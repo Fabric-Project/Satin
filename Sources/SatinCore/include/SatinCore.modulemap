@@ -1,0 +1,4 @@
+module SatinCore [system] {
+umbrella header "SatinCore.h"
+export *
+}
