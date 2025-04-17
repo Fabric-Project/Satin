@@ -9,6 +9,12 @@ let package = Package(
         .library(
             name: "Satin",
             targets: ["Satin", "SatinCore"]
+        ),
+        
+        .library(
+            name: "Satin Dynamic",
+            type: .dynamic,
+            targets: ["Satin", "SatinCore"]
         )
     ],
     dependencies: [],
