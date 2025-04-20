@@ -14,6 +14,7 @@ import AppKit
 import UIKit
 #endif
 
+
 open class MetalViewRenderer: MetalViewRendererDelegate {
     public enum Appearance {
         case unspecified
@@ -30,19 +31,19 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
         return result
     }
 
-    public internal(set) unowned var metalView: MetalView!
+    open unowned var metalView: MetalView!
 
-    public internal(set) var device: MTLDevice!
-    public internal(set) var commandQueue: MTLCommandQueue!
+    open var device: MTLDevice!
+    open var commandQueue: MTLCommandQueue!
 
-    public internal(set) var colorMultisampleTextures: [MTLTexture?] = []
+    open var colorMultisampleTextures: [MTLTexture?] = []
 
-    public internal(set) var depthTextures: [MTLTexture?] = []
-    public internal(set) var depthMultisampleTextures: [MTLTexture?] = []
+    open var depthTextures: [MTLTexture?] = []
+    open var depthMultisampleTextures: [MTLTexture?] = []
 
-    public internal(set) var isSetup = false
+    open var isSetup = false
 
-    public internal(set) var appearance: Appearance = .unspecified {
+    open var appearance: Appearance = .unspecified {
         didSet {
             updateAppearance()
         }
@@ -59,7 +60,7 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
     open var depthTextureStorageMode: MTLStorageMode { .memoryless }
     open var depthTextureUsage: MTLTextureUsage { .renderTarget }
 
-    public var defaultContext: Context {
+    open var defaultContext: Context {
         Context(
             device: device,
             sampleCount: sampleCount,
@@ -189,7 +190,7 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
 
     // MARK: - ForgeMetalViewRenderDelegate
 
-    func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
+    open func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
         guard isSetup, let commandBuffer = preDraw() else { return }
 
         update()
@@ -345,7 +346,7 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
         return texture
     }
 
-    func drawableResized(size: CGSize, scaleFactor: CGFloat) {
+    open func drawableResized(size: CGSize, scaleFactor: CGFloat) {
 #if DEBUG_VIEWS
         print("renderer resize: \(size), scaleFactor: \(scaleFactor) - MetalViewRenderer: \(id)")
 #endif
