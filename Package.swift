@@ -34,7 +34,11 @@ let package = Package(
             name: "Satin",
             dependencies: ["SatinCore"],
             path: "Sources/Satin",
-            resources: [.copy("Pipelines")]
+            resources: [.copy("Pipelines")],
+            linkerSettings: [
+                .linkedFramework("Metal"),
+                .linkedFramework("MetalKit")
+            ]
         ),
         .testTarget(
             name: "SatinTests",

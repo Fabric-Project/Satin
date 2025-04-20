@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1BB86A7E2DB456F000A91945 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BB86A7C2DB456F000A91945 /* Metal.framework */; };
+		1BB86A7F2DB456F000A91945 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1BB86A7D2DB456F000A91945 /* MetalKit.framework */; };
 		E101A8542C07061D0055FABA /* Bezier.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEED2C06A24B00B5A6C8 /* Bezier.mm */; };
 		E101A8552C07061D0055FABA /* Bounds.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEE2C06A24B00B5A6C8 /* Bounds.mm */; };
 		E101A8562C07061D0055FABA /* Bvh.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEF2C06A24B00B5A6C8 /* Bvh.mm */; };
@@ -273,6 +275,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1BB86A7C2DB456F000A91945 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Metal.framework; sourceTree = DEVELOPER_DIR; };
+		1BB86A7D2DB456F000A91945 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/MetalKit.framework; sourceTree = DEVELOPER_DIR; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
 		66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easings.swift; sourceTree = "<group>"; };
@@ -534,6 +538,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1BB86A7E2DB456F000A91945 /* Metal.framework in Frameworks */,
+				1BB86A7F2DB456F000A91945 /* MetalKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -548,6 +554,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1BB86A7B2DB456F000A91945 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1BB86A7C2DB456F000A91945 /* Metal.framework */,
+				1BB86A7D2DB456F000A91945 /* MetalKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		66D7DD292C06A23000B5A6C8 = {
 			isa = PBXGroup;
 			children = (
@@ -556,6 +571,7 @@
 				66D7DD342C06A23000B5A6C8 /* Products */,
 				66D7DEF92C06A24B00B5A6C8 /* Sources */,
 				E125E6972CA9EABF005D3A0E /* Tests */,
+				1BB86A7B2DB456F000A91945 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
