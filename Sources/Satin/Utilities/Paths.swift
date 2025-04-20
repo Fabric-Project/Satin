@@ -9,11 +9,11 @@
 import Foundation
 
 public func getResourceURL() -> URL? {
-    #if SWIFT_PACKAGE
-    return Bundle.module.resourceURL
-    #else
+//    #if SWIFT_PACKAGE
+//    return Bundle.module.resourceURL
+//    #else
     return Bundle(for: Object.self).resourceURL
-    #endif
+//    #endif
 }
 
 public func getResourceURL(_ path: String) -> URL? {
