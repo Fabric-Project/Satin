@@ -11,14 +11,20 @@ import SwiftUI
 #if os(macOS)
 
 public struct SatinMetalView: NSViewControllerRepresentable {
-    public var renderer: MetalViewRenderer
+    public var renderer: any MetalViewRendererDelegate
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: any MetalViewRendererDelegate) {
+
+        print("SatinMetalView SwiftUI Initializer renderer id: \(renderer.id)")
+
         self.renderer = renderer
+
     }
 
     public func makeNSViewController(context: Self.Context) -> MetalViewController {
-        MetalViewController(renderer: renderer)
+        print("SatinMetalView SwiftUI makeNSViewController renderer id: \(renderer.id)")
+
+        return MetalViewController(renderer: renderer)
     }
 
     public func updateNSViewController(_ nsViewController: Self.NSViewControllerType, context: Self.Context) {}

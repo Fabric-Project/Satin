@@ -10,7 +10,7 @@
 import AppKit
 
 public final class MetalViewController: NSViewController {
-    public let renderer: MetalViewRenderer
+    public var renderer: any  MetalViewRendererDelegate
     public private(set) var metalView = MetalView()
 
     override public var acceptsFirstResponder: Bool { return true }
@@ -21,7 +21,10 @@ public final class MetalViewController: NSViewController {
 
     // MARK: - Init
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: any MetalViewRendererDelegate) {
+        
+        print("MetalViewController NSViewController initializer renderer id: \(renderer.id)")
+
         self.renderer = renderer
         super.init(nibName: nil, bundle: nil)
     }
