@@ -148,8 +148,6 @@ final class DirectionalShadowRenderer: BaseRenderer {
                 light0.castShadow.toggle()
                 light1.castShadow.toggle()
                 
-                floorMesh.receiveShadow.toggle()
-
                 return true
             }
             return false
