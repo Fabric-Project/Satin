@@ -144,7 +144,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
         if !super.keyDown(with: event) {
             if event.characters == " " {
                 print("Toggling Lighting & Shadows")
-
+                
                 light0.castShadow.toggle()
                 light1.castShadow.toggle()
                 
