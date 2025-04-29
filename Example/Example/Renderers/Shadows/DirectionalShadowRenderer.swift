@@ -144,12 +144,12 @@ final class DirectionalShadowRenderer: BaseRenderer {
         if !super.keyDown(with: event) {
             if event.characters == " " {
                 print("Toggling Lighting & Shadows")
-                let meshes = [baseMesh]
-                for mesh in meshes {
-                    mesh.material?.lighting.toggle()
-                    mesh.material?.castShadow.toggle()
-                    mesh.material?.receiveShadow.toggle()
-                }
+                
+                light0.castShadow.toggle()
+                light1.castShadow.toggle()
+                
+                floorMesh.receiveShadow.toggle()
+
                 return true
             }
             return false
