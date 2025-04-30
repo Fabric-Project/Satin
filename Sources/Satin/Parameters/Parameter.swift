@@ -54,6 +54,7 @@ public enum ControlType: String, Codable {
     case colorpalette
     case dropdown
     case label
+    case filepicker
 }
 
 public enum ParameterType: String, Codable {
