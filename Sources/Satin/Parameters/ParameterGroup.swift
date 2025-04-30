@@ -10,8 +10,9 @@ import Combine
 import Foundation
 import Metal
 import simd
+import Observation
 
-public final class ParameterGroup: Codable, CustomStringConvertible, ObservableObject {
+@Observable public final class ParameterGroup: Codable, CustomStringConvertible {
     public let id: String = UUID().uuidString
 
     public var description: String {
@@ -22,8 +23,8 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         return dsc
     }
 
-    @Published public var label = ""
-    @Published public private(set) var params: [any Parameter] = [] {
+    public var label = ""
+    public private(set) var params: [any Parameter] = [] {
         didSet {
             _updateSize = true
             _updateStride = true
@@ -33,7 +34,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         }
     }
 
-    @Published public var paramsMap: [String: any Parameter] = [:]
+    public var paramsMap: [String: any Parameter] = [:]
 
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 
@@ -72,7 +73,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, weak param] _ in
             guard let self = self, let param else { return }
             self._updateData = true
-            self.objectWillChange.send()
+//            self.objectWillChange.send()
             self.parameterUpdatedPublisher.send(param)
         }
 
@@ -393,15 +394,15 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         }
     }
 
-    private var _size = 0
-    private var _stride = 0
-    private var _alignment = 0
-    private var _dataAllocated = false
-    private var _reallocateData = false
-    private var _updateSize = true
-    private var _updateStride = true
-    private var _updateAlignment = true
-    private var _updateData = true
+    @ObservationIgnored private var _size = 0
+    @ObservationIgnored private var _stride = 0
+    @ObservationIgnored private var _alignment = 0
+    @ObservationIgnored private var _dataAllocated = false
+    @ObservationIgnored private var _reallocateData = false
+    @ObservationIgnored private var _updateSize = true
+    @ObservationIgnored private var _updateStride = true
+    @ObservationIgnored private var _updateAlignment = true
+    @ObservationIgnored private var _updateData = true
 
     private func updateSize() {
         var result = 0
@@ -473,7 +474,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         return source
     }
 
-    private lazy var _data: UnsafeMutableRawPointer = {
+    @ObservationIgnored private lazy var _data: UnsafeMutableRawPointer = {
         _dataAllocated = true
         return UnsafeMutableRawPointer.allocate(byteCount: size, alignment: alignment)
     }()

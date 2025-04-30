@@ -5,11 +5,12 @@
 //  Created by Reza Ali on 4/7/22.
 //
 
+import Observation
 import Combine
 import Foundation
 
-public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObject {
-    public var id: String = UUID().uuidString
+@Observable public class GenericParameter<T: Codable & Equatable>: Parameter {
+    @ObservationIgnored public var id: String = UUID().uuidString
 
     public typealias ValueType = T
 
@@ -17,13 +18,13 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
     public let valuePublisher = PassthroughSubject<ValueType, Never>()
 
     // Getable Properties
-    public var type: ParameterType { .generic }
-    public var string: String { type.string }
+    @ObservationIgnored public var type: ParameterType { .generic }
+    @ObservationIgnored public var string: String { type.string }
 
     // Computed Properties
-    public var size: Int { return MemoryLayout<ValueType>.size }
-    public var stride: Int { return MemoryLayout<ValueType>.stride }
-    public var alignment: Int { return MemoryLayout<ValueType>.alignment }
+    @ObservationIgnored public var size: Int { return MemoryLayout<ValueType>.size }
+    @ObservationIgnored public var stride: Int { return MemoryLayout<ValueType>.stride }
+    @ObservationIgnored public var alignment: Int { return MemoryLayout<ValueType>.alignment }
 
     // Setable Properties
     public var controlType = ControlType.none
@@ -33,7 +34,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
         "Label: \(label) type: \(string) value: \(value) controlType: \(controlType)"
     }
 
-    @Published public var value: ValueType {
+    @ObservationIgnored public var value: ValueType {
         didSet {
             if value != oldValue {
                 valuePublisher.send(value)
@@ -41,7 +42,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
         }
     }
 
-    public var defaultValue: ValueType
+    @ObservationIgnored public var defaultValue: ValueType
 
     private enum CodingKeys: String, CodingKey {
         case controlType
@@ -117,9 +118,9 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
 public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParameter<T> {
     public typealias ValueType = T
 
-    public let minValuePublisher = PassthroughSubject<ValueType, Never>()
+    @ObservationIgnored public let minValuePublisher = PassthroughSubject<ValueType, Never>()
 
-    @Published public var min: ValueType {
+    public var min: ValueType {
         didSet {
             minValuePublisher.send(min)
             valuePublisher.send(value)
@@ -128,7 +129,7 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
 
     public let maxValuePublisher = PassthroughSubject<ValueType, Never>()
 
-    @Published public var max: ValueType {
+    public var max: ValueType {
         didSet {
             maxValuePublisher.send(max)
             valuePublisher.send(value)
