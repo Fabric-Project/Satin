@@ -34,7 +34,7 @@ import Foundation
         "Label: \(label) type: \(string) value: \(value) controlType: \(controlType)"
     }
 
-    @ObservationIgnored public var value: ValueType {
+    public var value: ValueType {
         didSet {
             if value != oldValue {
                 valuePublisher.send(value)
@@ -118,7 +118,7 @@ import Foundation
 public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParameter<T> {
     public typealias ValueType = T
 
-    @ObservationIgnored public let minValuePublisher = PassthroughSubject<ValueType, Never>()
+    public let minValuePublisher = PassthroughSubject<ValueType, Never>()
 
     public var min: ValueType {
         didSet {
