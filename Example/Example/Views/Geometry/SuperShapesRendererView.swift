@@ -11,7 +11,7 @@ import SwiftUI
 
 struct SuperShapesRendererView: View {
     let renderer = SuperShapesRenderer()
-    @ObservedObject var parameters: ParameterGroup
+    var parameters: ParameterGroup
     @State var dragLocation: CGPoint?
 
     init() {
