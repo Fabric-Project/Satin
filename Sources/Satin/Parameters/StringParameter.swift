@@ -28,7 +28,7 @@ public final class StringParameter: GenericParameter<String> {
         case value
         case options
     }
-
+    
     public convenience init(_ label: String, _ value: ValueType = "", _ options: [String], _ controlType: ControlType = .dropdown) {
         self.init(label, value, controlType)
         self.options = options

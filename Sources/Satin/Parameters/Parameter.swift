@@ -9,10 +9,10 @@
 import Combine
 import Foundation
 
-public protocol Parameter: AnyObject, Codable, CustomStringConvertible {
+public protocol Parameter: AnyObject, Codable, CustomStringConvertible, Identifiable {
     associatedtype ValueType: Codable & Equatable
 
-    var id: String { get }
+    var id: UUID { get }
     var value: ValueType { get set }
     var defaultValue: ValueType { get set }
 
