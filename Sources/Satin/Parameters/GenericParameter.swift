@@ -10,7 +10,7 @@ import Combine
 import Foundation
 
 @Observable public class GenericParameter<T: Codable & Equatable>: Parameter {
-    @ObservationIgnored public var id: String = UUID().uuidString
+    @ObservationIgnored public var id: UUID
 
     public typealias ValueType = T
 
@@ -45,6 +45,7 @@ import Foundation
     @ObservationIgnored public var defaultValue: ValueType
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case controlType
         case label
         case value
@@ -54,6 +55,9 @@ import Foundation
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
+        let id = try container.decode(UUID.self, forKey: .id)
+        self.id = id
+        
         controlType = try container.decode(ControlType.self, forKey: .controlType)
 
         label = try container.decode(String.self, forKey: .label)
@@ -72,6 +76,8 @@ import Foundation
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
         try container.encode(controlType, forKey: .controlType)
         try container.encode(label, forKey: .label)
 
@@ -85,6 +91,7 @@ import Foundation
     }
 
     public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
+        self.id = UUID()
         self.label = label
         self.value = value
         defaultValue = value
