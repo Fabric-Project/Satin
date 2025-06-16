@@ -9,7 +9,7 @@ import Metal
 import simd
 
 public final class BasicDiffuseMaterial: BasicColorMaterial {
-    var hardness: Float {
+    public var hardness: Float {
         get {
             get("Hardness", as: FloatParameter.self)!.value
         }
