@@ -97,6 +97,7 @@ public func setupRenderPipelineDescriptorBlending(blending: ShaderBlending, desc
             colorAttachment.rgbBlendOperation = blending.rgbBlendOperation
             colorAttachment.alphaBlendOperation = blending.alphaBlendOperation
         case .disabled:
+            colorAttachment.isBlendingEnabled = false
             break
     }
 }
