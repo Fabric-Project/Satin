@@ -389,7 +389,7 @@ open class Shader {
         )
     }
 
-    func setup() {
+    public func setup() {
         updateDefines()
         updateConstants()
 
@@ -400,7 +400,7 @@ open class Shader {
         updateParameters()
     }
 
-    func update() {
+    public func update() {
         updateDefines()
         updateConstants()
 

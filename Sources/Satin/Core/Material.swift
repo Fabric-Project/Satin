@@ -358,6 +358,7 @@ open class Material: Codable, ObservableObject {
         }
 
         shader?.context = context
+        shader?.setup()
     }
 
     open func setupShaderRenderingConfiguration(_ shader: Shader) {
