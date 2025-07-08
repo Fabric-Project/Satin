@@ -419,7 +419,7 @@ import Observation
         _size = result
     }
 
-    public var size: Int {
+    @ObservationIgnored public var size: Int {
         if _updateSize {
             updateSize()
             _updateSize = false
@@ -487,7 +487,7 @@ import Observation
         return UnsafeMutableRawPointer.allocate(byteCount: size, alignment: alignment)
     }
 
-    public var data: UnsafeRawPointer {
+    @ObservationIgnored public var data: UnsafeRawPointer {
         if _reallocateData {
             _data = allocateData()
             _reallocateData = false
