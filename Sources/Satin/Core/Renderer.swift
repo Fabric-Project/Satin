@@ -454,6 +454,7 @@ open class Renderer {
         renderPassDescriptor.depthAttachment.loadAction = depthLoadAction
         renderPassDescriptor.depthAttachment.clearDepth = clearDepth
 
+        renderPassDescriptor.stencilAttachment.storeAction = stencilStoreAction
         renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
         renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
 
