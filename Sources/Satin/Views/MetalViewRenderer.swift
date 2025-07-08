@@ -222,9 +222,10 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
             renderPassDescriptor.stencilAttachment.texture = getStencilTexture(ref: drawable.texture, index: index)
         }
 
+        
         renderPassDescriptor.stencilAttachment.storeAction = .store
         renderPassDescriptor.stencilAttachment.loadAction = .clear
-        renderPassDescriptor.stencilAttachment.clearStencil  = 0
+        renderPassDescriptor.stencilAttachment.clearStencil = 0
 
         draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
         postDraw(drawable: drawable, commandBuffer: commandBuffer)
@@ -350,7 +351,7 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
         descriptor.resourceOptions = .storageModePrivate
 
         let texture = device.makeTexture(descriptor: descriptor)
-        texture?.label = "\(id) Depth Texture \(index + 1)/\(maxBuffersInFlight)"
+        texture?.label = "\(id) Stencil Texture \(index + 1)/\(maxBuffersInFlight)"
 
         if replace {
             stencilTextures[index] = texture
