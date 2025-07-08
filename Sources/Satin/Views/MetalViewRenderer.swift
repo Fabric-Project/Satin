@@ -40,6 +40,9 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
     public internal(set) var depthTextures: [MTLTexture?] = []
     public internal(set) var depthMultisampleTextures: [MTLTexture?] = []
 
+    public internal(set) var stencilTextures: [MTLTexture?] = []
+    public internal(set) var stencilMultisampleTextures: [MTLTexture?] = []
+
     public internal(set) var isSetup = false
 
     public internal(set) var appearance: Appearance = .unspecified {
@@ -58,6 +61,9 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
 
     open var depthTextureStorageMode: MTLStorageMode { .memoryless }
     open var depthTextureUsage: MTLTextureUsage { .renderTarget }
+
+    open var stencilTextureStorageMode: MTLStorageMode { .memoryless }
+    open var stencilTextureUsage: MTLTextureUsage { .renderTarget }
 
     public var defaultContext: Context {
         Context(
@@ -204,13 +210,21 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
             renderPassDescriptor.renderTargetHeight = drawable.texture.height
             renderPassDescriptor.depthAttachment.texture = getMultisampleDepthTexture(ref: drawable.texture, index: index)
             renderPassDescriptor.depthAttachment.resolveTexture = getDepthTexture(ref: drawable.texture, index: index)
+            renderPassDescriptor.stencilAttachment.texture = getMultisampleStencilTexture(ref: drawable.texture, index: index)
+            renderPassDescriptor.stencilAttachment.resolveTexture = getStencilTexture(ref: drawable.texture, index: index)
+
         }
         else {
             renderPassDescriptor.colorAttachments[0].texture = drawable.texture
             renderPassDescriptor.renderTargetWidth = drawable.texture.width
             renderPassDescriptor.renderTargetHeight = drawable.texture.height
             renderPassDescriptor.depthAttachment.texture = getDepthTexture(ref: drawable.texture, index: index)
+            renderPassDescriptor.stencilAttachment.texture = getStencilTexture(ref: drawable.texture, index: index)
         }
+
+        renderPassDescriptor.stencilAttachment.storeAction = .store
+        renderPassDescriptor.stencilAttachment.loadAction = .clear
+        renderPassDescriptor.stencilAttachment.clearStencil  = 0
 
         draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
         postDraw(drawable: drawable, commandBuffer: commandBuffer)
@@ -303,7 +317,95 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
 
         return texture
     }
+    
+    func getStencilTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
+        guard stencilPixelFormat != .invalid else { return nil }
 
+        guard ref.width > 0, ref.height > 0 else { return nil }
+
+        var replace = false
+
+        if stencilTextures.count > index,
+           let stencilTexture = stencilTextures[index]
+        {
+            if stencilTexture.width == ref.width && stencilTexture.height == ref.height {
+                return stencilTexture
+            }
+            else {
+                replace = true
+            }
+        }
+
+        let descriptor = MTLTextureDescriptor()
+        descriptor.pixelFormat = stencilPixelFormat
+        descriptor.width = ref.width
+        descriptor.height = ref.height
+
+        descriptor.sampleCount = 1
+        descriptor.textureType = .type2D
+
+        descriptor.usage = stencilTextureUsage
+        descriptor.storageMode = stencilTextureStorageMode
+        descriptor.allowGPUOptimizedContents = true
+        descriptor.resourceOptions = .storageModePrivate
+
+        let texture = device.makeTexture(descriptor: descriptor)
+        texture?.label = "\(id) Depth Texture \(index + 1)/\(maxBuffersInFlight)"
+
+        if replace {
+            stencilTextures[index] = texture
+        }
+        else {
+            stencilTextures.append(texture)
+        }
+
+        return texture
+    }
+
+    func getMultisampleStencilTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
+        guard sampleCount > 1, stencilPixelFormat != .invalid else { return nil }
+
+        guard ref.width > 0, ref.height > 0 else { return nil }
+
+        var replace = false
+
+        if stencilMultisampleTextures.count > index,
+           let stencilMultisampleTexture = stencilMultisampleTextures[index]
+        {
+            if stencilMultisampleTexture.width == ref.width && stencilMultisampleTexture.height == ref.height {
+                return stencilMultisampleTexture
+            }
+            else {
+                replace = true
+            }
+        }
+
+        let descriptor = MTLTextureDescriptor()
+        descriptor.pixelFormat = stencilPixelFormat
+        descriptor.sampleCount = sampleCount
+        descriptor.textureType = .type2DMultisample
+
+        descriptor.width = ref.width
+        descriptor.height = ref.height
+
+        descriptor.usage = stencilTextureUsage
+        descriptor.storageMode = stencilTextureStorageMode
+        descriptor.allowGPUOptimizedContents = true
+        descriptor.resourceOptions = .storageModePrivate
+
+        let texture = device.makeTexture(descriptor: descriptor)
+        texture?.label = "\(id) Multisample Stencil Texture \(index + 1)/\(maxBuffersInFlight)"
+
+        if replace {
+            stencilMultisampleTextures[index] = texture
+        }
+        else {
+            stencilMultisampleTextures.append(texture)
+        }
+
+        return texture
+    }
+    
     func getMultisampleColorTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
         var replace = false
 
