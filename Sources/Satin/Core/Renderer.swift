@@ -184,7 +184,7 @@ open class Renderer {
         depthStoreAction: MTLStoreAction = .store,
         clearStencil: UInt32 = 0,
         stencilLoadAction: MTLLoadAction = .clear,
-        stencilStoreAction: MTLStoreAction = .dontCare,
+        stencilStoreAction: MTLStoreAction = .store,
         frameBufferOnly: Bool = true
     ) {
         self.label = label
