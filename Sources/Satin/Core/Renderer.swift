@@ -504,9 +504,10 @@ open class Renderer {
 #endif
                     renderEncoder.endEncoding()
 
-                    renderPassDescriptor.colorAttachments[0].loadAction = .load
-                    renderPassDescriptor.depthAttachment.loadAction = .load
-                    renderPassDescriptor.stencilAttachment.loadAction = .load
+                    // Not sure why this is necessary? 
+//                    renderPassDescriptor.colorAttachments[0].loadAction = .load
+//                    renderPassDescriptor.depthAttachment.loadAction = .load
+//                    renderPassDescriptor.stencilAttachment.loadAction = .load
                 }
             }
         }
