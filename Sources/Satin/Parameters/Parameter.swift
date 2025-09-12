@@ -28,7 +28,8 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible, Identifi
     var description: String { get }
 
     var valuePublisher: PassthroughSubject<ValueType, Never> { get }
-
+    var valueDidChange:Bool { get }
+    
     func alignData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
     func writeData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
 
