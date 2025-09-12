@@ -34,11 +34,45 @@ import Foundation
         "Label: \(label) type: \(string) value: \(value) controlType: \(controlType)"
     }
 
-    public var value: ValueType {
+    // Maybe a bit too verbose?
+    private var intervalValueDidChange : Bool = true
+    public var valueDidChange:Bool
+    {
+        get
+        {
+            let val = self.intervalValueDidChange
+            self.intervalValueDidChange = false
+            return val
+        }
+        set
+        {
+            self.intervalValueDidChange = newValue
+        }
+    }
+    
+    private var internalValue:ValueType
+    {
         didSet {
-            if value != oldValue {
-                valuePublisher.send(value)
+            if internalValue != oldValue {
+                valuePublisher.send(internalValue)
             }
+        }
+    }
+    
+    public var value: ValueType
+    {
+        get
+        {
+            return self.internalValue
+        }
+        set
+        {
+            if self.internalValue != newValue
+            {
+                self.valueDidChange = true
+            }
+            
+            self.internalValue = newValue
         }
     }
 
@@ -64,7 +98,7 @@ import Foundation
 
         let value = try container.decode(ValueType.self, forKey: .value)
 
-        self.value = value
+        self.internalValue = value
 
         if let defaultValue = try container.decodeIfPresent(ValueType.self, forKey: .defaultValue) {
             self.defaultValue = defaultValue
@@ -93,7 +127,7 @@ import Foundation
     public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
         self.id = UUID()
         self.label = label
-        self.value = value
+        self.internalValue = value
         defaultValue = value
         self.controlType = controlType
     }
