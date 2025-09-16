@@ -55,6 +55,7 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
             characterPaths[char] = charPaths
         }
         else if let glyphPath = CTFontCreatePathForGlyph(ctFont, glyph, nil) {
+            
             let glyphPaths = getPolylines(glyphPath, angleLimit, fontSize / 10.0)
 
             var _paths: [UnsafeMutablePointer<simd_float2>?] = []
@@ -67,7 +68,12 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
 
             var triData = createTriangleData()
             if triangulate(&_paths, &_lengths, Int32(_lengths.count), &triData) == 0 {
-                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData)
+                let glyphBounds = glyphPath.boundingBox
+                let bounds = simd_float4(Float(glyphBounds.minX),
+                                         Float(glyphBounds.minY),
+                                         Float(glyphBounds.maxX),
+                                         Float(glyphBounds.maxY))
+                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData, bounds)
                 copyTriangleDataToGeometryData(&triData, &cData)
                 freeTriangleData(&triData)
             }
