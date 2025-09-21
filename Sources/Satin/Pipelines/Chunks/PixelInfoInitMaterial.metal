@@ -74,11 +74,11 @@ const float2 clearcoatRoughnessTexcoord =
 pixel.material.clearcoatRoughness =
     clearcoatRoughnessMap.sample(clearcoatRoughnessSampler, clearcoatRoughnessTexcoord).r;
 pixel.material.clearcoatRoughness *= uniforms.clearcoatRoughness;
-#elseif defined(CLEARCOAT_GLOSS_MAP) && defined(HAS_TEXCOORD)
-const float2 clearcoatRoughnessTexcoord =
+#elif defined(CLEARCOAT_GLOSS_MAP) && defined(HAS_TEXCOORD)
+const float2 clearcoatGlossTexcoord =
     (uniforms.clearcoatRoughnessTexcoordTransform * float3(in.texcoord, 1.0)).xy;
 pixel.material.clearcoatRoughness =
-    1.0 - clearcoatGlossMap.sample(clearcoatGlossSampler, clearcoatRoughnessTexcoord).r;
+    1.0 - clearcoatGlossMap.sample(clearcoatRoughnessSampler, clearcoatGlossTexcoord).r;
 pixel.material.clearcoatRoughness *= uniforms.clearcoatRoughness;
 #else
 pixel.material.clearcoatRoughness = uniforms.clearcoatRoughness;
