@@ -17,6 +17,8 @@ float3 bitangent = -normalize(cross(normal, tangent));
 const float3x3 TBN = float3x3(tangent, bitangent, normal);
 
 pixel.normal = normalize(TBN * mapNormal);
+pixel.tangent = tangent;
+pixel.bitangent = bitangent;
 #endif
 
 #else
@@ -33,5 +35,4 @@ float3 bitangent = -normalize(cross(normal, tangent));
 pixel.normal = normalize(normal);
 pixel.tangent = tangent;
 pixel.bitangent = bitangent;
-
 #endif
