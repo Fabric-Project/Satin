@@ -106,17 +106,20 @@ public final class DirectionalLightShadow: Shadow {
     public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
         setupTexture()
 
-        if self.texture == nil
+        if self.device == nil
         {
-            self.setupTexture()
+            self.device = context.device
         }
         
         let renderPassDescriptor = MTLRenderPassDescriptor()
+        
+        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
+        
         renderPassDescriptor.depthAttachment.texture = texture
         renderPassDescriptor.depthAttachment.loadAction = .clear
         renderPassDescriptor.depthAttachment.storeAction = .store
         renderPassDescriptor.depthAttachment.clearDepth = 0.0
-        renderPassDescriptor.defaultRasterSampleCount = 1
+        
         renderPassDescriptor.renderTargetWidth = resolution.width
         renderPassDescriptor.renderTargetHeight = resolution.height
 
@@ -156,14 +159,19 @@ public final class DirectionalLightShadow: Shadow {
     }
 
     private func setupTexture() {
-        guard let device, _updateTexture, pixelFormat != .invalid, resolution.width > 1, resolution.height > 1 else {
-            return
-        }
+        guard let device, _updateTexture, pixelFormat != .invalid, resolution.width > 1, resolution.height > 1 else { return }
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(pixelFormat: pixelFormat, width: resolution.width, height: resolution.height, mipmapped: false)
         descriptor.usage = [.renderTarget, .shaderRead]
         descriptor.storageMode = .private
+        descriptor.resourceOptions = .storageModePrivate
+        texture = device.makeTexture(descriptor: descriptor)
+        texture?.label = label + " Depth Texture"
+
+        _updateTexture = false
+    }
+}
         descriptor.resourceOptions = .storageModePrivate
         texture = device.makeTexture(descriptor: descriptor)
         texture?.label = label + " Depth Texture"
