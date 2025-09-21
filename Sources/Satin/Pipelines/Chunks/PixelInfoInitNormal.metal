@@ -17,8 +17,22 @@ float3 bitangent = -normalize(cross(normal, tangent));
 const float3x3 TBN = float3x3(tangent, bitangent, normal);
 
 pixel.normal = normalize(TBN * mapNormal);
+pixel.tangent = tangent;
+pixel.bitangent = bitangent;
 #endif
 
 #else
-pixel.normal = normalize(in.normal);
+
+const float3 Q1 = dfdx(in.worldPosition);
+const float3 Q2 = dfdy(in.worldPosition);
+const float2 st1 = dfdx(in.texcoord);
+const float2 st2 = dfdy(in.texcoord);
+
+float3 normal = in.normal;
+float3 tangent = normalize(Q1 * st2.y - Q2 * st1.y);
+float3 bitangent = -normalize(cross(normal, tangent));
+
+pixel.normal = normalize(normal);
+pixel.tangent = tangent;
+pixel.bitangent = bitangent;
 #endif
