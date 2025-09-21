@@ -56,9 +56,9 @@ void pbrIndirectLighting(
 #if defined(HAS_TRANSMISSION)
     // Transmission
     float ior = pixel.material.ior;
-    // float3 thickness = pixel.material.thickness;
+     float3 thickness = pixel.material.thickness;
     float3 transmissionRay =
-        pixel.material.reflectionTexcoordTransform * getVolumeTransmissionRay(N, V, 1.0, ior);
+        pixel.material.reflectionTexcoordTransform * getVolumeTransmissionRay(N, V, thickness, ior);
     // float3 refractedRayExit = pixel.position + transmissionRay;
 
     // Since Satin's render isn't ready for multiple passes we are going to default to refract into
