@@ -87,17 +87,29 @@ float3 evalTransmission(thread PixelInfo &pixel, float3 F, float3 L, float NdotV
     // If the light ray travels through the geometry, use the point it exits the geometry again.
     // That will change the angle to the light source, if the material refracts the light ray.
 
-    // float3 transmissionRay = getVolumeTransmissionRay(N, V, 1.0, ior);
+     float3 transmissionRay = getVolumeTransmissionRay(N, V, pixel.material.thickness, ior);
     // use the transmission ray to change the L vector?
+
+    float3 V_exit = pixel.position + transmissionRay;
+
+    // 2) Light direction from exit point (point/spot)
+    float3 L_exit = normalize(L - V_exit);
+    // Optional: backface/exit normal (if available). Fallback: flip N.
+    float3 N_exit = -N;
 
     float transmissionRoughness = applyIorToRoughness(pixel.material.roughness, ior);
 
-    float3 L_mirror = normalize(L + 2.0 * N * dot(-L, N));
-    float3 H = normalize(L_mirror + V);
+    // Half vector for transmission (Walter 2007):
+    float3 Ht = normalize(V + ior * L_exit);
+    float NdotH = saturate(dot(N, Ht)); // distribution still uses surface frame
 
-    float D = distributionGGX(saturate(dot(N, H)), transmissionRoughness);
+    // Cosines (clamp/saturate as needed)
+    float NdotL_exit = saturate(dot(N_exit, L_exit));   // note exit side
+    float NdotV_pos  = saturate(NdotV);
+
+    float D = distributionGGX(NdotH, transmissionRoughness);
     float Vis =
-        visibilitySmithGGXCorrelated(saturate(dot(N, L_mirror)), NdotV, transmissionRoughness);
+        visibilitySmithGGXCorrelated(NdotL_exit, NdotV_pos, transmissionRoughness);
 
     // Transmission BTDF
     return (1.0 - F) * pixel.material.baseColor * D * Vis;
