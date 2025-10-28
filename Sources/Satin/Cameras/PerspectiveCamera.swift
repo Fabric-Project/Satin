@@ -69,7 +69,7 @@ open class PerspectiveCamera: Camera {
         get {
             if updateProjectionMatrix {
                 if enableFrustumShift {
-                    _projectionMatrix = frustumShiftProjectionMatrix()
+                    _projectionMatrix = frustumShiftPerspectiveMatrixf(fov, aspect, near, far, lensShiftX, lensShiftY)
                 } else {
                     _projectionMatrix = perspectiveMatrixf(fov, aspect, near, far)
                 }
@@ -183,11 +183,6 @@ open class PerspectiveCamera: Camera {
     }
 
     // MARK: - Frustum Shift
-
-    private func frustumShiftProjectionMatrix() -> matrix_float4x4 {
-        return frustumShiftPerspectiveMatrixf(fov, aspect, near, far, lensShiftX, lensShiftY)
-    }
-
     public func setLensShift(_ x: Float, _ y: Float) {
         lensShiftX = x
         lensShiftY = y
