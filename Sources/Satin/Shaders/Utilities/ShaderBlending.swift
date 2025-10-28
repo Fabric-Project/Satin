@@ -77,7 +77,7 @@ public func setupRenderPipelineDescriptorBlending(blending: ShaderBlending, desc
             colorAttachment.alphaBlendOperation = .add
         case .additive:
             colorAttachment.sourceRGBBlendFactor = .sourceAlpha
-            colorAttachment.sourceAlphaBlendFactor = .one
+            colorAttachment.sourceAlphaBlendFactor = .sourceAlpha
             colorAttachment.destinationRGBBlendFactor = .one
             colorAttachment.destinationAlphaBlendFactor = .one
             colorAttachment.rgbBlendOperation = .add
@@ -97,6 +97,7 @@ public func setupRenderPipelineDescriptorBlending(blending: ShaderBlending, desc
             colorAttachment.rgbBlendOperation = blending.rgbBlendOperation
             colorAttachment.alphaBlendOperation = blending.alphaBlendOperation
         case .disabled:
+            colorAttachment.isBlendingEnabled = false
             break
     }
 }

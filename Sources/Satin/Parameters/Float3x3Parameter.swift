@@ -22,11 +22,7 @@ public final class Float3x3Parameter: GenericParameter<simd_float3x3> {
     }
 
     public required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let controlType = try container.decode(ControlType.self, forKey: .controlType)
-        let label = try container.decode(String.self, forKey: .label)
-        let value = try container.decode(simd_float3x3.self, forKey: .value)
-        super.init(label, value, controlType)
+        try super.init(from: decoder)
     }
 
     override public func clone() -> any Parameter {

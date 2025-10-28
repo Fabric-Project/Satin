@@ -14,10 +14,10 @@ import simd
 import SatinCore
 #endif
 
-public final class SpotLight: Object, Light {
-    public var type: LightType { .spot }
+public final class SpotLight: Light {
+    override public var type: LightType { .spot }
 
-    public var data: LightData {
+    override public var data: LightData {
         let cosOuter = cos(degToRad(angleOuter))
         let cosInner = cos(degToRad(angleInner))
         let spotScale = 1.0 / max(cosInner - cosOuter, 1e-4)
@@ -35,21 +35,12 @@ public final class SpotLight: Object, Light {
         )
     }
 
-    public var color: simd_float3 {
-        didSet {
-            publisher.send(self)
-        }
+    override public var castShadow: Bool
+    {
+        get { false }
+        set { }
     }
-
-    public var intensity: Float {
-        didSet {
-            publisher.send(self)
-        }
-    }
-
-    public var castShadow: Bool = false
     /* FIX ME */
-    public lazy var shadow: Shadow = DirectionalLightShadow(label: label)
 
     public var radius: Float {
         didSet {
@@ -69,30 +60,28 @@ public final class SpotLight: Object, Light {
         }
     }
 
-    public let publisher = PassthroughSubject<Light, Never>()
     private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
-        case color
-        case intensity
         case radius
         case angleInner
         case angleOuter
     }
 
     public init(label: String = "Spot Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0, angleInner: Float = 60.0, angleOuter: Float = 90.0) {
-        self.color = color
-        self.intensity = intensity
         self.radius = radius
         self.angleInner = angleInner
         self.angleOuter = angleOuter
+
         super.init(label: label)
+        self.color = color
+        self.intensity = intensity
+        
+        self.shadow = DirectionalLightShadow(label: label)
     }
 
     public required init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        color = try values.decode(simd_float3.self, forKey: .color)
-        intensity = try values.decode(Float.self, forKey: .intensity)
         radius = try values.decode(Float.self, forKey: .radius)
         angleInner = try values.decode(Float.self, forKey: .angleInner)
         angleOuter = try values.decode(Float.self, forKey: .angleOuter)
@@ -102,10 +91,9 @@ public final class SpotLight: Object, Light {
     override public func encode(to encoder: Encoder) throws {
         try super.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(color, forKey: .color)
-        try container.encode(intensity, forKey: .intensity)
         try container.encode(angleInner, forKey: .angleInner)
         try container.encode(angleOuter, forKey: .angleOuter)
+        try container.encode(radius, forKey: .radius)
     }
 
     override public func setup() {

@@ -201,7 +201,7 @@ open class BufferComputeSystem: ComputeSystem {
 
     private func updateBuffers(_ buffers: [ParameterGroup]) {
         self.buffers = buffers
-        objectWillChange.send()
+//        objectWillChange.send()
         delegate?.updated(computeSystem: self)
     }
 

@@ -11,7 +11,7 @@ import MetalKit
 
 import Satin
 
-final class BufferGeometryMesh: Object, Renderable {
+final class BufferGeometryMesh: Renderable {
     var geometry: Geometry {
         didSet {
             if geometry != oldValue {
@@ -21,23 +21,15 @@ final class BufferGeometryMesh: Object, Renderable {
         }
     }
 
-    var doubleSided: Bool = false
-    var opaque: Bool { material?.blending == .disabled }
+    override var opaque: Bool { get {  material?.blending == .disabled } set { } }
 
-    var cullMode: MTLCullMode = .back
-    var windingOrder: MTLWinding { geometry.windingOrder }
-    var triangleFillMode: MTLTriangleFillMode = .fill
-
-    var renderOrder: Int = 0
-    var renderPass: Int = 0
-
-    var lighting: Bool { material?.lighting ?? false }
-    var receiveShadow: Bool { material?.receiveShadow ?? false }
-    var castShadow: Bool { material?.castShadow ?? false }
+    override var lighting: Bool { material?.lighting ?? false }
+    override var receiveShadow: Bool{  get { material?.receiveShadow ?? false } set { } }
+    override var castShadow: Bool { get { material?.castShadow ?? false } set { } }
 
     var instanceCount: Int = 1
 
-    func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
+    override func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
               !geometry.vertexBuffers.isEmpty,
@@ -46,17 +38,10 @@ final class BufferGeometryMesh: Object, Renderable {
         return true
     }
 
-    var preDraw: ((MTLRenderCommandEncoder) -> Void)?
-
-    var material: Material?
-    var materials: [Material] = []
-
-    var vertexUniforms: [Context: VertexUniformBuffer] = [:]
-
     public init(label: String = "Buffer Geometry Mesh", geometry: Geometry, material: Material) {
         self.geometry = geometry
-        self.material = material
         super.init(label: label)
+        self.material = material
     }
 
     required init(from decoder: Decoder) throws {
@@ -119,7 +104,7 @@ final class BufferGeometryMesh: Object, Renderable {
         )
     }
 
-    func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         if let material, let shader = material.shader {
             if shader.vertexWantsVertexUniforms {
                 renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext]

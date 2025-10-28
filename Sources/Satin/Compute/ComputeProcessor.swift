@@ -15,7 +15,7 @@ public protocol ComputeProcessorDelegate: AnyObject {
     func updated(computeProcessor: ComputeProcessor)
 }
 
-open class ComputeProcessor: ComputeShaderDelegate, ObservableObject {
+open class ComputeProcessor: ComputeShaderDelegate {
     public internal(set) lazy var label = prefix
 
     var prefix: String {
@@ -466,7 +466,7 @@ open class ComputeProcessor: ComputeShaderDelegate, ObservableObject {
         parameters.setFrom(newParameters)
         parameters.label = newParameters.label
         uniformsNeedsUpdate = true
-        objectWillChange.send()
+//        objectWillChange.send()
         delegate?.updated(computeProcessor: self)
     }
 

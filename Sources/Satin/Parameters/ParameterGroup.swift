@@ -11,7 +11,7 @@ import Foundation
 import Metal
 import simd
 
-public final class ParameterGroup: Codable, CustomStringConvertible, ObservableObject {
+public final class ParameterGroup: Codable, CustomStringConvertible {
     public let id: String = UUID().uuidString
 
     public var description: String {
@@ -22,8 +22,8 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         return dsc
     }
 
-    @Published public var label = ""
-    @Published public private(set) var params: [any Parameter] = [] {
+    public var label = ""
+    public private(set) var params: [any Parameter] = [] {
         didSet {
             _updateSize = true
             _updateStride = true
@@ -33,7 +33,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
         }
     }
 
-    @Published public var paramsMap: [String: any Parameter] = [:]
+    public var paramsMap: [String: any Parameter] = [:]
 
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 
@@ -69,11 +69,13 @@ public final class ParameterGroup: Codable, CustomStringConvertible, ObservableO
     public func append(_ param: some Parameter) {
         params.append(param)
         paramsMap[param.label] = param
-        paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, weak param] _ in
-            guard let self = self, let param else { return }
+        paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
+            guard let self = self
+//                  let param 
+            else { return }
             self._updateData = true
-            self.objectWillChange.send()
-            self.parameterUpdatedPublisher.send(param)
+//            self.objectWillChange.send()
+//            self.parameterUpdatedPublisher.send(param)
         }
 
         parameterAddedPublisher.send(param)

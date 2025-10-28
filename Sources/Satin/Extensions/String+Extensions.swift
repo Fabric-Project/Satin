@@ -7,6 +7,9 @@
 
 import Foundation
 
+// Partial Fix for https://github.com/Fabric-Project/Satin/issues/15
+var TitleCaseStringCache = [String:String ]()
+
 public extension String {
     var camelCase: String {
         var parts = split(separator: " ")
@@ -18,11 +21,21 @@ public extension String {
     }
 
     var titleCase: String {
-        replacingOccurrences(of: "([A-Z])",
-                             with: " $1",
-                             options: .regularExpression,
-                             range: range(of: self))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .capitalized
+        
+        // Partial Fix for https://github.com/Fabric-Project/Satin/issues/15
+        if let cached = TitleCaseStringCache[self] {
+            return cached
+        } else {
+            let titleCase = self.replacingOccurrences(of: "([A-Z])",
+                                                 with: " $1",
+                                                 options: .regularExpression,
+                                                 range: range(of: self))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .capitalized
+            
+            TitleCaseStringCache[self] = titleCase
+            
+            return titleCase
+        }
     }
 }

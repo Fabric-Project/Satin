@@ -193,24 +193,18 @@ private final class CustomMaterial: SourceMaterial {
     }
 }
 
-private final class CustomMesh: Object, Renderable {
-    var preDraw: ((MTLRenderCommandEncoder) -> Void)?
+private final class CustomMesh: Renderable {
 
-    var opaque: Bool { material?.blending == .disabled }
-    var doubleSided: Bool = false
+    override var opaque: Bool { get {  material?.blending == .disabled } set { } }
 
-    var cullMode: MTLCullMode = .back
-    var windingOrder: MTLWinding = .counterClockwise
-    var triangleFillMode: MTLTriangleFillMode = .fill
+    override var renderOrder:Int { get { 0 } set {} }
+    override var renderPass:Int { get { 0 } set {} }
 
-    var renderOrder = 0
-    var renderPass = 0
+    override var lighting: Bool { material?.lighting ?? false }
+    override var receiveShadow: Bool{  get { material?.receiveShadow ?? false } set { } }
+    override var castShadow: Bool { get { material?.castShadow ?? false } set { } }
 
-    var lighting: Bool { material?.lighting ?? false }
-    var receiveShadow: Bool { material?.receiveShadow ?? false }
-    var castShadow: Bool { material?.castShadow ?? false }
-
-    func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
+    override func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard #available(macOS 13.0, iOS 16.0, *),
               let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil
@@ -218,20 +212,21 @@ private final class CustomMesh: Object, Renderable {
         return true
     }
 
-    var material: Satin.Material? {
+    override var material: Satin.Material? {
         didSet {
             material?.context = context
         }
     }
 
-    var materials: [Satin.Material] {
-        if let material = material {
-            return [material]
+    override var materials: [Satin.Material] {
+        get {
+            if let material = material {
+                return [material]
+            }
+            return []
         }
-        return []
+        set { }
     }
-
-    var vertexUniforms: [Context: VertexUniformBuffer] = [:]
 
     public required init(from _: Decoder) throws {
         fatalError("init(from:) has not been implemented")
@@ -241,8 +236,8 @@ private final class CustomMesh: Object, Renderable {
 
     init(geometry: Geometry, material: Material?) {
         self.geometry = geometry
-        self.material = material
         super.init(label: "Custom Mesh")
+        self.material = material
     }
 
     override func setup() {
@@ -298,7 +293,7 @@ private final class CustomMesh: Object, Renderable {
 
     // MARK: - Draw
 
-    func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         guard #available(macOS 13.0, iOS 16.0, *),
               let vertexUniforms = vertexUniforms[renderContext],
               let material,

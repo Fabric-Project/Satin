@@ -28,7 +28,12 @@ public final class StringParameter: GenericParameter<String> {
         case value
         case options
     }
-
+    
+    public override init(_ label: String, _ value: ValueType = "" , _ controlType: ControlType = .dropdown) {
+        self.options = []
+        super.init(label, value, controlType)
+    }
+    
     public convenience init(_ label: String, _ value: ValueType = "", _ options: [String], _ controlType: ControlType = .dropdown) {
         self.init(label, value, controlType)
         self.options = options
@@ -36,5 +41,21 @@ public final class StringParameter: GenericParameter<String> {
 
     override public func clone() -> any Parameter {
         StringParameter(label, value, options, controlType)
+    }
+    
+    override public func encode(to encoder: any Encoder) throws {
+        try super.encode(to: encoder)
+        
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(options, forKey: .options)
+    }
+    
+    required public init(from decoder: Decoder) throws {
+        
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        self.options = try container.decodeIfPresent([String].self, forKey:.options) ?? []
+        
+        try super.init(from: decoder)
     }
 }

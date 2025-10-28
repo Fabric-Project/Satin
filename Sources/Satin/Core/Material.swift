@@ -26,8 +26,9 @@ public struct DepthBias: Codable, Equatable {
     }
 }
 
-open class Material: Codable, ObservableObject {
-    @Published open var id: String = UUID().uuidString
+open class Material: Codable {
+    
+    let id: String = UUID().uuidString
 
     var prefix: String {
         var result = String(describing: type(of: self)).replacingOccurrences(of: "Material", with: "")
@@ -103,15 +104,13 @@ open class Material: Codable, ObservableObject {
 
     public let parametersSetPublisher = PassthroughSubject<ParameterGroup, Never>()
     private var parameterGroupSubscriptions = Set<AnyCancellable>()
-    public private(set) lazy var parameters: ParameterGroup = {
-        let params = ParameterGroup("\(label) Uniforms")
-        setupParameterGroupSubscriptions(params)
-        return params
-    }() {
+    public private(set) var parameters: ParameterGroup = ParameterGroup() {
         didSet {
+            if parameters == oldValue { return }
+            parameters.label = "\(label) Uniforms"
             setupParameterGroupSubscriptions(parameters)
             uniformsNeedsUpdate = true
-            objectWillChange.send()
+            //objectWillChange.send()
             parametersSetPublisher.send(parameters)
         }
     }
@@ -206,6 +205,10 @@ open class Material: Codable, ObservableObject {
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
         setupShaderParametersSubscription(shader)
+        setupParameterGroupSubscriptions(parameters)
+        uniformsNeedsUpdate = true
+        parametersSetPublisher.send(parameters)
+
     }
 
     // MARK: - CodingKeys
@@ -287,7 +290,7 @@ open class Material: Codable, ObservableObject {
         setupDepthStencilState()
         setupShader()
         setupUniforms()
-        objectWillChange.send()
+//        objectWillChange.send()
     }
 
     private func setupParameterGroupSubscriptions(_ parameterGroup: ParameterGroup) {
@@ -296,30 +299,32 @@ open class Material: Codable, ObservableObject {
         parameterGroup.parameterAddedPublisher.sink { [weak self] _ in
             guard let self else { return }
             self.uniformsNeedsUpdate = true
-            self.objectWillChange.send()
+            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
         parameterGroup.parameterRemovedPublisher.sink { [weak self] _ in
             guard let self else { return }
             self.uniformsNeedsUpdate = true
-            self.objectWillChange.send()
+            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
         parameterGroup.parameterUpdatedPublisher.sink { [weak self] _ in
             guard let self else { return }
-            self.objectWillChange.send()
+            self.uniformsNeedsUpdate = true
+
+            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
         parameterGroup.loadedPublisher.sink { [weak self] _ in
             guard let self else { return }
             self.uniformsNeedsUpdate = true
-            self.objectWillChange.send()
+            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
         parameterGroup.clearedPublisher.sink { [weak self] _ in
             guard let self else { return }
             self.uniformsNeedsUpdate = true
-            self.objectWillChange.send()
+            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
     }
 
@@ -358,11 +363,12 @@ open class Material: Codable, ObservableObject {
         }
 
         shader?.context = context
+        shader?.setup()
     }
 
     open func setupShaderRenderingConfiguration(_ shader: Shader) {
         shader.renderingConfiguration = renderingConfiguration
-        objectWillChange.send()
+        //objectWillChange.send()
     }
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
@@ -375,7 +381,7 @@ open class Material: Codable, ObservableObject {
 
             self.uniformsNeedsUpdate = true
 
-            self.objectWillChange.send()
+            //self.objectWillChange.send()
 
             self.parametersSetPublisher.send(self.parameters)
 

@@ -54,7 +54,8 @@ class TriangulatorTests: XCTestCase {
         triangulate(&_paths, &_lengths, 3, &triData)
 
         copyTriangleDataToGeometryData(&triData, &geoData)
-        createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &geoData)
+        let bounds = simd_float4(0.0, 0.0, 1.0, 1.0)
+        createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &geoData, bounds)
         freeTriangleData(&triData)
 
         XCTAssertEqual(geoData.vertexCount, 161)
@@ -63,7 +64,7 @@ class TriangulatorTests: XCTestCase {
         // Hash only positions because Vertex contains a float3 which has an extra four uninitized bytes for alignment.
         let positions = UnsafeMutableBufferPointer(start: geoData.vertexData, count: Int(geoData.vertexCount)).map { $0.position }
 
-        XCTAssertEqual(MD5(array: positions), "9b835e4e6281be92a2c9be43d7e3c46d")
+        XCTAssertEqual(MD5(array: positions), "feec3181e2ee6b4a734ecbe1737d2240")
         XCTAssertEqual(MD5(ptr: geoData.indexData, count: Int(geoData.indexCount)), "ca5d4028863569f75629928ba570c9fd")
 
         freeGeometryData(&geoData)
@@ -97,7 +98,8 @@ class TriangulatorTests: XCTestCase {
                 triangulate(&_paths, &_lengths, 3, &triData)
 
                 copyTriangleDataToGeometryData(&triData, &geoData)
-                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &geoData)
+                let bounds = simd_float4(0.0, 0.0, 1.0, 1.0)
+                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &geoData, bounds)
 
                 freeTriangleData(&triData)
                 freeGeometryData(&geoData)

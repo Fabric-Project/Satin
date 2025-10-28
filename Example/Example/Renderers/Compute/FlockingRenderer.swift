@@ -9,6 +9,7 @@
 import Combine
 import Metal
 import Satin
+import SwiftUICore
 
 final class FlockingRenderer: BaseRenderer {
     final class FlockingComputeSystem: BufferComputeSystem {}
@@ -80,13 +81,13 @@ final class FlockingRenderer: BaseRenderer {
     }
 
     func setupObservers() {
-        particleCountParam.$value.sink { [weak self] value in
+        particleCountParam.valuePublisher.sink { [weak self] value in
             guard let self = self else { return }
             self.particleSystem.count = value
             self.sprite.instanceCount = value
         }.store(in: &cancellables)
 
-        resetParam.$value.sink { [weak self] value in
+        resetParam.valuePublisher.sink { [weak self] value in
             guard let self = self, value == true else { return }
             self.particleSystem.reset()
             self.resetParam.value = false

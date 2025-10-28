@@ -196,9 +196,9 @@ final class SuperShapesRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     override func setup() {
-        parametersSubscription = parameters.objectWillChange.sink { [weak self] in
-            self?.updateGeometry()
-        }
+//        parametersSubscription = parameters.objectWillChange.sink { [weak self] in
+//            self?.updateGeometry()
+//        }
 
         mesh.cullMode = .none
 

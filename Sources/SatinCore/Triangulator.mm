@@ -985,22 +985,38 @@ int extrudePaths(simd_float2 **paths, int *lengths, int count, GeometryData *gDa
                              .indexData =
                                  (TriangleIndices *)malloc(indexCount * sizeof(TriangleIndices)) };
 
-        float lengthMinusOne = (float)(length - 1);
+        float L = 0.0f;
+        tsVertex *v = path->v;
+        for (int j = 0; j < length; ++j) {
+            simd_float2 a = v->v;
+            simd_float2 b = v->next->v;            // wraps on the last iter
+            float dx = b.x - a.x;
+            float dy = b.y - a.y;
+            L += sqrtf(dx * dx + dy * dy);
+            v = v->next;
+        }
+        if (L <= FLT_EPSILON) L = 1.0f;            // avoid divide-by-zero
         tsVertex *curr = path->v;
+        float s = 0.0f;                             // running arc length from seam
+
+        
+//        float lengthMinusOne = (float)(length - 1);
+        
         for (int j = 0; j < length; j++) {
             const simd_float2 pt = curr->v;
-            const float uv = (float)j / lengthMinusOne;
+//            const float uv = (float)j / lengthMinusOne;
+            const float u = s / L;
             // front vertex
             extrudeData.vertexData[j] =
                 (SatinVertex) { .position = simd_make_float3(pt.x, pt.y, 1.0),
                                 .normal = simd_make_float3(0.0, 0.0, 0.0),
-                                .uv = simd_make_float2(uv, 0.0) };
+                                .uv = simd_make_float2(u, 0.0) };
 
             // rear vertex
             extrudeData.vertexData[j + length] =
                 (SatinVertex) { .position = simd_make_float3(pt.x, pt.y, -1.0),
                                 .normal = simd_make_float3(0.0, 0.0, 0.0),
-                                .uv = simd_make_float2(uv, 1.0) };
+                                .uv = simd_make_float2(u, 1.0) };
 
             const uint32_t i0 = j;
             const uint32_t i1 = i0 + length;
@@ -1013,6 +1029,11 @@ int extrudePaths(simd_float2 **paths, int *lengths, int count, GeometryData *gDa
             extrudeData.indexData[j0] = (TriangleIndices) { .i0 = i0, .i1 = i1, .i2 = i2 };
             extrudeData.indexData[j1] = (TriangleIndices) { .i0 = i0, .i1 = i2, .i2 = i3 };
 
+            const simd_float2 nxt = curr->next->v;
+            const float dx = nxt.x - pt.x;
+            const float dy = nxt.y - pt.y;
+            s += sqrtf(dx * dx + dy * dy);
+            
             curr = curr->next;
         }
 

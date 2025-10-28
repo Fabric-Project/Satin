@@ -72,6 +72,6 @@ public final class ExtrudedRoundedRectGeometry: SatinGeometry {
     }
 
     override public func generateGeometryData() -> GeometryData {
-        generateExtrudedRoundedRectGeometryData(size.x, size.y, size.z, radius, cornerResolution, edgeXResolution, edgeYResolution, Int32(depthResolution), Int32(radialResolution))
+        generateExtrudedRoundedRectGeometryData(size.x, size.y, size.z, radius, cornerResolution, edgeXResolution, edgeYResolution, Int32(depthResolution), Int32(radialResolution), false)
     }
 }

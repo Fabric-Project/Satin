@@ -72,7 +72,7 @@ GeometryData generateSkyboxGeometryData(float size);
 
 GeometryData generateUVDiskGeometryData(float innerRadius, float outerRadius);
 
-GeometryData generateCircleGeometryData(float radius, int angularResolution, int radialResolution);
+GeometryData generateCircleGeometryData(float radius, int angularResolution, int radialResolution, bool radialUVs);
 
 GeometryData generateTriangleGeometryData(float size);
 
@@ -95,7 +95,8 @@ GeometryData generateRoundedRectGeometryData(
     int angularResolution,
     int edgeXResolution,
     int edgeYResolution,
-    int radialResolution);
+    int radialResolution,
+    bool radialUVs);
 
 GeometryData generateExtrudedRoundedRectGeometryData(
     float width,
@@ -106,7 +107,8 @@ GeometryData generateExtrudedRoundedRectGeometryData(
     int edgeXResolution,
     int edgeYResolution,
     int edgeZResolution,
-    int radialResolution);
+    int radialResolution,
+    bool radialUVs);
 
 GeometryData generateTubeGeometryData(
     float radius,

@@ -10,10 +10,10 @@ import Foundation
 import Metal
 import simd
 
-public final class PointLight: Object, Light {
-    public var type: LightType { .point }
+public final class PointLight: Light {
+    override public var type: LightType { .point }
 
-    public var data: LightData {
+    override public var data: LightData {
         LightData(
             // (rgb, intensity)
             color: simd_make_float4(color, intensity),
@@ -25,51 +25,39 @@ public final class PointLight: Object, Light {
             spotInfo: .zero
         )
     }
-
-    public var color: simd_float3 {
-        didSet {
-            if color != oldValue {
-                publisher.send(self)
-            }
-        }
+    
+    /* TODO: FIX ME */
+    override public var castShadow:Bool
+    {
+        get { false }
+        set { }
     }
-
-    public var intensity: Float {
-        didSet {
-            publisher.send(self)
-        }
-    }
-
-    public var castShadow = false
-    /* FIX ME */
-    public lazy var shadow: Shadow = DirectionalLightShadow(label: label)
-
+    
     public var radius: Float {
         didSet {
             publisher.send(self)
         }
     }
 
-    public let publisher = PassthroughSubject<Light, Never>()
     private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
-        case color
-        case intensity
         case radius
     }
 
     public init(label: String = "Point Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0) {
+        self.radius = radius
+
+        super.init(label: label)
         self.color = color
         self.intensity = intensity
-        self.radius = radius
-        super.init(label: label)
+
+        /* TODO: FIX ME */
+        self.shadow = DirectionalLightShadow(label: label)
     }
 
     public required init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        color = try values.decode(simd_float3.self, forKey: .color)
-        intensity = try values.decode(Float.self, forKey: .intensity)
         radius = try values.decode(Float.self, forKey: .radius)
         try super.init(from: decoder)
     }
@@ -77,8 +65,7 @@ public final class PointLight: Object, Light {
     override public func encode(to encoder: Encoder) throws {
         try super.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(color, forKey: .color)
-        try container.encode(intensity, forKey: .intensity)
+        try container.encode(radius, forKey: .radius)
     }
 
     override public func setup() {

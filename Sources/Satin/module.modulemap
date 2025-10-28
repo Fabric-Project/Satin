@@ -1,0 +1,9 @@
+
+framework module Satin {
+  umbrella header "Satin.h"
+  requires objc
+
+  export *
+
+  module * { export * }
+}

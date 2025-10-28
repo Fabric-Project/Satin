@@ -54,6 +54,6 @@ public final class CircleGeometry: SatinGeometry {
     }
 
     override public func generateGeometryData() -> GeometryData {
-        generateCircleGeometryData(radius, Int32(angularResolution), Int32(radialResolution))
+        generateCircleGeometryData(radius, Int32(angularResolution), Int32(radialResolution), false)
     }
 }

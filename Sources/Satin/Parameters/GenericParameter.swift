@@ -8,8 +8,8 @@
 import Combine
 import Foundation
 
-public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObject {
-    public var id: String = UUID().uuidString
+public class GenericParameter<T: Codable & Equatable>: Parameter {
+    public var id: UUID
 
     public typealias ValueType = T
 
@@ -33,10 +33,17 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
         "Label: \(label) type: \(string) value: \(value) controlType: \(controlType)"
     }
 
-    @Published public var value: ValueType {
-        didSet {
-            if value != oldValue {
-                valuePublisher.send(value)
+    // Maybe a bit too verbose?
+    public var valueDidChange:Bool = true
+        
+    public var value: ValueType
+    {
+        didSet
+        {
+            if oldValue != self.value
+            {
+                self.valueDidChange = true
+                valuePublisher.send(self.value)
             }
         }
     }
@@ -44,6 +51,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
     public var defaultValue: ValueType
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case controlType
         case label
         case value
@@ -53,6 +61,9 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
+        let id = try container.decode(UUID.self, forKey: .id)
+        self.id = id
+        
         controlType = try container.decode(ControlType.self, forKey: .controlType)
 
         label = try container.decode(String.self, forKey: .label)
@@ -71,6 +82,8 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
         try container.encode(controlType, forKey: .controlType)
         try container.encode(label, forKey: .label)
 
@@ -84,6 +97,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ObservableObje
     }
 
     public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
+        self.id = UUID()
         self.label = label
         self.value = value
         defaultValue = value
@@ -119,7 +133,7 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
 
     public let minValuePublisher = PassthroughSubject<ValueType, Never>()
 
-    @Published public var min: ValueType {
+    public var min: ValueType {
         didSet {
             minValuePublisher.send(min)
             valuePublisher.send(value)
@@ -128,7 +142,7 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
 
     public let maxValuePublisher = PassthroughSubject<ValueType, Never>()
 
-    @Published public var max: ValueType {
+    public var max: ValueType {
         didSet {
             maxValuePublisher.send(max)
             valuePublisher.send(value)

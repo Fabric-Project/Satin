@@ -55,6 +55,6 @@ public final class RoundedRectGeometry: SatinGeometry {
     }
 
     override public func generateGeometryData() -> GeometryData {
-        generateRoundedRectGeometryData(size.x, size.y, radius, cornerResolution, edgeX, edgeY, Int32(radialResolution))
+        generateRoundedRectGeometryData(size.x, size.y, radius, cornerResolution, edgeX, edgeY, Int32(radialResolution), false)
     }
 }

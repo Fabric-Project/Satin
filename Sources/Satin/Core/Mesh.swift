@@ -14,34 +14,9 @@ import simd
 import SatinCore
 #endif
 
-open class Mesh: Object, Renderable {
-    public var opaque: Bool { material!.blending == .disabled }
+open class Mesh: Renderable {
 
-    public let doubleSidedPublisher = PassthroughSubject<Bool, Never>()
-    public var doubleSided: Bool = false {
-        didSet {
-            doubleSidedPublisher.send(doubleSided)
-        }
-    }
-
-    public let renderOrderPublisher = PassthroughSubject<Int, Never>()
-    public var renderOrder = 0 {
-        didSet {
-            renderOrderPublisher.send(renderOrder)
-        }
-    }
-
-    public let renderPassPublisher = PassthroughSubject<Int, Never>()
-    public var renderPass = 0 {
-        didSet {
-            renderPassPublisher.send(renderPass)
-        }
-    }
-
-    public var lighting: Bool { material?.lighting ?? false }
-
-    public let receiveShadowPublisher = PassthroughSubject<Bool, Never>()
-    public var receiveShadow = false {
+    override public var receiveShadow: Bool {
         didSet {
             if receiveShadow != oldValue {
                 material?.receiveShadow = receiveShadow
@@ -49,12 +24,10 @@ open class Mesh: Object, Renderable {
                     submesh.material?.receiveShadow = receiveShadow
                 }
             }
-            receiveShadowPublisher.send(receiveShadow)
         }
     }
-
-    public let castShadowPublisher = PassthroughSubject<Bool, Never>()
-    public var castShadow = false {
+  
+    override public var castShadow:Bool {
         didSet {
             if castShadow != oldValue {
                 material?.castShadow = castShadow
@@ -62,25 +35,10 @@ open class Mesh: Object, Renderable {
                     submesh.material?.castShadow = castShadow
                 }
             }
-            castShadowPublisher.send(castShadow)
         }
     }
 
-    public let cullModePublisher = PassthroughSubject<MTLCullMode, Never>()
-    public var cullMode: MTLCullMode = .back {
-        didSet {
-            cullModePublisher.send(cullMode)
-        }
-    }
-
-    public let triangleFillModePublisher = PassthroughSubject<MTLTriangleFillMode, Never>()
-    public var triangleFillMode: MTLTriangleFillMode = .fill {
-        didSet {
-            triangleFillModePublisher.send(triangleFillMode)
-        }
-    }
-
-    public var windingOrder: MTLWinding {
+    override public var windingOrder: MTLWinding {
         get {
             geometry.windingOrder
         }
@@ -89,7 +47,7 @@ open class Mesh: Object, Renderable {
         }
     }
 
-    open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
+    override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
               !geometry.vertexBuffers.isEmpty,
               vertexUniforms[renderContext] != nil
@@ -111,9 +69,6 @@ open class Mesh: Object, Renderable {
         }
     }
 
-    public var vertexUniforms: [Context: VertexUniformBuffer] = [:]
-
-    public var preDraw: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
 
     open var geometry = Geometry() {
         didSet {
@@ -123,8 +78,8 @@ open class Mesh: Object, Renderable {
             }
         }
     }
-
-    open var material: Material? {
+    
+    override open var material: Material? {
         didSet {
             if material != oldValue {
                 setupMaterial()
@@ -132,29 +87,21 @@ open class Mesh: Object, Renderable {
         }
     }
 
-    open var materials: [Material] {
-        var allMaterials = [Material]()
-        if let material = material {
-            allMaterials.append(material)
-        }
-        for submesh in submeshes {
-            if let material = submesh.material {
-                allMaterials.append(material)
-            }
-        }
-        return allMaterials
-    }
-
     var geometrySubscription: AnyCancellable?
 
     public internal(set) var submeshes: [Submesh] = []
+    {
+        didSet {
+            self.updateAllMaterials()
+        }
+    }
 
     public init(label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
         self.geometry = geometry
+        super.init(label: label, visible: visible)
         self.material = material
         self.renderOrder = renderOrder
         self.renderPass = renderPass
-        super.init(label: label, visible: visible)
     }
 
     // MARK: - Decode
@@ -216,6 +163,8 @@ open class Mesh: Object, Renderable {
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
         material.context = context
+        
+        self.updateAllMaterials()
     }
 
     // MARK: - Binding
@@ -274,10 +223,25 @@ open class Mesh: Object, Renderable {
             index: index
         )
     }
+    
+    private func updateAllMaterials()
+    {
+        var allMaterials = [Material]()
+        if let material = material {
+            allMaterials.append(material)
+        }
+        for submesh in submeshes {
+            if let material = submesh.material {
+                allMaterials.append(material)
+            }
+        }
+        
+        self.materials = allMaterials
+    }
 
     // MARK: - Draw
 
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         draw(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,

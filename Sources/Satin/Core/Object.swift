@@ -15,23 +15,23 @@ import simd
 import SatinCore
 #endif
 
-open class Object: Codable, ObservableObject {
+open class Object: Codable {
     public let idPublisher = PassthroughSubject<String, Never>()
-    @Published open var id: String = UUID().uuidString {
+    var id: String = UUID().uuidString {
         didSet {
             idPublisher.send(id)
         }
     }
 
     public let labelPublisher = PassthroughSubject<String, Never>()
-    @Published open var label = "Object" {
+    public var label = "Object" {
         didSet {
             labelPublisher.send(label)
         }
     }
 
     public let visiblePublisher = PassthroughSubject<Bool, Never>()
-    @Published open var visible = true {
+    public var visible = true {
         didSet {
             visiblePublisher.send(visible)
         }
@@ -41,14 +41,14 @@ open class Object: Codable, ObservableObject {
         didSet {
             if let context, context != oldValue {
                 setup()
-                objectWillChange.send()
+                //objectWillChange.send()
             }
         }
     }
 
     // MARK: - Position
 
-    @Published open var position: simd_float3 = .zero {
+    public var position: simd_float3 = .zero {
         didSet {
             _translationMatrix.clear()
 
@@ -81,7 +81,7 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - Orientation
 
-    @Published open var orientation = simd_quatf(matrix_identity_float4x4) {
+    public var orientation = simd_quatf(matrix_identity_float4x4) {
         didSet {
             _rotationMatrix.clear()
 
@@ -126,7 +126,7 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - Scale
 
-    @Published open var scale: simd_float3 = .one {
+    public var scale: simd_float3 = .one {
         didSet {
             _scaleMatrix.clear()
 
@@ -192,7 +192,7 @@ open class Object: Codable, ObservableObject {
         }
     }
 
-    var updateLocalMatrix = true {
+    public var updateLocalMatrix = true {
         didSet {
             if updateLocalMatrix {
                 updateLocalBounds = true
@@ -276,7 +276,7 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - Bounds
 
-    open var updateBounds = true {
+    public var updateBounds = true {
         didSet {
             if updateBounds {
                 _updateBounds = true
@@ -304,7 +304,7 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - Local Bounds
 
-    open var updateLocalBounds = true {
+    public var updateLocalBounds = true {
         didSet {
             if updateLocalBounds {
                 _updateLocalBounds = true
@@ -334,7 +334,7 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - World Bounds
 
-    open var updateWorldBounds = true {
+     var updateWorldBounds = true {
         didSet {
             if updateWorldBounds {
                 _updateWorldBounds = true
@@ -404,13 +404,13 @@ open class Object: Codable, ObservableObject {
 
     // MARK: - Parent & Children
 
-    open weak var parent: Object? {
+     weak var parent: Object? {
         didSet {
             updateWorldMatrix = true
         }
     }
 
-    @Published open var children: [Object] = [] {
+    public var children: [Object] = [] {
         didSet {
             updateLocalBounds = true
         }

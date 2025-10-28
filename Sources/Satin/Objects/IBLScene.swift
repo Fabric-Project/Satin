@@ -9,19 +9,8 @@
 @preconcurrency import Metal
 import simd
 
-open class IBLScene: Object, IBLEnvironment {
-    public var environmentIntensity: Float = 1.0
-
-    public internal(set) var environment: MTLTexture?
-    public internal(set) var cubemapTexture: MTLTexture?
-    public internal(set) var brdfTexture: MTLTexture?
-
-    public internal(set) var irradianceTexture: MTLTexture?
-    public var irradianceTexcoordTransform = matrix_identity_float3x3
-
-    public internal(set) var reflectionTexture: MTLTexture?
-    public var reflectionTexcoordTransform = matrix_identity_float3x3
-
+open class IBLScene:  IBLEnvironment {
+    
     var cubemapGenerator: CubemapGenerator? // 0.023512959480285645
         = CubemapGenerator(device: MTLCreateSystemDefaultDevice()!)
     var diffuseIBLGenerator: DiffuseIBLGenerator? // 0.3512990474700928

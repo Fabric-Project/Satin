@@ -91,18 +91,18 @@ final class AudioInput: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
     }
 
     func setupObservers() {
-        input.$value.sink { [weak self] value in
+        input.valuePublisher.sink { [weak self] value in
             guard let self = self else { return }
             if self.input.value != value {
                 self.setupCapture()
             }
         }.store(in: &cancellables)
 
-        fftSmoothing.$value.sink { [weak self] _ in
+        fftSmoothing.valuePublisher.sink { [weak self] _ in
             self?.setSmoothing()
         }.store(in: &cancellables)
 
-        window.$value.sink { [weak self] _ in
+        window.valuePublisher.sink { [weak self] _ in
             self?.setWindowType()
         }.store(in: &cancellables)
     }

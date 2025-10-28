@@ -12,11 +12,6 @@ import Metal
 import simd
 
 public final class DirectionalLightShadow: Shadow {
-    public var label: String
-
-    public var data: ShadowData {
-        ShadowData(strength: strength, bias: bias, radius: radius)
-    }
 
     var device: MTLDevice? {
         didSet {
@@ -26,9 +21,7 @@ public final class DirectionalLightShadow: Shadow {
         }
     }
 
-    public var camera: Camera
-
-    public var resolution: (width: Int, height: Int) = (1024, 1024) {
+    override public var resolution: (width: Int, height: Int) {
         didSet {
             if resolution.width != oldValue.width || resolution.height != oldValue.height {
                 _updateTexture = true
@@ -37,7 +30,7 @@ public final class DirectionalLightShadow: Shadow {
         }
     }
 
-    public var strength: Float = 1.0 {
+    override public var strength: Float {
         didSet {
             if strength != oldValue {
                 dataPublisher.send(self)
@@ -45,7 +38,7 @@ public final class DirectionalLightShadow: Shadow {
         }
     }
 
-    public var radius: Float = 1.0 {
+    override public var radius: Float {
         didSet {
             if radius != oldValue {
                 dataPublisher.send(self)
@@ -53,7 +46,7 @@ public final class DirectionalLightShadow: Shadow {
         }
     }
 
-    public var bias: Float = 0.00001 {
+    override public var bias: Float {
         didSet {
             if bias != oldValue {
                 dataPublisher.send(self)
@@ -77,7 +70,7 @@ public final class DirectionalLightShadow: Shadow {
         }
     }
 
-    @Published public var texture: MTLTexture? {
+    override public var texture: MTLTexture? {
         didSet {
             texturePublisher.send(self)
         }
@@ -85,28 +78,29 @@ public final class DirectionalLightShadow: Shadow {
 
     var _updateTexture = true
 
-    public let texturePublisher = PassthroughSubject<Shadow, Never>()
-    public let resolutionPublisher = PassthroughSubject<Shadow, Never>()
-    public let dataPublisher = PassthroughSubject<Shadow, Never>()
-
-    init(label: String) {
-        self.label = label
-        camera = OrthographicCamera(left: -5, right: 5, bottom: -5, top: 5, near: 0.01, far: 50.0)
-    }
+   
 
     func setup() {
         setupTexture()
     }
 
-    public func update(light: Object) {
+    override public func update(light: Object) {
         camera.position = light.worldPosition
         camera.lookAt(target: light.worldPosition + light.worldForwardDirection, up: Satin.worldUpDirection)
     }
 
-    public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
+    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
         setupTexture()
 
+        if self.device == nil
+        {
+            self.device = context.device
+        }
+        
         let renderPassDescriptor = MTLRenderPassDescriptor()
+        
+        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
+        
         renderPassDescriptor.depthAttachment.texture = texture
         renderPassDescriptor.depthAttachment.loadAction = .clear
         renderPassDescriptor.depthAttachment.storeAction = .store
@@ -151,7 +145,9 @@ public final class DirectionalLightShadow: Shadow {
     }
 
     private func setupTexture() {
-        guard let device, _updateTexture, pixelFormat != .invalid, resolution.width > 1, resolution.height > 1 else { return }
+        guard let device, _updateTexture, pixelFormat != .invalid, resolution.width > 1, resolution.height > 1 else {
+            return
+        }
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(pixelFormat: pixelFormat, width: resolution.width, height: resolution.height, mipmapped: false)

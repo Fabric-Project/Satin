@@ -146,9 +146,11 @@ public func loadHDR(device: MTLDevice, url: URL) -> MTLTexture? {
     descriptor.height = cgImage.height
     descriptor.depth = 1
     descriptor.usage = .shaderRead
-    #if os(macOS)
+
+    // Apple Silicon Systems prefer Shared so its the default
+    #if arch(x86_64)
     descriptor.resourceOptions = .storageModeManaged
-    #elseif os(iOS) || os(tvOS)
+    #else
     descriptor.resourceOptions = .storageModeShared
     #endif
     descriptor.sampleCount = 1

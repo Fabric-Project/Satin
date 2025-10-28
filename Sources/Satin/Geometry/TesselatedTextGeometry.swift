@@ -356,7 +356,12 @@ public class TesselatedTextGeometry: SatinGeometry {
 
             var triData = createTriangleData()
             if triangulate(&_paths, &_lengths, Int32(_lengths.count), &triData) == 0 {
-                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData)
+                let glyphBounds = glyphPath.boundingBoxOfPath
+                let bounds = simd_float4(Float(glyphBounds.minX),
+                                         Float(glyphBounds.minY),
+                                         Float(glyphBounds.maxX),
+                                         Float(glyphBounds.maxY))
+                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData, bounds)
                 copyTriangleDataToGeometryData(&triData, &cData)
                 freeTriangleData(&triData)
             } else {

@@ -100,7 +100,7 @@ public enum PBRTextureType: String, CaseIterable, Codable {
     }
 
     public var description: String {
-        String(describing: self)
+        self.rawValue
     }
 
     public var samplerName: String {

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum Easing {
+public enum Easing: CaseIterable {
     case linear
     case smoothstep
     case smootherstep
@@ -41,6 +41,79 @@ public enum Easing {
     case inBounce
     case outBounce
     case inOutBounce
+    
+    public func title() -> String {
+        switch self
+        {
+        case .linear:
+            return "Linear"
+        case .smoothstep:
+            return  "Smoothstep"
+        case .smootherstep:
+            return "Smootherstep"
+        case .inSine:
+            return "In Sine"
+        case .outSine:
+            return "Out Sine"
+        case .inOutSine:
+            return "Sine"
+        case .inQuad:
+            return "In Quad"
+        case .outQuad:
+            return "Out Quad"
+        case .inOutQuad:
+            return "Quad"
+        case .inCubic:
+            return "In Cubic"
+        case .outCubic:
+            return "Out Cubic"
+        case .inOutCubic:
+            return "Cubic"
+        case .inQuart:
+            return "In Quart"
+        case .outQuart:
+            return "Out Quart"
+        case .inOutQuart:
+            return "Quart"
+        case .inQuint:
+            return "In Quint"
+        case .outQuint:
+            return "Out Quint"
+        case .inOutQuint:
+            return "Quint"
+        case .inExpo:
+            return "In Expo"
+        case .outExpo:
+            return "Out Expo"
+        case .inOutExpo:
+            return "Expo"
+        case .inCirc:
+            return "In Circ"
+        case .outCirc:
+            return "Out Circ"
+        case .inOutCirc:
+            return "Circ"
+        case .inBack:
+            return "In Back"
+        case .outBack:
+            return "Out Back"
+        case .inOutBack:
+            return "Back"
+        case .inElastic:
+            return "In Elastic"
+        case .outElastic:
+            return "Out Elastic"
+        case .inOutElastic:
+            return "Elastic"
+        case .inBounce:
+            return "In Bounce"
+        case .outBounce:
+            return "Out Bounce"
+        case .inOutBounce:
+            return "Bounce"
+            
+        }
+    }
 
     public var function: (Double) -> Double {
         switch self {

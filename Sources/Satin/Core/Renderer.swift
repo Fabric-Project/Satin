@@ -184,7 +184,7 @@ open class Renderer {
         depthStoreAction: MTLStoreAction = .store,
         clearStencil: UInt32 = 0,
         stencilLoadAction: MTLLoadAction = .clear,
-        stencilStoreAction: MTLStoreAction = .dontCare,
+        stencilStoreAction: MTLStoreAction = .store,
         frameBufferOnly: Bool = true
     ) {
         self.label = label
@@ -454,6 +454,7 @@ open class Renderer {
         renderPassDescriptor.depthAttachment.loadAction = depthLoadAction
         renderPassDescriptor.depthAttachment.clearDepth = clearDepth
 
+        renderPassDescriptor.stencilAttachment.storeAction = stencilStoreAction
         renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
         renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
 
@@ -503,9 +504,10 @@ open class Renderer {
 #endif
                     renderEncoder.endEncoding()
 
-                    renderPassDescriptor.colorAttachments[0].loadAction = .load
-                    renderPassDescriptor.depthAttachment.loadAction = .load
-                    renderPassDescriptor.stencilAttachment.loadAction = .load
+                    // Not sure why this is necessary? 
+//                    renderPassDescriptor.colorAttachments[0].loadAction = .load
+//                    renderPassDescriptor.depthAttachment.loadAction = .load
+//                    renderPassDescriptor.stencilAttachment.loadAction = .load
                 }
             }
         }
@@ -578,13 +580,13 @@ open class Renderer {
                     shadowCasters.append(renderable)
                 }
             }
-        }
-
-        for child in object.children {
-            updateLists(
-                object: child,
-                visible: object.visible && visible
-            )
+            
+            for child in object.children {
+                updateLists(
+                    object: child,
+                    visible: object.visible && visible
+                )
+            }
         }
     }
 

@@ -10,6 +10,7 @@
 
 #include "Geometry.h"
 #include "Types.h"
+#include <Accelerate/Accelerate.h>
 
 Points2D createPoints2D(void) { return (Points2D) { .count = 0, .data = NULL }; }
 
@@ -146,7 +147,7 @@ void copyTriangleDataToGeometryData(TriangleData *triData, GeometryData *destDat
 }
 
 void createGeometryDataFromPaths(
-    simd_float2 **paths, int *lengths, int count, GeometryData *geoData) {
+    simd_float2 **paths, int *lengths, int count, GeometryData *geoData, simd_float4 pathBounds ) {
     int vertexCount = 0;
     for (int i = 0; i < count; i++) {
         vertexCount += lengths[i];
@@ -161,10 +162,15 @@ void createGeometryDataFromPaths(
         const simd_float2 *subpath = paths[i];
         for (int j = 0; j < pathLength; j++) {
             const simd_float2 &pt = subpath[j];
+            
             geoData->vertexData[index++] =
-                (SatinVertex) { .position = simd_make_float3(pt.x, pt.y, 0.0),
-                                .normal = simd_make_float3(0.0, 0.0, 1.0),
-                                .uv = simd_make_float2((float)j / (float)pathLength, 0.0) };
+            (SatinVertex) { .position = simd_make_float3(pt.x, pt.y, 0.0),
+                    .normal = simd_make_float3(0.0, 0.0, 1.0),
+                    .uv = simd_make_float2((pt.x - pathBounds[0])/(pathBounds[2] - pathBounds[0]),
+                                           (pt.y - pathBounds[1])/(pathBounds[3] - pathBounds[1]) )};
+//                                                       (float)pt.x / (float)pathLength ,
+//                                                       (float)pt.y / (float)pathLength ) };
+//                                .uv = simd_make_float2((float)j / (float)pathLength, 0.0) };
         }
     }
 }

@@ -9,10 +9,10 @@
 import Combine
 import Foundation
 
-public protocol Parameter: AnyObject, Codable, CustomStringConvertible {
+public protocol Parameter: AnyObject, Codable, CustomStringConvertible, Identifiable {
     associatedtype ValueType: Codable & Equatable
 
-    var id: String { get }
+    var id: UUID { get }
     var value: ValueType { get set }
     var defaultValue: ValueType { get set }
 
@@ -28,7 +28,8 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible {
     var description: String { get }
 
     var valuePublisher: PassthroughSubject<ValueType, Never> { get }
-
+    var valueDidChange:Bool { get }
+    
     func alignData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
     func writeData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
 
@@ -54,6 +55,7 @@ public enum ControlType: String, Codable {
     case colorpalette
     case dropdown
     case label
+    case filepicker
 }
 
 public enum ParameterType: String, Codable {
