@@ -104,6 +104,26 @@ simd_float4x4 perspectiveMatrixf(float fov, float aspect, float near, float far)
     return simd_matrix(col0, col1, col2, col3);
 }
 
+// Frustum shift perspective projection matrix
+simd_float4x4 frustumShiftPerspectiveMatrixf(float fov, float aspect, float near, float far, float lensShiftX, float lensShiftY) {
+
+    const float halfFovRad = degToRad(0.5 * fov);
+    const float top = near * tanf(halfFovRad);
+    const float bottom = -top;
+    const float right = top * aspect;
+    const float left = -right;
+
+    const float horizontalShift = lensShiftX * (right - left);
+    const float verticalShift = lensShiftY * (top - bottom);
+
+    const float shiftedLeft = left + horizontalShift;
+    const float shiftedRight = right + horizontalShift;
+    const float shiftedBottom = bottom + verticalShift;
+    const float shiftedTop = top + verticalShift;
+
+    return frustrumMatrixf(shiftedLeft, shiftedRight, shiftedBottom, shiftedTop, near, far);
+}
+
 simd_float4x4 lookAtMatrix3f(simd_float3 eye, simd_float3 at, simd_float3 up) {
     simd_float4x4 result = matrix_identity_float4x4;
 

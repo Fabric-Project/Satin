@@ -25,6 +25,7 @@ frustrumMatrixf(float left, float right, float bottom, float top, float near, fl
 simd_float4x4
 orthographicMatrixf(float left, float right, float bottom, float top, float near, float far);
 simd_float4x4 perspectiveMatrixf(float fov, float aspect, float near, float far);
+simd_float4x4 frustumShiftPerspectiveMatrixf(float fov, float aspect, float near, float far, float lensShiftX, float lensShiftY);
 
 simd_float4x4 lookAtMatrix3f(simd_float3 eye, simd_float3 at, simd_float3 up);
 
