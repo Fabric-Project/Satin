@@ -16,7 +16,7 @@ import SatinCore
 public final class ParametricGeometry: Geometry {
     public var rangeU: ClosedRange<Float> = 0.0 ... 1.0 {
         didSet {
-            if oldValue != rangeV {
+            if oldValue != rangeU {
                 _updateGeometry = true
             }
         }
@@ -133,8 +133,9 @@ public final class ParametricGeometry: Geometry {
         let ru = resolution.x
         let rv = resolution.y
 
-        let ruf = Float(ru)
-        let rvf = Float(rv)
+        // guard against div/0 when ru or rv is 0
+        let ruf = max(1.0, Float(ru))
+        let rvf = max(1.0, Float(rv))
 
         let ruInc = (rangeU.upperBound - rangeU.lowerBound) / ruf
         let rvInc = (rangeV.upperBound - rangeV.lowerBound) / rvf
@@ -142,6 +143,25 @@ public final class ParametricGeometry: Geometry {
         let uminf = Float(rangeU.lowerBound)
         let vminf = Float(rangeV.lowerBound)
 
+        // NEW: non-indexed single-row path for line primitives
+        if primitiveType == .lineStrip || primitiveType == .line || primitiveType == .point {
+            // one row, ru+1 vertices along U, fixed V = lowerBound
+            for u in 0 ... ru {
+                let uf = Float(u)
+                let uIn = uminf + uf * ruInc
+                let pos = generator(uIn, vminf)
+                // simple forward normal for 2D polylines; tweak if you need shading
+                let normal = simd_make_float3(0, 0, 1)
+                vertexData.append(
+                    SatinVertex(position: pos,
+                                normal: normal,
+                                uv: simd_make_float2(uf / ruf, 0.0))
+                )
+            }
+            // leave indexData empty → renderer will use a non-indexed draw call
+            return
+        }
+        
         for v in 0 ... rv {
             let vf = Float(v)
             let vIn = vminf + vf * rvInc

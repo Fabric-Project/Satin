@@ -175,6 +175,26 @@ void createGeometryDataFromPaths(
     }
 }
 
+void createGeometryDataFromPath( simd_float2 *path, int length, GeometryData *geoData, simd_float4 pathBounds ) {
+    
+    geoData->vertexCount = length;
+    geoData->vertexData = (SatinVertex *)malloc(sizeof(SatinVertex) * geoData->vertexCount);
+    
+    for (int j = 0; j < length; j++) {
+        const simd_float2 &pt = path[j];
+        
+        geoData->vertexData[j] = (SatinVertex) {
+            .position = simd_make_float3(pt.x, pt.y, 0.0),
+                .normal = simd_make_float3(0.0, 0.0, 1.0),
+                .uv = simd_make_float2((pt.x - pathBounds[0])/(pathBounds[2] - pathBounds[0]),
+                                       (pt.y - pathBounds[1])/(pathBounds[3] - pathBounds[1]) )};
+        //                                                       (float)pt.x / (float)pathLength ,
+        //                                                       (float)pt.y / (float)pathLength ) };
+        //                                .uv = simd_make_float2((float)j / (float)pathLength, 0.0) };
+    }
+}
+
+
 void createGeometryDataFromPolylines(Polylines2D *polylines, GeometryData *geoData) {
     int vertexCount = 0;
     for (int i = 0; i < polylines->count; i++) {
