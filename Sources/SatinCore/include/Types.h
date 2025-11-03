@@ -133,6 +133,7 @@ void freeGeometryData(GeometryData *data);
 void copyVertexDataToGeometryData(SatinVertex *vertices, int count, GeometryData *destData);
 void copyTriangleDataToGeometryData(TriangleData *triData, GeometryData *destData);
 
+void createGeometryDataFromPath(simd_float2 *path, int length, GeometryData *geoData, simd_float4 pathBounds );
 void createGeometryDataFromPaths(simd_float2 **paths, int *lengths, int count, GeometryData *tData, simd_float4 pathBounds);
 void createGeometryDataFromPolylines(Polylines2D *polylines, GeometryData *tData);
 

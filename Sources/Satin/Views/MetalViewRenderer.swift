@@ -32,8 +32,8 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
 
     public internal(set) unowned var metalView: MetalView!
 
-    public internal(set) var device: MTLDevice!
-    public internal(set) var commandQueue: MTLCommandQueue!
+    public var device: MTLDevice!
+    public var commandQueue: MTLCommandQueue!
 
     public internal(set) var colorMultisampleTextures: [MTLTexture?] = []
 
