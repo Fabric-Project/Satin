@@ -82,6 +82,10 @@ open class SourceShader: Shader {
         super.init(configuration: configuration)
         setupShaderCompiler()
     }
+    
+    deinit {
+        compilerSubscription?.cancel()
+    }
 
     open func setupShaderCompiler() {
         compiler = ShaderSourceCache.getCompiler(url: pipelineURL)

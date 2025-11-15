@@ -46,8 +46,11 @@ public final class ParameterGroup: Codable, CustomStringConvertible {
     public let clearedPublisher = PassthroughSubject<ParameterGroup, Never>()
 
     deinit {
+        
         params = []
         paramsMap = [:]
+
+        paramSubscriptions.forEach { $0.value.cancel() }
         paramSubscriptions = [:]
 
         if _dataAllocated {
