@@ -47,10 +47,35 @@ public final class ComputeShaderLibrarySourceCache: Sendable {
 
         source += shaderSource
 
+        injectCustomCode(source: &source, configuration: configuration)
+
         queue.sync(flags: .barrier) {
             cache[configuration] = source
         }
 
         return source
+    }
+}
+
+extension ComputeShaderLibrarySourceCache {
+    private static let injectionRegistry = ShaderCodeInjectionRegistry<ComputeShaderLibraryConfiguration>()
+
+    // MARK: - Register Injector
+    public static func registerInjector<T: ShaderCodeInjector>(_ injector: T, for pipelineType: String) where T.Configuration == ComputeShaderLibraryConfiguration {
+        injectionRegistry.register(injector, for: pipelineType)
+    }
+
+    public static func registerInjector(_ closure: @escaping @Sendable (inout String, ComputeShaderLibraryConfiguration) -> Void, for pipelineType: String) {
+        injectionRegistry.register(closure, for: pipelineType)
+    }
+
+    // MARK: - Unregister Injector
+    public static func unregisterInjector(for pipelineType: String) {
+        injectionRegistry.unregister(for: pipelineType)
+    }
+
+    // MARK: - Custom Injection
+    private static func injectCustomCode(source: inout String, configuration: ComputeShaderLibraryConfiguration) {
+        injectionRegistry.injectCustomCode(source: &source, label: configuration.label, configuration: configuration)
     }
 }

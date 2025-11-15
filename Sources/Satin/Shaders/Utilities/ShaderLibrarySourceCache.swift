@@ -148,56 +148,24 @@ public final class ShaderLibrarySourceCache: Sendable {
 
 
 extension ShaderLibrarySourceCache {
-    
-    // MARK: - Custom Injector Registry
-    public typealias ShaderInjectionClosure = @Sendable (inout String, ShaderLibraryConfiguration) -> Void
-    private nonisolated(unsafe) static var injectors: [String: ShaderInjectionClosure] = [:]
-    private static let injectorsQueue = DispatchQueue(label: "ShaderLibrarySourceCacheInjectorsQueue", attributes: .concurrent)
+    private static let injectionRegistry = ShaderCodeInjectionRegistry<ShaderLibraryConfiguration>()
 
     // MARK: - Register Injector
-    public static func registerInjector(_ injector: some ShaderCodeInjector, for materialType: String) {
-        let closure: ShaderInjectionClosure = { source, config in
-            injector.injectCode(source: &source, configuration: config)
-        }
-        injectorsQueue.sync(flags: .barrier) {
-            injectors[materialType] = closure
-        }
+    public static func registerInjector<T: ShaderCodeInjector>(_ injector: T, for materialType: String) where T.Configuration == ShaderLibraryConfiguration {
+        injectionRegistry.register(injector, for: materialType)
     }
 
-    public static func registerInjector(_ closure: @escaping ShaderInjectionClosure, for materialType: String) {
-        injectorsQueue.sync(flags: .barrier) {
-            injectors[materialType] = closure
-        }
+    public static func registerInjector(_ closure: @escaping @Sendable (inout String, ShaderLibraryConfiguration) -> Void, for materialType: String) {
+        injectionRegistry.register(closure, for: materialType)
     }
 
     // MARK: - Unregister Injector
     public static func unregisterInjector(for materialType: String) {
-        injectorsQueue.sync(flags: .barrier) {
-            _ = injectors.removeValue(forKey: materialType)
-        }
+        injectionRegistry.unregister(for: materialType)
     }
 
     // MARK: - Custom Injection
     private static func injectCustomCode(source: inout String, configuration: ShaderLibraryConfiguration) {
-        var availableInjectors: [String: ShaderInjectionClosure] = [:]
-
-        injectorsQueue.sync {
-            availableInjectors = injectors
-        }
-
-        // Material-specific injector
-        if let injector = availableInjectors[configuration.label] {
-            injector(&source, configuration)
-        }
-
-        // Global injector (wildcard)
-        if let globalInjector = availableInjectors["*"] {
-            globalInjector(&source, configuration)
-        }
+        injectionRegistry.injectCustomCode(source: &source, label: configuration.label, configuration: configuration)
     }
-}
-
-// MARK: - Shader Code Injector
-public protocol ShaderCodeInjector: Sendable {
-    func injectCode(source: inout String, configuration: ShaderLibraryConfiguration)
 }
