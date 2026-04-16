@@ -19,9 +19,9 @@ final class PostProcessingRenderer: BaseRenderer {
     let geometry = IcoSphereGeometry(radius: 1.0, resolution: 0)
 
     lazy var scene: Object = {
-        let scene = Object(label: "Scene")
+        let scene = Object(context: defaultContext, label: "Scene")
         for _ in 0 ... 50 {
-            let mesh = Mesh(geometry: geometry, material: material)
+            let mesh = Mesh(context: defaultContext, geometry: geometry, material: material)
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 5.0
 

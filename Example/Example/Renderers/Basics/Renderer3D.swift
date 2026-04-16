@@ -12,13 +12,15 @@ import MetalKit
 import Satin
 
 final class Renderer3D: BaseRenderer {
-    let mesh = Mesh(
+    lazy var mesh = Mesh(
+        context: defaultContext,
         label: "Sphere",
         geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
         material: BasicDiffuseMaterial(hardness: 0.7)
     )
 
-    let intersectionMesh = Mesh(
+    lazy var intersectionMesh = Mesh(
+        context: defaultContext,
         label: "Intersection Mesh",
         geometry: IcoSphereGeometry(radius: 0.05, resolution: 2),
         material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),

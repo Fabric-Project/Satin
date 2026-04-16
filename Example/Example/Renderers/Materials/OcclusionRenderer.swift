@@ -12,12 +12,14 @@ import MetalKit
 import Satin
 
 final class OcclusionRenderer: BaseRenderer {
-    let mesh = Mesh(
+    lazy var mesh = Mesh(
+        context: defaultContext,
         label: "Mesh",
         geometry: IcoSphereGeometry(radius: 1.0, resolution: 0),
         material: BasicDiffuseMaterial(hardness: 0.7)
     )
-    let intersectionMesh = Mesh(
+    lazy var intersectionMesh = Mesh(
+        context: defaultContext,
         label: "Intersection Mesh",
         geometry: IcoSphereGeometry(radius: 0.1, resolution: 2),
         material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
@@ -29,6 +31,7 @@ final class OcclusionRenderer: BaseRenderer {
     lazy var occlusionMesh: Mesh = {
         let meshMaterial = BasicColorMaterial(color: .zero, blending: .disabled)
         let mesh = Mesh(
+            context: defaultContext,
             geometry: occlusionGeometry,
             material: meshMaterial
         )
@@ -39,6 +42,7 @@ final class OcclusionRenderer: BaseRenderer {
         wireframeMaterial.depthWriteEnabled = false
 
         let meshWireframe = Mesh(
+            context: defaultContext,
             geometry: occlusionGeometry,
             material: wireframeMaterial
         )

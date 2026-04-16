@@ -26,8 +26,8 @@ final class ARDrawingRenderer: BaseRenderer {
     // MARK: - 3D
 
     lazy var material = RainbowMaterial(pipelinesURL: pipelinesURL)
-    lazy var mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 0.03, resolution: 3), material: material, count: 20000)
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.03, resolution: 3), material: material, count: 20000)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {

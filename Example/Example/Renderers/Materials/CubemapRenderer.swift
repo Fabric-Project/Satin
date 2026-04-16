@@ -18,7 +18,7 @@ final class CubemapRenderer: BaseRenderer {
 
     var camera = PerspectiveCamera(position: [0.0, 0.0, 6.0], near: 0.001, far: 200.0, fov: 45.0)
 
-    lazy var scene = Object(label: "Scene", [skybox, mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [skybox, mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -33,7 +33,7 @@ final class CubemapRenderer: BaseRenderer {
             return torusKnotGenerator(u, v, R, r, c, q, p)
         })
 
-        let mesh = Mesh(geometry: geometry, material: customMaterial)
+        let mesh = Mesh(context: defaultContext, geometry: geometry, material: customMaterial)
         mesh.cullMode = .none
         mesh.label = "Knot"
         mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
@@ -45,7 +45,7 @@ final class CubemapRenderer: BaseRenderer {
     lazy var customMaterial = CustomMaterial(pipelineURL: pipelinesURL.appendingPathComponent("Shaders.metal"))
 
     lazy var skybox: Mesh = {
-        let mesh = Mesh(label: "Skybox", geometry: SkyboxGeometry(), material: SkyboxMaterial())
+        let mesh = Mesh(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(), material: SkyboxMaterial())
         mesh.scale = [50, 50, 50]
         return mesh
     }()

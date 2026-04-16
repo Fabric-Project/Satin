@@ -17,13 +17,13 @@ final class ExportGeometryRenderer: BaseRenderer {
 
     lazy var metal: Mesh = {
         let geo = ExtrudedTextGeometry(text: "SATIN", fontName: "Ariel", fontSize: 1, distance: 0.5)
-        let mesh = Mesh(label: "SATIN", geometry: geo, material: material)
+        let mesh = Mesh(context: defaultContext, label: "SATIN", geometry: geo, material: material)
         mesh.position = [0, 0.25, 0]
         return mesh
     }()
 
     lazy var rocks: Mesh = {
-        let mesh = Mesh(label: "PRO", geometry: ExtrudedTextGeometry(text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
+        let mesh = Mesh(context: defaultContext, label: "PRO", geometry: ExtrudedTextGeometry(text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
                         material: material)
         mesh.position = [0, -0.75, 0]
         return mesh

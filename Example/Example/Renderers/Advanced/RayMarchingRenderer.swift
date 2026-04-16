@@ -25,11 +25,11 @@ final class RayMarchingRenderer: BaseRenderer {
         }
     }
 
-    let mesh = Mesh(geometry: BoxGeometry(size: 2.0), material: BasicDiffuseMaterial(hardness: 0.7))
+    lazy var mesh = Mesh(context: defaultContext, geometry: BoxGeometry(size: 2.0), material: BasicDiffuseMaterial(hardness: 0.7))
     let camera = PerspectiveCamera(position: [10.0, 10.0, 10.0], near: 0.1, far: 100.0, fov: 45)
 
     lazy var rayMarchedMaterial = RayMarchedMaterial(pipelinesURL: pipelinesURL)
-    lazy var rayMarchedMesh = Mesh(geometry: QuadGeometry(), material: rayMarchedMaterial)
+    lazy var rayMarchedMesh = Mesh(context: defaultContext, geometry: QuadGeometry(), material: rayMarchedMaterial)
     lazy var scene = Object(label: "Scene", [mesh, rayMarchedMesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)

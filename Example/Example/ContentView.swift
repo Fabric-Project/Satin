@@ -293,7 +293,9 @@ struct ContentView: View {
     #endif
 }
 
-#Preview {
-    ContentView()
-        .preferredColorScheme(.dark)
-}
+#if false
+    #Preview {
+        ContentView()
+            .preferredColorScheme(.dark)
+    }
+#endif

@@ -130,13 +130,7 @@ open class Material: Codable {
 
     public let updatedPublisher = PassthroughSubject<Material, Never>()
 
-    public var context: Context? {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public private(set) var context: Context?
 
     public var instancing: Bool {
         get { renderingConfiguration.instancing }
@@ -197,10 +191,22 @@ open class Material: Codable {
     public var depthBias: DepthBias?
     public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
+    private var needsContextSetup = false
 
-    public required init() {}
+    public required init() {
+        self.context = nil
+        setupParameterGroupSubscriptions(parameters)
+        parametersSetPublisher.send(parameters)
+    }
+
+    public convenience init(context: Context) {
+        self.init()
+        bindContext(context)
+    }
 
     public init(shader: Shader) {
+        self.context = shader.context
+        self.needsContextSetup = shader.context != nil
         self.shader = shader
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
@@ -237,7 +243,10 @@ open class Material: Codable {
     // MARK: - Decode
 
     public required init(from decoder: Decoder) throws {
+        context = decoder.satinContext
+        needsContextSetup = context != nil
         try decode(from: decoder)
+        setupParameterGroupSubscriptions(parameters)
     }
 
     public func decode(from decoder: Decoder) throws {
@@ -347,10 +356,11 @@ open class Material: Codable {
     // MARK: - Shader
 
     open func createShader() -> Shader {
-        SourceShader(
-            label: label,
-            pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal")
-        )
+        if let context {
+            SourceShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        } else {
+            SourceShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        }
     }
 
     open func setupShader() {
@@ -362,7 +372,9 @@ open class Material: Codable {
             isClone = false
         }
 
-        shader?.context = context
+        if let context {
+            shader?.bindContext(context)
+        }
         shader?.setup()
     }
 
@@ -404,10 +416,17 @@ open class Material: Codable {
     }
 
     open func update() {
+        ensureContextSetup()
         updateDepth()
         updateShader()
         updateUniforms()
         onUpdate?()
+    }
+
+    private func ensureContextSetup() {
+        guard needsContextSetup, context != nil else { return }
+        needsContextSetup = false
+        setup()
     }
 
     open func updateShader() {
@@ -422,6 +441,20 @@ open class Material: Codable {
     open func updateUniforms() {
         if uniformsNeedsUpdate { setupUniforms() }
         uniforms?.update()
+    }
+
+    func bindContext(_ newContext: Context) {
+        if let context {
+            precondition(
+                context == newContext,
+                "\(type(of: self)) expected matching context. Existing: \(context.id), new: \(newContext.id)"
+            )
+            return
+        }
+
+        context = newContext
+        needsContextSetup = true
+        shader?.bindContext(newContext)
     }
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}

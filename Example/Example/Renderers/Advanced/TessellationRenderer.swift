@@ -28,6 +28,7 @@ final class TessellationRenderer: BaseRenderer {
 
     lazy var tessMaterial = TessellatedMaterial(pipelinesURL: pipelinesURL)
     lazy var tessMesh = TessellationMesh(
+        context: defaultContext,
         label: "Tessellated Fill",
         geometry: tessGeometry,
         material: tessMaterial,
@@ -36,6 +37,7 @@ final class TessellationRenderer: BaseRenderer {
     )
 
     lazy var tessWireMesh = TessellationMesh(
+        context: defaultContext,
         label: "Tessellated Wire",
         geometry: tessGeometry,
         material: TessellatedMaterial(pipelinesURL: pipelinesURL),
@@ -54,8 +56,8 @@ final class TessellationRenderer: BaseRenderer {
 
         tessMesh.material?.depthBias = DepthBias(bias: -1, slope: -1, clamp: -1)
 
-        tessWireMesh.triangleFillMode = .lines
-        tessWireMesh.material?.blending = .additive
+        tessWireMesh.triangleFillMode = MTLTriangleFillMode.lines
+        tessWireMesh.material?.blending = Blending.additive
 
         tessWireMesh.material?.depthBias = DepthBias(bias: 1, slope: 1, clamp: 1)
         tessWireMesh.material?.set("Color", [1.0, 1.0, 1.0, 0.33])

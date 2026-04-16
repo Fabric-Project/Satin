@@ -17,6 +17,8 @@ struct BloomRendererView: View {
     }
 }
 
-#Preview {
-    BloomRendererView()
-}
+#if false
+    #Preview {
+        BloomRendererView()
+    }
+#endif

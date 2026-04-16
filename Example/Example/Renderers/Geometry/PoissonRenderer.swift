@@ -137,8 +137,8 @@ final class PoissonRenderer: BaseRenderer {
     lazy var scene = Object(label: "Scene", [intersectionMesh])
     lazy var renderer = Renderer(context: defaultContext)
 
-    var intersectionMesh: Mesh = {
-        let mesh = Mesh(geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+    lazy var intersectionMesh: Mesh = {
+        let mesh = Mesh(context: defaultContext, geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
         mesh.renderPass = 1
         mesh.visible = false
@@ -177,6 +177,7 @@ final class PoissonRenderer: BaseRenderer {
         }
 
         let mesh = Mesh(
+            context: defaultContext,
             label: "Points",
             geometry: PointGeometry(data: points),
             material: BasicPointMaterial(color: [0, 0, 1, 1], size: 8)
@@ -204,6 +205,7 @@ final class PoissonRenderer: BaseRenderer {
         }
 
         let mesh = Mesh(
+            context: defaultContext,
             label: "Points",
             geometry: PointGeometry(data: points),
             material: BasicPointMaterial(color: color, size: 8)

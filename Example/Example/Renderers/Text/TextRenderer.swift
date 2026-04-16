@@ -15,7 +15,7 @@ import MetalKit
 import Satin
 
 final class TextRenderer: BaseRenderer {
-    let scene = Object()
+    lazy var scene = Object(context: defaultContext)
     let camera = PerspectiveCamera(position: simd_make_float3(0.0, 0.0, 40.0), near: 0.001, far: 1000.0)
     lazy var cameraController: PerspectiveCameraController = .init(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
@@ -49,7 +49,7 @@ final class TextRenderer: BaseRenderer {
 
         let mat = BasicColorMaterial(color: [1.0, 1.0, 1.0, 0.125], blending: .additive)
         mat.depthWriteEnabled = false
-        let mesh = Mesh(geometry: geo, material: mat)
+        let mesh = Mesh(context: defaultContext, geometry: geo, material: mat)
         scene.add(mesh)
 
 //        fatalError("generate point mesh")
@@ -63,7 +63,7 @@ final class TextRenderer: BaseRenderer {
 
         let fmat = BasicColorMaterial(color: [1, 1, 1, 0.025], blending: .additive)
         fmat.depthWriteEnabled = false
-        let fmesh = Mesh(geometry: geo, material: fmat)
+        let fmesh = Mesh(context: defaultContext, geometry: geo, material: fmat)
         fmesh.triangleFillMode = .lines
         scene.add(fmesh)
     }

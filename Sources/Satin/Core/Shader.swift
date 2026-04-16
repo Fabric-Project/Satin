@@ -84,13 +84,7 @@ open class Shader {
     public internal(set) var fragmentWantsVertexUniforms: Bool = false
     public internal(set) var fragmentWantsMaterialUniforms: Bool = false
 
-    public var context: Context? {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public private(set) var context: Context?
 
     // MARK: - Configurations
 
@@ -368,7 +362,14 @@ open class Shader {
     }
 
     public required init(configuration: ShaderConfiguration) {
+        self.context = configuration.context
         self.configuration = configuration
+    }
+
+    public convenience init(context: Context, configuration: ShaderConfiguration) {
+        var configuration = configuration
+        configuration.context = context
+        self.init(configuration: configuration)
     }
 
     public init(
@@ -379,6 +380,7 @@ open class Shader {
         libraryURL: URL? = nil,
         pipelineURL: URL? = nil
     ) {
+        self.context = nil
         configuration = ShaderConfiguration(
             label: label,
             vertexFunctionName: vertexFunctionName ?? label.camelCase + "Vertex",
@@ -387,6 +389,26 @@ open class Shader {
             libraryURL: libraryURL,
             pipelineURL: pipelineURL
         )
+    }
+
+    public convenience init(
+        context: Context,
+        label: String,
+        vertexFunctionName: String? = nil,
+        fragmentFunctionName: String? = nil,
+        shadowFunctionName: String? = nil,
+        libraryURL: URL? = nil,
+        pipelineURL: URL? = nil
+    ) {
+        self.init(
+            label: label,
+            vertexFunctionName: vertexFunctionName,
+            fragmentFunctionName: fragmentFunctionName,
+            shadowFunctionName: shadowFunctionName,
+            libraryURL: libraryURL,
+            pipelineURL: pipelineURL
+        )
+        bindContext(context)
     }
 
     public func setup() {
@@ -553,6 +575,19 @@ open class Shader {
     public func clone() -> Shader {
         let clone: Shader = type(of: self).init(configuration: configuration)
         return clone
+    }
+
+    func bindContext(_ newContext: Context) {
+        if let context {
+            precondition(
+                context == newContext,
+                "\(type(of: self)) expected matching context. Existing: \(context.id), new: \(newContext.id)"
+            )
+            return
+        }
+
+        context = newContext
+        configuration.context = newContext
     }
 }
 

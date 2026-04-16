@@ -11,15 +11,15 @@ import MetalKit
 import Satin
 
 final class Renderer2D: BaseRenderer {
-    let mesh = Mesh(label: "Quad", geometry: QuadGeometry(size: 500), material: UVColorMaterial())
+    lazy var mesh = Mesh(context: defaultContext, label: "Quad", geometry: QuadGeometry(size: 500), material: UVColorMaterial())
 
     var camera = OrthographicCamera()
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView)
     lazy var scene = Object(label: "Scene", [mesh, intersectionMesh])
     lazy var renderer = Renderer(context: defaultContext)
 
-    var intersectionMesh: Mesh = {
-        let mesh = Mesh(geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+    lazy var intersectionMesh: Mesh = {
+        let mesh = Mesh(context: defaultContext, geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
         mesh.renderPass = 1
         mesh.visible = false

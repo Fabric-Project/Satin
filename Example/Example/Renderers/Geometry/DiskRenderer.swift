@@ -24,7 +24,7 @@ final class DiskRenderer: BaseRenderer {
 
         let scene = Object(label: "Scene")
         let count = 1000
-        let mesh = InstancedMesh(geometry: geometry, material: material, count: count)
+        let mesh = InstancedMesh(context: defaultContext, geometry: geometry, material: material, count: count)
         let object = Object()
         for i in 0 ..< count {
             let scale = Float.random(in: 0.1 ... 0.5)

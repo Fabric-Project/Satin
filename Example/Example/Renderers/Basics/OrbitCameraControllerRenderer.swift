@@ -23,12 +23,12 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
         let geometryZ = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .z)
         for i in 0 ... intervals {
             let fi = Float(i)
-            let meshX = Mesh(geometry: geometryX, material: material)
+            let meshX = Mesh(context: defaultContext, geometry: geometryX, material: material)
             let offset = remap(fi, 0.0, Float(intervals), -intervalsf * 0.5, intervalsf * 0.5)
             meshX.position = [0.0, 0.0, offset]
             object.add(meshX)
 
-            let meshZ = Mesh(geometry: geometryZ, material: material)
+            let meshZ = Mesh(context: defaultContext, geometry: geometryZ, material: material)
             meshZ.position = [offset, 0.0, 0.0]
             object.add(meshZ)
         }
@@ -43,24 +43,26 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
         let height = intervalsf
 
         let x = Mesh(
+            context: defaultContext,
             geometry: CapsuleGeometry(radius: radius, height: height, axis: .x),
             material: BasicColorMaterial(color: simd_make_float4(1.0, 0.0, 0.0, 1.0))
         )
         x.position.x += height * 0.5
         object.add(x)
 
-        let y = Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0)))
+        let y = Mesh(context: defaultContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0)))
         y.position.y += height * 0.5
         object.add(y)
 
-        let z = Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0)))
+        let z = Mesh(context: defaultContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0)))
         z.position.z += height * 0.5
         object.add(z)
 
         return object
     }()
 
-    let targetMesh = Mesh(
+    lazy var targetMesh = Mesh(
+        context: defaultContext,
         geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 3),
         material: NormalColorMaterial(true)
     )

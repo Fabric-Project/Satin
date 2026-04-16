@@ -9,14 +9,14 @@
 import Metal
 
 public struct Context {
-    public var id: UUID
-    public var device: MTLDevice
-    public var sampleCount: Int
-    public var colorPixelFormat: MTLPixelFormat
-    public var depthPixelFormat: MTLPixelFormat
-    public var stencilPixelFormat: MTLPixelFormat
-    public var vertexAmplificationCount: Int
-    public var maxBuffersInFlight: Int
+    public let id: UUID
+    public let device: MTLDevice
+    public let sampleCount: Int
+    public let colorPixelFormat: MTLPixelFormat
+    public let depthPixelFormat: MTLPixelFormat
+    public let stencilPixelFormat: MTLPixelFormat
+    public let vertexAmplificationCount: Int
+    public let maxBuffersInFlight: Int
 
     public init(id: UUID = UUID(),
                 device: MTLDevice,
@@ -48,6 +48,8 @@ public struct Context {
 
 extension Context: Hashable {
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(ObjectIdentifier(device))
         hasher.combine(sampleCount)
         hasher.combine(colorPixelFormat)
         hasher.combine(depthPixelFormat)
@@ -59,11 +61,31 @@ extension Context: Hashable {
 
 extension Context: Equatable {
     public static func == (lhs: Context, rhs: Context) -> Bool {
-        lhs.sampleCount == rhs.sampleCount &&
+        lhs.id == rhs.id &&
+            lhs.device === rhs.device &&
+            lhs.sampleCount == rhs.sampleCount &&
             lhs.colorPixelFormat == rhs.colorPixelFormat &&
             lhs.depthPixelFormat == rhs.depthPixelFormat &&
             lhs.stencilPixelFormat == rhs.stencilPixelFormat &&
             lhs.vertexAmplificationCount == rhs.vertexAmplificationCount &&
             lhs.maxBuffersInFlight == rhs.maxBuffersInFlight
+    }
+}
+
+extension CodingUserInfoKey {
+    public static let satinContext = CodingUserInfoKey(rawValue: "Satin.Context")!
+}
+
+extension Decoder {
+    public var satinContext: Context? {
+        userInfo[.satinContext] as? Context
+    }
+
+    public func requireSatinContext(typeName: String) throws -> Context {
+        guard let context = satinContext else {
+            let description = "\(typeName) decoding requires Decoder.userInfo[.satinContext]"
+            throw DecodingError.dataCorrupted(.init(codingPath: codingPath, debugDescription: description))
+        }
+        return context
     }
 }

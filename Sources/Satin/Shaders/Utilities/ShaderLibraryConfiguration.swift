@@ -10,6 +10,8 @@ import Metal
 
 // these are things that change the library source code
 public struct ShaderLibraryConfiguration {
+    var contextID: UUID?
+    var deviceID: ObjectIdentifier?
     var label: String
 
     var libraryURL: URL?
@@ -34,7 +36,9 @@ public struct ShaderLibraryConfiguration {
 
 extension ShaderLibraryConfiguration: Equatable {
     public static func == (lhs: ShaderLibraryConfiguration, rhs: ShaderLibraryConfiguration) -> Bool {
-        lhs.label == rhs.label &&
+        lhs.contextID == rhs.contextID &&
+            lhs.deviceID == rhs.deviceID &&
+            lhs.label == rhs.label &&
             lhs.libraryURL == rhs.libraryURL &&
             lhs.pipelineURL == rhs.pipelineURL &&
             lhs.vertexDescriptor == rhs.vertexDescriptor &&
@@ -50,6 +54,8 @@ extension ShaderLibraryConfiguration: Equatable {
 
 extension ShaderLibraryConfiguration: Hashable {
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(contextID)
+        hasher.combine(deviceID)
         hasher.combine(label)
 
         if let libraryURL = libraryURL { hasher.combine(libraryURL) }

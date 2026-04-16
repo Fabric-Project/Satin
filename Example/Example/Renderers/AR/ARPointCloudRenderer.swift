@@ -48,9 +48,9 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - 3D
 
-    lazy var mesh = Mesh(geometry: IcoSphereGeometry(radius: 0.001, resolution: 1), material: PointMaterial(pipelinesURL: pipelinesURL))
+    lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.001, resolution: 1), material: PointMaterial(pipelinesURL: pipelinesURL))
 
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {

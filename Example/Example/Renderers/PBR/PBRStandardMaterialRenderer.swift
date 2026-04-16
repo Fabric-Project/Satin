@@ -39,7 +39,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
 
     var model: Object?
     lazy var startTime = getTime()
-    lazy var skybox: Mesh = .init(label: "Skybox", geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())
+    lazy var skybox: Mesh = .init(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())
     lazy var scene = IBLScene(label: "Scene", [skybox])
     lazy var camera = PerspectiveCamera(position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
@@ -114,7 +114,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
     lazy var textureLoader = MTKTextureLoader(device: device)
 
     func setupScene() {
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"), context: defaultContext) {
             var mesh: Mesh?
             model.apply { obj in
                 if let m = obj as? Mesh {

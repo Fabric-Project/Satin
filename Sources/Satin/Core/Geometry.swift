@@ -18,13 +18,8 @@ import SatinCore
 open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
     public var id: String = UUID().uuidString
 
-    public var context: Context? {
-        didSet {
-            if oldValue == nil, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public private(set) var context: Context?
+    private var needsContextSetup = false
 
     public var windingOrder: MTLWinding = .counterClockwise
     public var primitiveType: MTLPrimitiveType = .triangle {
@@ -112,7 +107,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Init
 
-    public init(primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+    public init(context: Context? = nil, primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+        self.context = context
+        needsContextSetup = context != nil
         self.windingOrder = windingOrder
         self.primitiveType = primitiveType
     }
@@ -122,6 +119,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     }
 
     open func update() {
+        ensureContextSetup()
         updateBuffers()
     }
 
@@ -215,6 +213,26 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     public func hasAttribute(_ index: VertexAttributeIndex) -> Bool {
         return vertexAttributes[index] != nil
+    }
+
+    func bindContext(_ newContext: Context?) {
+        guard let newContext else { return }
+        if let context {
+            precondition(
+                context.device === newContext.device,
+                "\(type(of: self)) expected a context on the same device when attached"
+            )
+            return
+        }
+
+        context = newContext
+        needsContextSetup = true
+    }
+
+    private func ensureContextSetup() {
+        guard needsContextSetup, context != nil else { return }
+        needsContextSetup = false
+        setup()
     }
 
     // MARK: - Update Buffers

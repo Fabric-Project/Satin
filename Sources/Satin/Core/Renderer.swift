@@ -17,15 +17,7 @@ open class Renderer {
 
     public var sortObjects: Bool
 
-    public var context: Context {
-        didSet {
-            if oldValue != context {
-                updateColorTexture = true
-                updateDepthTexture = true
-                updateStencilTexture = true
-            }
-        }
-    }
+    public let context: Context
 
     public var size: (width: Float, height: Float) = (0, 0) {
         didSet {
@@ -548,7 +540,7 @@ open class Renderer {
     }
 
     private func updateLists(object: Object, visible: Bool) {
-        object.context = context
+        object.ensureContextSetup()
         object.update()
 
         if object.visible, visible {

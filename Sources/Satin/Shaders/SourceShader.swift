@@ -46,9 +46,19 @@ open class SourceShader: Shader {
         setupShaderCompiler()
     }
 
+    public convenience init(context: Context, label: String, pipelineURL: URL, pipelineDescriptor: MTLRenderPipelineDescriptor? = nil) {
+        self.init(label: label, pipelineURL: pipelineURL, pipelineDescriptor: pipelineDescriptor)
+        bindContext(context)
+    }
+
     public required init(configuration: ShaderConfiguration) {
         super.init(configuration: configuration)
         setupShaderCompiler()
+    }
+
+    public convenience init(context: Context, configuration: ShaderConfiguration) {
+        self.init(configuration: configuration)
+        bindContext(context)
     }
     
     deinit {

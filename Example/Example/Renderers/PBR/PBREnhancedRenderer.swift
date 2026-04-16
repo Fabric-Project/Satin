@@ -56,9 +56,9 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }()
 
     lazy var mesh: InstancedMesh = {
-        let mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 12)
+        let mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 12)
         mesh.label = "Spheres"
-        let placer = Object()
+        let placer = Object(context: defaultContext)
         for y in 0 ..< 12 {
             for x in 0 ..< 11 {
                 let index = y * 11 + x
@@ -70,7 +70,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }()
 
     lazy var skyboxMaterial = SkyboxMaterial()
-    lazy var skybox = Mesh(geometry: SkyboxGeometry(size: 50), material: skyboxMaterial)
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(size: 50), material: skyboxMaterial)
 
     override func setup() {
         setupLights()
@@ -95,7 +95,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         for (index, position) in positions.enumerated() {
             let light = PointLight(color: .one, intensity: 250, radius: 150.0)
             light.position = position
-            let lightMesh = Mesh(geometry: sphereLightGeo, material: sphereLightMat)
+            let lightMesh = Mesh(context: defaultContext, geometry: sphereLightGeo, material: sphereLightMat)
             lightMesh.scale = .init(repeating: 0.25)
             lightMesh.label = "Light Mesh \(index)"
             light.add(lightMesh)

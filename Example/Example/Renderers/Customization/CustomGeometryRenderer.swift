@@ -29,7 +29,7 @@ final class IcosahedronGeometry: SatinGeometry {
 }
 
 final class CustomGeometryRenderer: BaseRenderer {
-    let scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
     let camera = PerspectiveCamera(position: [0.0, 0.0, 6.0], near: 0.001, far: 100.0)
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
@@ -52,6 +52,7 @@ final class CustomGeometryRenderer: BaseRenderer {
 
     func setupMesh() {
         mesh = Mesh(
+            context: defaultContext,
             label: "Icosahedron",
             geometry: IcosahedronGeometry(size: 1.0, resolution: 4),
             material: NormalColorMaterial(true)

@@ -183,7 +183,7 @@ final class Model: Object {
         material.setTexture(tmpTexture, type: .normal)
         material.setTexture(tmpTexture, type: .roughness)
 
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"), context: context) {
             var mesh: Mesh?
             model.apply { obj in
                 if let m = obj as? Mesh {

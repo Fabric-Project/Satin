@@ -77,8 +77,10 @@ struct VisionsView: View {
     }
 }
 
-#Preview {
-    VisionsView()
-}
+#if false
+    #Preview {
+        VisionsView()
+    }
+#endif
 
 #endif

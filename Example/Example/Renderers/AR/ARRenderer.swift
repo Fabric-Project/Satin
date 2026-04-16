@@ -23,7 +23,7 @@ final class ARRenderer: BaseRenderer {
     private let boxMaterial = UVColorMaterial()
     private var meshAnchorMap: [UUID: Mesh] = [:]
 
-    private var scene = Object(label: "Scene")
+    private lazy var scene = Object(context: context, label: "Scene")
 
     private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     private lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
@@ -45,9 +45,6 @@ final class ARRenderer: BaseRenderer {
         metalView.preferredFramesPerSecond = 60
 
         renderer.colorLoadAction = .load
-
-        boxGeometry.context = context
-        boxMaterial.context = context
 
         backgroundRenderer = ARBackgroundRenderer(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
@@ -91,7 +88,7 @@ final class ARRenderer: BaseRenderer {
         if let currentFrame = session.currentFrame {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
-            let mesh = Mesh(geometry: boxGeometry, material: boxMaterial)
+            let mesh = Mesh(context: context, geometry: boxGeometry, material: boxMaterial)
             mesh.worldMatrix = anchor.transform
             meshAnchorMap[anchor.identifier] = mesh
             scene.add(mesh)

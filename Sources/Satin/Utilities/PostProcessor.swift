@@ -59,8 +59,8 @@ open class PostProcessor {
             frameBufferOnly: frameBufferOnly
         )
 
-        mesh = Mesh(label: label + "Mesh", geometry: QuadGeometry(), material: material)
-        scene = Object(label: label + " Scene", [mesh])
+        mesh = Mesh(context: context, label: label + "Mesh", geometry: QuadGeometry(), material: material)
+        scene = Object(context: context, label: label + " Scene", [mesh])
     }
 
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {

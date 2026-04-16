@@ -24,6 +24,7 @@ final class FXAARenderer: BaseRenderer {
 
     lazy var mesh: Mesh = {
         let mesh = Mesh(
+            context: defaultContext,
             geometry:
             ExtrudedTextGeometry(
                 text: "FXAA",
@@ -39,7 +40,7 @@ final class FXAARenderer: BaseRenderer {
 
     var camera = PerspectiveCamera(position: [0, 0, 9], near: 0.001, far: 100.0)
 
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 

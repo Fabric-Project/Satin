@@ -96,9 +96,9 @@ open class Mesh: Renderable {
         }
     }
 
-    public init(label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
         self.geometry = geometry
-        super.init(label: label, visible: visible)
+        super.init(context: context, label: label, visible: visible)
         self.material = material
         self.renderOrder = renderOrder
         self.renderPass = renderPass
@@ -148,13 +148,13 @@ open class Mesh: Renderable {
             self.updateBounds = true
             self.material?.vertexDescriptor = geo.vertexDescriptor
         }
-        geometry.context = context
+        geometry.bindContext(context)
     }
 
     open func setupSubmeshes() {
         guard let context else { return }
         for submesh in submeshes {
-            submesh.context = context
+            submesh.bindContext(context)
         }
     }
 
@@ -162,7 +162,7 @@ open class Mesh: Renderable {
         guard let context, let material else { return }
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
-        material.context = context
+        material.bindContext(context)
         
         self.updateAllMaterials()
     }
@@ -281,6 +281,9 @@ open class Mesh: Renderable {
 
     open func addSubmesh(_ submesh: Submesh) {
         submesh.parent = self
+        if let context {
+            submesh.bindContext(context)
+        }
         submeshes.append(submesh)
     }
 

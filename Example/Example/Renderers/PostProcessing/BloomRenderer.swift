@@ -32,12 +32,12 @@ final class BloomRenderer: BaseRenderer {
     var renderTexture: MTLTexture?
 
     lazy var scene: Object = {
-        let scene = Object(label: "Scene")
-        let mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 1.0, resolution: 4), material: StandardMaterial(baseColor: [0.25, 0.25, 0.25, 1], metallic: 1, roughness: 0.2, specular: 1.0), count: 10)
+        let scene = Object(context: defaultContext, label: "Scene")
+        let mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 1.0, resolution: 4), material: StandardMaterial(baseColor: [0.25, 0.25, 0.25, 1], metallic: 1, roughness: 0.2, specular: 1.0), count: 10)
         for index in 0 ..< 10 {
             let scale = Float.random(in: 0.1 ... 0.5)
             let magnitude = (1.0 - scale) * 10.0
-            let object = Object()
+            let object = Object(context: defaultContext)
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))
@@ -61,11 +61,11 @@ final class BloomRenderer: BaseRenderer {
         directionlLight3.lookAt(target: .zero)
         scene.add(directionlLight3)
 
-        let boxMesh = InstancedMesh(geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 3), material: StandardMaterial(baseColor: [0.5, 0.5, 0.5, 1], metallic: 1.0, roughness: 0.1), count: 20)
+        let boxMesh = InstancedMesh(context: defaultContext, geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 3), material: StandardMaterial(baseColor: [0.5, 0.5, 0.5, 1], metallic: 1.0, roughness: 0.1), count: 20)
         for index in 0 ..< 20 {
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 10.0
-            let object = Object()
+            let object = Object(context: defaultContext)
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))
@@ -74,11 +74,11 @@ final class BloomRenderer: BaseRenderer {
         }
         scene.add(boxMesh)
 
-        let capusleMesh = InstancedMesh(geometry: CapsuleGeometry(radius: 0.5, height: 2.0), material: StandardMaterial(baseColor: [0.93, 0.36, 0.46, 1], metallic: 1.0, roughness: 0.0), count: 20)
+        let capusleMesh = InstancedMesh(context: defaultContext, geometry: CapsuleGeometry(radius: 0.5, height: 2.0), material: StandardMaterial(baseColor: [0.93, 0.36, 0.46, 1], metallic: 1.0, roughness: 0.0), count: 20)
         for index in 0 ..< 20 {
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 10.0
-            let object = Object()
+            let object = Object(context: defaultContext)
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))

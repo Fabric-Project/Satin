@@ -15,7 +15,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     final class FloodMaterial: SourceMaterial {}
     final class PostMaterial: SourceMaterial {}
 
-    lazy var mesh = Mesh(geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 4), material: BasicDiffuseMaterial(hardness: 0))
+    lazy var mesh = Mesh(context: defaultContext, geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 4), material: BasicDiffuseMaterial(hardness: 0))
 
     final class JumpFloodComputeSystem: TextureComputeSystem {
         var spacing: Int = 8
@@ -36,9 +36,9 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     final class JumpFloodInitComputeSystem: TextureComputeSystem {}
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    lazy var quad = Mesh(geometry: QuadGeometry(), material: PostMaterial(pipelinesURL: pipelinesURL, live: true))
+    lazy var quad = Mesh(context: defaultContext, geometry: QuadGeometry(), material: PostMaterial(pipelinesURL: pipelinesURL, live: true))
 
     override var sampleCount: Int { 1 }
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }

@@ -37,14 +37,8 @@ open class Object: Codable {
         }
     }
 
-    open var context: Context? = nil {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-                //objectWillChange.send()
-            }
-        }
-    }
+    public private(set) var context: Context?
+    private var needsContextSetup = false
 
     // MARK: - Position
 
@@ -440,9 +434,24 @@ open class Object: Codable {
 
     // MARK: - Init
 
-    public init() {}
+    public init(context: Context? = nil) {
+        self.context = context
+        needsContextSetup = context != nil
+    }
+
+    public init(context: Context? = nil, label: String = "Object", visible: Bool = true, _ children: [Object] = []) {
+        self.context = context
+        needsContextSetup = context != nil
+        self.label = label
+        self.visible = visible
+        for child in children {
+            add(child)
+        }
+    }
 
     public init(label: String = "Object", visible: Bool = true, _ children: [Object] = []) {
+        self.context = nil
+        needsContextSetup = false
         self.label = label
         self.visible = visible
         for child in children {
@@ -469,6 +478,8 @@ open class Object: Codable {
     // MARK: - Decode
 
     public required init(from decoder: Decoder) throws {
+        context = decoder.satinContext
+        needsContextSetup = context != nil
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(String.self, forKey: .id)
         label = try values.decode(String.self, forKey: .label)
@@ -484,7 +495,7 @@ open class Object: Codable {
         children = try values.decode([Object].self, forKey: .children)
         for child in children {
             child.parent = self
-            child.context = context
+            child.bindContext(context)
         }
     }
 
@@ -509,6 +520,26 @@ open class Object: Codable {
     // MARK: - Setup
 
     open func setup() {}
+
+    func ensureContextSetup() {
+        guard needsContextSetup, context != nil else { return }
+        needsContextSetup = false
+        setup()
+    }
+
+    func bindContext(_ newContext: Context?) {
+        guard let newContext else { return }
+        if let context {
+            precondition(
+                context == newContext,
+                "\(type(of: self)) expected matching context. Existing: \(context.id), new: \(newContext.id)"
+            )
+            return
+        }
+
+        context = newContext
+        needsContextSetup = true
+    }
 
     // MARK: - Compute Bounds
 
@@ -539,7 +570,8 @@ open class Object: Codable {
             if setParent {
                 child.parent = self
             }
-            child.context = context
+            validateChildContext(child)
+            child.bindContext(context)
             children.insert(child, at: at)
         }
     }
@@ -552,7 +584,8 @@ open class Object: Codable {
             child.parent = self
         }
 
-        child.context = context
+        validateChildContext(child)
+        child.bindContext(context)
 
         children.append(child)
         childAddedPublisher.send(child)
@@ -573,6 +606,18 @@ open class Object: Codable {
     open func add(_ objects: [Object], _ setParent: Bool = true) {
         for obj in objects {
             add(obj, setParent)
+        }
+    }
+
+    private func validateChildContext(_ child: Object) {
+        switch (context, child.context) {
+        case let (parentContext?, childContext?):
+            precondition(
+                parentContext == childContext,
+                "Cannot attach \(type(of: child)) with context \(childContext.id) to \(type(of: self)) with context \(parentContext.id)"
+            )
+        case (_?, nil), (nil, _?), (nil, nil):
+            break
         }
     }
 

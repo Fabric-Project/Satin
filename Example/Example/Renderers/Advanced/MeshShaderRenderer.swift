@@ -11,8 +11,8 @@ import Satin
 
 final class MeshShaderRenderer: BaseRenderer {
     let geometry = IcoSphereGeometry(radius: 1.0, resolution: 4)
-    lazy var mesh = Mesh(geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
-    fileprivate lazy var meshNormals = CustomMesh(geometry: geometry, material: CustomMaterial(pipelinesURL: pipelinesURL))
+    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
+    fileprivate lazy var meshNormals = CustomMesh(context: defaultContext, geometry: geometry, material: CustomMaterial(pipelinesURL: pipelinesURL))
 
     lazy var scene = Object(label: "Scene", [mesh])
 
@@ -22,7 +22,7 @@ final class MeshShaderRenderer: BaseRenderer {
     lazy var startTime = getTime()
 
     override func setup() {
-        mesh.triangleFillMode = .lines
+        mesh.triangleFillMode = MTLTriangleFillMode.lines
         mesh.add(meshNormals)
 #if os(visionOS)
         renderer.setClearColor(.zero)
@@ -193,102 +193,24 @@ private final class CustomMaterial: SourceMaterial {
     }
 }
 
-private final class CustomMesh: Renderable {
-
-    override var opaque: Bool { get {  material?.blending == .disabled } set { } }
-
-    override var renderOrder:Int { get { 0 } set {} }
-    override var renderPass:Int { get { 0 } set {} }
-
-    override var lighting: Bool { material?.lighting ?? false }
-    override var receiveShadow: Bool{  get { material?.receiveShadow ?? false } set { } }
-    override var castShadow: Bool { get { material?.castShadow ?? false } set { } }
+private final class CustomMesh: Mesh {
 
     override func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard #available(macOS 13.0, iOS 16.0, *),
               let material,
-              material.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+              material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
+              !geometry.vertexBuffers.isEmpty,
+              vertexUniforms[renderContext] != nil
         else { return false }
         return true
-    }
-
-    override var material: Satin.Material? {
-        didSet {
-            material?.context = context
-        }
-    }
-
-    override var materials: [Satin.Material] {
-        get {
-            if let material = material {
-                return [material]
-            }
-            return []
-        }
-        set { }
     }
 
     public required init(from _: Decoder) throws {
         fatalError("init(from:) has not been implemented")
     }
 
-    var geometry: Geometry
-
-    init(geometry: Geometry, material: Material?) {
-        self.geometry = geometry
-        super.init(label: "Custom Mesh")
-        self.material = material
-    }
-
-    override func setup() {
-        setupVertexUniforms()
-        setupGeometry()
-        setupMaterial()
-    }
-
-    func setupVertexUniforms() {
-        guard let context, vertexUniforms[context] == nil else { return }
-        vertexUniforms[context] = VertexUniformBuffer(context: context)
-    }
-
-    func setupGeometry() {
-        guard let context else { return }
-        geometry.context = context
-    }
-
-    func setupMaterial() {
-        guard let context, let material else { return }
-        material.context = context
-    }
-
-    // MARK: - Update
-
-    override func update() {
-        geometry.update()
-        material?.update()
-        super.update()
-    }
-
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
-        geometry.encode(commandBuffer)
-        material?.encode(commandBuffer)
-        super.encode(commandBuffer)
-    }
-
-    override func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms[renderContext]?.update(
-            object: self,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-
-        super.update(
-            renderContext: renderContext,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
+    init(context: Context, geometry: Geometry, material: Material?) {
+        super.init(context: context, label: "Custom Mesh", geometry: geometry, material: material)
     }
 
     // MARK: - Draw

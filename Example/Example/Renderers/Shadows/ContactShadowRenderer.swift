@@ -35,7 +35,7 @@ final class ContactShadowRenderer: BaseRenderer {
         let geometrySize = geometry.bounds.size
 
         let material = MatCapMaterial(texture: matcapTexture)
-        let sphere0 = Mesh(geometry: geometry, material: material)
+        let sphere0 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere0.position.y += 0.5
         sphere0.onUpdate = { [weak self, weak sphere0] in
             if let self = self, let sphere = sphere0 {
@@ -44,7 +44,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere1 = Mesh(geometry: geometry, material: material)
+        let sphere1 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere1.position.x += 1.5
         sphere1.position.y += 0.25
         sphere1.scale *= 0.75
@@ -56,7 +56,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere2 = Mesh(geometry: geometry, material: material)
+        let sphere2 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere2.position.x -= 1.5
         sphere2.position.z -= 1.0
         sphere2.position.y += 0.25
@@ -69,7 +69,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere3 = Mesh(geometry: geometry, material: material)
+        let sphere3 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere3.position.x -= 0.25
         sphere3.position.z += 1.5
         sphere3.position.y += 0.0
@@ -82,7 +82,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere4 = Mesh(geometry: geometry, material: material)
+        let sphere4 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere4.position.x += 0.75
         sphere4.position.z -= 1.25
         sphere4.position.y += 0.875
@@ -95,7 +95,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere5 = Mesh(geometry: geometry, material: material)
+        let sphere5 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere5.position.x -= 1.5
         sphere5.position.z += 1.25
         sphere5.position.y += 0.25
@@ -116,7 +116,7 @@ final class ContactShadowRenderer: BaseRenderer {
     lazy var spheresContainer = Object(label: "Spheres Container", [spheres, floorMesh])
 
     lazy var scene = Object(label: "Scene", [spheresContainer])
-    lazy var floorMesh = Mesh(geometry: PlaneGeometry(size: 1.0, orientation: .zx), material: BasicTextureMaterial())
+    lazy var floorMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(size: 1.0, orientation: .zx), material: BasicTextureMaterial())
 
     lazy var camera: PerspectiveCamera = {
         var camera = PerspectiveCamera(position: [20, 20, 20], near: 0.01, far: 100.0, fov: 10)

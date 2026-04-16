@@ -10,7 +10,7 @@ import Metal
 import Satin
 
 final class ExtrudedTextRenderer: BaseRenderer {
-    var scene = Object()
+    lazy var scene = Object(context: defaultContext)
     var mesh: Mesh!
 
     lazy var camera = PerspectiveCamera(position: [15.0, 20.0, 40.0], near: 10.0, far: 60.0, fov: 60)
@@ -45,7 +45,7 @@ final class ExtrudedTextRenderer: BaseRenderer {
 
         let mat = DepthMaterial()
         mat.set("Invert", true)
-        mesh = Mesh(geometry: geo, material: mat)
+        mesh = Mesh(context: defaultContext, geometry: geo, material: mat)
 
         camera.lookAt(target: mesh.worldBounds.center)
 

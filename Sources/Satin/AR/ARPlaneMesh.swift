@@ -19,12 +19,12 @@ class ARPlaneMesh: Mesh {
         }
     }
 
-    public init(label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
+    public init(context: Context, label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
         self.anchor = anchor
-        let geometry = Geometry()
+        let geometry = Geometry(context: context)
         geometry.addAttribute(Float3BufferAttribute(defaultValue: .zero, data: []), for: .Position)
         geometry.addAttribute(Float2BufferAttribute(defaultValue: .zero, data: []), for: .Texcoord)
-        super.init(geometry: geometry, material: material)
+        super.init(context: context, geometry: geometry, material: material)
         self.label = label
     }
 

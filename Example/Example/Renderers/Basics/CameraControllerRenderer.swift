@@ -15,7 +15,7 @@ final class CameraControllerRenderer: BaseRenderer {
     var gridInterval: Float = 1.0
 
     lazy var grid: Object = {
-        let object = Object()
+        let object = Object(context: defaultContext)
         let material = BasicColorMaterial(color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
         let intervals = 5
         let intervalsf = Float(intervals)
@@ -23,12 +23,12 @@ final class CameraControllerRenderer: BaseRenderer {
         let geometryZ = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .z)
         for i in 0 ... intervals {
             let fi = Float(i)
-            let meshX = Mesh(geometry: geometryX, material: material)
+            let meshX = Mesh(context: defaultContext, geometry: geometryX, material: material)
             let offset = remap(fi, 0.0, Float(intervals), -intervalsf * 0.5, intervalsf * 0.5)
             meshX.position = [0.0, 0.0, offset]
             object.add(meshX)
 
-            let meshZ = Mesh(geometry: geometryZ, material: material)
+            let meshZ = Mesh(context: defaultContext, geometry: geometryZ, material: material)
             meshZ.position = [offset, 0.0, 0.0]
             object.add(meshZ)
         }
@@ -36,19 +36,19 @@ final class CameraControllerRenderer: BaseRenderer {
     }()
 
     lazy var axisMesh: Object = {
-        let object = Object()
+        let object = Object(context: defaultContext)
         let intervals = 5
         let intervalsf = Float(intervals)
         let radius = Float(0.005)
         let height = intervalsf
-        object.add(Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .x), material: BasicColorMaterial(color: simd_make_float4(1.0, 0.0, 0.0, 1.0))))
-        object.add(Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0))))
-        object.add(Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0))))
+        object.add(Mesh(context: defaultContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .x), material: BasicColorMaterial(color: simd_make_float4(1.0, 0.0, 0.0, 1.0))))
+        object.add(Mesh(context: defaultContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0))))
+        object.add(Mesh(context: defaultContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0))))
         return object
     }()
 
-    lazy var targetMesh = Mesh(geometry: BoxGeometry(size: 1.0), material: NormalColorMaterial())
-    lazy var scene = Object(label: "Scene", [grid, axisMesh])
+    lazy var targetMesh = Mesh(context: defaultContext, geometry: BoxGeometry(size: 1.0), material: NormalColorMaterial())
+    lazy var scene = Object(context: defaultContext, label: "Scene", [grid, axisMesh])
 
     lazy var camera: PerspectiveCamera = {
         let pos = simd_make_float3(5.0, 5.0, 5.0)

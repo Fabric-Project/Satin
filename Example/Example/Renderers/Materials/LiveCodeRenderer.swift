@@ -33,8 +33,8 @@ final class LiveCodeRenderer: BaseRenderer {
 
     let camera = OrthographicCamera()
 
-    lazy var mesh = Mesh(geometry: QuadGeometry(), material: CustomMaterial(pipelinesURL: pipelinesURL))
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(), material: CustomMaterial(pipelinesURL: pipelinesURL))
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }

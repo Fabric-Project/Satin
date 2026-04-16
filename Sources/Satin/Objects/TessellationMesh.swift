@@ -21,10 +21,11 @@ open class TessellationMesh: Mesh {
 
     public let tessellatePublisher = PassthroughSubject<Bool, Never>()
 
-    public init(label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
         self.tessellator = tessellator
         self.tessellate = tessellate
         super.init(
+            context: context,
             label: label,
             geometry: geometry,
             material: material,

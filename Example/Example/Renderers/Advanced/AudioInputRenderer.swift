@@ -30,7 +30,7 @@ final class AudioInputRenderer: BaseRenderer {
         return mat
     }()
 
-    lazy var mesh: Mesh = .init(geometry: PlaneGeometry(size: 700), material: audioMaterial)
+    lazy var mesh: Mesh = .init(context: defaultContext, geometry: PlaneGeometry(size: 700), material: audioMaterial)
     var camera = OrthographicCamera()
     lazy var scene = Object(label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)

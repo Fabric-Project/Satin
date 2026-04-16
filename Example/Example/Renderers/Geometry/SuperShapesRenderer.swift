@@ -188,8 +188,8 @@ final class SuperShapesRenderer: BaseRenderer {
     var parametersSubscription: AnyCancellable?
 
     lazy var startTime = getTime()
-    lazy var mesh = Mesh(geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     var camera = PerspectiveCamera(position: simd_make_float3(2.0, 1.0, 4.0), near: 0.001, far: 200.0)

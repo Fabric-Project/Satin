@@ -70,7 +70,7 @@ final class ARBloomRenderer: BaseRenderer {
     }()
 
     var objectAnchorMap: [UUID: Object] = [:]
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: context, label: "Scene")
 
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
@@ -93,7 +93,7 @@ final class ARBloomRenderer: BaseRenderer {
         frameBufferOnly: false
     )
 
-    let bloomedScene = Object(label: "Bloomed Objects")
+    lazy var bloomedScene = Object(context: context, label: "Bloomed Objects")
 
     lazy var startTime = getTime()
 
@@ -122,8 +122,6 @@ final class ARBloomRenderer: BaseRenderer {
 
     override func setup() {
         setupSessionObservers()
-
-        geometry.context = context
 
         backgroundRenderer = ARBackgroundDepthRenderer(
             context: context,
@@ -202,6 +200,7 @@ final class ARBloomRenderer: BaseRenderer {
             session.add(anchor: anchor)
 
             let mesh = Mesh(
+                context: context,
                 geometry: geometry,
                 material: BasicColorMaterial(color: simd_float4(.random(in: 0.25 ... 1), 0.8), blending: .alpha)
             )
@@ -209,7 +208,7 @@ final class ARBloomRenderer: BaseRenderer {
             mesh.cullMode = .none
             mesh.scale = .init(repeating: .random(in: 0.25 ... 1.0))
 
-            let object = Object(label: anchor.identifier.uuidString, [mesh])
+            let object = Object(context: context, label: anchor.identifier.uuidString, [mesh])
 
             scene.attach(object)
             object.worldMatrix = anchor.transform

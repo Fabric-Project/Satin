@@ -36,7 +36,7 @@ final class PBRRenderer: BaseRenderer {
 
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    lazy var scene = IBLScene(label: "Scene", [mesh, skybox])
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [mesh, skybox])
     lazy var camera = PerspectiveCamera(position: [0.0, 0.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
@@ -50,9 +50,9 @@ final class PBRRenderer: BaseRenderer {
     }()
 
     lazy var mesh: InstancedMesh = {
-        let mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 11)
+        let mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 11)
         mesh.label = "Spheres"
-        let placer = Object()
+        let placer = Object(context: defaultContext)
         for y in 0 ..< 11 {
             for x in 0 ..< 11 {
                 let index = y * 11 + x
@@ -63,7 +63,7 @@ final class PBRRenderer: BaseRenderer {
         return mesh
     }()
 
-    lazy var skybox = Mesh(geometry: SkyboxGeometry(size: 50), material: SkyboxMaterial())
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(size: 50), material: SkyboxMaterial())
 
     override func setup() {
         loadHdri()
@@ -88,7 +88,7 @@ final class PBRRenderer: BaseRenderer {
         for (index, position) in positions.enumerated() {
             let light = PointLight(color: .one, intensity: 250, radius: 150.0)
             light.position = position
-            let lightMesh = Mesh(geometry: sphereLightGeo, material: sphereLightMat)
+            let lightMesh = Mesh(context: defaultContext, geometry: sphereLightGeo, material: sphereLightMat)
             lightMesh.scale = .init(repeating: 0.25)
             lightMesh.label = "Light Mesh \(index)"
             light.add(lightMesh)

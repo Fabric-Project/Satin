@@ -14,7 +14,7 @@ final class PBRSubmeshRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    var scene = IBLScene(label: "Scene", [Mesh(geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())])
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [Mesh(context: defaultContext, geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())])
 
     lazy var camera: PerspectiveCamera = {
         let pos = simd_make_float3(125.0, 125.0, 125.0)
@@ -42,7 +42,7 @@ final class PBRSubmeshRenderer: BaseRenderer {
         end()
 
         start("Model Setup")
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("chair_swan.usdz"), textureLoader: textureLoader) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("chair_swan.usdz"), context: defaultContext, textureLoader: textureLoader) {
             print("loaded model")
             scene.add(model)
             let sceneBounds = scene.worldBounds

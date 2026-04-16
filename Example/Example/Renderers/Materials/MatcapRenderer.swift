@@ -14,7 +14,7 @@ class MatcapRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(label: "Scene")
 
     lazy var matcapTexture: MTLTexture? = {
         // from https://github.com/nidorx/matcaps
@@ -131,7 +131,7 @@ class MatcapRenderer: BaseRenderer {
         }
 
         scene.add(
-            Mesh(label: "Suzanne", geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
+            Mesh(context: defaultContext, label: "Suzanne", geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
         )
     }
 
@@ -146,8 +146,8 @@ class MatcapRenderer: BaseRenderer {
             return torusKnotGenerator(u, v, R, r, c, q, p)
         })
 
-        let mesh = Mesh(geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
-        mesh.cullMode = .none
+        let mesh = Mesh(context: defaultContext, geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
+        mesh.cullMode = MTLCullMode.none
         mesh.label = "Knot"
         mesh.scale = .init(repeating: 2.5)
         scene.add(mesh)
