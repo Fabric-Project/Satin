@@ -26,19 +26,19 @@ open class PerspectiveCamera: Camera {
         }
     }
 
-    @Published public var lensShiftX: Float = 0.0 {
+    public var lensShiftX: Float = 0.0 {
         didSet {
             updateProjectionMatrix = true
         }
     }
 
-    @Published public var lensShiftY: Float = 0.0 {
+    public var lensShiftY: Float = 0.0 {
         didSet {
             updateProjectionMatrix = true
         }
     }
 
-    @Published public var enableFrustumShift: Bool = false {
+    public var enableFrustumShift: Bool = false {
         didSet {
             updateProjectionMatrix = true
         }
