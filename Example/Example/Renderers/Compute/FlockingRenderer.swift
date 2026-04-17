@@ -9,7 +9,7 @@
 import Combine
 import Metal
 import Satin
-import SwiftUICore
+import SwiftUI
 
 final class FlockingRenderer: BaseRenderer {
     final class FlockingComputeSystem: BufferComputeSystem {}

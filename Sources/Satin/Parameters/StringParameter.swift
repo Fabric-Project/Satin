@@ -29,18 +29,18 @@ public final class StringParameter: GenericParameter<String> {
         case options
     }
     
-    public override init(_ label: String, _ value: ValueType = "" , _ controlType: ControlType = .dropdown) {
+    public override init(_ label: String, _ value: ValueType = "" , _ controlType: ControlType = .dropdown, _ description: String = "") {
         self.options = []
-        super.init(label, value, controlType)
+        super.init(label, value, controlType, description)
     }
     
-    public convenience init(_ label: String, _ value: ValueType = "", _ options: [String], _ controlType: ControlType = .dropdown) {
-        self.init(label, value, controlType)
+    public convenience init(_ label: String, _ value: ValueType = "", _ options: [String], _ controlType: ControlType = .dropdown, _ description: String = "") {
+        self.init(label, value, controlType, description)
         self.options = options
     }
 
     override public func clone() -> any Parameter {
-        StringParameter(label, value, options, controlType)
+        StringParameter(label, value, options, controlType, description)
     }
     
     override public func encode(to encoder: any Encoder) throws {

@@ -64,26 +64,34 @@ public final class FileWatcher: Sendable {
             DispatchQueue.main.async { [weak self] in
                 self?.watch()
             }
-            return
+            return  
         }
 
+        // Always create the timer on the main thread/run loop.
+        // Avoid re-entrant sync by extracting and invalidating any previous timer first.
+        let oldTimer = timerQueue.sync(flags: .barrier) { () -> Timer? in
+            let existing = self.timer
+            self.timer = nil
+            return existing
+        }
+        oldTimer?.invalidate()
+
+        let newTimer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { [weak self] _ in
+            self?.checkFile()
+        })
+
         timerQueue.sync(flags: .barrier) {
-            if self.timer != nil {
-                self.unwatch()
-            }
-            self.timer = Timer.scheduledTimer(withTimeInterval: timeInterval, repeats: true, block: { [weak self] _ in
-                self?.checkFile()
-            })
+            self.timer = newTimer
         }
     }
 
     public func unwatch() {
-        timerQueue.sync(flags: .barrier) {
-            if let timer {
-                timer.invalidate()
-            }
+        let oldTimer = timerQueue.sync(flags: .barrier) { () -> Timer? in
+            let existing = self.timer
             self.timer = nil
+            return existing
         }
+        oldTimer?.invalidate()
     }
 
     deinit {

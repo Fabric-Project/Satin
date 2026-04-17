@@ -684,8 +684,78 @@ open class Renderer {
                 )
             }
         }
+        
+        // cache of old working code
+        // but had a bug which Fabric seemed to trigger
+        // causing a crash -
+//        if !shadowReceivers.isEmpty {
+//            for shadow in shadowList {
+//                if let shadowTexture = shadow.texture {
+//                    renderEncoder.useResource(shadowTexture, usage: .read, stages: .fragment)
+//                }
+//            }
+//
+//            if let shadowDataBuffer = shadowDataBuffer {
+//                renderEncoder.useResource(shadowDataBuffer.buffer, usage: .read, stages: .fragment)
+//            }
+//
+//            if let shadowBuffer = shadowMatricesBuffer {
+//                renderEncoder.setVertexBuffer(
+//                    shadowBuffer.buffer,
+//                    offset: shadowBuffer.offset,
+//                    index: VertexBufferIndex.ShadowMatrices.rawValue
+//                )
+//            }
+//
+//            if let shadowArgumentBuffer = shadowArgumentBuffer {
+//                renderEncoder.setFragmentBuffer(
+//                    shadowArgumentBuffer,
+//                    offset: 0,
+//                    index: FragmentBufferIndex.Shadows.rawValue
+//                )
+//            }
+//        }
+        
+        // This fixes a crash only in Fabric
+        // (at least, i couldnt trigger it in Satin's Examples)
 
-        if !shadowReceivers.isEmpty {
+        // Do not gate shadow buffer bindings on `shadowReceivers`.
+        // Shader variants for Physical / Standard materials may still expect
+        // `shadowMatrices` (vertex index) and `shadows` (fragment index) even
+        // in frames where no objects currently receive shadows.
+        //
+        // If the shadow buffers exist (created when at least one shadow-casting
+        // light is active), they *must always* be bound to their expected buffer
+        // indices to satisfy the pipeline’s argument layout. Failing to bind them
+        // results in Metal validation errors such as:
+        //
+        //   missing buffer binding at index 4 for shadowMatrices[0]
+        //   missing buffer binding at index 3 for shadows[0]
+        //
+        // We therefore bind the shadow buffers whenever they are non-nil,
+        // regardless of how many receivers are present this frame.
+        
+        if let shadowBuffer = shadowMatricesBuffer {
+            // Always bind shadow matrices if we have a buffer
+            renderEncoder.setVertexBuffer(
+                shadowBuffer.buffer,
+                offset: shadowBuffer.offset,
+                index: VertexBufferIndex.ShadowMatrices.rawValue
+            )
+        }
+
+        if let shadowArgumentBuffer = shadowArgumentBuffer {
+            // Always bind shadow argument buffer if we have one
+            renderEncoder.setFragmentBuffer(
+                shadowArgumentBuffer,
+                offset: 0,
+                index: FragmentBufferIndex.Shadows.rawValue
+            )
+        }
+
+        // The useResource bits are only really needed when we *actually* have shadows;
+        // they don’t matter for the binding assertion.
+        if !shadowList.isEmpty {
             for shadow in shadowList {
                 if let shadowTexture = shadow.texture {
                     renderEncoder.useResource(shadowTexture, usage: .read, stages: .fragment)
@@ -694,22 +764,6 @@ open class Renderer {
 
             if let shadowDataBuffer = shadowDataBuffer {
                 renderEncoder.useResource(shadowDataBuffer.buffer, usage: .read, stages: .fragment)
-            }
-
-            if let shadowBuffer = shadowMatricesBuffer {
-                renderEncoder.setVertexBuffer(
-                    shadowBuffer.buffer,
-                    offset: shadowBuffer.offset,
-                    index: VertexBufferIndex.ShadowMatrices.rawValue
-                )
-            }
-
-            if let shadowArgumentBuffer = shadowArgumentBuffer {
-                renderEncoder.setFragmentBuffer(
-                    shadowArgumentBuffer,
-                    offset: 0,
-                    index: FragmentBufferIndex.Shadows.rawValue
-                )
             }
         }
 
@@ -845,6 +899,7 @@ open class Renderer {
     private func setupDepthTexture(arrayLength: Int) {
         guard updateDepthTexture,
               context.depthPixelFormat != .invalid,
+              (depthLoadAction != .dontCare && depthStoreAction != .dontCare),
               size.width > 0,
               size.height > 0
         else { return }
@@ -872,6 +927,8 @@ open class Renderer {
     private func setupDepthMultisampleTexture(arrayLength: Int) {
         guard updateDepthMultisampleTexture,
               context.depthPixelFormat != .invalid,
+              (depthLoadAction != .dontCare && depthStoreAction != .dontCare),
+
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0
@@ -900,7 +957,12 @@ open class Renderer {
     // MARK: - Stencil Textures
 
     private func setupStencilTexture(arrayLength: Int) {
-        guard updateStencilTexture, context.stencilPixelFormat != .invalid, size.width > 1, size.height > 1 else { return }
+        guard updateStencilTexture,
+              context.stencilPixelFormat != .invalid,
+              (stencilLoadAction != .dontCare && stencilStoreAction != .dontCare),
+              size.width > 1,
+              size.height > 1
+        else { return }
 
         let descriptor = MTLTextureDescriptor()
         descriptor.pixelFormat = context.stencilPixelFormat
@@ -922,6 +984,7 @@ open class Renderer {
     private func setupStencilMultisampleTexture(arrayLength: Int) {
         guard updateStencilMultisampleTexture,
               context.stencilPixelFormat != .invalid,
+              (stencilLoadAction != .dontCare && stencilStoreAction != .dontCare),
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0 else { return }

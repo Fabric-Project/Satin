@@ -8,4 +8,4 @@
 import Foundation
 import Metal
 
-extension MTLVertexStepFunction: Codable {}
+extension MTLVertexStepFunction: @retroactive Codable {}

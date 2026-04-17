@@ -12,11 +12,11 @@ import simd
 public final class Int2Parameter: GenericParameterWithMinMax<simd_int2> {
     override public var type: ParameterType { .int2 }
 
-    public convenience init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
-        self.init(label, value, .zero, .one, controlType)
+    public convenience init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none, _ description:String = "") {
+        self.init(label, value, .zero, .one, controlType, description)
     }
 
     override public func clone() -> any Parameter {
-        Int2Parameter(label, value, min, max, controlType)
+        Int2Parameter(label, value, min, max, controlType, description)
     }
 }

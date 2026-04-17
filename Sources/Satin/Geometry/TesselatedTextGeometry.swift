@@ -14,7 +14,7 @@ import simd
 import SatinCore
 #endif
 
-extension CTTextAlignment: Codable {}
+extension CTTextAlignment: @retroactive Codable {}
 
 public class TesselatedTextGeometry: SatinGeometry {
     public enum VerticalAlignment: Int, Codable {

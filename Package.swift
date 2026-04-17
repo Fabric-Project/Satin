@@ -10,7 +10,12 @@ let package = Package(
             name: "Satin",
             targets: ["Satin", "SatinCore"]
         ),
-        
+
+        .library(
+            name: "SatinCore",
+            targets: ["SatinCore"]
+        ),
+
         .library(
             name: "Satin Dynamic",
             type: .dynamic,

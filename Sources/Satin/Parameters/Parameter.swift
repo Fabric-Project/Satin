@@ -9,7 +9,7 @@
 import Combine
 import Foundation
 
-public protocol Parameter: AnyObject, Codable, CustomStringConvertible, Identifiable {
+public protocol Parameter: AnyObject, Codable, CustomStringConvertible, CustomDebugStringConvertible, Identifiable {
     associatedtype ValueType: Codable & Equatable
 
     var id: UUID { get }
@@ -25,7 +25,8 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible, Identifi
 
     var controlType: ControlType { get set }
     var label: String { get }
-    var description: String { get }
+    var description: String { set get }
+    var debugDescription: String { get }
 
     var valuePublisher: PassthroughSubject<ValueType, Never> { get }
     var valueDidChange:Bool { get }

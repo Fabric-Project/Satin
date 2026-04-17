@@ -100,9 +100,9 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         mesh.scale = .init(repeating: 0.25)
         mesh.cullMode = .none
 
-        parametersSubscription = parameters.objectWillChange.sink { [weak self] in
-            self?.updateGeometry()
-        }
+        // parametersSubscription = parameters.objectWillChange.sink { [weak self] in
+        //     self?.updateGeometry()
+        // }
     }
 
     override func update() {

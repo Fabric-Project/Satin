@@ -29,7 +29,9 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     public var controlType = ControlType.none
     public var label: String
 
-    public var description: String {
+    public var description: String = ""
+    
+    public var debugDescription: String {
         "Label: \(label) type: \(string) value: \(value) controlType: \(controlType)"
     }
 
@@ -56,6 +58,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         case label
         case value
         case defaultValue
+        case description
     }
 
     public required init(from decoder: Decoder) throws {
@@ -64,9 +67,9 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         let id = try container.decode(UUID.self, forKey: .id)
         self.id = id
         
-        controlType = try container.decode(ControlType.self, forKey: .controlType)
+        self.controlType = try container.decode(ControlType.self, forKey: .controlType)
 
-        label = try container.decode(String.self, forKey: .label)
+        self.label = try container.decode(String.self, forKey: .label)
 
         let value = try container.decode(ValueType.self, forKey: .value)
 
@@ -78,6 +81,16 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         else {
             defaultValue = value
         }
+        
+        if let description = try container.decodeIfPresent(String.self, forKey: .description)
+        {
+            self.description = description
+        }
+        else
+        {
+            self.description = ""
+        }
+        
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -86,6 +99,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         try container.encode(id, forKey: .id)
         try container.encode(controlType, forKey: .controlType)
         try container.encode(label, forKey: .label)
+        try container.encode(description, forKey: .description)
 
         var saveDefaultValueInPlaceOfValue = false
         if controlType == .none, let ignoreControlTypeNone = encoder.userInfo[.ignoreControlTypeNone] as? Bool {
@@ -96,12 +110,13 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         try container.encode(defaultValue, forKey: .defaultValue)
     }
 
-    public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
+    public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none, _ description:String = "") {
         self.id = UUID()
         self.label = label
         self.value = value
-        defaultValue = value
+        self.defaultValue = value
         self.controlType = controlType
+        self.description = description
     }
 
     public func alignData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer {
@@ -124,7 +139,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     }
 
     public func clone() -> any Parameter {
-        GenericParameter<ValueType>(label, value, controlType)
+        GenericParameter<ValueType>(label, value, controlType, description)
     }
 }
 
@@ -154,10 +169,10 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
         case max
     }
 
-    public init(_ label: String, _ value: ValueType, _ min: ValueType, _ max: ValueType, _ controlType: ControlType = .none) {
+    public init(_ label: String, _ value: ValueType, _ min: ValueType, _ max: ValueType, _ controlType: ControlType = .none,  _ description:String = "") {
         self.min = min
         self.max = max
-        super.init(label, value, controlType)
+        super.init(label, value, controlType, description)
     }
 
     public required init(from decoder: Decoder) throws {
@@ -175,6 +190,6 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
     }
 
     override public func clone() -> any Parameter {
-        GenericParameterWithMinMax<ValueType>(label, value, min, max, controlType)
+        GenericParameterWithMinMax<ValueType>(label, value, min, max, controlType, description)
     }
 }

@@ -37,6 +37,14 @@ public final class StructBuffer<T>: BindableBuffer {
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }
     }
+    
+    public func update(data: ContiguousArray<T>) {
+        index = (index + 1) % maxBuffersInFlight
+        offset = alignedSize * index
+        _ = data.withUnsafeBytes { dataPtr in
+            memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
+        }
+    }
 
     private var alignedSize: Int {
         align(size: MemoryLayout<T>.size * count)

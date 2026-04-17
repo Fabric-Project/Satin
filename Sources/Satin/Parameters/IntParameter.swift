@@ -15,8 +15,8 @@ public final class IntParameter: GenericParameterWithMinMax<Int> {
     override public var stride: Int { return MemoryLayout<Int32>.stride }
     override public var alignment: Int { return MemoryLayout<Int32>.alignment }
 
-    public convenience init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none) {
-        self.init(label, value, 0, 1, controlType)
+    public convenience init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none, _ description:String = "") {
+        self.init(label, value, 0, 1, controlType, description)
     }
 
     override public func writeData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer {
@@ -28,6 +28,6 @@ public final class IntParameter: GenericParameterWithMinMax<Int> {
     }
 
     override public func clone() -> any Parameter {
-        IntParameter(label, value, min, max, controlType)
+        IntParameter(label, value, min, max, controlType, description)
     }
 }

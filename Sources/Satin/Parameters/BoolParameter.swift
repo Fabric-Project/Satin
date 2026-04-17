@@ -13,6 +13,6 @@ public final class BoolParameter: GenericParameter<Bool> {
     override public var type: ParameterType { .bool }
 
     override public func clone() -> any Parameter {
-        BoolParameter(label, value, controlType)
+        BoolParameter(label, value, controlType, description)
     }
 }

@@ -22,12 +22,31 @@ public final class InstanceMatrixUniformBuffer {
         self.buffer.label = "Instance Matrix Uniforms"
     }
 
+//    public func update(data: [InstanceMatrixUniforms]) {
+//        index = (index + 1) % maxBuffersInFlight
+//        offset = alignedSize * index
+//
+//        _ = data.withUnsafeBytes { dataPtr in
+//            memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<InstanceMatrixUniforms>.size * data.count)
+//        }
+//    }
+    
     public func update(data: [InstanceMatrixUniforms]) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
 
-        _ = data.withUnsafeBytes { dataPtr in
-            memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<InstanceMatrixUniforms>.size * data.count)
+        guard !data.isEmpty else { return }
+
+        let n = min(data.count, self.count)
+        let bytes = MemoryLayout<InstanceMatrixUniforms>.stride * n
+
+        // Optional but HIGHLY recommended debug check:
+        precondition(offset + bytes <= buffer.length, "InstanceMatrixUniformBuffer overflow")
+
+        data.withUnsafeBytes { dataPtr in
+            memcpy(buffer.contents().advanced(by: offset),
+                   dataPtr.baseAddress!,
+                   bytes)
         }
     }
 

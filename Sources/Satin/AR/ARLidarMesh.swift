@@ -26,20 +26,11 @@ public func ARLidarMeshVertexDescriptor() -> MTLVertexDescriptor {
     return vertexDescriptor
 }
 
-public class ARLidarMesh: Object, Renderable {
-    public var preDraw: ((MTLRenderCommandEncoder) -> Void)?
+public class ARLidarMesh: Renderable {
 
-    public var opaque: Bool { material?.blending == .disabled }
-    public var doubleSided: Bool = false
+    override public var opaque: Bool { material?.blending == .disabled }
 
-    public var lighting: Bool { material?.lighting ?? false }
-    public var receiveShadow: Bool { false }
-    public var castShadow: Bool { false }
-
-    public var renderOrder = 0
-    public var renderPass = 0
-
-    public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
+    override  public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
               vertexUniforms[renderContext] != nil,
@@ -49,20 +40,6 @@ public class ARLidarMesh: Object, Renderable {
         return true
     }
 
-    public var vertexUniforms: [Context: VertexUniformBuffer] = [:]
-
-    public var material: Material?
-    public var materials: [Satin.Material] {
-        if let material = material {
-            return [material]
-        } else {
-            return []
-        }
-    }
-
-    public var cullMode: MTLCullMode = .back
-    public var windingOrder: MTLWinding = .counterClockwise
-    public var triangleFillMode: MTLTriangleFillMode = .fill
 
     public var indexBuffer: MTLBuffer? {
         meshAnchor?.geometry.faces.buffer ?? nil
@@ -92,9 +69,9 @@ public class ARLidarMesh: Object, Renderable {
 
     public init(meshAnchor: ARMeshAnchor, material: Material) {
         self.meshAnchor = meshAnchor
-        self.material = material
-        material.vertexDescriptor = ARLidarMeshVertexDescriptor()
         super.init(label: "Lidar Mesh \(meshAnchor.identifier)")
+        material.vertexDescriptor = ARLidarMeshVertexDescriptor()
+        self.material = material
     }
 
     override public func setup() {
@@ -136,7 +113,7 @@ public class ARLidarMesh: Object, Renderable {
 
     // MARK: - Draw
 
-    public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         guard let vertexUniforms = vertexUniforms[renderContext],
               let vertexBuffer = vertexBuffer,
               let material = material

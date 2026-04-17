@@ -36,39 +36,7 @@ open class SourceShader: Shader {
     private lazy var compiler = MetalFileCompiler(watch: live) {
         didSet {
             compilerSubscription = compiler.onUpdatePublisher.sink { [weak self] _ in
-                guard let self = self else { return }
-
-                ShaderSourceCache.removeSource(url: self.pipelineURL)
-
-                ShaderLibrarySourceCache.invalidateLibrarySource(
-                    configuration: self.configuration.getLibraryConfiguration()
-                )
-
-                ShaderLibraryCache.invalidateLibrary(
-                    configuration: self.configuration.getLibraryConfiguration()
-                )
-
-                ShaderPipelineCache.invalidate(configuration: self.configuration)
-
-                // invalidate caches to recompile shader
-                self.pipelines.removeAll()
-                self.pipelineError = nil
-
-                self.shadowPipelines.removeAll()
-                self.shadowPipelineError = nil
-
-                self.configurations.removeAll()
-
-                if self.castShadow {
-                    self.shadowPipelineNeedsUpdate = true
-                }
-
-                self.pipelineNeedsUpdate = true
-                self.parametersNeedsUpdate = true
-
-                print("Updating Shader: \(self.label) at: \(self.pipelineURL.path)")
-
-                self.update()
+                self?.reloadFromSource()
             }
         }
     }
@@ -82,9 +50,46 @@ open class SourceShader: Shader {
         super.init(configuration: configuration)
         setupShaderCompiler()
     }
+    
+    deinit {
+        compilerSubscription?.cancel()
+    }
 
     open func setupShaderCompiler() {
         compiler = ShaderSourceCache.getCompiler(url: pipelineURL)
         compiler.watch = live
+    }
+
+    public func reloadFromSource() {
+        ShaderSourceCache.removeSource(url: self.pipelineURL)
+
+        ShaderLibrarySourceCache.invalidateLibrarySource(
+            configuration: self.configuration.getLibraryConfiguration()
+        )
+
+        ShaderLibraryCache.invalidateLibrary(
+            configuration: self.configuration.getLibraryConfiguration()
+        )
+
+        ShaderPipelineCache.invalidate(configuration: self.configuration)
+
+        self.pipelines.removeAll()
+        self.pipelineError = nil
+
+        self.shadowPipelines.removeAll()
+        self.shadowPipelineError = nil
+
+        self.configurations.removeAll()
+
+        if self.castShadow {
+            self.shadowPipelineNeedsUpdate = true
+        }
+
+        self.pipelineNeedsUpdate = true
+        self.parametersNeedsUpdate = true
+
+        print("Updating Shader: \(self.label) at: \(self.pipelineURL.path)")
+
+        self.update()
     }
 }

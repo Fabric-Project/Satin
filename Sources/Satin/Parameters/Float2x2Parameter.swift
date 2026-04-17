@@ -11,8 +11,8 @@ import simd
 public final class Float2x2Parameter: GenericParameter<simd_float2x2> {
     override public var type: ParameterType { .float2x2 }
 
-    override public init(_ label: String, _ value: simd_float2x2, _ controlType: ControlType = .none) {
-        super.init(label, value, controlType)
+    override public init(_ label: String, _ value: simd_float2x2, _ controlType: ControlType = .none, _  description:String = "") {
+        super.init(label, value, controlType, description)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -26,6 +26,6 @@ public final class Float2x2Parameter: GenericParameter<simd_float2x2> {
     }
 
     override public func clone() -> any Parameter {
-        Float2x2Parameter(label, value, controlType)
+        Float2x2Parameter(label, value, controlType, description)
     }
 }

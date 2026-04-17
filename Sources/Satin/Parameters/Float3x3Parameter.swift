@@ -11,8 +11,8 @@ import simd
 public final class Float3x3Parameter: GenericParameter<simd_float3x3> {
     override public var type: ParameterType { .float3x3 }
 
-    override public init(_ label: String, _ value: simd_float3x3, _ controlType: ControlType = .none) {
-        super.init(label, value, controlType)
+    override public init(_ label: String, _ value: simd_float3x3, _ controlType: ControlType = .none, _ description:String = "") {
+        super.init(label, value, controlType, description)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -26,6 +26,6 @@ public final class Float3x3Parameter: GenericParameter<simd_float3x3> {
     }
 
     override public func clone() -> any Parameter {
-        Float3x3Parameter(label, value, controlType)
+        Float3x3Parameter(label, value, controlType, description)
     }
 }
