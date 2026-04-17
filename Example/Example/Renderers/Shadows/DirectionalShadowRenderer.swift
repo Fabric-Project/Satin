@@ -13,49 +13,46 @@ import Satin
 final class DirectionalShadowRenderer: BaseRenderer {
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    let lightHelperGeo = BoxGeometry(width: 0.1, height: 0.1, depth: 0.5)
-    let lightHelperMat = BasicDiffuseMaterial(hardness: 0.7)
+    lazy var lightHelperGeo = BoxGeometry(context: defaultContext, width: 0.1, height: 0.1, depth: 0.5)
+    lazy var lightHelperMat = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
 
     lazy var lightHelperMesh0 = Mesh(context: defaultContext, geometry: lightHelperGeo, material: lightHelperMat)
     lazy var lightHelperMesh1 = Mesh(context: defaultContext, geometry: lightHelperGeo, material: lightHelperMat)
 
-    lazy var baseMesh = Mesh(
-        context: defaultContext,
-        geometry: BoxGeometry(width: 1.25, height: 0.125, depth: 1.25, resolution: 5),
-        material: StandardMaterial(baseColor: [1.0, 1.0, 1.0, 1.0], metallic: 0.75, roughness: 0.25)
+    lazy var baseMesh = Mesh(context: defaultContext, 
+        geometry: BoxGeometry(context: defaultContext, width: 1.25, height: 0.125, depth: 1.25, resolution: 5),
+        material: StandardMaterial(context: defaultContext, baseColor: [1.0, 1.0, 1.0, 1.0], metallic: 0.75, roughness: 0.25)
     )
 
-    lazy var torusMesh = Mesh(
-        context: defaultContext,
-        geometry: TorusGeometry(minorRadius: 0.1, majorRadius: 0.5),
-        material: StandardMaterial(baseColor: [1, 1, 1, 1], metallic: 1.0, roughness: 0.25, specular: 1.0)
+    lazy var torusMesh = Mesh(context: defaultContext, 
+        geometry: TorusGeometry(context: defaultContext, minorRadius: 0.1, majorRadius: 0.5),
+        material: StandardMaterial(context: defaultContext, baseColor: [1, 1, 1, 1], metallic: 1.0, roughness: 0.25, specular: 1.0)
     )
 
-    lazy var sphereMesh = Mesh(
-        context: defaultContext,
-        geometry: IcoSphereGeometry(radius: 0.25, resolution: 3),
-        material: StandardMaterial(baseColor: .one, metallic: 0.8, roughness: 0.5, specular: 1.0)
+    lazy var sphereMesh = Mesh(context: defaultContext, 
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.25, resolution: 3),
+        material: StandardMaterial(context: defaultContext, baseColor: .one, metallic: 0.8, roughness: 0.5, specular: 1.0)
     )
 
-    lazy var floorMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(size: 8.0, orientation: .zx), material: ShadowMaterial())
+    lazy var floorMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 8.0, orientation: .zx), material: ShadowMaterial(context: defaultContext))
 
-    var light0 = DirectionalLight(color: [1.0, 1.0, 1.0], intensity: 1.0)
-    var light1 = DirectionalLight(color: [1.0, 1.0, 1.0], intensity: 1.0)
+    lazy var light0 = DirectionalLight(context: defaultContext, color: [1.0, 1.0, 1.0], intensity: 1.0)
+    lazy var light1 = DirectionalLight(context: defaultContext, color: [1.0, 1.0, 1.0], intensity: 1.0)
 
-    lazy var scene = IBLScene(label: "Scene", [light0, light1, floorMesh, baseMesh, sphereMesh, torusMesh])
-    lazy var camera = PerspectiveCamera(position: .init(repeating: 5.0), near: 0.01, far: 500.0, fov: 30)
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [light0, light1, floorMesh, baseMesh, sphereMesh, torusMesh])
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 5.0), near: 0.01, far: 500.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    override init() {
-        super.init()
+    func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
-        if let hdr = loadHDR(device: MTLCreateSystemDefaultDevice()!, url: texturesURL.appendingPathComponent(filename)) {
+        if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
             scene.setEnvironment(texture: hdr)
         }
     }
 
     override func setup() {
+        loadHdri()
         renderer.clearColor = .init(red: 0.75, green: 0.75, blue: 0.75, alpha: 1.0)
 
         light0.position.y = 5.0

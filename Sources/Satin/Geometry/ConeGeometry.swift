@@ -51,13 +51,13 @@ public final class ConeGeometry: SatinGeometry {
         }
     }
 
-    public init(radius: Float, height: Float, angularResolution: Int = 60, radialResolution: Int = 1, verticalResolution: Int = 1) {
+    public init(context: Context, radius: Float, height: Float, angularResolution: Int = 60, radialResolution: Int = 1, verticalResolution: Int = 1) {
         self.radius = radius
         self.height = height
         self.angularResolution = angularResolution
         self.radialResolution = radialResolution
         self.verticalResolution = verticalResolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

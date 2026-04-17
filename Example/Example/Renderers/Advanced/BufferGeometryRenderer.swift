@@ -23,20 +23,20 @@ final class BufferGeometryMesh: Mesh {
 
 final class BufferGeometryRenderer: BaseRenderer {
     var geometryData = createGeometryData()
-    var geometry = Geometry()
-    lazy var mesh = BufferGeometryMesh(context: defaultContext, geometry: geometry, material: NormalColorMaterial(true))
+    lazy var geometry = Geometry(context: defaultContext)
+    lazy var mesh = BufferGeometryMesh(context: defaultContext, geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
 
     lazy var intersectionMesh: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.1, resolution: 2), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+        lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 2), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
         mesh.renderPass = 1
         mesh.visible = false
         return mesh
     }()
 
-    lazy var scene = Object(label: "Scene", [mesh, intersectionMesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, intersectionMesh])
 
-    lazy var camera = PerspectiveCamera(position: [0, 0, -5], near: 0.01, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, -5], near: 0.01, far: 100.0, fov: 30)
     lazy var renderer = Renderer(context: defaultContext)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 

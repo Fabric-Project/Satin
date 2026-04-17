@@ -14,18 +14,18 @@ final class ProjectedShadowRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [shadowPlaneMesh, mesh])
     lazy var mesh: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: TorusGeometry(minorRadius: 0.1, majorRadius: 0.5), material: NormalColorMaterial(true))
+        lazy var mesh = Mesh(context: defaultContext, geometry: TorusGeometry(context: defaultContext, minorRadius: 0.1, majorRadius: 0.5), material: NormalColorMaterial(context: defaultContext, true))
         mesh.label = "Box"
         mesh.position = .init(0, 2.0, 0)
         return mesh
     }()
 
-    lazy var shadowMaterial = BasicTextureMaterial(texture: nil, flipped: true)
+    lazy var shadowMaterial = BasicTextureMaterial(context: defaultContext, texture: nil, flipped: true)
     lazy var shadowRenderer = MeshShadowRenderer(device: device, mesh: mesh, size: (512, 512))
-    lazy var shadowPlaneMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(size: 4, orientation: .zx), material: shadowMaterial)
+    lazy var shadowPlaneMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 4, orientation: .zx), material: shadowMaterial)
 
     lazy var camera: PerspectiveCamera = {
-        var camera = PerspectiveCamera(position: [4.0, 6.0, 4.0], near: 0.01, far: 1000.0)
+        lazy var camera = PerspectiveCamera(context: defaultContext, position: [4.0, 6.0, 4.0], near: 0.01, far: 1000.0)
         camera.lookAt(target: .zero)
         return camera
     }()

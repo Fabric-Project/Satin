@@ -45,15 +45,13 @@ public final class PointLight: Light {
         case radius
     }
 
-    public init(label: String = "Point Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0) {
+    public init(context: Context, label: String = "Point Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0) {
         self.radius = radius
-
-        super.init(label: label)
+        super.init(context: context, label: label)
         self.color = color
         self.intensity = intensity
-
         /* TODO: FIX ME */
-        self.shadow = DirectionalLightShadow(label: label)
+        self.shadow = DirectionalLightShadow(context: context, label: label)
     }
 
     public required init(from decoder: Decoder) throws {

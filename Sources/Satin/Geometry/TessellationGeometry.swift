@@ -55,7 +55,7 @@ public final class TessellationGeometry: Geometry {
 
     public init(baseGeometry: Geometry) {
         self.baseGeometry = baseGeometry
-        super.init(primitiveType: baseGeometry.primitiveType, windingOrder: baseGeometry.windingOrder)
+        super.init(context: baseGeometry.context, primitiveType: baseGeometry.primitiveType, windingOrder: baseGeometry.windingOrder)
         for (index, attribute) in baseGeometry.vertexAttributes {
             addAttribute(attribute, for: index)
         }

@@ -150,7 +150,7 @@ final class Model: Object {
     private var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
     private var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
 
-    var material = PhysicalMaterial()
+    lazy var material = PhysicalMaterial(context: defaultContext)
 
     override init() {
         super.init(label: "Suzanne")
@@ -291,9 +291,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     var session = ARSession()
 
     var shadowPlaneMesh = {
-        let material = BasicTextureMaterial(texture: nil, flipped: false)
+        lazy var material = BasicTextureMaterial(context: defaultContext, texture: nil, flipped: false)
         material.depthBias = DepthBias(bias: 100.0, slope: 100.0, clamp: 100.0)
-        let mesh = Mesh(geometry: PlaneGeometry(size: 1.0, orientation: .zx), material: material)
+        let mesh = Mesh(geometry: PlaneGeometry(context: defaultContext, size: 1.0, orientation: .zx), material: material)
         mesh.label = "Shadow Catcher"
         return mesh
     }()
@@ -326,8 +326,10 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     var backgroundRenderer: ARBackgroundDepthRenderer!
     var featheredDepthMaskGenerator: ARFeatheredDepthMaskGenerator!
 
+    lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
+
     lazy var postMaterial: PostMaterial = {
-        let material = PostMaterial(pipelinesURL: pipelinesURL)
+        lazy var material = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
         material.depthWriteEnabled = false
         material.blending = .alpha
         return material
@@ -335,7 +337,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     lazy var postProcessor = PostProcessor(
         label: "Post Processor",
-        context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
+        context: postContext,
         material: postMaterial
     )
 

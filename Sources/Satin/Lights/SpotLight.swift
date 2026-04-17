@@ -68,16 +68,14 @@ public final class SpotLight: Light {
         case angleOuter
     }
 
-    public init(label: String = "Spot Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0, angleInner: Float = 60.0, angleOuter: Float = 90.0) {
+    public init(context: Context, label: String = "Spot Light", color: simd_float3, intensity: Float = 1.0, radius: Float = 4.0, angleInner: Float = 60.0, angleOuter: Float = 90.0) {
         self.radius = radius
         self.angleInner = angleInner
         self.angleOuter = angleOuter
-
-        super.init(label: label)
+        super.init(context: context, label: label)
         self.color = color
         self.intensity = intensity
-        
-        self.shadow = DirectionalLightShadow(label: label)
+        self.shadow = DirectionalLightShadow(context: context, label: label)
     }
 
     public required init(from decoder: Decoder) throws {

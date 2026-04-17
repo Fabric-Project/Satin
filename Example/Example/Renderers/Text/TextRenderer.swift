@@ -16,7 +16,7 @@ import Satin
 
 final class TextRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext)
-    let camera = PerspectiveCamera(position: simd_make_float3(0.0, 0.0, 40.0), near: 0.001, far: 1000.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(0.0, 0.0, 40.0), near: 0.001, far: 1000.0)
     lazy var cameraController: PerspectiveCameraController = .init(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -45,25 +45,25 @@ final class TextRenderer: BaseRenderer {
          SFProRounded-Heavy
          */
 
-        let geo = TesselatedTextGeometry(text: input, fontName: "SFProRounded-Heavy", fontSize: 8)
+        lazy var geo = TesselatedTextGeometry(context: defaultContext, text: input, fontName: "SFProRounded-Heavy", fontSize: 8)
 
-        let mat = BasicColorMaterial(color: [1.0, 1.0, 1.0, 0.125], blending: .additive)
+        lazy var mat = BasicColorMaterial(context: defaultContext, color: [1.0, 1.0, 1.0, 0.125], blending: .additive)
         mat.depthWriteEnabled = false
-        let mesh = Mesh(context: defaultContext, geometry: geo, material: mat)
+        lazy var mesh = Mesh(context: defaultContext, geometry: geo, material: mat)
         scene.add(mesh)
 
 //        fatalError("generate point mesh")
-//        let pGeo = Geometry()
+//        let pGeo = Geometry(context: defaultContext)
 //        pGeo.vertexData = geo.vertexData
 //        pGeo.primitiveType = .point
-//        let pmat = BasicPointMaterial([1, 1, 1, 0.5], 6, .alpha)
+//        let pmat = BasicPointMaterial(context: defaultContext, [1, 1, 1, 0.5], 6, .alpha)
 //        pmat.depthWriteEnabled = false
 //        let pmesh = Mesh(geometry: pGeo, material: pmat)
 //        scene.add(pmesh)
 
-        let fmat = BasicColorMaterial(color: [1, 1, 1, 0.025], blending: .additive)
+        lazy var fmat = BasicColorMaterial(context: defaultContext, color: [1, 1, 1, 0.025], blending: .additive)
         fmat.depthWriteEnabled = false
-        let fmesh = Mesh(context: defaultContext, geometry: geo, material: fmat)
+        lazy var fmesh = Mesh(context: defaultContext, geometry: geo, material: fmat)
         fmesh.triangleFillMode = .lines
         scene.add(fmesh)
     }

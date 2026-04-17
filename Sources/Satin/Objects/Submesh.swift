@@ -24,7 +24,7 @@ open class Submesh {
 
     weak var parent: Mesh?
     var material: Material?
-    var geometry = Geometry()
+    var geometry: Geometry!
 
     public init(
         context: Context,
@@ -38,6 +38,7 @@ open class Submesh {
         self.parent = parent
         self.indexBufferOffset = indexBufferOffset
         self.material = material
+        geometry = Geometry(context: context)
         geometry.setElements(elementBuffer)
     }
 
@@ -48,11 +49,8 @@ open class Submesh {
         indexBufferOffset: Int = 0,
         material: Material? = nil
     ) {
-        guard let context = parent.context else {
-            preconditionFailure("Submesh requires a parent mesh with a bound context")
-        }
         self.init(
-            context: context,
+            context: parent.context,
             label: label,
             parent: parent,
             elementBuffer: elementBuffer,
@@ -79,19 +77,11 @@ open class Submesh {
     open func setupMaterial() {
         guard let material, let parent else { return }
         material.vertexDescriptor = parent.geometry.vertexDescriptor
-        material.bindContext(context)
+        material.tessellationDescriptor = parent.geometry.tessellationDescriptor
+        material.setup()
     }
 
-    open func setupGeometry() {
-        geometry.bindContext(context)
-    }
-
-    func bindContext(_ newContext: Context) {
-        precondition(
-            context == newContext,
-            "\(type(of: self)) expected matching context. Existing: \(context.id), new: \(newContext.id)"
-        )
-    }
+    open func setupGeometry() {}
 
     open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
         material?.bind(

@@ -73,7 +73,7 @@ public final class PerspectiveCameraController: CameraController, Codable {
     public var defaultPosition: simd_float3 = simd_make_float3(0.0, 0.0, 1.0)
     public var defaultOrientation: simd_quatf = simd_quaternion(matrix_identity_float4x4)
 
-    public var target = Object(label: "Perspective Camera Controller Target")
+    public lazy var target: Object = Object(context: camera.context, label: "Perspective Camera Controller Target")
 
     public var mouseDeltaSensitivity: Float = 600.0
     public var scrollDeltaSensitivity: Float = 600.0

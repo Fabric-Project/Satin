@@ -15,13 +15,13 @@ final class PostProcessingRenderer: BaseRenderer {
     final class PostMaterial: SourceMaterial {}
 
     var renderTexture: MTLTexture?
-    let material = BasicDiffuseMaterial(hardness: 0.7)
-    let geometry = IcoSphereGeometry(radius: 1.0, resolution: 0)
+    lazy var material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+    lazy var geometry = IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 0)
 
     lazy var scene: Object = {
-        let scene = Object(context: defaultContext, label: "Scene")
+        lazy var scene = Object(context: defaultContext, label: "Scene")
         for _ in 0 ... 50 {
-            let mesh = Mesh(context: defaultContext, geometry: geometry, material: material)
+            lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: material)
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 5.0
 
@@ -34,11 +34,12 @@ final class PostProcessingRenderer: BaseRenderer {
         return scene
     }()
 
-    lazy var postMaterial = PostMaterial(pipelinesURL: pipelinesURL)
+    lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
+    lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
     lazy var postProcessor: PostProcessor = {
         let processor = PostProcessor(
             label: "Post Processor",
-            context: Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat),
+            context: postContext,
             material: postMaterial
         )
         processor.mesh.preDraw = { [weak self] renderEncoder in
@@ -48,7 +49,7 @@ final class PostProcessingRenderer: BaseRenderer {
         return processor
     }()
 
-    let camera = PerspectiveCamera(position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 30.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 30.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 

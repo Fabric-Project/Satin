@@ -22,11 +22,11 @@ final class TessellationRenderer: BaseRenderer {
         geometry: tessGeometry
     )
 
-    let tessGeometry = TessellationGeometry(
-        baseGeometry: IcoSphereGeometry(radius: 1, resolution: 1)
+    lazy var tessGeometry = TessellationGeometry(
+        baseGeometry: IcoSphereGeometry(context: defaultContext, radius: 1, resolution: 1)
     )
 
-    lazy var tessMaterial = TessellatedMaterial(pipelinesURL: pipelinesURL)
+    lazy var tessMaterial = TessellatedMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
     lazy var tessMesh = TessellationMesh(
         context: defaultContext,
         label: "Tessellated Fill",
@@ -40,14 +40,14 @@ final class TessellationRenderer: BaseRenderer {
         context: defaultContext,
         label: "Tessellated Wire",
         geometry: tessGeometry,
-        material: TessellatedMaterial(pipelinesURL: pipelinesURL),
+        material: TessellatedMaterial(context: defaultContext, pipelinesURL: pipelinesURL),
         tessellator: tessellator,
         tessellate: false
     )
 
-    lazy var scene = Object(label: "Scene", [tessMesh, tessWireMesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [tessMesh, tessWireMesh])
 
-    let camera = PerspectiveCamera(position: .init(repeating: 4.0), near: 0.01, far: 50.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 4.0), near: 0.01, far: 50.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 

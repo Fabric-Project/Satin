@@ -10,13 +10,13 @@ import Metal
 import Satin
 
 final class MeshShaderRenderer: BaseRenderer {
-    let geometry = IcoSphereGeometry(radius: 1.0, resolution: 4)
-    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
-    fileprivate lazy var meshNormals = CustomMesh(context: defaultContext, geometry: geometry, material: CustomMaterial(pipelinesURL: pipelinesURL))
+    lazy var geometry = IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 4)
+    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    fileprivate lazy var meshNormals = CustomMesh(context: defaultContext, geometry: geometry, material: CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL))
 
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    let camera = PerspectiveCamera(position: .init(0.0, 0.0, 8.0), near: 0.01, far: 100.0, fov: 45)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(0.0, 0.0, 8.0), near: 0.01, far: 100.0, fov: 45)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
     lazy var startTime = getTime()
@@ -60,13 +60,14 @@ private final class CustomShader: SourceShader {
 
     var meshFunction: String?
 
-    init(_ label: String,
-         _ pipelineURL: URL,
-         _ objectFunctionName: String? = nil,
-         _ meshFunctionName: String? = nil,
-         _: String? = nil)
+    convenience init(_ context: Context,
+                     _ label: String,
+                     _ pipelineURL: URL,
+                     _ objectFunctionName: String? = nil,
+                     _ meshFunctionName: String? = nil,
+                     _: String? = nil)
     {
-        super.init(label: label, pipelineURL: pipelineURL)
+        self.init(context: context, label: label, pipelineURL: pipelineURL)
         self.objectFunctionName = objectFunctionName ?? label.camelCase + "Object"
         self.meshFunctionName = meshFunctionName ?? label.camelCase + "Mesh"
     }
@@ -77,8 +78,8 @@ private final class CustomShader: SourceShader {
 
     override public func makePipeline() throws -> (pipeline: MTLRenderPipelineState?, reflection: MTLRenderPipelineReflection?) {
         if #available(macOS 13.0, iOS 16.0, *) {
-            if let context,
-               let library = try ShaderLibraryCache.getLibrary(configuration: configuration.getLibraryConfiguration(), device: context.device),
+            let context = context
+            if let library = try ShaderLibraryCache.getLibrary(configuration: configuration.getLibraryConfiguration(), device: context.device),
                let objectFunction = library.makeFunction(name: objectFunctionName),
                let meshFunction = library.makeFunction(name: meshFunctionName),
                let fragmentFunction = library.makeFunction(name: fragmentFunctionName)
@@ -147,13 +148,13 @@ private final class CustomShader: SourceShader {
 }
 
 private final class CustomMaterial: SourceMaterial {
-    init(pipelinesURL: URL) {
-        super.init(pipelinesURL: pipelinesURL)
+    init(context: Context, pipelinesURL: URL) {
+        super.init(context: context, pipelinesURL: pipelinesURL)
 //        set("Time", 0.0)
     }
 
-    required init() {
-        fatalError("init() has not been implemented")
+    required init(context: Context) {
+        super.init(context: context)
     }
 
     required init(from _: Decoder) throws {
@@ -161,7 +162,7 @@ private final class CustomMaterial: SourceMaterial {
     }
 
     override func createShader() -> Shader {
-        let shader = CustomShader(label, pipelineURL)
+        let shader = CustomShader(context, label, pipelineURL)
         shader.live = true
         return shader
     }

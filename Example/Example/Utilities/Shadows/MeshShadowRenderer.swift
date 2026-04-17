@@ -36,7 +36,7 @@ final class MeshShadowRenderer {
         self.device = device
         context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
 
-        let mat = BasicColorMaterial(color: [0, 0, 0, 0.75], blending: .alpha)
+        let mat = BasicColorMaterial(context: context, color: [0, 0, 0, 0.75], blending: .alpha)
 
         shadowMesh = Mesh(context: context, geometry: mesh.geometry, material: mat)
         shadowMesh.cullMode = .front
@@ -50,7 +50,7 @@ final class MeshShadowRenderer {
         renderer.resize(size)
 
         let distance: Float = 2.0
-        camera = OrthographicCamera(
+        camera = OrthographicCamera(context: context, 
             left: -distance,
             right: distance,
             bottom: -distance,

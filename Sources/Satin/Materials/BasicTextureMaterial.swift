@@ -16,8 +16,8 @@ open class BasicTextureMaterial: BasicColorMaterial {
         }
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
     }
 
     public required init(from decoder: Decoder) throws {
@@ -25,24 +25,24 @@ open class BasicTextureMaterial: BasicColorMaterial {
         set("Flipped", flipped)
     }
 
-    public init(texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
-        super.init()
+    public init(context: Context, texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
+        super.init(context: context)
         if let texture = texture, texture.textureType != .type2D, texture.textureType != .type2DMultisample {
             fatalError("BasicTextureMaterial expects a 2D texture")
         }
         self.flipped = flipped
         self.texture = texture
-        self.sampler = sampler
+        if let sampler { self.sampler = sampler }
         set("Flipped", flipped)
     }
 
-    public init(texture: MTLTexture, sampler: MTLSamplerState? = nil) {
-        super.init()
+    public init(context: Context, texture: MTLTexture, sampler: MTLSamplerState? = nil) {
+        super.init(context: context)
         if texture.textureType != .type2D, texture.textureType != .type2DMultisample {
             fatalError("BasicTextureMaterial expects a 2D texture")
         }
         self.texture = texture
-        self.sampler = sampler
+        if let sampler { self.sampler = sampler }
         set("Flipped", flipped)
     }
 
@@ -58,7 +58,7 @@ open class BasicTextureMaterial: BasicColorMaterial {
         desc.minFilter = .linear
         desc.magFilter = .linear
         desc.mipFilter = .linear
-        sampler = context?.device.makeSamplerState(descriptor: desc)
+        sampler = context.device.makeSamplerState(descriptor: desc)
     }
 
     public func bindTexture(_ renderEncoder: MTLRenderCommandEncoder) {

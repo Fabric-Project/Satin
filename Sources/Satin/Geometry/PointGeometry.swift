@@ -21,9 +21,9 @@ public final class PointGeometry: Geometry {
 
     let pointBufferAttribute = Float3BufferAttribute(defaultValue: .zero, data: [])
 
-    public init(data: [simd_float3] = [.zero]) {
+    public init(context: Context, data: [simd_float3] = [.zero]) {
         self.data = data
-        super.init(primitiveType: .point)
+        super.init(context: context, primitiveType: .point)
         addAttribute(pointBufferAttribute, for: .Position)
         pointBufferAttribute.data = data
     }

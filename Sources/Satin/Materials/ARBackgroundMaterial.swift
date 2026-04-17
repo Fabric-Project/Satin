@@ -51,15 +51,15 @@ public final class ARBackgroundMaterial: Material {
         }
     }
 
-    public init(color: simd_float4 = simd_float4(repeating: 1.0), srgb: Bool = false) {
-        super.init()
+    public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), srgb: Bool = false) {
+        super.init(context: context)
         set("Color", color)
         set("Srgb", srgb)
         configure()
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         set("Color", simd_float4.one)
         set("Srgb", false)
         configure()

@@ -25,8 +25,8 @@ public class ARBackgroundDepthMaterial: Material {
         }
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         configure()
     }
 

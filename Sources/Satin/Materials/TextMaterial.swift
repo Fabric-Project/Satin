@@ -25,8 +25,8 @@ public final class TextMaterial: Material {
         }
     }
 
-    public init(color: simd_float4 = .one, fontTexture: MTLTexture?) {
-        super.init()
+    public init(context: Context, color: simd_float4 = .one, fontTexture: MTLTexture?) {
+        super.init(context: context)
 
         self.blending = .alpha
         self.fontTexture = fontTexture
@@ -35,8 +35,8 @@ public final class TextMaterial: Material {
         set(fontTexture, index: FragmentTextureIndex.Custom0)
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
 
         blending = .alpha
         set("Color", simd_float4.one)

@@ -49,12 +49,12 @@ public final class ParametricGeometry: Geometry {
 
     var _updateGeometry = true
 
-    public init(rangeU: ClosedRange<Float>, rangeV: ClosedRange<Float>, resolution: simd_int2, generator: @escaping (_ u: Float, _ v: Float) -> simd_float3) {
+    public init(context: Context, rangeU: ClosedRange<Float>, rangeV: ClosedRange<Float>, resolution: simd_int2, generator: @escaping (_ u: Float, _ v: Float) -> simd_float3) {
         self.rangeU = rangeU
         self.rangeV = rangeV
         self.resolution = resolution
         self.generator = generator
-        super.init()
+        super.init(context: context)
         setupGeometry()
     }
 

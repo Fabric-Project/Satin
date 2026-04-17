@@ -12,26 +12,24 @@ import MetalKit
 import Satin
 
 final class Renderer3D: BaseRenderer {
-    lazy var mesh = Mesh(
-        context: defaultContext,
+    lazy var mesh = Mesh(context: defaultContext, 
         label: "Sphere",
-        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial(hardness: 0.7)
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
+        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
     )
 
-    lazy var intersectionMesh = Mesh(
-        context: defaultContext,
+    lazy var intersectionMesh = Mesh(context: defaultContext, 
         label: "Intersection Mesh",
-        geometry: IcoSphereGeometry(radius: 0.05, resolution: 2),
-        material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.05, resolution: 2),
+        material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
         visible: false,
         renderPass: 1
     )
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
-    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     override var sampleCount: Int { 1 }

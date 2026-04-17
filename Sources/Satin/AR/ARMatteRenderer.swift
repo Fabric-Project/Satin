@@ -36,10 +36,9 @@ public class ARMatteRenderer {
         self.context = context
         self.session = session
         self.matteGenerator = ARMatteGenerator(device: device, matteResolution: matteResolution)
-        let material = ARMatteMaterial()
-        material.bindContext(context)
+        let material = ARMatteMaterial(context: context)
         self.material = material
-        self.mesh = Mesh(context: context, geometry: QuadGeometry(), material: nil)
+        self.mesh = Mesh(context: context, geometry: QuadGeometry(context: context), material: nil)
         self.renderer = Renderer(context: context)
         renderer.setClearColor(.zero)
         renderer.label = "AR Matte Renderer"

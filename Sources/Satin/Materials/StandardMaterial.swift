@@ -164,7 +164,7 @@ open class StandardMaterial: Material {
         set(type.texcoordName.titleCase, transform)
     }
 
-    public init(baseColor: simd_float4 = .one,
+    public init(context: Context, baseColor: simd_float4 = .one,
                 metallic: Float = 0.0,
                 roughness: Float = 0.2,
                 specular: Float = 0.5,
@@ -172,7 +172,7 @@ open class StandardMaterial: Material {
                 emissiveColor: simd_float4 = .zero,
                 maps: [PBRTextureType: MTLTexture?] = [:])
     {
-        super.init()
+        super.init(context: context)
         self.baseColor = baseColor
         self.metallic = metallic
         self.roughness = roughness
@@ -201,8 +201,8 @@ open class StandardMaterial: Material {
         blending = .disabled
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         self.baseColor = .one
         self.metallic = 0.0
         self.roughness = 0.2
@@ -223,7 +223,7 @@ open class StandardMaterial: Material {
     }
 
     override open func createShader() -> Shader {
-        StandardShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        StandardShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     override open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {

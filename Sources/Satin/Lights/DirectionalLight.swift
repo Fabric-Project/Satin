@@ -39,13 +39,11 @@ public final class DirectionalLight: Light {
         case intensity
     }
 
-    public init(label: String = "Directional Light", color: simd_float3, intensity: Float = 1.0) {
-
-        super.init(label: label)
-
+    public init(context: Context, label: String = "Directional Light", color: simd_float3, intensity: Float = 1.0) {
+        super.init(context: context, label: label)
         self.color = color
         self.intensity = intensity
-        self.shadow = DirectionalLightShadow(label: label)
+        self.shadow = DirectionalLightShadow(context: context, label: label)
     }
         
     public required init(from decoder: Decoder) throws {
@@ -77,7 +75,7 @@ public final class DirectionalLight: Light {
     }
 
     func setupShadow() {
-        guard castShadow, let directionalShadow = shadow as? DirectionalLightShadow, let context else { return }
+        guard castShadow, let directionalShadow = shadow as? DirectionalLightShadow else { return }
         directionalShadow.device = context.device
         directionalShadow.update(light: self)
     }

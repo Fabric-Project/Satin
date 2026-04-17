@@ -33,18 +33,18 @@ final class FlockingRenderer: BaseRenderer {
 //    lazy var params = ParameterGroup("Controls", [pauseParam, resetParam, particleCountParam])
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [sprite])
-    let camera = OrthographicCamera()
+    lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var renderer = Renderer(context: defaultContext)
     lazy var particleSystem = FlockingComputeSystem(device: device, pipelinesURL: pipelinesURL, count: particleCountParam.value, feedback: true, live: true)
 
     lazy var spriteMaterial: SpriteMaterial = {
-        let material = SpriteMaterial(pipelinesURL: pipelinesURL)
+        lazy var material = SpriteMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
         material.depthWriteEnabled = false
         return material
     }()
 
     lazy var sprite: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: PointGeometry(), material: spriteMaterial)
+        lazy var mesh = Mesh(context: defaultContext, geometry: PointGeometry(context: defaultContext), material: spriteMaterial)
         mesh.label = "Sprite"
         mesh.cullMode = .none
         mesh.instanceCount = particleCountParam.value

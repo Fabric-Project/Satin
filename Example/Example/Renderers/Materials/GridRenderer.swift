@@ -12,14 +12,14 @@ import Satin
 final class GridRenderer: BaseRenderer {
     final class GridMaterial: SourceMaterial {}
 
-    var camera = PerspectiveCamera(position: [0.0, 0.0, 6.0], near: 0.001, far: 200.0, fov: 45.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 6.0], near: 0.001, far: 200.0, fov: 45.0)
     lazy var scene = Object(context: defaultContext, label: "Scene", [skybox])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
-    lazy var gridMaterial = GridMaterial(pipelinesURL: pipelinesURL, live: true)
+    lazy var gridMaterial = GridMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
 
     lazy var skybox: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: SkyboxGeometry(), material: gridMaterial)
+        lazy var mesh = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext), material: gridMaterial)
         mesh.label = "Skybox"
         mesh.scale = [50, 50, 50]
         return mesh

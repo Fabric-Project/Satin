@@ -16,7 +16,7 @@ final class LoadObjRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
 
     lazy var scene = Object(context: defaultContext, label: "Scene")
-    let camera = PerspectiveCamera(position: [0.0, 0.0, 9.0], near: 0.001, far: 100.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 9.0], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -35,8 +35,8 @@ final class LoadObjRenderer: BaseRenderer {
 
     func loadOBJ(url: URL) {
         let asset = MDLAsset(url: url, vertexDescriptor: SatinModelIOVertexDescriptor(), bufferAllocator: MTKMeshBufferAllocator(device: device))
-        let geometry = Geometry()
-        let mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.0))
+        lazy var geometry = Geometry(context: defaultContext)
+        lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.0))
         mesh.label = "Suzanne"
 
         let object0 = asset.object(at: 0)

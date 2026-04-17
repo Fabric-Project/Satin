@@ -20,13 +20,14 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
 
     final class CustomMaterial: PhysicalMaterial {
         var pipelineURL: URL
-        required init(pipelinesURL: URL) {
+        init(context: Context, pipelinesURL: URL) {
             pipelineURL = pipelinesURL.appendingPathComponent("Custom").appendingPathComponent("Shaders.metal")
-            super.init(baseColor: .one, metallic: .zero, roughness: .zero)
+            super.init(context: context, baseColor: .one, metallic: .zero, roughness: .zero)
         }
 
-        required init() {
-            fatalError("init() has not been implemented")
+        required init(context: Context) {
+            pipelineURL = URL(fileURLWithPath: "")
+            super.init(context: context)
         }
 
         required init(from _: Decoder) throws {
@@ -34,7 +35,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         }
 
         override func createShader() -> Shader {
-            let shader = CustomShader(label: label, pipelineURL: pipelineURL)
+            let shader = CustomShader(context: context, label: label, pipelineURL: pipelineURL)
 //            shader.live = true
             return shader
         }
@@ -42,13 +43,13 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
 
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    lazy var scene = IBLScene(label: "Scene", [mesh, skybox])
-    lazy var camera = PerspectiveCamera(position: [0.0, 0.0, 40.0], near: 0.001, far: 1000.0)
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [mesh, skybox])
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
     lazy var customMaterial: CustomMaterial = {
-        let mat = CustomMaterial(pipelinesURL: pipelinesURL)
+        lazy var mat = CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
         mat.delegate = self
         mat.set("Base Color", [1.0, 0.0, 0.0, 1.0])
         mat.set("Emissive Color", [1.0, 1.0, 1.0, 0.0])
@@ -56,9 +57,9 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }()
 
     lazy var mesh: InstancedMesh = {
-        let mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 12)
+        lazy var mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.875, resolution: 4), material: customMaterial, count: 11 * 12)
         mesh.label = "Spheres"
-        let placer = Object(context: defaultContext)
+        lazy var placer = Object(context: defaultContext)
         for y in 0 ..< 12 {
             for x in 0 ..< 11 {
                 let index = y * 11 + x
@@ -69,8 +70,8 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         return mesh
     }()
 
-    lazy var skyboxMaterial = SkyboxMaterial()
-    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(size: 50), material: skyboxMaterial)
+    lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: skyboxMaterial)
 
     override func setup() {
         setupLights()
@@ -90,12 +91,12 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
             simd_make_float3(-dist, -dist, dist),
         ]
 
-        let sphereLightGeo = mesh.geometry
-        let sphereLightMat = BasicColorMaterial(color: .one, blending: .disabled)
+        let sphereLightGeo: Geometry = mesh.geometry
+        lazy var sphereLightMat = BasicColorMaterial(context: defaultContext, color: .one, blending: .disabled)
         for (index, position) in positions.enumerated() {
-            let light = PointLight(color: .one, intensity: 250, radius: 150.0)
+            lazy var light = PointLight(context: defaultContext, color: .one, intensity: 250, radius: 150.0)
             light.position = position
-            let lightMesh = Mesh(context: defaultContext, geometry: sphereLightGeo, material: sphereLightMat)
+            lazy var lightMesh = Mesh(context: defaultContext, geometry: sphereLightGeo, material: sphereLightMat)
             lightMesh.scale = .init(repeating: 0.25)
             lightMesh.label = "Light Mesh \(index)"
             light.add(lightMesh)
@@ -130,6 +131,5 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }
 
     func updated(material: Satin.Material) {
-        print("updated material: \(material.label)")
     }
 }

@@ -132,13 +132,13 @@ struct PoissonDiskSampler {
 }
 
 final class PoissonRenderer: BaseRenderer {
-    var camera = OrthographicCamera()
+    lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView)
-    lazy var scene = Object(label: "Scene", [intersectionMesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [intersectionMesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     lazy var intersectionMesh: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+        lazy var mesh = Mesh(context: defaultContext, geometry: CircleGeometry(context: defaultContext, radius: 10), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
         mesh.renderPass = 1
         mesh.visible = false
@@ -176,11 +176,10 @@ final class PoissonRenderer: BaseRenderer {
             points.append(simd_make_float3(sample, 0.0))
         }
 
-        let mesh = Mesh(
-            context: defaultContext,
+        lazy var mesh = Mesh(context: defaultContext, 
             label: "Points",
-            geometry: PointGeometry(data: points),
-            material: BasicPointMaterial(color: [0, 0, 1, 1], size: 8)
+            geometry: PointGeometry(context: defaultContext, data: points),
+            material: BasicPointMaterial(context: defaultContext, color: [0, 0, 1, 1], size: 8)
         )
 
         mesh.position.x += 100
@@ -204,11 +203,10 @@ final class PoissonRenderer: BaseRenderer {
             points.append(simd_make_float3(points2D.data[i], 0.0))
         }
 
-        let mesh = Mesh(
-            context: defaultContext,
+        lazy var mesh = Mesh(context: defaultContext, 
             label: "Points",
-            geometry: PointGeometry(data: points),
-            material: BasicPointMaterial(color: color, size: 8)
+            geometry: PointGeometry(context: defaultContext, data: points),
+            material: BasicPointMaterial(context: defaultContext, color: color, size: 8)
         )
 
         scene.add(mesh)

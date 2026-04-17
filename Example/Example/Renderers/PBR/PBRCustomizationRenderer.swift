@@ -16,15 +16,15 @@ final class PBRCustomizationRenderer: BaseRenderer {
 
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    var material = PhysicalMaterial()
-    lazy var mesh = Mesh(context: defaultContext, geometry: BoxGeometry(size: 4.0), material: material)
-    lazy var scene = IBLScene(label: "Scene", [skybox, mesh])
-    lazy var camera = PerspectiveCamera(position: .init(repeating: 10.0), near: 0.001, far: 1000.0)
+    lazy var material = PhysicalMaterial(context: defaultContext)
+    lazy var mesh = Mesh(context: defaultContext, geometry: BoxGeometry(context: defaultContext, size: 4.0), material: material)
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox, mesh])
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 10.0), near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    lazy var skyboxMaterial = SkyboxMaterial()
-    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(size: 50), material: skyboxMaterial)
+    lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: skyboxMaterial)
 
     override func setup() {
         camera.lookAt(target: .zero)

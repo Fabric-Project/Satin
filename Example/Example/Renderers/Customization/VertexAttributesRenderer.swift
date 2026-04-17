@@ -13,7 +13,7 @@ import Satin
 
 final class VertexAttributesRenderer: BaseRenderer {
     lazy var intersectionMesh: Mesh = {
-        let mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.01, resolution: 2), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+        lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.01, resolution: 2), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
         mesh.visible = false
         return mesh
@@ -23,7 +23,7 @@ final class VertexAttributesRenderer: BaseRenderer {
 
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
 
-    let camera = PerspectiveCamera(position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
     lazy var scene = Object(context: defaultContext, label: "Scene", [intersectionMesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
@@ -32,7 +32,7 @@ final class VertexAttributesRenderer: BaseRenderer {
         let url = modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")
         guard let model = loadAsset(url: url, context: defaultContext), let mesh = getMeshes(model, true, true).first else { return }
 
-        mesh.material = CustomMaterial(pipelinesURL: pipelinesURL)
+        mesh.material = CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
         scene.add(mesh)
 
         #if os(visionOS)

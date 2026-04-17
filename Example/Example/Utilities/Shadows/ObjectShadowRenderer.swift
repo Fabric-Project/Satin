@@ -26,8 +26,8 @@ final class ShadowPostProcessor: PostProcessor {
             }
         }
 
-        public required init() {
-            super.init(pipelinesURL: Bundle.main.resourceURL!
+        required init(context: Context) {
+            super.init(context: context, pipelinesURL: Bundle.main.resourceURL!
                 .appendingPathComponent("Assets")
                 .appendingPathComponent("Shared")
                 .appendingPathComponent("Pipelines")
@@ -57,7 +57,7 @@ final class ShadowPostProcessor: PostProcessor {
     }
 
     public init(context: Context) {
-        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial())
+        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial(context: context))
         renderer.setClearColor(.zero)
     }
 }
@@ -103,7 +103,7 @@ final class ObjectShadowRenderer {
 
     var materialCache: [Object: Material] = [:]
 
-    var material = BasicColorMaterial(color: .one, blending: .disabled)
+    lazy var material = BasicColorMaterial(context: context, color: .one, blending: .disabled)
 
     init(context: Context,
          object: Object,
@@ -133,7 +133,7 @@ final class ObjectShadowRenderer {
         renderer.label = "Object Shadow Renderer"
 
         processor = ShadowPostProcessor(context: Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float))
-        camera = OrthographicCamera()
+        camera = OrthographicCamera(context: context)
 
         let size = (Float(resolution), Float(resolution))
         renderer.resize(size)

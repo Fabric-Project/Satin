@@ -21,7 +21,7 @@ open class PostProcessor {
     public let context: Context
     public let scene: Object
     public let mesh: Mesh
-    public let camera = OrthographicCamera()
+    public let camera: OrthographicCamera
 
     public let renderer: Renderer
 
@@ -43,6 +43,7 @@ open class PostProcessor {
     ) {
         self.label = label
         self.context = context
+        camera = OrthographicCamera(context: context)
         renderer = Renderer(
             label: label + " Renderer",
             context: context,
@@ -59,7 +60,14 @@ open class PostProcessor {
             frameBufferOnly: frameBufferOnly
         )
 
-        mesh = Mesh(context: context, label: label + "Mesh", geometry: QuadGeometry(), material: material)
+        if let material {
+            precondition(
+                material.context == context,
+                "PostProcessor material context (\(material.context.id)) must match processor context (\(context.id))"
+            )
+        }
+
+        mesh = Mesh(context: context, label: label + "Mesh", geometry: QuadGeometry(context: context), material: material)
         scene = Object(context: context, label: label + " Scene", [mesh])
     }
 

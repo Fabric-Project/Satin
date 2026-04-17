@@ -24,15 +24,15 @@ public class ARPostMaterial: Material {
     private lazy var startTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
     private var time: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
 
-    init(contentTexture: MTLTexture? = nil, cameraGrainTexture: MTLTexture? = nil) {
+    init(context: Context, contentTexture: MTLTexture? = nil, cameraGrainTexture: MTLTexture? = nil) {
         self.contentTexture = contentTexture
         self.cameraGrainTexture = cameraGrainTexture
-        super.init()
+        super.init(context: context)
         configure()
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         configure()
     }
 

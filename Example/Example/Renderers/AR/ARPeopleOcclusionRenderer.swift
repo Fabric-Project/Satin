@@ -19,12 +19,12 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     private lazy var sessionPublisher = ARSessionPublisher(session: ARSession())
     private var anchorsUpdatedSubscription: AnyCancellable?
 
-    let boxGeometry = BoxGeometry(size: 0.1)
-    let boxMaterial = UVColorMaterial()
+    lazy var boxGeometry = BoxGeometry(context: defaultContext, size: 0.1)
+    lazy var boxMaterial = UVColorMaterial(context: defaultContext)
 
     var meshAnchorMap: [UUID: Mesh] = [:]
 
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.001, far: 100.0)
     lazy var renderer = Renderer(context: defaultContext, clearColor: .zero, frameBufferOnly: false)
@@ -135,7 +135,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         if let currentFrame = session.currentFrame {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
-            let mesh = Mesh(geometry: boxGeometry, material: boxMaterial)
+            lazy var mesh = Mesh(context: defaultContext, geometry: boxGeometry, material: boxMaterial)
             mesh.worldMatrix = anchor.transform
             meshAnchorMap[anchor.identifier] = mesh
             scene.add(mesh)

@@ -41,14 +41,16 @@ open class SourceShader: Shader {
         }
     }
 
-    public init(label: String, pipelineURL: URL, pipelineDescriptor: MTLRenderPipelineDescriptor? = nil) {
-        super.init(label: label, pipelineURL: pipelineURL)
-        setupShaderCompiler()
-    }
-
     public convenience init(context: Context, label: String, pipelineURL: URL, pipelineDescriptor: MTLRenderPipelineDescriptor? = nil) {
-        self.init(label: label, pipelineURL: pipelineURL, pipelineDescriptor: pipelineDescriptor)
-        bindContext(context)
+        var configuration = ShaderConfiguration(
+            label: label,
+            vertexFunctionName: label.camelCase + "Vertex",
+            fragmentFunctionName: label.camelCase + "Fragment",
+            shadowFunctionName: label.camelCase + "ShadowVertex",
+            pipelineURL: pipelineURL
+        )
+        configuration.context = context
+        self.init(configuration: configuration)
     }
 
     public required init(configuration: ShaderConfiguration) {
@@ -57,8 +59,9 @@ open class SourceShader: Shader {
     }
 
     public convenience init(context: Context, configuration: ShaderConfiguration) {
+        var configuration = configuration
+        configuration.context = context
         self.init(configuration: configuration)
-        bindContext(context)
     }
     
     deinit {

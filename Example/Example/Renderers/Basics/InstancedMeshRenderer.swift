@@ -17,7 +17,7 @@ final class InstancedMeshRenderer: BaseRenderer {
 
     // MARK: - Satin
 
-    private let camera = PerspectiveCamera(position: [10.0, 10.0, 10.0], near: 0.001, far: 100.0)
+    private lazy var camera = PerspectiveCamera(context: defaultContext, position: [10.0, 10.0, 10.0], near: 0.001, far: 100.0)
     private lazy var scene = Object(context: defaultContext, label: "Scene")
     private lazy var container = Object(context: defaultContext, label: "Container")
 
@@ -48,11 +48,10 @@ final class InstancedMeshRenderer: BaseRenderer {
         let url = modelsURL.appendingPathComponent("Suzanne/Suzanne.obj")
         guard let model = loadAsset(url: url, context: defaultContext), let mesh = getMeshes(model, true, true).first else { return }
 
-        let instancedMesh = InstancedMesh(
-            context: defaultContext,
+        lazy var instancedMesh = InstancedMesh(context: defaultContext, 
             label: "Spot",
             geometry: mesh.geometry,
-            material: BasicDiffuseMaterial(hardness: 0.0),
+            material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.0),
             count: dim * dim * dim
         )
 
@@ -67,7 +66,7 @@ final class InstancedMeshRenderer: BaseRenderer {
         guard let instancedMesh = instancedMesh else { return }
 
         let halfDim: Int = dim / 2
-        let object = Object(context: defaultContext)
+        lazy var object = Object(context: defaultContext)
         object.scale = .init(repeating: 0.5)
         var index = 0
         for z in -halfDim ... halfDim {

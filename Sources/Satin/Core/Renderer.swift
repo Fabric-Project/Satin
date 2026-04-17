@@ -540,7 +540,6 @@ open class Renderer {
     }
 
     private func updateLists(object: Object, visible: Bool) {
-        object.ensureContextSetup()
         object.update()
 
         if object.visible, visible {

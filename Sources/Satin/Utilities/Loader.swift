@@ -172,8 +172,7 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
 
                         var material: Material?
                         if let mdlMaterial = mdlSubmesh.material, let textureLoader = textureLoader {
-                            let mat = PhysicalMaterial()
-                            mat.bindContext(context)
+                            let mat = PhysicalMaterial(context: context)
                             mat.setPropertiesFrom(material: mdlMaterial, textureLoader: textureLoader)
                             material = mat
                         }
@@ -199,8 +198,7 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
         else {
             if let mdlSubmesh = submeshes.object(at: 0) as? MDLSubmesh {
                 if let mdlMaterial = mdlSubmesh.material, let textureLoader = textureLoader {
-                    let mat = PhysicalMaterial()
-                    mat.bindContext(context)
+                    let mat = PhysicalMaterial(context: context)
                     mat.setPropertiesFrom(material: mdlMaterial, textureLoader: textureLoader)
                     stnMesh.material = mat
                 }

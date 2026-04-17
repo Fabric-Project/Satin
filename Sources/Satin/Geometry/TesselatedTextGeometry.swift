@@ -283,7 +283,7 @@ public class TesselatedTextGeometry: SatinGeometry {
     public var characterPaths: [Character: [Polyline2D]] = [:]
     public var characterOffsets: [String.Index: simd_float2] = [:]
 
-    public init(text: String, fontName: String = "Helvetica", fontSize: Float, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0.0) {
+    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0.0) {
         self.text = text
         self.fontName = fontName
         self.fontSize = fontSize
@@ -294,7 +294,7 @@ public class TesselatedTextGeometry: SatinGeometry {
         self.kern = kern
         self.lineSpacing = lineSpacing
         ctFont = CTFontCreateWithName(fontName as CFString, CGFloat(fontSize), nil)
-        super.init()
+        super.init(context: context)
     }
 
     var angleLimit: Float = degToRad(7.5)

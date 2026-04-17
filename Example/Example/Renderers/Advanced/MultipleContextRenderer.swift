@@ -13,17 +13,17 @@ import MetalKit
 import Satin
 
 final class MultipleContextRenderer: BaseRenderer {
-    lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(hardness: 0.7))
+    lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
     lazy var noDepthContext = Context(
         device: device,
         sampleCount: 1,
         colorPixelFormat: colorPixelFormat
     )
-    lazy var meshNoDepth = Mesh(context: noDepthContext, geometry: IcoSphereGeometry(radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(hardness: 0.7))
+    lazy var meshNoDepth = Mesh(context: noDepthContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
-    lazy var sceneNoDepth = Object(label: "Scene No Depth", [meshNoDepth])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var sceneNoDepth = Object(context: defaultContext, label: "Scene No Depth", [meshNoDepth])
 
     override var sampleCount: Int {
 #if targetEnvironment(simulator)
@@ -38,7 +38,7 @@ final class MultipleContextRenderer: BaseRenderer {
         context: noDepthContext
     )
 
-    lazy var camera = PerspectiveCamera(position: [5, 5, 5], near: 0.01, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [5, 5, 5], near: 0.01, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     var tween: Tween?

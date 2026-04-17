@@ -84,7 +84,7 @@ open class Shader {
     public internal(set) var fragmentWantsVertexUniforms: Bool = false
     public internal(set) var fragmentWantsMaterialUniforms: Bool = false
 
-    public private(set) var context: Context?
+    public let context: Context
 
     // MARK: - Configurations
 
@@ -326,7 +326,11 @@ open class Shader {
             if configurationNeedsUpdate {
                 configurations.removeAll()
                 pipelines.removeAll()
+                pipelineReflection = nil
+                pipelineError = nil
                 shadowPipelines.removeAll()
+                shadowPipelineReflection = nil
+                shadowPipelineError = nil
             }
         }
     }
@@ -362,7 +366,10 @@ open class Shader {
     }
 
     public required init(configuration: ShaderConfiguration) {
-        self.context = configuration.context
+        guard let ctx = configuration.context else {
+            preconditionFailure("\(Self.self) requires ShaderConfiguration.context to be non-nil")
+        }
+        self.context = ctx
         self.configuration = configuration
     }
 
@@ -370,25 +377,6 @@ open class Shader {
         var configuration = configuration
         configuration.context = context
         self.init(configuration: configuration)
-    }
-
-    public init(
-        label: String,
-        vertexFunctionName: String? = nil,
-        fragmentFunctionName: String? = nil,
-        shadowFunctionName: String? = nil,
-        libraryURL: URL? = nil,
-        pipelineURL: URL? = nil
-    ) {
-        self.context = nil
-        configuration = ShaderConfiguration(
-            label: label,
-            vertexFunctionName: vertexFunctionName ?? label.camelCase + "Vertex",
-            fragmentFunctionName: fragmentFunctionName ?? label.camelCase + "Fragment",
-            shadowFunctionName: shadowFunctionName ?? label.camelCase + "ShadowVertex",
-            libraryURL: libraryURL,
-            pipelineURL: pipelineURL
-        )
     }
 
     public convenience init(
@@ -400,15 +388,16 @@ open class Shader {
         libraryURL: URL? = nil,
         pipelineURL: URL? = nil
     ) {
-        self.init(
+        var configuration = ShaderConfiguration(
             label: label,
-            vertexFunctionName: vertexFunctionName,
-            fragmentFunctionName: fragmentFunctionName,
-            shadowFunctionName: shadowFunctionName,
+            vertexFunctionName: vertexFunctionName ?? label.camelCase + "Vertex",
+            fragmentFunctionName: fragmentFunctionName ?? label.camelCase + "Fragment",
+            shadowFunctionName: shadowFunctionName ?? label.camelCase + "ShadowVertex",
             libraryURL: libraryURL,
             pipelineURL: pipelineURL
         )
-        bindContext(context)
+        configuration.context = context
+        self.init(configuration: configuration)
     }
 
     public func setup() {
@@ -436,7 +425,7 @@ open class Shader {
     // MARK: - Configuration
 
     func setupConfiguration() {
-        guard let context, configurations[context] == nil else { return }
+        guard configurations[context] == nil else { return }
 
         configuration.context = context
         configurations[context] = configuration
@@ -513,7 +502,7 @@ open class Shader {
     }
 
     func setupPipeline() {
-        guard let context, pipelines[context] == nil, pipelineError == nil else { return }
+        guard pipelines[context] == nil, pipelineError == nil else { return }
         do {
             let result = try makePipeline()
             pipelines[context] = result.pipeline
@@ -543,7 +532,7 @@ open class Shader {
     }
 
     func setupShadowPipeline() {
-        guard let context, shadowPipelines[context] == nil, shadowPipelineError == nil, castShadow else { return }
+        guard shadowPipelines[context] == nil, shadowPipelineError == nil, castShadow else { return }
         do {
             shadowPipelines[context] = try makeShadowPipeline()
             shadowPipelineError = nil
@@ -577,18 +566,6 @@ open class Shader {
         return clone
     }
 
-    func bindContext(_ newContext: Context) {
-        if let context {
-            precondition(
-                context == newContext,
-                "\(type(of: self)) expected matching context. Existing: \(context.id), new: \(newContext.id)"
-            )
-            return
-        }
-
-        context = newContext
-        configuration.context = newContext
-    }
 }
 
 extension Shader: Equatable {

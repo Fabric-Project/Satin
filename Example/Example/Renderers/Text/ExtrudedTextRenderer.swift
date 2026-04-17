@@ -13,7 +13,7 @@ final class ExtrudedTextRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext)
     var mesh: Mesh!
 
-    lazy var camera = PerspectiveCamera(position: [15.0, 20.0, 40.0], near: 10.0, far: 60.0, fov: 60)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [15.0, 20.0, 40.0], near: 10.0, far: 60.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -32,7 +32,7 @@ final class ExtrudedTextRenderer: BaseRenderer {
 
     func setupText() {
         let input = "stay hungry\nstay foolish"
-        let geo = ExtrudedTextGeometry(
+        lazy var geo = ExtrudedTextGeometry(context: defaultContext, 
             text: input,
             fontName: "Helvetica",
             fontSize: 8,
@@ -43,7 +43,7 @@ final class ExtrudedTextRenderer: BaseRenderer {
             verticalAlignment: .center
         )
 
-        let mat = DepthMaterial()
+        lazy var mat = DepthMaterial(context: defaultContext)
         mat.set("Invert", true)
         mesh = Mesh(context: defaultContext, geometry: geo, material: mat)
 

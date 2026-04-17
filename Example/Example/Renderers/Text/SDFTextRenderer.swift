@@ -27,13 +27,13 @@ final class SDFTextRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
     lazy var textMesh: TextMesh = {
         let fontAtlas = try! FontAtlas.load(url: sharedAssetsURL.appendingPathComponent("Fonts/SFProRounded/SFProRoundedBold64.json"))
-        return TextMesh(context: defaultContext, geometry: TextGeometry(text: "Hello World", font: fontAtlas), material: TextMaterial(color: .one, fontTexture: fontTexture))
+        return TextMesh(context: defaultContext, geometry: TextGeometry(context: defaultContext, text: "Hello World", font: fontAtlas), material: TextMaterial(context: defaultContext, color: .one, fontTexture: fontTexture))
     }()
 
     override func setup() {

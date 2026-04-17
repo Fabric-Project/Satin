@@ -18,15 +18,15 @@ final class MultipleViewportRenderer: BaseRenderer {
 
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
-    lazy var material = ViewportMaterial(pipelinesURL: pipelinesURL)
-    lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(size: 2.0), material: material)
+    lazy var material = ViewportMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+    lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext, size: 2.0), material: material)
     lazy var startTime = getTime()
     lazy var renderer = Renderer(context: defaultContext)
 
-    var camera = OrthographicCamera()
+    lazy var camera = OrthographicCamera(context: defaultContext)
 
     lazy var subContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float, vertexAmplificationCount: 2)
-    lazy var subMesh = Mesh(context: subContext, geometry: IcosahedronGeometry(size: 0.5), material: BasicDiffuseMaterial(hardness: 1.0))
+    lazy var subMesh = Mesh(context: subContext, geometry: IcosahedronGeometry(context: subContext, size: 0.5), material: BasicDiffuseMaterial(context: subContext, hardness: 1.0))
 //    lazy var subMesh = Mesh(geometry: IcosahedronGeometry(size: 0.5), material: AmplificationMaterial(pipelinesURL: pipelinesURL))
     lazy var subScene = Object(context: subContext, label: "Subscene", [grid, axisMesh, subMesh])
     lazy var subRenderer = Renderer(context: subContext)
@@ -36,17 +36,17 @@ final class MultipleViewportRenderer: BaseRenderer {
     var subDepthTexture: MTLTexture?
     var subRenderPassDescriptor = MTLRenderPassDescriptor()
 
-    lazy var subCamera0 = PerspectiveCamera(position: [0, 4, 4], near: 0.01, far: 100.0, fov: 30)
-    lazy var subCamera1 = PerspectiveCamera(position: [4, 4, 4], near: 0.01, far: 100.0, fov: 30)
+    lazy var subCamera0 = PerspectiveCamera(context: defaultContext, position: [0, 4, 4], near: 0.01, far: 100.0, fov: 30)
+    lazy var subCamera1 = PerspectiveCamera(context: defaultContext, position: [4, 4, 4], near: 0.01, far: 100.0, fov: 30)
     var subViewport = MTLViewport()
 
     lazy var grid: Object = {
         let object = Object(context: subContext)
-        let material = BasicColorMaterial(color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
+        lazy var material = BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
         let intervals = 5
         let intervalsf = Float(intervals)
-        let geometryX = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .x)
-        let geometryZ = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .z)
+        lazy var geometryX = CapsuleGeometry(context: defaultContext, radius: 0.005, height: intervalsf, axis: .x)
+        lazy var geometryZ = CapsuleGeometry(context: defaultContext, radius: 0.005, height: intervalsf, axis: .z)
         for i in 0 ... intervals {
             let fi = Float(i)
             let meshX = Mesh(context: subContext, geometry: geometryX, material: material)
@@ -67,9 +67,9 @@ final class MultipleViewportRenderer: BaseRenderer {
         let intervalsf = Float(intervals)
         let radius = Float(0.005)
         let height = intervalsf
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .x), material: BasicColorMaterial(color: simd_make_float4(1.0, 0.0, 0.0, 1.0))))
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0))))
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0))))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .x), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 0.0, 0.0, 1.0))))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .y), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 1.0, 0.0, 1.0))))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .z), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 0.0, 1.0, 1.0))))
         return object
     }()
 

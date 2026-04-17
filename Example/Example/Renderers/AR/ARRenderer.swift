@@ -19,8 +19,8 @@ final class ARRenderer: BaseRenderer {
     private let sessionPublisher = ARSessionPublisher(session: ARSession())
     private var anchorsSubscription: AnyCancellable?
 
-    private let boxGeometry = BoxGeometry(width: 0.1, height: 0.1, depth: 0.1)
-    private let boxMaterial = UVColorMaterial()
+    private lazy var boxGeometry = BoxGeometry(context: defaultContext, width: 0.1, height: 0.1, depth: 0.1)
+    private lazy var boxMaterial = UVColorMaterial(context: defaultContext)
     private var meshAnchorMap: [UUID: Mesh] = [:]
 
     private lazy var scene = Object(context: context, label: "Scene")

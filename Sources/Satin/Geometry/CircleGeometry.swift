@@ -35,22 +35,22 @@ public final class CircleGeometry: SatinGeometry {
         }
     }
 
-    public init(radius: Float) {
+    public init(context: Context, radius: Float) {
         self.radius = radius
-        super.init()
+        super.init(context: context)
     }
 
-    public init(radius: Float, angularResolution: Int) {
+    public init(context: Context, radius: Float, angularResolution: Int) {
         self.radius = radius
         self.angularResolution = angularResolution
-        super.init()
+        super.init(context: context)
     }
 
-    public init(radius: Float, angularResolution: Int, radialResolution: Int) {
+    public init(context: Context, radius: Float, angularResolution: Int, radialResolution: Int) {
         self.radius = radius
         self.angularResolution = angularResolution
         self.radialResolution = radialResolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

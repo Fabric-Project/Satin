@@ -19,26 +19,26 @@ final class FXAARenderer: BaseRenderer {
     var renderTexture: MTLTexture!
     var updateRenderTexture = true
 
-    lazy var fxaaMaterial = FxaaMaterial(pipelinesURL: pipelinesURL)
-    lazy var fxaaProcessor = PostProcessor(label: "FXAA Post Processor", context: Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat), material: fxaaMaterial)
+    lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
+    lazy var fxaaMaterial = FxaaMaterial(context: postContext, pipelinesURL: pipelinesURL)
+    lazy var fxaaProcessor = PostProcessor(label: "FXAA Post Processor", context: postContext, material: fxaaMaterial)
 
     lazy var mesh: Mesh = {
-        let mesh = Mesh(
-            context: defaultContext,
+        lazy var mesh = Mesh(context: defaultContext, 
             geometry:
-            ExtrudedTextGeometry(
+            ExtrudedTextGeometry(context: defaultContext, 
                 text: "FXAA",
                 fontName: "Helvetica",
                 fontSize: 1,
                 distance: 0.5,
                 pivot: [0, 0]
             ),
-            material: BasicDiffuseMaterial(hardness: 1.0)
+            material: BasicDiffuseMaterial(context: defaultContext, hardness: 1.0)
         )
         return mesh
     }()
 
-    var camera = PerspectiveCamera(position: [0, 0, 9], near: 0.001, far: 100.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 9], near: 0.001, far: 100.0)
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
