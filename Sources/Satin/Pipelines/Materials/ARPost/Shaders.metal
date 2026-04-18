@@ -1,9 +1,11 @@
 #include "Library/Random.metal"
+#include "Library/TextureTransform.metal"
 
 typedef struct {
     float cameraGrainIntensity;
     float time;
     float2 grainSize;
+    float4x4 contentTextureTransform;
 } ARPostUniforms;
 
 fragment half4 arpostFragment(
@@ -11,7 +13,7 @@ fragment half4 arpostFragment(
     constant ARPostUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
     texture2d<float, access::sample> contextTex [[texture(FragmentTextureCustom0)]],
     texture3d<float, access::sample> grainTex [[texture(FragmentTextureCustom1)]]) {
-    const float2 uv = in.texcoord;
+    const float2 uv = applyTextureTransform(in.texcoord, uniforms.contentTextureTransform);
     const float time = uniforms.time;
     const float2 grainSize = uniforms.grainSize;
     const float cameraGrainIntensity = uniforms.cameraGrainIntensity;

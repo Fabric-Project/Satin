@@ -11,6 +11,15 @@ import ARKit
 import Metal
 
 public final class ARBackgroundMaterial: Material {
+    public var textureTransform: simd_float4x4 {
+        set {
+            set("Texture Transform", newValue)
+        }
+        get {
+            (get("Texture Transform") as? Float4x4Parameter)?.value ?? matrix_identity_float4x4
+        }
+    }
+
     public var color: simd_float4 {
         set {
             (get("Color") as! Float4Parameter).value = newValue
@@ -55,6 +64,7 @@ public final class ARBackgroundMaterial: Material {
         super.init(context: context)
         set("Color", color)
         set("Srgb", srgb)
+        set("Texture Transform", matrix_identity_float4x4)
         configure()
     }
 
@@ -62,6 +72,7 @@ public final class ARBackgroundMaterial: Material {
         super.init(context: context)
         set("Color", simd_float4.one)
         set("Srgb", false)
+        set("Texture Transform", matrix_identity_float4x4)
         configure()
     }
 
@@ -73,6 +84,9 @@ public final class ARBackgroundMaterial: Material {
 
     public required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
+        if get("Texture Transform") == nil {
+            set("Texture Transform", matrix_identity_float4x4)
+        }
     }
 }
 

@@ -1,9 +1,13 @@
 #include "Library/Random.metal"
+#include "Library/TextureTransform.metal"
 
 typedef struct {
     float cameraGrainIntensity;
     float time;
     float2 grainSize;
+    float4x4 contentTextureTransform;
+    float4x4 backgroundTextureTransform;
+    float4x4 matteTextureTransform;
 } ARCompositorUniforms;
 
 fragment float4 arcompositorFragment(
@@ -17,7 +21,10 @@ fragment float4 arcompositorFragment(
     depth2d<float> dilatedDepthTexture [[texture(FragmentTextureCustom5)]]) {
     constexpr sampler s = sampler(filter::linear);
 
-    const float2 uv = in.texcoord;
+    const float2 contentUV = applyTextureTransform(in.texcoord, uniforms.contentTextureTransform);
+    const float2 backgroundUV =
+        applyTextureTransform(in.texcoord, uniforms.backgroundTextureTransform);
+    const float2 matteUV = applyTextureTransform(in.texcoord, uniforms.matteTextureTransform);
     const float time = uniforms.time;
     const float2 grainSize = uniforms.grainSize;
     const float cameraGrainIntensity = uniforms.cameraGrainIntensity;
@@ -30,12 +37,12 @@ fragment float4 arcompositorFragment(
     const float3 guv = float3(fract(grainUV + noiseOffset), cameraGrainIntensity);
     const float4 grain = grainTexture.sample(s, guv);
 
-    const float4 backgroundSample = backgroundTexture.sample(s, uv);
-    float4 contentSample = contextTexture.sample(s, uv);
-    const float contentDepthSample = contentDepthTexture.sample(s, uv);
+    const float4 backgroundSample = backgroundTexture.sample(s, backgroundUV);
+    float4 contentSample = contextTexture.sample(s, contentUV);
+    const float contentDepthSample = contentDepthTexture.sample(s, contentUV);
 
-    const float alphaSample = alphaTexture.sample(s, uv).r;
-    const float dilatedDepthSample = dilatedDepthTexture.sample(s, uv);
+    const float alphaSample = alphaTexture.sample(s, matteUV).r;
+    const float dilatedDepthSample = dilatedDepthTexture.sample(s, matteUV);
 
     contentSample.rgb += mix(0.0, grain.rgb, contentSample.a);
 

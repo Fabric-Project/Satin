@@ -31,6 +31,6 @@ struct Material {
     float3 thickness; // already multiplied by the modelView's scale matrix
     float ior;
 #endif
-    float3x3 reflectionTexcoordTransform;
-    float3x3 irradianceTexcoordTransform;
+    float4x4 reflectionTexcoordTransform;
+    float4x4 irradianceTexcoordTransform;
 };

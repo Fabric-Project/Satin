@@ -634,7 +634,7 @@ open class Renderer {
 
                     if let cubemapTexture = cubemapTexture, let skyboxMaterial = material as? SkyboxMaterial {
                         skyboxMaterial.texture = cubemapTexture
-                        skyboxMaterial.texcoordTransform = reflectionTexcoordTransform
+                        skyboxMaterial.texcoordTransform = simd_float4x4(textureTransform: reflectionTexcoordTransform)
                         skyboxMaterial.environmentIntensity = environmentIntensity
                     }
 

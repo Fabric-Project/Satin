@@ -1,5 +1,8 @@
+#include "Library/TextureTransform.metal"
+
 typedef struct {
     float3 nearFarDelta;
+    float4x4 textureTransform;
 } ARBackgroundDepthUniforms;
 
 struct FragOut {
@@ -14,7 +17,8 @@ fragment FragOut arbackgroundDepthFragment(
     depth2d<float, access::sample> capturedDepthTexture [[texture(FragmentTextureCustom0)]]) {
     FragOut out;
 
-    float z = capturedDepthTexture.sample(s, in.texcoord) + 0.01;
+    const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
+    float z = capturedDepthTexture.sample(s, uv) + 0.01;
     //    const float4x4 proj = uniforms.projection;
     //    float sz = proj[2][2];
     //    float sw = proj[3][2];
