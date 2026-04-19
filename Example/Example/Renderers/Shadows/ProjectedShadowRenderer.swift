@@ -40,10 +40,6 @@ final class ProjectedShadowRenderer: BaseRenderer {
         cameraController.target.position.y += 1
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
 

@@ -78,10 +78,6 @@ final class WaveSimulationRenderer: BaseRenderer {
         super.setup()
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     lazy var startTime = getTime()
 
     override func update() {

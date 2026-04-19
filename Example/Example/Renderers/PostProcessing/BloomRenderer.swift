@@ -104,10 +104,6 @@ final class BloomRenderer: BaseRenderer {
 
     lazy var bloomGenerator = BloomGenerator(device: device, levels: 5)
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {
             renderTexture = createTexture(

@@ -41,10 +41,6 @@ final class VertexAttributesRenderer: BaseRenderer {
         #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

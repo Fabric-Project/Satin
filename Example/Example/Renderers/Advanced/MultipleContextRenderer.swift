@@ -60,7 +60,6 @@ final class MultipleContextRenderer: BaseRenderer {
     }
 
     deinit {
-        cameraController.disable()
         tween?.remove()
     }
 

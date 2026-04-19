@@ -17,10 +17,6 @@ final class OctasphereRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func setup() {
         #if os(visionOS)
         renderer.setClearColor(.zero)

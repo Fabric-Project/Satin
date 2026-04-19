@@ -46,10 +46,6 @@ final class CustomGeometryRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func setupMesh() {
         mesh = Mesh(context: defaultContext, 
             label: "Icosahedron",

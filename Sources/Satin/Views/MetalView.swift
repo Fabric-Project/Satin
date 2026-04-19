@@ -87,6 +87,8 @@ public final class MetalView: NSView, CALayerDelegate {
 #if DEBUG_VIEW
         print("\ndeinit - MetalView: \(delegate?.id)\n")
 #endif
+        NotificationCenter.default.removeObserver(self)
+        stopRenderLoop()
     }
 
     // MARK: - Layer
@@ -130,9 +132,16 @@ public final class MetalView: NSView, CALayerDelegate {
         else {
 #if DEBUG_VIEW
             print("viewDidMoveToWindow - MetalView: \(delegate?.id) - NO WINDOW")
-            stopRenderLoop()
 #endif
+            stopRenderLoop()
         }
+    }
+
+    override public func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil {
+            stopRenderLoop()
+        }
+        super.viewWillMove(toWindow: newWindow)
     }
 
     override public func viewDidHide() {
@@ -140,6 +149,7 @@ public final class MetalView: NSView, CALayerDelegate {
 #if DEBUG_VIEW
         print("viewDidHide - MetalView: \(delegate?.id)")
 #endif
+        suspendDrawableResources()
     }
 
     override public func viewDidUnhide() {
@@ -147,12 +157,20 @@ public final class MetalView: NSView, CALayerDelegate {
 #if DEBUG_VIEW
         print("viewDidUnhide - MetalView: \(delegate?.id)")
 #endif
+        refreshDrawableSize()
     }
 
     // MARK: - Layer Rendering
 
     private func render() {
-        guard let delegate, let drawable = metalLayer.nextDrawable() else { return }
+        guard
+            window != nil,
+            superview != nil,
+            !isHiddenOrHasHiddenAncestor,
+            metalLayer.device != nil,
+            let delegate,
+            let drawable = metalLayer.nextDrawable()
+        else { return }
         delegate.draw(metalLayer: metalLayer, drawable: drawable)
     }
 
@@ -260,6 +278,7 @@ public final class MetalView: NSView, CALayerDelegate {
         _displayLink = nil
         _displaySource?.cancel()
         _displaySource = nil
+        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: nil)
     }
 
     @objc func windowWillClose(_ notification: Notification) {
@@ -287,7 +306,23 @@ public final class MetalView: NSView, CALayerDelegate {
         resizeDrawable()
     }
 
+    func refreshDrawableSize() {
+        resizeDrawable()
+    }
+
+    private func suspendDrawableResources() {
+        guard metalLayer.drawableSize != .zero else { return }
+        metalLayer.drawableSize = .zero
+    }
+
+    func releaseDrawableResources() {
+        suspendDrawableResources()
+        metalLayer.device = nil
+    }
+
     private func resizeDrawable() {
+        guard window != nil, !isHiddenOrHasHiddenAncestor else { return }
+
         let newScaleFactor = contentScaleFactor
         var newSize = bounds.size
 
@@ -559,8 +594,13 @@ public final class MetalView: UIView {
     // MARK: - Render
 
     @objc private func render() {
-        guard let drawable = metalLayer.nextDrawable() else { return }
-        delegate?.draw(metalLayer: metalLayer, drawable: drawable)
+        guard
+            window != nil,
+            metalLayer.device != nil,
+            let delegate,
+            let drawable = metalLayer.nextDrawable()
+        else { return }
+        delegate.draw(metalLayer: metalLayer, drawable: drawable)
     }
 
     // MARK: - Event Based Rendering
@@ -614,7 +654,23 @@ public final class MetalView: UIView {
         }
     }
 
+    func refreshDrawableSize() {
+        resizeDrawable()
+    }
+
+    private func suspendDrawableResources() {
+        guard metalLayer.drawableSize != .zero else { return }
+        metalLayer.drawableSize = .zero
+    }
+
+    func releaseDrawableResources() {
+        suspendDrawableResources()
+        metalLayer.device = nil
+    }
+
     private func resizeDrawable() {
+        guard window != nil, !isHidden else { return }
+
         let newScaleFactor = contentScaleFactor
         var newSize = bounds.size
 

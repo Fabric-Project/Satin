@@ -102,6 +102,14 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
 #endif
     }
 
+    func releaseDrawableResources() {
+        colorMultisampleTextures.removeAll(keepingCapacity: false)
+        depthTextures.removeAll(keepingCapacity: false)
+        depthMultisampleTextures.removeAll(keepingCapacity: false)
+        stencilTextures.removeAll(keepingCapacity: false)
+        stencilMultisampleTextures.removeAll(keepingCapacity: false)
+    }
+
     deinit {
 #if DEBUG_VIEW
         print("\ndeinit - MetalViewRenderer: \(id)\n")

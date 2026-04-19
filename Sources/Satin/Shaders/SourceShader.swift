@@ -28,14 +28,20 @@ open class SourceShader: Shader {
 
     public var live = false {
         didSet {
-            compiler.watch = live
+            if live {
+                setupShaderCompiler()
+            }
+            compiler?.watch = live
         }
     }
 
     var compilerSubscription: AnyCancellable?
-    private lazy var compiler = MetalFileCompiler(watch: live) {
+    private var compiler: MetalFileCompiler? {
         didSet {
-            compilerSubscription = compiler.onUpdatePublisher.sink { [weak self] _ in
+            compilerSubscription?.cancel()
+            compilerSubscription = nil
+
+            compilerSubscription = compiler?.onUpdatePublisher.sink { [weak self] _ in
                 self?.reloadFromSource()
             }
         }
@@ -66,11 +72,13 @@ open class SourceShader: Shader {
     
     deinit {
         compilerSubscription?.cancel()
+        compilerSubscription = nil
+        compiler = nil
     }
 
     open func setupShaderCompiler() {
-        compiler = ShaderSourceCache.getCompiler(url: pipelineURL)
-        compiler.watch = live
+        guard compiler == nil, live else { return }
+        compiler = MetalFileCompiler(watch: live)
     }
 
     public func reloadFromSource() {

@@ -82,10 +82,6 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
         targetMesh.orientation = cameraController.camera.worldOrientation.inverse

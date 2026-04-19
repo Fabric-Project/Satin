@@ -25,10 +25,6 @@ final class GridRenderer: BaseRenderer {
         return mesh
     }()
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

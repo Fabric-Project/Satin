@@ -64,10 +64,6 @@ final class PBRSubmeshRenderer: BaseRenderer {
         scene.add(light)
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

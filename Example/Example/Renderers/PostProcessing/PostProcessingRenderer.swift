@@ -53,10 +53,6 @@ final class PostProcessingRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {
             renderTexture = createTexture("Render Texture", Int(metalView.drawableSize.width), Int(metalView.drawableSize.height), colorPixelFormat, device)

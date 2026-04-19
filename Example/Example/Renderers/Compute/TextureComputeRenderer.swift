@@ -72,10 +72,6 @@ class TextureComputeRenderer: BaseRenderer {
         super.setup()
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

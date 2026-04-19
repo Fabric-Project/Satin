@@ -159,14 +159,20 @@ open class ComputeShader {
 
     public var live: Bool = false {
         didSet {
-            compiler.watch = live
+            if live {
+                setupShaderCompiler()
+            }
+            compiler?.watch = live
         }
     }
 
     var compilerSubscription: AnyCancellable?
-    private lazy var compiler = MetalFileCompiler(watch: live) {
+    private var compiler: MetalFileCompiler? {
         didSet {
-            compilerSubscription = compiler.onUpdatePublisher.sink { [weak self] _ in
+            compilerSubscription?.cancel()
+            compilerSubscription = nil
+
+            compilerSubscription = compiler?.onUpdatePublisher.sink { [weak self] _ in
                 guard let self = self, let pipelineURL = self.pipelineURL else { return }
 
                 ShaderSourceCache.removeSource(url: pipelineURL)
@@ -397,14 +403,17 @@ open class ComputeShader {
     // MARK: - Live / Compiler
 
     open func setupShaderCompiler() {
-        guard let pipelineURL = pipelineURL else { return }
-        compiler = ShaderSourceCache.getCompiler(url: pipelineURL)
-        compiler.watch = live
+        guard compiler == nil, live, let pipelineURL = pipelineURL else { return }
+        _ = pipelineURL
+        compiler = MetalFileCompiler(watch: live)
     }
 
     // MARK: - Deinit
 
     deinit {
+        compilerSubscription?.cancel()
+        compilerSubscription = nil
+        compiler = nil
         resetPipeline = nil
         resetPipelineError = nil
 

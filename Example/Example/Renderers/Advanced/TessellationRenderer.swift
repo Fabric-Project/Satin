@@ -63,10 +63,6 @@ final class TessellationRenderer: BaseRenderer {
         tessWireMesh.material?.set("Color", [1.0, 1.0, 1.0, 0.33])
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     lazy var startTime = getTime()
     override func update() {
         let currentTime = getTime() - startTime
