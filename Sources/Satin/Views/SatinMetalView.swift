@@ -22,10 +22,6 @@ public struct SatinMetalView: NSViewControllerRepresentable {
     }
 
     public func updateNSViewController(_ nsViewController: Self.NSViewControllerType, context: Self.Context) {}
-
-    public static func dismantleNSViewController(_ nsViewController: MetalViewController, coordinator: ()) {
-        nsViewController.cleanup()
-    }
 }
 
 #elseif os(iOS) || os(tvOS) || os(visionOS)
@@ -42,10 +38,6 @@ public struct SatinMetalView: UIViewControllerRepresentable {
     }
 
     public func updateUIViewController(_ uiViewController: MetalViewController, context: Self.Context) {}
-
-    public static func dismantleUIViewController(_ uiViewController: MetalViewController, coordinator: ()) {
-        uiViewController.cleanup()
-    }
 }
 
 #endif

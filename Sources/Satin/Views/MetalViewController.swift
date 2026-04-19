@@ -63,16 +63,6 @@ public final class MetalViewController: NSViewController {
         self.setupTracking()
     }
 
-    override public func viewDidAppear() {
-        super.viewDidAppear()
-        activateRenderer()
-    }
-
-    override public func viewWillDisappear() {
-        super.viewWillDisappear()
-        deactivateRenderer()
-    }
-
     // MARK: - Setup View
 
     private func setupView() {
@@ -81,7 +71,6 @@ public final class MetalViewController: NSViewController {
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
         self.metalView.metalLayer.device = device
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
     }
 
     // MARK: - Renderer
@@ -109,26 +98,6 @@ public final class MetalViewController: NSViewController {
 #endif
         self.renderer.cleanup()
         self.renderer.isSetup = false
-    }
-
-    private func activateRenderer() {
-        setupView()
-        metalView.refreshDrawableSize()
-
-        if !renderer.isSetup {
-            setupRenderer()
-        } else if metalView.delegate == nil {
-            metalView.delegate = renderer
-        }
-
-        metalView.isPaused = false
-    }
-
-    private func deactivateRenderer() {
-        metalView.isPaused = true
-        metalView.delegate = nil
-        renderer.releaseDrawableResources()
-        metalView.releaseDrawableResources()
     }
 
     // MARK: - Appearance
@@ -211,10 +180,11 @@ public final class MetalViewController: NSViewController {
 #if DEBUG_VIEWS
         print("cleanup - MetalViewController: \(self.renderer.id)")
 #endif
-        deactivateRenderer()
         self.cleanupRenderer()
+        self.removeEvents()
         self.removeTracking()
         self.removeEvents()
+        self.metalView.delegate = nil
     }
 
     @objc func updateAppearance() {
@@ -374,7 +344,9 @@ public final class MetalViewController: UIViewController {
 #if DEBUG_VIEWS
         print("\ndeinit - MetalViewController: \(renderer.id)\n")
 #endif
-        cleanup()
+        cleanupRenderer()
+        removeEvents()
+        metalView.delegate = nil
     }
 
     // MARK: - Load View
@@ -397,16 +369,6 @@ public final class MetalViewController: UIViewController {
         self.setupAppearance()
     }
 
-    override public func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        activateRenderer()
-    }
-
-    override public func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        deactivateRenderer()
-    }
-
     override public var prefersHomeIndicatorAutoHidden: Bool {
         true
     }
@@ -419,7 +381,6 @@ public final class MetalViewController: UIViewController {
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
         self.metalView.metalLayer.device = device
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
     }
 
     // MARK: - Renderer
@@ -463,32 +424,6 @@ public final class MetalViewController: UIViewController {
 #endif
         self.renderer.cleanup()
         self.renderer.isSetup = false
-    }
-
-    private func activateRenderer() {
-        setupView()
-        metalView.refreshDrawableSize()
-
-        if !renderer.isSetup {
-            setupRenderer()
-        } else if metalView.delegate == nil {
-            metalView.delegate = renderer
-        }
-
-        metalView.isPaused = false
-    }
-
-    private func deactivateRenderer() {
-        metalView.isPaused = true
-        metalView.delegate = nil
-        renderer.releaseDrawableResources()
-        metalView.releaseDrawableResources()
-    }
-
-    func cleanup() {
-        deactivateRenderer()
-        cleanupRenderer()
-        removeEvents()
     }
 
     func setupAppearance() {

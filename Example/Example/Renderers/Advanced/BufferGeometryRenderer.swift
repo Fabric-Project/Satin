@@ -11,30 +11,6 @@ import MetalKit
 
 import Satin
 
-private final class RoundedBoxBufferGeometry: SatinGeometry {
-    var size: Float {
-        didSet {
-            if oldValue != size {
-                _updateData = true
-            }
-        }
-    }
-
-    let radius: Float
-    let resolution: Int
-
-    init(context: Context, size: Float = 1.0, radius: Float = 0.25, resolution: Int = 3) {
-        self.size = size
-        self.radius = radius
-        self.resolution = resolution
-        super.init(context: context)
-    }
-
-    override func generateGeometryData() -> GeometryData {
-        generateRoundedBoxGeometryData(size, size, size, radius, Int32(resolution))
-    }
-}
-
 final class BufferGeometryMesh: Mesh {
     init(context: Context, label: String = "Buffer Geometry Mesh", geometry: Geometry, material: Material) {
         super.init(context: context, label: label, geometry: geometry, material: material)
@@ -46,8 +22,8 @@ final class BufferGeometryMesh: Mesh {
 }
 
 final class BufferGeometryRenderer: BaseRenderer {
-    private lazy var interleavedGeometry = RoundedBoxBufferGeometry(context: defaultContext)
-    lazy var geometry: Geometry = interleaved ? interleavedGeometry : Geometry(context: defaultContext)
+    var geometryData = createGeometryData()
+    lazy var geometry = Geometry(context: defaultContext)
     lazy var mesh = BufferGeometryMesh(context: defaultContext, geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
 
     lazy var intersectionMesh: Mesh = {
@@ -67,7 +43,9 @@ final class BufferGeometryRenderer: BaseRenderer {
     let interleaved = true
 
     override func setup() {
-        if !interleaved {
+        if interleaved {
+            setupInterleavedBufferGeometry(size: 1.0)
+        } else {
             setupBufferGeometry()
         }
 
@@ -79,12 +57,14 @@ final class BufferGeometryRenderer: BaseRenderer {
 #endif
     }
 
+    deinit {
+        freeGeometryData(&geometryData)
+    }
+
     var theta: Float = 0.0
 
     override func update() {
-        if interleaved {
-            interleavedGeometry.size = 1.0 + 0.25 * sin(theta)
-        }
+        setupInterleavedBufferGeometry(size: 1.0 + 0.25 * sin(theta))
         cameraController.update()
 
         theta += 0.1
@@ -105,6 +85,52 @@ final class BufferGeometryRenderer: BaseRenderer {
     }
 
     // MARK: Geometry Generation
+
+    func setupInterleavedBufferGeometry(size: Float) {
+        freeGeometryData(&geometryData)
+//        var geoData = SatinCore.generateQuadGeometryData(1.0)
+//        var geoData = SatinCore.generateBoxGeometryData(1, 1, 1, 0, 0, 0, 1, 1, 1)
+        geometryData = generateRoundedBoxGeometryData(size, size, size, 0.25, 3)
+
+        // position (4) & normal (3) & uv (2)
+        //        var data: [Float] = [
+        //            -1.0, -1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+        //             1.0, -1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
+        //             1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0,
+        //             -1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0
+        //        ]
+
+        if let data = geometryData.vertexData {
+            let vertexCount = Int(geometryData.vertexCount)
+            let interleavedBuffer = InterleavedBuffer(
+                index: .Vertices,
+                data: data,
+                stride: MemoryLayout<SatinVertex>.size,
+                count: vertexCount,
+                source: geometryData
+            )
+
+            if geometryData.indexCount > 0 {
+                geometry.setElements(
+                    ElementBuffer(
+                        type: .uint32,
+                        data: geometryData.indexData,
+                        count: Int(geometryData.indexCount * 3),
+                        source: geometryData
+                    )
+                )
+            } else {
+                geometry.setElements(nil)
+            }
+
+            var offset = 0
+            geometry.addAttribute(Float3InterleavedBufferAttribute(parent: interleavedBuffer, offset: offset), for: .Position)
+            offset += MemoryLayout<Float>.size * 4
+            geometry.addAttribute(Float3InterleavedBufferAttribute(parent: interleavedBuffer, offset: offset), for: .Normal)
+            offset += MemoryLayout<Float>.size * 4
+            geometry.addAttribute(Float2InterleavedBufferAttribute(parent: interleavedBuffer, offset: offset), for: .Texcoord)
+        }
+    }
 
     func setupBufferGeometry() {
         geometry.addAttribute(
