@@ -485,7 +485,9 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Mouse
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
+            self?.state = .inactive
+        }) else { return event }
 
         if event.clickCount == 2 {
             reset()
@@ -511,7 +513,9 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Right Mouse
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
+            self?.state = .inactive
+        }) else { return event }
         state = .zooming
         return event
     }
@@ -531,7 +535,7 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Scroll Wheel
 
     private func scrollWheel(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
         if event.phase == .began {
             state = .panning
