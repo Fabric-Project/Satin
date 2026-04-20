@@ -14,6 +14,15 @@ import MetalKit
 import Satin
 
 final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
+    typealias AnimatedPointLight = (
+        light: PointLight,
+        basePosition: simd_float3,
+        orbit: simd_float2,
+        verticalAmplitude: Float,
+        phase: Float,
+        speed: Float
+    )
+
     // MARK: - 3D Scene
 
     final class CustomShader: PhysicalShader {}
@@ -69,6 +78,9 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 6.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
+    lazy var startTime = getTime()
+
+    var animatedLights: [AnimatedPointLight] = []
 
     lazy var customMaterial: CustomMaterial = {
         lazy var mat = CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
@@ -127,6 +139,15 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
             [0.72, 0.8, 1.0],
         ]
         let intensities: [Float] = [325.0, 160.0, 110.0, 85.0]
+        let orbitOffsets: [simd_float2] = [
+            [0.65, 0.45],
+            [0.5, 0.35],
+            [0.4, 0.3],
+            [0.55, 0.4],
+        ]
+        let verticalAmplitudes: [Float] = [0.35, 0.2, 0.18, 0.24]
+        let phases: [Float] = [0.0, 1.3, 2.2, 3.4]
+        let speeds: [Float] = [1.3, 1.24, 1.2, 1.26]
 
         let sphereLightGeo: Geometry = mesh.geometry
         for (index, position) in positions.enumerated() {
@@ -137,14 +158,12 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
                 radius: 120.0
             )
             light.position = position
-//            if index == 0 {
-                light.castShadow = true
-                light.shadow.resolution = (1024, 1024)
-                light.shadow.bias = 0.0005
-                light.shadow.normalBias = 0.05
-                light.shadow.radius = 1.0
-                light.shadow.strength = 1.0
-//            }
+            light.castShadow = true
+            light.shadow.resolution = (1024, 1024)
+            light.shadow.bias = 0.0005
+            light.shadow.normalBias = 0.05
+            light.shadow.radius = 1.0
+            light.shadow.strength = 1.0
 
             lazy var lightMesh = Mesh(
                 context: defaultContext,
@@ -156,8 +175,17 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
             light.add(lightMesh)
 
             scene.add(light)
-            scene.environmentIntensity = 0.2
+            animatedLights.append((
+                light: light,
+                basePosition: position,
+                orbit: orbitOffsets[index],
+                verticalAmplitude: verticalAmplitudes[index],
+                phase: phases[index],
+                speed: speeds[index]
+            ))
         }
+
+        scene.environmentIntensity = 0.2
     }
 
     func loadHdri() {
@@ -168,6 +196,16 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }
 
     override func update() {
+        let time = Float(getTime() - startTime)
+        for animatedLight in animatedLights {
+            let orbitTime = time * animatedLight.speed + animatedLight.phase
+            var position = animatedLight.basePosition
+            position.x += cos(orbitTime) * animatedLight.orbit.x
+            position.z += sin(orbitTime) * animatedLight.orbit.y
+            position.y += sin(orbitTime * 0.7 + animatedLight.phase) * animatedLight.verticalAmplitude
+            animatedLight.light.position = position
+        }
+
         cameraController.update()
     }
 
