@@ -96,12 +96,12 @@ open class Mesh: Renderable {
         }
     }
 
-    public init(context: Context, label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderLayer: RenderLayer = .opaque) {
         self.geometry = geometry
         super.init(context: context, label: label, visible: visible)
         self.material = material
         self.renderOrder = renderOrder
-        self.renderPass = renderPass
+        self.renderLayer = renderLayer
     }
 
     // MARK: - Decode

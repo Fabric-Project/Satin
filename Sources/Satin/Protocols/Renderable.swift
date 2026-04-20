@@ -27,10 +27,10 @@ open class Renderable : Object {
         }
     }
 
-    final let renderPassPublisher = PassthroughSubject<Int, Never>()
-    open var renderPass = 0 {
+    final let renderLayerPublisher = PassthroughSubject<RenderLayer, Never>()
+    open var renderLayer: RenderLayer = .opaque {
         didSet {
-            renderPassPublisher.send(renderPass)
+            renderLayerPublisher.send(renderLayer)
         }
     }
     

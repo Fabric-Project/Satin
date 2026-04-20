@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2852F9692FB00DE68DE /* RenderLayer.swift */; };
+		1B35E2882F9692FB00DE68DE /* RenderPasses.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2862F9692FB00DE68DE /* RenderPasses.swift */; };
 		1B62F68A2F95C93C007F29E9 /* SpotShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6892F95C93C007F29E9 /* SpotShadow.swift */; };
 		1B62F68B2F95C93C007F29E9 /* DirectionalShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */; };
 		1B62F68C2F95C93C007F29E9 /* PointShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6882F95C93C007F29E9 /* PointShadow.swift */; };
@@ -277,6 +279,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1B35E2852F9692FB00DE68DE /* RenderLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderLayer.swift; sourceTree = "<group>"; };
+		1B35E2862F9692FB00DE68DE /* RenderPasses.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderPasses.swift; sourceTree = "<group>"; };
 		1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionalShadow.swift; sourceTree = "<group>"; };
 		1B62F6882F95C93C007F29E9 /* PointShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadow.swift; sourceTree = "<group>"; };
 		1B62F6892F95C93C007F29E9 /* SpotShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadow.swift; sourceTree = "<group>"; };
@@ -964,6 +968,8 @@
 				66D7DEC62C06A24B00B5A6C8 /* InstanceMatrixUniforms.swift */,
 				66D7DEC72C06A24B00B5A6C8 /* LightData.swift */,
 				66D7DEC92C06A24B00B5A6C8 /* ShadowData.swift */,
+				1B35E2852F9692FB00DE68DE /* RenderLayer.swift */,
+				1B35E2862F9692FB00DE68DE /* RenderPasses.swift */,
 			);
 			path = Types;
 			sourceTree = "<group>";
@@ -1337,6 +1343,8 @@
 				E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */,
 				E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */,
 				E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */,
+				1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */,
+				1B35E2882F9692FB00DE68DE /* RenderPasses.swift in Sources */,
 				E101A8A72C070E8E0055FABA /* OrthographicCameraController.swift in Sources */,
 				E101A8A82C070E8E0055FABA /* PerspectiveCameraController.swift in Sources */,
 				E101A8A92C070E8E0055FABA /* OrthographicCamera.swift in Sources */,

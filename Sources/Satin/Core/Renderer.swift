@@ -567,10 +567,10 @@ open class Renderer {
             }
 
             if let renderable = object as? Renderable {
-                if let renderPassList = renderLists[renderable.renderPass] {
+                if let renderPassList = renderLists[renderable.renderLayer.rawValue] {
                     renderPassList.append(renderable)
                 } else {
-                    renderLists[renderable.renderPass] = RenderList(renderable)
+                    renderLists[renderable.renderLayer.rawValue] = RenderList(renderable)
                 }
 
                 if renderable.lighting {
