@@ -159,6 +159,8 @@ struct ContentView: View {
                     ExampleItem(id: "contact-shadow", title: "Contact Shadow (Utility)", systemImage: "square.2.layers.3d.bottom.filled") { ContactShadowRendererView() },
                     ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "shadow") { DirectionalShadowRendererView() },
                     ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "lightbulb.2") { PointShadowRendererView() },
+                    ExampleItem(id: "spot-shadow", title: "Spot Shadows", systemImage: "flashlight.on.fill") { SpotShadowRendererView() },
+                    ExampleItem(id: "projector", title: "Projector", systemImage: "film.stack") { ProjectorRendererView() },
                     ExampleItem(id: "projected-shadow", title: "Projected Shadow (Utility)", systemImage: "shadow") { ProjectedShadowRendererView() }
                 ]
             )
