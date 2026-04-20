@@ -158,6 +158,7 @@ struct ContentView: View {
                 items: [
                     ExampleItem(id: "contact-shadow", title: "Contact Shadow (Utility)", systemImage: "square.2.layers.3d.bottom.filled") { ContactShadowRendererView() },
                     ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "shadow") { DirectionalShadowRendererView() },
+                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "lightbulb.2") { PointShadowRendererView() },
                     ExampleItem(id: "projected-shadow", title: "Projected Shadow (Utility)", systemImage: "shadow") { ProjectedShadowRendererView() }
                 ]
             )

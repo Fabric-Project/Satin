@@ -126,12 +126,12 @@ final class PBRRenderer: BaseRenderer {
             simd_make_float3(-dist * 0.5, -dist * 0.35, dist * 1.1),
         ]
         let colors: [simd_float3] = [
-            [1.0, 0.94, 0.86],
-            [0.78, 0.86, 1.0],
-            [1.0, 0.76, 0.62],
-            [0.72, 0.8, 1.0],
+            [1.0, 0.28, 0.22],
+            [0.12, 0.85, 1.0],
+            [0.98, 0.85, 0.18],
+            [0.34, 1.0, 0.42],
         ]
-        let intensities: [Float] = [325.0, 160.0, 110.0, 85.0]
+        let intensities: [Float] = [260.0, 180.0, 110.0, 95.0]
         let orbitOffsets: [simd_float2] = [
             [0.65, 0.45],
             [0.5, 0.35],
@@ -156,7 +156,7 @@ final class PBRRenderer: BaseRenderer {
             light.shadow.bias = 0.0005
             light.shadow.normalBias = 0.05
             light.shadow.radius = 1.0
-            light.shadow.strength = 0.75
+            light.shadow.strength = 0.9
 
             lazy var lightMesh = Mesh(
                 context: defaultContext,
@@ -178,7 +178,7 @@ final class PBRRenderer: BaseRenderer {
             ))
         }
 
-        scene.environmentIntensity = 0.05
+        scene.environmentIntensity = 0.0125
     }
 
     func loadHdri() {
