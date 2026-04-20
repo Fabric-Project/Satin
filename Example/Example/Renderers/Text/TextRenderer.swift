@@ -29,10 +29,6 @@ final class TextRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func setupText() {
         let input = "SATIN\nPRO"
 

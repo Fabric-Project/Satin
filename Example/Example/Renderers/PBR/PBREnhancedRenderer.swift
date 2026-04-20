@@ -78,10 +78,6 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         loadHdri()
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func setupLights() {
         let dist: Float = 12.0
         let positions = [

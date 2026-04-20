@@ -61,10 +61,6 @@ final class BufferComputeRenderer: BaseRenderer {
         startTime = CFAbsoluteTimeGetCurrent()
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         var time = Float(CFAbsoluteTimeGetCurrent() - startTime)
         chromaMaterial.set("Time", time)

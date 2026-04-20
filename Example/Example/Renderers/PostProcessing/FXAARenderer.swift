@@ -44,10 +44,6 @@ final class FXAARenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         if updateRenderTexture {
             renderTexture = createTexture("Render Texture", colorPixelFormat)

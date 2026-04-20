@@ -533,7 +533,6 @@ open class Object: Codable {
             if setParent {
                 child.parent = self
             }
-            validateChildContext(child)
             children.insert(child, at: at)
         }
     }
@@ -545,8 +544,6 @@ open class Object: Codable {
             child.removeFromParent()
             child.parent = self
         }
-
-        validateChildContext(child)
 
         children.append(child)
         childAddedPublisher.send(child)
@@ -568,13 +565,6 @@ open class Object: Codable {
         for obj in objects {
             add(obj, setParent)
         }
-    }
-
-    private func validateChildContext(_ child: Object) {
-        precondition(
-            context == child.context,
-            "Cannot attach \(type(of: child)) with context \(child.context.id) to \(type(of: self)) with context \(context.id)"
-        )
     }
 
     open func remove(_ child: Object) {

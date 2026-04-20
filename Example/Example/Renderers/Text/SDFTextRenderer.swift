@@ -48,10 +48,6 @@ final class SDFTextRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     var frame: Float = 0
     override func update() {
         textMesh.text = "\(frame)"

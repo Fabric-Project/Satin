@@ -21,6 +21,15 @@ public class ARPostMaterial: Material {
         }
     }
 
+    public var contentTextureTransform: simd_float4x4 {
+        get {
+            get("Content Texture Transform", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4
+        }
+        set {
+            set("Content Texture Transform", newValue)
+        }
+    }
+
     private lazy var startTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
     private var time: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
 
@@ -43,6 +52,9 @@ public class ARPostMaterial: Material {
 
     private func configure() {
         blending = .alpha
+        if get("Content Texture Transform") == nil {
+            set("Content Texture Transform", matrix_identity_float4x4)
+        }
     }
 
     override public func update() {

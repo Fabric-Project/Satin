@@ -38,10 +38,6 @@ final class RayMarchingRenderer: BaseRenderer {
         camera.lookAt(target: .zero)
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

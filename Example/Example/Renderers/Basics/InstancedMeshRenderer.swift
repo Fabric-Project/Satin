@@ -40,10 +40,6 @@ final class InstancedMeshRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func setupScene() {
         let url = modelsURL.appendingPathComponent("Suzanne/Suzanne.obj")
         guard let model = loadAsset(url: url, context: defaultContext), let mesh = getMeshes(model, true, true).first else { return }

@@ -59,7 +59,6 @@ final class BufferGeometryRenderer: BaseRenderer {
 
     deinit {
         freeGeometryData(&geometryData)
-        cameraController.disable()
     }
 
     var theta: Float = 0.0

@@ -114,10 +114,6 @@ final class DepthMaterialRenderer: BaseRenderer {
         #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

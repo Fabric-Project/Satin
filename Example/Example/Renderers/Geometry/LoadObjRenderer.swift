@@ -29,10 +29,6 @@ final class LoadObjRenderer: BaseRenderer {
         #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func loadOBJ(url: URL) {
         let asset = MDLAsset(url: url, vertexDescriptor: SatinModelIOVertexDescriptor(), bufferAllocator: MTKMeshBufferAllocator(device: device))
         lazy var geometry = Geometry(context: defaultContext)

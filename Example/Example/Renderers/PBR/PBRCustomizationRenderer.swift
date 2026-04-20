@@ -32,10 +32,6 @@ final class PBRCustomizationRenderer: BaseRenderer {
         generateNoiseTexture()
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {

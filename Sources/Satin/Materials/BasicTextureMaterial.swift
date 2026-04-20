@@ -10,19 +10,29 @@ import Metal
 open class BasicTextureMaterial: BasicColorMaterial {
     public var texture: MTLTexture?
     public var sampler: MTLSamplerState?
+    open var textureTransform: simd_float4x4 {
+        get {
+            get("Texture Transform", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4
+        }
+        set {
+            set("Texture Transform", newValue)
+        }
+    }
+
     public var flipped = false {
         didSet {
-            set("Flipped", flipped)
+            textureTransform = flipped ? .textureVerticalFlip : matrix_identity_float4x4
         }
     }
 
     public required init(context: Context) {
         super.init(context: context)
+        initializeTextureTransform()
     }
 
     public required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
-        set("Flipped", flipped)
+        initializeTextureTransform(flipped ? .textureVerticalFlip : matrix_identity_float4x4)
     }
 
     public init(context: Context, texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
@@ -33,7 +43,7 @@ open class BasicTextureMaterial: BasicColorMaterial {
         self.flipped = flipped
         self.texture = texture
         if let sampler { self.sampler = sampler }
-        set("Flipped", flipped)
+        initializeTextureTransform(flipped ? .textureVerticalFlip : matrix_identity_float4x4)
     }
 
     public init(context: Context, texture: MTLTexture, sampler: MTLSamplerState? = nil) {
@@ -43,7 +53,7 @@ open class BasicTextureMaterial: BasicColorMaterial {
         }
         self.texture = texture
         if let sampler { self.sampler = sampler }
-        set("Flipped", flipped)
+        initializeTextureTransform()
     }
 
     override public func setup() {
@@ -70,6 +80,15 @@ open class BasicTextureMaterial: BasicColorMaterial {
     public func bindSampler(_ renderEncoder: MTLRenderCommandEncoder) {
         if let sampler = sampler {
             renderEncoder.setFragmentSamplerState(sampler, index: FragmentSamplerIndex.Custom0.rawValue)
+        }
+    }
+
+    private func initializeTextureTransform(_ transform: simd_float4x4 = matrix_identity_float4x4) {
+        if get("Texture Transform") == nil {
+            set("Texture Transform", transform)
+        }
+        else {
+            textureTransform = transform
         }
     }
 

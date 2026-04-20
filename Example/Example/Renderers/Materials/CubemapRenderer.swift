@@ -72,10 +72,6 @@ final class CubemapRenderer: BaseRenderer {
         }
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     override func update() {
         cameraController.update()
     }

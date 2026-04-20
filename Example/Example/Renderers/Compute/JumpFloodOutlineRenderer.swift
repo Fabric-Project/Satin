@@ -89,7 +89,6 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     }
 
     deinit {
-        cameraController.disable()
         tween?.remove()
     }
 
