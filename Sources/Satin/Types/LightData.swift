@@ -13,4 +13,5 @@ public struct LightData {
     var position: simd_float4 // (xyz, type)
     var direction: simd_float4 // (xyz, inverse radius)
     var spotInfo: simd_float4 // (spotScale, spotOffset, cosInner, cosOuter)
+    var shadowInfo: simd_float4 // (shadowIndex, projectorIndex, projectorMode, unused)
 }

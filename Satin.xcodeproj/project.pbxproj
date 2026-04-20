@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B62F68A2F95C93C007F29E9 /* SpotShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6892F95C93C007F29E9 /* SpotShadow.swift */; };
+		1B62F68B2F95C93C007F29E9 /* DirectionalShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */; };
+		1B62F68C2F95C93C007F29E9 /* PointShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6882F95C93C007F29E9 /* PointShadow.swift */; };
+		1B62F68D2F95C9DE007F29E9 /* SpotLightProjectionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000012E04100200AAA002 /* SpotLightProjectionMode.swift */; };
+		1B62F68E2F95C9F3007F29E9 /* ShadowConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000012E04100200AAA001 /* ShadowConstants.swift */; };
 		E101A8542C07061D0055FABA /* Bezier.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEED2C06A24B00B5A6C8 /* Bezier.mm */; };
 		E101A8552C07061D0055FABA /* Bounds.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEE2C06A24B00B5A6C8 /* Bounds.mm */; };
 		E101A8562C07061D0055FABA /* Bvh.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEF2C06A24B00B5A6C8 /* Bvh.mm */; };
@@ -210,7 +215,6 @@
 		E101A9412C070EA00055FABA /* SkyboxShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEBD2C06A24B00B5A6C8 /* SkyboxShader.swift */; };
 		E101A9422C070EA00055FABA /* SourceShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEBE2C06A24B00B5A6C8 /* SourceShader.swift */; };
 		E101A9432C070EA00055FABA /* StandardShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEBF2C06A24B00B5A6C8 /* StandardShader.swift */; };
-		E101A9442C070EA00055FABA /* DirectionalLightShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEC12C06A24B00B5A6C8 /* DirectionalLightShadow.swift */; };
 		E101A9452C070EA00055FABA /* FontAtlas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEC32C06A24B00B5A6C8 /* FontAtlas.swift */; };
 		E101A9462C070EA00055FABA /* TextMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEC42C06A24B00B5A6C8 /* TextMesh.swift */; };
 		E101A9472C070EA00055FABA /* InstanceMatrixUniforms.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEC62C06A24B00B5A6C8 /* InstanceMatrixUniforms.swift */; };
@@ -273,6 +277,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionalShadow.swift; sourceTree = "<group>"; };
+		1B62F6882F95C93C007F29E9 /* PointShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadow.swift; sourceTree = "<group>"; };
+		1B62F6892F95C93C007F29E9 /* SpotShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadow.swift; sourceTree = "<group>"; };
 		1BB12B462E025B3F0075C276 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
@@ -454,7 +461,6 @@
 		66D7DEBD2C06A24B00B5A6C8 /* SkyboxShader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkyboxShader.swift; sourceTree = "<group>"; };
 		66D7DEBE2C06A24B00B5A6C8 /* SourceShader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SourceShader.swift; sourceTree = "<group>"; };
 		66D7DEBF2C06A24B00B5A6C8 /* StandardShader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StandardShader.swift; sourceTree = "<group>"; };
-		66D7DEC12C06A24B00B5A6C8 /* DirectionalLightShadow.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DirectionalLightShadow.swift; sourceTree = "<group>"; };
 		66D7DEC32C06A24B00B5A6C8 /* FontAtlas.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FontAtlas.swift; sourceTree = "<group>"; };
 		66D7DEC42C06A24B00B5A6C8 /* TextMesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextMesh.swift; sourceTree = "<group>"; };
 		66D7DEC62C06A24B00B5A6C8 /* InstanceMatrixUniforms.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InstanceMatrixUniforms.swift; sourceTree = "<group>"; };
@@ -528,6 +534,8 @@
 		E1E2E09D2CCF64A700627A2F /* SignedDistanceFunctions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SignedDistanceFunctions.h; sourceTree = "<group>"; };
 		E1E2E09F2CCF64B100627A2F /* SignedDistanceFunctions.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SignedDistanceFunctions.mm; sourceTree = "<group>"; };
 		E1FEA9062C3737830002CD80 /* Float+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Float+Extensions.swift"; sourceTree = "<group>"; };
+		F00000012E04100200AAA001 /* ShadowConstants.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShadowConstants.swift; sourceTree = "<group>"; };
+		F00000012E04100200AAA002 /* SpotLightProjectionMode.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SpotLightProjectionMode.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -686,6 +694,7 @@
 				66D7DD702C06A24B00B5A6C8 /* Blending.swift */,
 				66D7DD712C06A24B00B5A6C8 /* Constants.swift */,
 				66D7DD722C06A24B00B5A6C8 /* Lighting.swift */,
+				F00000012E04100200AAA001 /* ShadowConstants.swift */,
 				66D7DD732C06A24B00B5A6C8 /* Tonemapping.swift */,
 			);
 			path = Constants;
@@ -810,6 +819,7 @@
 				66D7DDBD2C06A24B00B5A6C8 /* DirectionalLight.swift */,
 				66D7DDBE2C06A24B00B5A6C8 /* PointLight.swift */,
 				66D7DDBF2C06A24B00B5A6C8 /* SpotLight.swift */,
+				F00000012E04100200AAA002 /* SpotLightProjectionMode.swift */,
 			);
 			path = Lights;
 			sourceTree = "<group>";
@@ -932,7 +942,9 @@
 		66D7DEC22C06A24B00B5A6C8 /* Shadows */ = {
 			isa = PBXGroup;
 			children = (
-				66D7DEC12C06A24B00B5A6C8 /* DirectionalLightShadow.swift */,
+				1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */,
+				1B62F6882F95C93C007F29E9 /* PointShadow.swift */,
+				1B62F6892F95C93C007F29E9 /* SpotShadow.swift */,
 			);
 			path = Shadows;
 			sourceTree = "<group>";
@@ -1247,6 +1259,9 @@
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
 				E101A8572C07061D0055FABA /* Conversions.mm in Sources */,
+				1B62F68A2F95C93C007F29E9 /* SpotShadow.swift in Sources */,
+				1B62F68B2F95C93C007F29E9 /* DirectionalShadow.swift in Sources */,
+				1B62F68C2F95C93C007F29E9 /* PointShadow.swift in Sources */,
 				E101A8582C07061D0055FABA /* Generators.mm in Sources */,
 				E101A8592C07061D0055FABA /* Geometry.mm in Sources */,
 				E101A85A2C07061D0055FABA /* Hermite.mm in Sources */,
@@ -1275,7 +1290,6 @@
 				E101A9412C070EA00055FABA /* SkyboxShader.swift in Sources */,
 				E101A9422C070EA00055FABA /* SourceShader.swift in Sources */,
 				E101A9432C070EA00055FABA /* StandardShader.swift in Sources */,
-				E101A9442C070EA00055FABA /* DirectionalLightShadow.swift in Sources */,
 				E101A9452C070EA00055FABA /* FontAtlas.swift in Sources */,
 				E101A9462C070EA00055FABA /* TextMesh.swift in Sources */,
 				E101A9472C070EA00055FABA /* InstanceMatrixUniforms.swift in Sources */,
@@ -1304,6 +1318,7 @@
 				E101A8922C070E8E0055FABA /* Easing.swift in Sources */,
 				E101A8932C070E8E0055FABA /* Easings.swift in Sources */,
 				E101A8942C070E8E0055FABA /* Tween.swift in Sources */,
+				1B62F68E2F95C9F3007F29E9 /* ShadowConstants.swift in Sources */,
 				E101A8952C070E8E0055FABA /* Tweener.swift in Sources */,
 				E101A8962C070E8E0055FABA /* ARBackgroundDepthRenderer.swift in Sources */,
 				E101A8972C070E8E0055FABA /* ARBackgroundRenderer.swift in Sources */,
@@ -1446,6 +1461,7 @@
 				E101A9152C070E8E0055FABA /* TextMaterial.swift in Sources */,
 				E101A9162C070E8E0055FABA /* UVColorMaterial.swift in Sources */,
 				E101A9172C070E8E0055FABA /* IBLScene.swift in Sources */,
+				1B62F68D2F95C9DE007F29E9 /* SpotLightProjectionMode.swift in Sources */,
 				E101A9182C070E8E0055FABA /* InstancedMesh.swift in Sources */,
 				E101A9192C070E8E0055FABA /* Submesh.swift in Sources */,
 				E1DDD3592C2FA77400012A44 /* OrbitPerspectiveCameraController.swift in Sources */,

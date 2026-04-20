@@ -22,7 +22,9 @@ public final class DirectionalLight: Light {
             // (xyz, inverse radius)
             direction: simd_make_float4(-worldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
-            spotInfo: .zero
+            spotInfo: .zero,
+            // (shadowIndex, projectorIndex, projectorMode, unused)
+            shadowInfo: simd_make_float4(Float(shadowIndex), Float(projectorIndex), 0.0, 0.0)
         )
     }
 
@@ -43,14 +45,16 @@ public final class DirectionalLight: Light {
         super.init(context: context, label: label)
         self.color = color
         self.intensity = intensity
-        self.shadow = DirectionalLightShadow(context: context, label: label)
+        self.shadow = DirectionalShadow(context: context, label: label)
     }
         
     public required init(from decoder: Decoder) throws {
+        let context = try decoder.requireSatinContext(typeName: "DirectionalLight")
 //        let values = try decoder.container(keyedBy: CodingKeys.self)
 //        color = try values.decode(simd_float3.self, forKey: .color)
 //        intensity = try values.decode(Float.self, forKey: .intensity)
         try super.init(from: decoder)
+        shadow = DirectionalShadow(context: context, label: label)
     }
 
     override public func encode(to encoder: Encoder) throws {
@@ -75,7 +79,7 @@ public final class DirectionalLight: Light {
     }
 
     func setupShadow() {
-        guard castShadow, let directionalShadow = shadow as? DirectionalLightShadow else { return }
+        guard castShadow, let directionalShadow = shadow as? DirectionalShadow else { return }
         directionalShadow.device = context.device
         directionalShadow.update(light: self)
     }

@@ -263,6 +263,33 @@ open class Shader {
         }
     }
 
+    public var directShadowCount: Int {
+        get {
+            renderingConfiguration.directShadowCount
+        }
+        set {
+            renderingConfiguration.directShadowCount = newValue
+        }
+    }
+
+    public var directShadowTextureCount: Int {
+        get {
+            renderingConfiguration.directShadowTextureCount
+        }
+        set {
+            renderingConfiguration.directShadowTextureCount = newValue
+        }
+    }
+
+    public var projectorCount: Int {
+        get {
+            renderingConfiguration.projectorCount
+        }
+        set {
+            renderingConfiguration.projectorCount = newValue
+        }
+    }
+
     public var vertexDescriptor: MTLVertexDescriptor {
         get {
             renderingConfiguration.vertexDescriptor
