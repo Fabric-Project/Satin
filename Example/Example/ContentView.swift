@@ -156,9 +156,12 @@ struct ContentView: View {
             ExampleSection(
                 title: "Shadows",
                 items: [
-                    ExampleItem(id: "contact-shadow", title: "Contact Shadow", systemImage: "square.2.layers.3d.bottom.filled") { ContactShadowRendererView() },
+                    ExampleItem(id: "contact-shadow", title: "Contact Shadow (Utility)", systemImage: "square.2.layers.3d.bottom.filled") { ContactShadowRendererView() },
                     ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "shadow") { DirectionalShadowRendererView() },
-                    ExampleItem(id: "projected-shadow", title: "Projected Shadow", systemImage: "shadow") { ProjectedShadowRendererView() }
+                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "lightbulb.2") { PointShadowRendererView() },
+                    ExampleItem(id: "spot-shadow", title: "Spot Shadows", systemImage: "flashlight.on.fill") { SpotShadowRendererView() },
+                    ExampleItem(id: "projector", title: "Projector", systemImage: "film.stack") { ProjectorRendererView() },
+                    ExampleItem(id: "projected-shadow", title: "Projected Shadow (Utility)", systemImage: "shadow") { ProjectedShadowRendererView() }
                 ]
             )
         )
@@ -199,9 +202,9 @@ struct ContentView: View {
             ExampleSection(
                 title: "Physically Based Rendering",
                 items: [
-                    ExampleItem(id: "pbr", title: "PBR", systemImage: "eye") { PBRRendererView() },
+                    ExampleItem(id: "pbr", title: "PBR Point Shadows", systemImage: "eye") { PBRRendererView() },
                     ExampleItem(id: "pbr-customization", title: "PBR Customization", systemImage: "gear") { PBRCustomizationRendererView() },
-                    ExampleItem(id: "pbr-physical-material", title: "PBR Physical Material", systemImage: "party.popper") { PBREnhancedRendererView() },
+                    ExampleItem(id: "pbr-physical-material", title: "PBR Physical Point Shadows", systemImage: "party.popper") { PBREnhancedRendererView() },
                     ExampleItem(id: "pbr-standard-material", title: "PBR Standard Material", systemImage: "flame") { PBRStandardMaterialRendererView() },
                     ExampleItem(id: "pbr-submeshes", title: "PBR Submeshes", systemImage: "soccerball") { PBRSubmeshRendererView() }
                 ]

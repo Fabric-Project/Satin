@@ -152,6 +152,16 @@ open class Renderer {
     private var shadowTextureSubscriptions = Set<AnyCancellable>()
     private var shadowBufferSubscriptions = Set<AnyCancellable>()
 
+    private var directShadowLights = [Light]()
+    private var directShadowTextures = [MTLTexture?]()
+    private var directShadowDataBuffer: StructBuffer<ShadowData>?
+    private var directShadowMatricesBuffer: StructBuffer<simd_float4x4>?
+
+    private var projectorLights = [SpotLight]()
+    private var projectorTextures = [MTLTexture?]()
+    private var projectorMatricesBuffer: StructBuffer<simd_float4x4>?
+    private var projectorTransformsBuffer: StructBuffer<simd_float4x4>?
+
     var frameBufferOnly: Bool {
         didSet {
             if frameBufferOnly != oldValue {
@@ -295,7 +305,9 @@ open class Renderer {
         // render objects that cast shadows into the depth textures
         if !shadowCasters.isEmpty, !shadowReceivers.isEmpty {
             for light in lightList where light.castShadow {
-                light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: shadowCasters)
+                if light.shadow.shouldRender {
+                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: shadowCasters)
+                }
             }
         }
 
@@ -546,8 +558,10 @@ open class Renderer {
             objectList.append(object)
 
             if let light = object as? Light {
+                light.shadowIndex = -1
+                light.projectorIndex = -1
                 lightList.append(light)
-                if light.castShadow {
+                if light.castShadow, light.shadow.isLegacyPlanarCompatible {
                     shadowList.append(light.shadow)
                 }
             }
@@ -582,8 +596,13 @@ open class Renderer {
     }
 
     private func updateScene(commandBuffer: MTLCommandBuffer, cameras: [Camera], viewports: [simd_float4]) {
+        updateDirectLightingState()
+
         let lightCount = lightList.count
         let shadowCount = shadowList.count
+        let directShadowCount = directShadowLights.count
+        let directShadowTextureCount = directShadowTextures.count
+        let projectorCount = projectorLights.count
 
         var environmentIntensity: Float = 1.0
         var cubemapTexture: MTLTexture?
@@ -611,10 +630,24 @@ open class Renderer {
                 for material in renderable.materials {
                     if material.lighting {
                         material.lightCount = lightCount
+                        material.projectorCount = projectorCount
+                    } else {
+                        material.lightCount = 0
+                        material.projectorCount = 0
                     }
 
                     if renderable.receiveShadow {
                         material.shadowCount = shadowCount
+                    } else {
+                        material.shadowCount = 0
+                    }
+
+                    if material.lighting, renderable.receiveShadow {
+                        material.directShadowCount = directShadowCount
+                        material.directShadowTextureCount = directShadowTextureCount
+                    } else {
+                        material.directShadowCount = 0
+                        material.directShadowTextureCount = 0
                     }
 
                     if let pbrMaterial = material as? StandardMaterial {
@@ -674,6 +707,55 @@ open class Renderer {
                     index: FragmentBufferIndex.Lighting.rawValue
                 )
             }
+        }
+
+        if let projectorMatricesBuffer = projectorMatricesBuffer {
+            renderEncoder.setFragmentBuffer(
+                projectorMatricesBuffer.buffer,
+                offset: projectorMatricesBuffer.offset,
+                index: FragmentBufferIndex.ProjectorMatrices.rawValue
+            )
+        }
+
+        if let projectorTransformsBuffer = projectorTransformsBuffer {
+            renderEncoder.setFragmentBuffer(
+                projectorTransformsBuffer.buffer,
+                offset: projectorTransformsBuffer.offset,
+                index: FragmentBufferIndex.ProjectorTransforms.rawValue
+            )
+        }
+
+        if let directShadowDataBuffer = directShadowDataBuffer {
+            renderEncoder.setFragmentBuffer(
+                directShadowDataBuffer.buffer,
+                offset: directShadowDataBuffer.offset,
+                index: FragmentBufferIndex.DirectShadows.rawValue
+            )
+        }
+
+        if let directShadowMatricesBuffer = directShadowMatricesBuffer {
+            renderEncoder.setFragmentBuffer(
+                directShadowMatricesBuffer.buffer,
+                offset: directShadowMatricesBuffer.offset,
+                index: FragmentBufferIndex.DirectShadowMatrices.rawValue
+            )
+        }
+
+        updateDirectShadowTextures()
+        updateProjectorTextures()
+
+        if !projectorTextures.isEmpty {
+            renderEncoder.setFragmentTextures(
+                projectorTextures,
+                range: FragmentTextureIndex.Projector0.rawValue..<(FragmentTextureIndex.Projector0.rawValue + projectorTextures.count)
+            )
+        }
+
+        if !directShadowTextures.isEmpty {
+            renderEncoder.setFragmentTextures(
+                directShadowTextures,
+                range: FragmentTextureIndex.DirectShadow0.rawValue..<(FragmentTextureIndex.DirectShadow0.rawValue + directShadowTextures.count)
+            )
         }
         
         // cache of old working code
@@ -755,6 +837,34 @@ open class Renderer {
 
             if let shadowDataBuffer = shadowDataBuffer {
                 renderEncoder.useResource(shadowDataBuffer.buffer, usage: .read, stages: .fragment)
+            }
+        }
+
+        if let projectorMatricesBuffer = projectorMatricesBuffer {
+            renderEncoder.useResource(projectorMatricesBuffer.buffer, usage: .read, stages: .fragment)
+        }
+
+        if let projectorTransformsBuffer = projectorTransformsBuffer {
+            renderEncoder.useResource(projectorTransformsBuffer.buffer, usage: .read, stages: .fragment)
+        }
+
+        if let directShadowDataBuffer = directShadowDataBuffer {
+            renderEncoder.useResource(directShadowDataBuffer.buffer, usage: .read, stages: .fragment)
+        }
+
+        if let directShadowMatricesBuffer = directShadowMatricesBuffer {
+            renderEncoder.useResource(directShadowMatricesBuffer.buffer, usage: .read, stages: .fragment)
+        }
+
+        for projectorTexture in projectorTextures {
+            if let projectorTexture {
+                renderEncoder.useResource(projectorTexture, usage: .read, stages: .fragment)
+            }
+        }
+
+        for directShadowTexture in directShadowTextures {
+            if let directShadowTexture {
+                renderEncoder.useResource(directShadowTexture, usage: .read, stages: .fragment)
             }
         }
 
@@ -1062,7 +1172,7 @@ open class Renderer {
                 label: "Shadow Matrices Buffer"
             )
 
-            for light in lightList where light.castShadow {
+            for light in lightList where light.castShadow && light.shadow.isLegacyPlanarCompatible {
                 light.publisher.sink { [weak self] _ in
                     self?._updateShadowMatrices = true
                 }.store(in: &shadowMatricesSubscriptions)
@@ -1100,7 +1210,7 @@ open class Renderer {
                 shadowArgumentEncoder.setBuffer(shadowDataBuffer.buffer, offset: shadowDataBuffer.offset, index: FragmentBufferIndex.ShadowData.rawValue)
 
                 for (index, shadow) in shadowList.enumerated() {
-                    shadowArgumentEncoder.setTexture(shadow.texture, index: FragmentTextureIndex.Shadow0.rawValue + index)
+                    shadowArgumentEncoder.setTexture(shadow.textures.first, index: FragmentTextureIndex.Shadow0.rawValue + index)
                 }
             }
 
@@ -1148,9 +1258,139 @@ open class Renderer {
               _updateShadowTextures else { return }
 
         for (index, shadow) in shadowList.enumerated() {
-            shadowArgumentEncoder.setTexture(shadow.texture, index: FragmentTextureIndex.Shadow0.rawValue + index)
+            shadowArgumentEncoder.setTexture(shadow.textures.first, index: FragmentTextureIndex.Shadow0.rawValue + index)
         }
 
         _updateShadowTextures = false
+    }
+
+    private func updateDirectLightingState() {
+        directShadowLights.removeAll(keepingCapacity: true)
+        directShadowTextures.removeAll(keepingCapacity: true)
+        projectorLights.removeAll(keepingCapacity: true)
+        projectorTextures.removeAll(keepingCapacity: true)
+
+        var directShadowData = [ShadowData]()
+        var directShadowMatrices = [simd_float4x4]()
+        var projectorMatrices = [simd_float4x4]()
+        var projectorTransforms = [simd_float4x4]()
+
+        var directShadowIndex = 0
+        var directShadowTextureIndex = 0
+        var directShadowMatrixIndex = 0
+        var projectorIndex = 0
+
+        for light in lightList {
+            light.shadowIndex = -1
+            light.projectorIndex = -1
+
+            if let spotLight = light as? SpotLight,
+               let projectionTexture = spotLight.projectionTexture,
+               projectorIndex < maxProjectors
+            {
+                light.projectorIndex = projectorIndex
+                projectorLights.append(spotLight)
+                projectorTextures.append(projectionTexture)
+                projectorMatrices.append(spotLight.projectorMatrix)
+                projectorTransforms.append(simd_float4x4(textureTransform: spotLight.projectionTransform))
+                projectorIndex += 1
+            }
+
+            guard light.castShadow,
+                  light.shadow.enabled,
+                  directShadowIndex < maxShadowedLights
+            else { continue }
+
+            let shadow = light.shadow
+            let shadowTextures = shadow.textures
+            let shadowMatrices = shadow.matrices
+            guard !shadowTextures.isEmpty,
+                  !shadowMatrices.isEmpty,
+                  directShadowTextureIndex + shadowTextures.count <= maxShadowTextures,
+                  directShadowMatrixIndex + shadowMatrices.count <= maxShadowTextures
+            else { continue }
+
+            light.shadowIndex = directShadowIndex
+            directShadowLights.append(light)
+            directShadowData.append(
+                ShadowData(
+                    strength: shadow.strength,
+                    bias: shadow.bias,
+                    normalBias: shadow.normalBias,
+                    radius: shadow.radius,
+                    textureIndex: UInt32(directShadowTextureIndex),
+                    matrixIndex: UInt32(directShadowMatrixIndex),
+                    viewCount: UInt32(shadow.viewCount)
+                )
+            )
+            directShadowMatrices.append(contentsOf: shadowMatrices)
+
+            directShadowIndex += 1
+            directShadowTextureIndex += shadowTextures.count
+            directShadowMatrixIndex += shadowMatrices.count
+        }
+
+        directShadowTextures = Array(repeating: nil, count: directShadowTextureIndex)
+        projectorTextures = Array(repeating: nil, count: projectorLights.count)
+
+        if directShadowData.isEmpty {
+            directShadowDataBuffer = nil
+            directShadowMatricesBuffer = nil
+        } else {
+            if directShadowDataBuffer?.count != directShadowData.count {
+                directShadowDataBuffer = StructBuffer<ShadowData>(
+                    device: context.device,
+                    count: directShadowData.count,
+                    label: "Direct Shadow Data Buffer"
+                )
+            }
+
+            if directShadowMatricesBuffer?.count != directShadowMatrices.count {
+                directShadowMatricesBuffer = StructBuffer<simd_float4x4>(
+                    device: context.device,
+                    count: directShadowMatrices.count,
+                    label: "Direct Shadow Matrices Buffer"
+                )
+            }
+
+            directShadowDataBuffer?.update(data: directShadowData)
+            directShadowMatricesBuffer?.update(data: directShadowMatrices)
+        }
+
+        if projectorMatrices.isEmpty {
+            projectorMatricesBuffer = nil
+            projectorTransformsBuffer = nil
+        } else {
+            if projectorMatricesBuffer?.count != projectorMatrices.count {
+                projectorMatricesBuffer = StructBuffer<simd_float4x4>(
+                    device: context.device,
+                    count: projectorMatrices.count,
+                    label: "Projector Matrices Buffer"
+                )
+            }
+
+            if projectorTransformsBuffer?.count != projectorTransforms.count {
+                projectorTransformsBuffer = StructBuffer<simd_float4x4>(
+                    device: context.device,
+                    count: projectorTransforms.count,
+                    label: "Projector Transforms Buffer"
+                )
+            }
+
+            projectorMatricesBuffer?.update(data: projectorMatrices)
+            projectorTransformsBuffer?.update(data: projectorTransforms)
+        }
+
+        _updateLightDataBuffer = true
+    }
+
+    private func updateDirectShadowTextures() {
+        directShadowTextures = directShadowLights.flatMap { light in
+            light.shadow.textures.map(Optional.some)
+        }
+    }
+
+    private func updateProjectorTextures() {
+        projectorTextures = projectorLights.map(\.projectionTexture)
     }
 }

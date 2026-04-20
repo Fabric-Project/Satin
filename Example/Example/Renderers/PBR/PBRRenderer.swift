@@ -13,6 +13,15 @@ import MetalKit
 import Satin
 
 final class PBRRenderer: BaseRenderer {
+    typealias AnimatedPointLight = (
+        light: PointLight,
+        basePosition: simd_float3,
+        orbit: simd_float2,
+        verticalAmplitude: Float,
+        phase: Float,
+        speed: Float
+    )
+
     final class CustomShader: PBRShader {}
     final class CustomMaterial: StandardMaterial {
         var pipelineURL: URL
@@ -37,10 +46,35 @@ final class PBRRenderer: BaseRenderer {
 
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [mesh, skybox])
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 40.0], near: 0.001, far: 1000.0)
+    lazy var floorMesh = Mesh(
+        context: defaultContext,
+        geometry: PlaneGeometry(context: defaultContext, size: 32.0, orientation: .zx),
+        material: StandardMaterial(
+            context: defaultContext,
+            baseColor: [0.8, 0.82, 0.86, 1.0],
+            metallic: 0.0,
+            roughness: 0.95
+        )
+    )
+
+    lazy var backdropMesh = Mesh(
+        context: defaultContext,
+        geometry: PlaneGeometry(context: defaultContext, width: 30.0, height: 24.0, orientation: .xy),
+        material: StandardMaterial(
+            context: defaultContext,
+            baseColor: [0.84, 0.86, 0.9, 1.0],
+            metallic: 0.0,
+            roughness: 0.9
+        )
+    )
+    
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [floorMesh, backdropMesh, mesh, skybox])
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 6.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
+    lazy var startTime = getTime()
+
+    var animatedLights: [AnimatedPointLight] = []
 
     lazy var customMaterial: CustomMaterial = {
         lazy var mat = CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
@@ -67,31 +101,84 @@ final class PBRRenderer: BaseRenderer {
     lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: SkyboxMaterial(context: defaultContext))
 
     override func setup() {
+        camera.lookAt(target: .zero)
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+
+        floorMesh.label = "Floor"
+        floorMesh.position.y = -12.5
+        floorMesh.receiveShadow = true
+
+        backdropMesh.label = "Backdrop"
+        backdropMesh.position.z = -8.0
+        backdropMesh.receiveShadow = true
+
         loadHdri()
         setupLights()
     }
 
     func setupLights() {
-        let dist: Float = 12.0
+        let dist: Float = 6.0
         let positions = [
             simd_make_float3(dist, dist, dist),
-            simd_make_float3(-dist, dist, dist),
-            simd_make_float3(dist, -dist, dist),
-            simd_make_float3(-dist, -dist, dist),
+            simd_make_float3(-dist * 0.95, dist * 0.75, dist * 0.85),
+            simd_make_float3(dist * 0.35, -dist * 0.9, dist * 0.5),
+            simd_make_float3(-dist * 0.5, -dist * 0.35, dist * 1.1),
         ]
+        let colors: [simd_float3] = [
+            [1.0, 0.28, 0.22],
+            [0.12, 0.85, 1.0],
+            [0.98, 0.85, 0.18],
+            [0.34, 1.0, 0.42],
+        ]
+        let intensities: [Float] = [260.0, 180.0, 110.0, 95.0]
+        let orbitOffsets: [simd_float2] = [
+            [0.65, 0.45],
+            [0.5, 0.35],
+            [0.4, 0.3],
+            [0.55, 0.4],
+        ]
+        let verticalAmplitudes: [Float] = [0.35, 0.2, 0.18, 0.24]
+        let phases: [Float] = [0.0, 1.3, 2.2, 3.4]
+        let speeds: [Float] = [1.3, 1.24, 1.2, 1.26]
 
         let sphereLightGeo: Geometry = mesh.geometry
-        lazy var sphereLightMat = BasicColorMaterial(context: defaultContext, color: .one, blending: .disabled)
         for (index, position) in positions.enumerated() {
-            lazy var light = PointLight(context: defaultContext, color: .one, intensity: 250, radius: 150.0)
+            lazy var light = PointLight(
+                context: defaultContext,
+                color: colors[index],
+                intensity: intensities[index],
+                radius: 120
+            )
             light.position = position
-            lazy var lightMesh = Mesh(context: defaultContext, geometry: sphereLightGeo, material: sphereLightMat)
+            light.castShadow = true
+            light.shadow.resolution = (1024, 1024)
+            light.shadow.bias = 0.0005
+            light.shadow.normalBias = 0.05
+            light.shadow.radius = 1.0
+            light.shadow.strength = 0.9
+
+            lazy var lightMesh = Mesh(
+                context: defaultContext,
+                geometry: sphereLightGeo,
+                material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(colors[index], 1.0), blending: .disabled)
+            )
             lightMesh.scale = .init(repeating: 0.25)
             lightMesh.label = "Light Mesh \(index)"
             light.add(lightMesh)
 
             scene.add(light)
+            animatedLights.append((
+                light: light,
+                basePosition: position,
+                orbit: orbitOffsets[index],
+                verticalAmplitude: verticalAmplitudes[index],
+                phase: phases[index],
+                speed: speeds[index]
+            ))
         }
+
+        scene.environmentIntensity = 0.0125
     }
 
     func loadHdri() {
@@ -102,6 +189,16 @@ final class PBRRenderer: BaseRenderer {
     }
 
     override func update() {
+        let time = Float(getTime() - startTime)
+        for animatedLight in animatedLights {
+            let orbitTime = time * animatedLight.speed + animatedLight.phase
+            var position = animatedLight.basePosition
+            position.x += cos(orbitTime) * animatedLight.orbit.x
+            position.z += sin(orbitTime) * animatedLight.orbit.y
+            position.y += sin(orbitTime * 0.7 + animatedLight.phase) * animatedLight.verticalAmplitude
+            animatedLight.light.position = position
+        }
+
         cameraController.update()
     }
 

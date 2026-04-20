@@ -165,6 +165,21 @@ open class Material: Codable {
         set { renderingConfiguration.shadowCount = newValue }
     }
 
+    public var directShadowCount: Int {
+        get { renderingConfiguration.directShadowCount }
+        set { renderingConfiguration.directShadowCount = newValue }
+    }
+
+    public var directShadowTextureCount: Int {
+        get { renderingConfiguration.directShadowTextureCount }
+        set { renderingConfiguration.directShadowTextureCount = newValue }
+    }
+
+    public var projectorCount: Int {
+        get { renderingConfiguration.projectorCount }
+        set { renderingConfiguration.projectorCount = newValue }
+    }
+
     public var lightCount: Int {
         get { renderingConfiguration.lightCount }
         set { renderingConfiguration.lightCount = newValue }

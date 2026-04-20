@@ -8,7 +8,6 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
-    // inject shadow coords
     float3 normal;
     float2 texcoord;
 
@@ -34,7 +33,6 @@ typedef struct {
 vertex CustomVertexData physicalVertex(
     Vertex in [[stage_in]],
     // inject instancing args
-    // inject shadow vertex args
     constant PhysicalUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]],
     ushort amp_id [[amplification_id]],
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
@@ -77,15 +75,22 @@ vertex CustomVertexData physicalVertex(
     out.thickness = uniforms.thickness * modelScale;
 #endif
 
-    // inject shadow vertex calc
-
     return out;
 }
 
 fragment float4 physicalFragment(
     CustomVertexData in [[stage_in]],
 // inject lighting args
-// inject shadow fragment args
+#if defined(PROJECTOR_COUNT)
+    constant float4x4 *projectorMatrices [[buffer(FragmentBufferProjectorMatrices)]],
+    constant float4x4 *projectorTransforms [[buffer(FragmentBufferProjectorTransforms)]],
+    array<texture2d<float>, PROJECTOR_COUNT> projectorTextures [[texture(FragmentTextureProjector0)]],
+#endif
+#if defined(DIRECT_SHADOW_COUNT) && defined(DIRECT_SHADOW_TEXTURE_COUNT)
+    constant ShadowData *directShadows [[buffer(FragmentBufferDirectShadows)]],
+    constant float4x4 *directShadowMatrices [[buffer(FragmentBufferDirectShadowMatrices)]],
+    array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
+#endif
 #include "Chunks/PbrTextures.metal"
     constant PhysicalUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
     float4 outColor;
@@ -95,6 +100,5 @@ fragment float4 physicalFragment(
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 #include "Chunks/PbrTonemap.metal"
-    // inject shadow fragment calc
     return outColor;
 }

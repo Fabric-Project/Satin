@@ -169,6 +169,12 @@
 		E1E767E228A6E84A005D75AB /* TorusKnotGenerator.c in Sources */ = {isa = PBXBuildFile; fileRef = E192F05D24874CE700C7EE74 /* TorusKnotGenerator.c */; };
 		E1E7681328A736BB005D75AB /* AudioInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17D2C1126BBB7DF005A136A /* AudioInput.swift */; };
 		E1F22D1D29BD71FA0011CEAB /* Timing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F22D1C29BD71FA0011CEAB /* Timing.swift */; };
+		F0A100012E05000100AAA001 /* PointShadowRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A100012E05000200AAA001 /* PointShadowRenderer.swift */; };
+		F0A100012E05000100AAA002 /* PointShadowRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A100012E05000200AAA002 /* PointShadowRendererView.swift */; };
+		F0A200012E05000100AAA001 /* SpotShadowRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A200012E05000200AAA001 /* SpotShadowRenderer.swift */; };
+		F0A200012E05000100AAA002 /* SpotShadowRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A200012E05000200AAA002 /* SpotShadowRendererView.swift */; };
+		F0A300012E05000100AAA001 /* ProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A300012E05000200AAA001 /* ProjectorRenderer.swift */; };
+		F0A300012E05000100AAA002 /* ProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A300012E05000200AAA002 /* ProjectorRendererView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -371,6 +377,12 @@
 		E1FA708224A5D394001BFE4B /* BufferComputeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BufferComputeRenderer.swift; sourceTree = "<group>"; };
 		E1FABFFC2527E698008569F7 /* ExportGeometryRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportGeometryRenderer.swift; sourceTree = "<group>"; };
 		E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PBRStandardMaterialRenderer.swift; sourceTree = "<group>"; };
+		F0A100012E05000200AAA001 /* PointShadowRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadowRenderer.swift; sourceTree = "<group>"; };
+		F0A100012E05000200AAA002 /* PointShadowRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadowRendererView.swift; sourceTree = "<group>"; };
+		F0A200012E05000200AAA001 /* SpotShadowRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadowRenderer.swift; sourceTree = "<group>"; };
+		F0A200012E05000200AAA002 /* SpotShadowRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadowRendererView.swift; sourceTree = "<group>"; };
+		F0A300012E05000200AAA001 /* ProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectorRenderer.swift; sourceTree = "<group>"; };
+		F0A300012E05000200AAA002 /* ProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectorRendererView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -612,7 +624,10 @@
 		E19D4C3D29F9C1C500DF993D /* Shadows */ = {
 			isa = PBXGroup;
 			children = (
+				F0A300012E05000200AAA002 /* ProjectorRendererView.swift */,
 				E1772A992981D35F005FE7B2 /* ProjectedShadowRendererView.swift */,
+				F0A100012E05000200AAA002 /* PointShadowRendererView.swift */,
+				F0A200012E05000200AAA002 /* SpotShadowRendererView.swift */,
 				E152372B29CC223600D96D46 /* ContactShadowRendererView.swift */,
 				E1707F6E29BAB0A000A934A0 /* DirectionalShadowRendererView.swift */,
 			);
@@ -725,7 +740,10 @@
 			children = (
 				E152372929CC21FF00D96D46 /* ContactShadowRenderer.swift */,
 				E1707F7029BAB0B100A934A0 /* DirectionalShadowRenderer.swift */,
+				F0A100012E05000200AAA001 /* PointShadowRenderer.swift */,
+				F0A300012E05000200AAA001 /* ProjectorRenderer.swift */,
 				E1772A952981D2A9005FE7B2 /* ProjectedShadowRenderer.swift */,
+				F0A200012E05000200AAA001 /* SpotShadowRenderer.swift */,
 			);
 			path = Shadows;
 			sourceTree = "<group>";
@@ -1058,6 +1076,9 @@
 				E1D43BCC2C65855A0063E2C9 /* ParameterGroupViewController.swift in Sources */,
 				E103E1442B603FF70017588F /* ContactShadowRendererView.swift in Sources */,
 				E103E1432B603FF70017588F /* DirectionalShadowRendererView.swift in Sources */,
+				F0A100012E05000100AAA002 /* PointShadowRendererView.swift in Sources */,
+				F0A200012E05000100AAA002 /* SpotShadowRendererView.swift in Sources */,
+				F0A300012E05000100AAA002 /* ProjectorRendererView.swift in Sources */,
 				E103E12E2B603ED30017588F /* OctasphereRenderer.swift in Sources */,
 				E1903C142B6046B4004AB175 /* ARDrawingRendererView.swift in Sources */,
 				E103E1212B603E760017588F /* DepthMaterialRenderer.swift in Sources */,
@@ -1074,6 +1095,9 @@
 				E1D43BC02C65855A0063E2C9 /* InspectorHeaderViewController.swift in Sources */,
 				E1D43BB32C65855A0063E2C9 /* LabelViewController.swift in Sources */,
 				E103E14D2B60400B0017588F /* ProjectedShadowRenderer.swift in Sources */,
+				F0A100012E05000100AAA001 /* PointShadowRenderer.swift in Sources */,
+				F0A200012E05000100AAA001 /* SpotShadowRenderer.swift in Sources */,
+				F0A300012E05000100AAA001 /* ProjectorRenderer.swift in Sources */,
 				E1903C1B2B608C01004AB175 /* Immersive3DRenderer.swift in Sources */,
 				E102D07E2C8A129700DD255C /* ImmersiveBaseRenderer.swift in Sources */,
 				E1D43BBF2C65855A0063E2C9 /* TranslucentView.swift in Sources */,

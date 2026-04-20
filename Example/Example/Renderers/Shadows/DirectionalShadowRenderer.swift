@@ -34,7 +34,16 @@ final class DirectionalShadowRenderer: BaseRenderer {
         material: StandardMaterial(context: defaultContext, baseColor: .one, metallic: 0.8, roughness: 0.5, specular: 1.0)
     )
 
-    lazy var floorMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 8.0, orientation: .zx), material: ShadowMaterial(context: defaultContext))
+    lazy var floorMesh = Mesh(
+        context: defaultContext,
+        geometry: PlaneGeometry(context: defaultContext, size: 8.0, orientation: .zx),
+        material: StandardMaterial(
+            context: defaultContext,
+            baseColor: [0.72, 0.74, 0.78, 1.0],
+            metallic: 0.0,
+            roughness: 0.95
+        )
+    )
 
     lazy var light0 = DirectionalLight(context: defaultContext, color: [1.0, 1.0, 1.0], intensity: 1.0)
     lazy var light1 = DirectionalLight(context: defaultContext, color: [1.0, 1.0, 1.0], intensity: 1.0)
@@ -48,6 +57,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
             scene.setEnvironment(texture: hdr)
+            scene.environmentIntensity = 0.5
         }
     }
 
@@ -64,7 +74,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
         }
         light0.shadow.resolution = (2048, 2048)
         light0.shadow.bias = 0.0005
-        light0.shadow.strength = 0.25
+        light0.shadow.strength = 1
         light0.shadow.radius = 2
 
         light1.position.y = 5.0
@@ -76,7 +86,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
         }
         light1.shadow.resolution = (2048, 2048)
         light1.shadow.bias = 0.0005
-        light1.shadow.strength = 0.25
+        light1.shadow.strength = 1
         light1.shadow.radius = 2
 
         // Setup things here
@@ -97,7 +107,6 @@ final class DirectionalShadowRenderer: BaseRenderer {
         baseMesh.receiveShadow = true
 
         floorMesh.label = "Floor"
-        floorMesh.material?.set("Color", [0.0, 0.0, 0.0, 1.0])
         floorMesh.receiveShadow = true
     }
 

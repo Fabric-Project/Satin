@@ -13,6 +13,9 @@ public class Light: Object {
     public var type: LightType { fatalError("Subclasses must overload") }
     
     public var data: LightData { fatalError("Subclasses must overload") }
+
+    var shadowIndex: Int = -1
+    var projectorIndex: Int = -1
     
     public var color: simd_float3 = .zero {
         didSet {

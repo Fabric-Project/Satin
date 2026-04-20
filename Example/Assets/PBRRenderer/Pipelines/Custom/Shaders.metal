@@ -47,6 +47,7 @@ vertex CustomVertexData customVertex(Vertex in [[stage_in]],
 
 fragment float4 customFragment( CustomVertexData in [[stage_in]],
     // inject lighting args
+    // inject direct shadow args
 #include "Chunks/PbrTextures.metal"
     constant CustomUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]])
 {
