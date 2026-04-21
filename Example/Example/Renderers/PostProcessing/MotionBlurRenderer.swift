@@ -21,7 +21,7 @@ final class MotionBlurRenderer: BaseRenderer {
     // MARK: - Inspector
 
     override var paramKeys: [String] { ["Motion Blur"] }
-    override var params: [String: ParameterGroup?] { ["Motion Blur": renderer.motionBlurMaterial.parameters] }
+    override var params: [String: ParameterGroup?] { ["Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters] }
 
     private var savedStrength: Float = 0.02
 
@@ -41,13 +41,18 @@ final class MotionBlurRenderer: BaseRenderer {
             depthStoreAction: .store,
             frameBufferOnly: false
         )
-        r.passes = [.motionBlur]
+        r.outputs = [.velocity]
         r.colorTextureStorageMode = .private
         r.depthTextureStorageMode = .private
-        r.motionBlurMaterial.strength = 0.02
-        r.motionBlurMaterial.samples = 24
-        r.motionBlurMaterial.jitter = 0.0
         return r
+    }()
+
+    lazy var motionBlurPostProcessor: MotionBlurPostProcessor = {
+        let pp = MotionBlurPostProcessor(context: defaultContext)
+        pp.motionBlurMaterial.strength = 0.02
+        pp.motionBlurMaterial.samples = 24
+        pp.motionBlurMaterial.jitter = 0.0
+        return pp
     }()
 
     lazy var compositorMaterial = BasicTextureMaterial(context: defaultContext)
@@ -118,24 +123,28 @@ final class MotionBlurRenderer: BaseRenderer {
             camera: camera
         )
 
-        if let motionBlurTexture = renderer.motionBlurTexture {
-            compositorMaterial.texture = motionBlurTexture
-            compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        motionBlurPostProcessor.colorTexture = renderer.colorTexture
+        motionBlurPostProcessor.velocityTexture = renderer.velocityTexture
+        motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+
+        if let blurredTexture = motionBlurPostProcessor.outputTexture {
+            compositorMaterial.texture = blurredTexture
         } else if let colorTexture = renderer.colorTexture {
             compositorMaterial.texture = colorTexture
-            compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
         }
+        compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         camera.aspect = size.width / size.height
         renderer.resize(size)
+        motionBlurPostProcessor.resize(size: size, scaleFactor: scaleFactor)
         compositor.resize(size: size, scaleFactor: scaleFactor)
     }
 
 #if os(macOS)
     override func mouseDown(with event: NSEvent) {
-        let mat = renderer.motionBlurMaterial
+        let mat = motionBlurPostProcessor.motionBlurMaterial
         if mat.strength > 0 {
             savedStrength = mat.strength
             mat.strength = 0

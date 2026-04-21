@@ -168,6 +168,9 @@
 		AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* VelocityMaterial.swift */; };
 		AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* SsaoMaterial.swift */; };
 		AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006AA000006AA000006 /* MotionBlurMaterial.swift */; };
+		AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000008AA000008AA000008 /* RendererOutputs.swift */; };
+		AA000009AA000009AA000009 /* MotionBlurPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000AAA00000AAA00000A /* MotionBlurPostProcessor.swift */; };
+		AA00000BAA00000BAA00000B /* SsaoPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000CAA00000CAA00000C /* SsaoPostProcessor.swift */; };
 		E101A9102C070E8E0055FABA /* PhysicalMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */; };
 		E101A9112C070E8E0055FABA /* ShadowMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */; };
 		E101A9122C070E8E0055FABA /* SkyboxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */; };
@@ -420,6 +423,9 @@
 		AA000002AA000002AA000002 /* VelocityMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VelocityMaterial.swift; sourceTree = "<group>"; };
 		AA000004AA000004AA000004 /* SsaoMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SsaoMaterial.swift; sourceTree = "<group>"; };
 		AA000006AA000006AA000006 /* MotionBlurMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MotionBlurMaterial.swift; sourceTree = "<group>"; };
+		AA000008AA000008AA000008 /* RendererOutputs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RendererOutputs.swift; sourceTree = "<group>"; };
+		AA00000AAA00000AAA00000A /* MotionBlurPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurPostProcessor.swift; sourceTree = "<group>"; };
+		AA00000CAA00000CAA00000C /* SsaoPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsaoPostProcessor.swift; sourceTree = "<group>"; };
 		66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhysicalMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShadowMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkyboxMaterial.swift; sourceTree = "<group>"; };
@@ -981,7 +987,7 @@
 				66D7DEC72C06A24B00B5A6C8 /* LightData.swift */,
 				66D7DEC92C06A24B00B5A6C8 /* ShadowData.swift */,
 				1B35E2852F9692FB00DE68DE /* RenderLayer.swift */,
-				1B35E2862F9692FB00DE68DE /* RenderPasses.swift */,
+				AA000008AA000008AA000008 /* RendererOutputs.swift */,
 			);
 			path = Types;
 			sourceTree = "<group>";
@@ -997,6 +1003,8 @@
 				66D7DECF2C06A24B00B5A6C8 /* MetalSourceCompiler.swift */,
 				66D7DED02C06A24B00B5A6C8 /* Paths.swift */,
 				66D7DED12C06A24B00B5A6C8 /* PostProcessor.swift */,
+				AA00000AAA00000AAA00000A /* MotionBlurPostProcessor.swift */,
+				AA00000CAA00000CAA00000C /* SsaoPostProcessor.swift */,
 				66D7DED32C06A24B00B5A6C8 /* Textures.swift */,
 				66D7DED42C06A24B00B5A6C8 /* ValueCache.swift */,
 				66D7DED52C06A24B00B5A6C8 /* VertexDescriptors.swift */,
@@ -1322,6 +1330,8 @@
 				E101A94F2C070EA00055FABA /* MetalSourceCompiler.swift in Sources */,
 				E101A9502C070EA00055FABA /* Paths.swift in Sources */,
 				E101A9512C070EA00055FABA /* PostProcessor.swift in Sources */,
+				AA000009AA000009AA000009 /* MotionBlurPostProcessor.swift in Sources */,
+				AA00000BAA00000BAA00000B /* SsaoPostProcessor.swift in Sources */,
 				E101A9532C070EA00055FABA /* Textures.swift in Sources */,
 				E101A9542C070EA00055FABA /* ValueCache.swift in Sources */,
 				E101A9552C070EA00055FABA /* VertexDescriptors.swift in Sources */,
@@ -1357,7 +1367,7 @@
 				E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */,
 				E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */,
 				1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */,
-				1B35E2882F9692FB00DE68DE /* RenderPasses.swift in Sources */,
+				AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */,
 				E101A8A72C070E8E0055FABA /* OrthographicCameraController.swift in Sources */,
 				E101A8A82C070E8E0055FABA /* PerspectiveCameraController.swift in Sources */,
 				E101A8A92C070E8E0055FABA /* OrthographicCamera.swift in Sources */,

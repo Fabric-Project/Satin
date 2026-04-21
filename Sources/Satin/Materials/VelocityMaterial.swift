@@ -3,11 +3,11 @@ import Metal
 public final class VelocityMaterial: Material {
     public required init(context: Context) {
         super.init(context: context)
-        blending = .alpha
+        blending = .disabled
         // Re-rendering the same geometry after the forward pass: depths are equal, not strictly less.
         // Write nothing back to depth — we only need to cull occluded fragments.
-        depthCompareFunction = .greaterEqual
-        depthWriteEnabled = true
+        depthCompareFunction = .always
+        depthWriteEnabled = false
     }
 
     public required init(from decoder: Decoder) throws {

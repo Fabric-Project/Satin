@@ -8,7 +8,6 @@
 
 import Combine
 import Metal
-import MetalKit
 import simd
 
 open class Renderer {
@@ -36,9 +35,6 @@ open class Renderer {
 
                 updateNormalTexture = true
                 updateVelocityTexture = true
-                updateSsaoTexture = true
-                updateTaaTexture = true
-                updateMotionBlurTexture = true
             }
         }
     }
@@ -124,13 +120,11 @@ open class Renderer {
     public var stencilLoadAction: MTLLoadAction
     public var stencilStoreAction: MTLStoreAction
 
-    // MARK: - Screen-Space Passes
+    // MARK: - Renderer Outputs
 
-    public var passes: RenderPasses = []
+    public var outputs: RendererOutputs = []
 
-    private var lastDrawTime: CFAbsoluteTime = 0
-
-    // Each prepass/pass needs its own Context so the pipeline compiles for the correct pixel format.
+    // Each output prepass needs its own Context so the pipeline compiles for the correct pixel format.
     // normalPassContext uses rgba16Float: world-space normals are signed unit vectors.
     private lazy var normalPassContext = Context(
         device: context.device,
@@ -145,51 +139,9 @@ open class Renderer {
         colorPixelFormat: .rg16Float,
         depthPixelFormat: context.depthPixelFormat
     )
-    private lazy var ssaoPassContext = Context(
-        device: context.device,
-        sampleCount: 1,
-        colorPixelFormat: .r8Unorm
-    )
-    // motionBlurPassContext matches the renderer's own color format — output is just blurred color.
-    private lazy var motionBlurPassContext = Context(
-        device: context.device,
-        sampleCount: 1,
-        colorPixelFormat: context.colorPixelFormat
-    )
 
     private lazy var normalColorMaterial = NormalColorMaterial(context: normalPassContext)
     private lazy var velocityMaterial = VelocityMaterial(context: velocityPassContext)
-
-    public private(set) lazy var ssaoMaterial: SsaoMaterial = SsaoMaterial(context: ssaoPassContext)
-    public private(set) lazy var motionBlurMaterial: MotionBlurMaterial = MotionBlurMaterial(context: motionBlurPassContext)
-
-    private lazy var ssaoPostProcessor = PostProcessor(
-        label: label + " SSAO",
-        context: ssaoPassContext,
-        material: ssaoMaterial,
-        clearColor: .one,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
-    )
-
-    private lazy var motionBlurPostProcessor = PostProcessor(
-        label: label + " Motion Blur",
-        context: motionBlurPassContext,
-        material: motionBlurMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
-    )
-
-    private lazy var blueNoiseTexture: MTLTexture? = {
-        guard let url = getTexturesURL("blue_noise_rgba.png") else { return nil }
-        let loader = MTKTextureLoader(device: context.device)
-        return try? loader.newTexture(URL: url, options: [
-            .SRGB: false,
-            .generateMipmaps: false,
-            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
-            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
-        ])
-    }()
 
     private var updateNormalTexture = true
     public private(set) var normalTexture: MTLTexture?
@@ -204,30 +156,6 @@ open class Renderer {
     public var velocityTextureStorageMode: MTLStorageMode = .private {
         didSet {
             if oldValue != velocityTextureStorageMode { updateVelocityTexture = true }
-        }
-    }
-
-    private var updateSsaoTexture = true
-    public private(set) var ssaoTexture: MTLTexture?
-    public var ssaoTextureStorageMode: MTLStorageMode = .private {
-        didSet {
-            if oldValue != ssaoTextureStorageMode { updateSsaoTexture = true }
-        }
-    }
-
-    private var updateTaaTexture = true
-    public private(set) var taaTexture: MTLTexture?
-    public var taaTextureStorageMode: MTLStorageMode = .private {
-        didSet {
-            if oldValue != taaTextureStorageMode { updateTaaTexture = true }
-        }
-    }
-
-    private var updateMotionBlurTexture = true
-    public private(set) var motionBlurTexture: MTLTexture?
-    public var motionBlurTextureStorageMode: MTLStorageMode = .private {
-        didSet {
-            if oldValue != motionBlurTextureStorageMode { updateMotionBlurTexture = true }
         }
     }
 
@@ -576,20 +504,11 @@ open class Renderer {
         renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
         renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
 
-        if passes.contains(.ssao) {
+        if outputs.contains(.normals) {
             setupNormalTexture()
         }
-        if passes.contains(.taa) || passes.contains(.motionBlur) {
+        if outputs.contains(.velocity) {
             setupVelocityTexture()
-        }
-        if passes.contains(.ssao) {
-            setupSsaoTexture()
-        }
-        if passes.contains(.taa) {
-            setupTaaTexture()
-        }
-        if passes.contains(.motionBlur) {
-            setupMotionBlurTexture()
         }
 
         if renderLists.isEmpty {
@@ -646,57 +565,14 @@ open class Renderer {
             }
         }
 
-        if !passes.isEmpty, let primaryCamera = cameras.first {
-            // Capture the actual rendered color texture before the defer block restores the RPD
-            let renderedColorTexture: MTLTexture?
-            if context.sampleCount > 1 {
-                renderedColorTexture = renderPassDescriptor.colorAttachments[0].resolveTexture ?? colorTexture
-            } else {
-                renderedColorTexture = renderPassDescriptor.colorAttachments[0].texture ?? colorTexture
-            }
+        if !outputs.isEmpty, let primaryCamera = cameras.first {
             let renderedDepthTexture = renderPassDescriptor.depthAttachment.texture ?? depthTexture
-
-            encodeScreenSpacePasses(
-                commandBuffer: commandBuffer,
-                scene: scene,
-                camera: primaryCamera,
-                viewports: viewports,
-                renderPassDescriptor: renderPassDescriptor,
-                renderedColorTexture: renderedColorTexture,
-                renderedDepthTexture: renderedDepthTexture
-            )
-        }
-    }
-
-    private func encodeScreenSpacePasses(
-        commandBuffer: MTLCommandBuffer,
-        scene: Object,
-        camera: Camera,
-        viewports: [MTLViewport],
-        renderPassDescriptor: MTLRenderPassDescriptor,
-        renderedColorTexture: MTLTexture?,
-        renderedDepthTexture: MTLTexture?
-    ) {
-        if passes.contains(.ssao) || passes.contains(.taa) || passes.contains(.motionBlur) {
-            encodeNormalPrepass(commandBuffer: commandBuffer, scene: scene, camera: camera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
-        }
-        if passes.contains(.taa) || passes.contains(.motionBlur) {
-            encodeVelocityPrepass(commandBuffer: commandBuffer, scene: scene, camera: camera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
-        }
-        if passes.contains(.ssao) {
-            encodeSsaoPass(
-                commandBuffer: commandBuffer,
-                camera: camera,
-                renderPassDescriptor: renderPassDescriptor,
-                renderedDepthTexture: renderedDepthTexture
-            )
-        }
-        if passes.contains(.motionBlur) {
-            encodeMotionBlurPass(
-                commandBuffer: commandBuffer,
-                renderPassDescriptor: renderPassDescriptor,
-                renderedColorTexture: renderedColorTexture
-            )
+            if outputs.contains(.normals) {
+                encodeNormalPrepass(commandBuffer: commandBuffer, scene: scene, camera: primaryCamera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
+            }
+            if outputs.contains(.velocity) {
+                encodeVelocityPrepass(commandBuffer: commandBuffer, scene: scene, camera: primaryCamera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
+            }
         }
     }
 
@@ -778,47 +654,6 @@ open class Renderer {
                 renderEncoder.endEncoding()
             }
         }
-    }
-
-    private func encodeSsaoPass(
-        commandBuffer: MTLCommandBuffer,
-        camera: Camera,
-        renderPassDescriptor: MTLRenderPassDescriptor,
-        renderedDepthTexture: MTLTexture? = nil
-    ) {
-        guard let ssaoTexture else { return }
-        ssaoMaterial.depthTexture = renderedDepthTexture ?? depthTexture
-        ssaoMaterial.normalTexture = normalTexture
-        ssaoMaterial.update(camera: camera)
-        ssaoPostProcessor.renderer.resize(size)
-        ssaoPostProcessor.draw(
-            renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            renderTarget: ssaoTexture
-        )
-    }
-
-    private func encodeMotionBlurPass(
-        commandBuffer: MTLCommandBuffer,
-        renderPassDescriptor: MTLRenderPassDescriptor,
-        renderedColorTexture: MTLTexture? = nil
-    ) {
-        guard let motionBlurTexture else { return }
-        let now = CFAbsoluteTimeGetCurrent()
-        if lastDrawTime > 0 {
-            motionBlurMaterial.deltaTime = Float(now - lastDrawTime)
-        }
-        lastDrawTime = now
-        motionBlurMaterial.frame = motionBlurMaterial.frame &+ 1
-        motionBlurMaterial.colorTexture = renderedColorTexture ?? colorTexture
-        motionBlurMaterial.velocityTexture = velocityTexture
-        motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
-        motionBlurPostProcessor.renderer.resize(size)
-        motionBlurPostProcessor.draw(
-            renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            renderTarget: motionBlurTexture
-        )
     }
 
     // MARK: - Internal Update
@@ -1713,7 +1548,7 @@ open class Renderer {
         projectorTextures = projectorLights.map(\.projectionTexture)
     }
 
-    // MARK: - Screen-Space Pass Textures
+    // MARK: - Output Textures
 
     private func setupNormalTexture() {
         guard updateNormalTexture, size.width > 1, size.height > 1 else { return }
@@ -1747,51 +1582,4 @@ open class Renderer {
         updateVelocityTexture = false
     }
 
-    private func setupSsaoTexture() {
-        guard updateSsaoTexture, size.width > 1, size.height > 1 else { return }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .r8Unorm,
-            width: Int(size.width),
-            height: Int(size.height),
-            mipmapped: false
-        )
-        descriptor.sampleCount = 1
-        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
-        descriptor.storageMode = ssaoTextureStorageMode
-        ssaoTexture = context.device.makeTexture(descriptor: descriptor)
-        ssaoTexture?.label = label + " SSAO Texture"
-        updateSsaoTexture = false
-    }
-
-    private func setupTaaTexture() {
-        guard updateTaaTexture, size.width > 1, size.height > 1 else { return }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float,
-            width: Int(size.width),
-            height: Int(size.height),
-            mipmapped: false
-        )
-        descriptor.sampleCount = 1
-        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
-        descriptor.storageMode = taaTextureStorageMode
-        taaTexture = context.device.makeTexture(descriptor: descriptor)
-        taaTexture?.label = label + " TAA Texture"
-        updateTaaTexture = false
-    }
-
-    private func setupMotionBlurTexture() {
-        guard updateMotionBlurTexture, size.width > 1, size.height > 1 else { return }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: context.colorPixelFormat,
-            width: Int(size.width),
-            height: Int(size.height),
-            mipmapped: false
-        )
-        descriptor.sampleCount = 1
-        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
-        descriptor.storageMode = motionBlurTextureStorageMode
-        motionBlurTexture = context.device.makeTexture(descriptor: descriptor)
-        motionBlurTexture?.label = label + " Motion Blur Texture"
-        updateMotionBlurTexture = false
-    }
 }
