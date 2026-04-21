@@ -158,6 +158,8 @@ open class Renderer {
             if oldValue != velocityTextureStorageMode { updateVelocityTexture = true }
         }
     }
+    
+    // MARK: -
 
     public var viewport = MTLViewport()
 
@@ -566,7 +568,11 @@ open class Renderer {
         }
 
         if !outputs.isEmpty, let primaryCamera = cameras.first {
-            let renderedDepthTexture = renderPassDescriptor.depthAttachment.texture ?? depthTexture
+            // Prefer the resolved (single-sample) depth so prepasses that run at sampleCount=1
+            // don't receive an MSAA multisample texture as their depth attachment.
+            let renderedDepthTexture = renderPassDescriptor.depthAttachment.resolveTexture
+                ?? renderPassDescriptor.depthAttachment.texture
+                ?? depthTexture
             if outputs.contains(.normals) {
                 encodeNormalPrepass(commandBuffer: commandBuffer, scene: scene, camera: primaryCamera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
             }
@@ -643,6 +649,9 @@ open class Renderer {
             if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
                 renderEncoder.label = label + " Velocity Prepass"
                 renderEncoder.setViewports(viewports)
+                // Nudge fragments ~1 ULP closer so re-rendered geometry passes .lessEqual against
+                // the forward-pass depth even when FP rounding differs across shader compilations.
+                renderEncoder.setDepthBias(-1, slopeScale: -1, clamp: -0.001)
                 encode(
                     renderEncoder: renderEncoder,
                     pass: pass,

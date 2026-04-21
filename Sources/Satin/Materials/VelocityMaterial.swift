@@ -6,7 +6,7 @@ public final class VelocityMaterial: Material {
         blending = .disabled
         // Re-rendering the same geometry after the forward pass: depths are equal, not strictly less.
         // Write nothing back to depth — we only need to cull occluded fragments.
-        depthCompareFunction = .always
+        depthCompareFunction = .lessEqual
         depthWriteEnabled = false
     }
 
