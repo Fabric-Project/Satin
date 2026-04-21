@@ -5,10 +5,6 @@
 //  Created by Reza Ali on 4/20/25.
 //  Copyright © 2025 Hi-Rez. All rights reserved.
 //
-#if os(macOS)
-import AppKit
-#endif
-
 import Metal
 import Satin
 import simd
@@ -20,11 +16,32 @@ final class MotionBlurRenderer: BaseRenderer {
 
     // MARK: - Inspector
 
-    override var paramKeys: [String] { ["Motion Blur"] }
-    override var params: [String: ParameterGroup?] { ["Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters] }
+    override var paramKeys: [String] { ["App", "Motion Blur"] }
+    override var params: [String: ParameterGroup?] {
+        [
+            "App": appParams,
+            "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters
+        ]
+    }
 
-    private var savedShutterAngle: Float = 180.0
+    private lazy var appParams: ParameterGroup = {
+        var parameters: [any Parameter] = []
+        for (index, params) in ringParams.enumerated() {
+            parameters.append(
+                FloatParameter(
+                    ringSpeedParameterName(index),
+                    params.speed,
+                    0.0,
+                    12.0,
+                    .slider,
+                    "Angular speed for ring \(index + 1)."
+                )
+            )
+        }
+        return ParameterGroup("App", parameters)
+    }()
 
+   
     // MARK: - Camera
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 14, 30], near: 0.1, far: 300.0, fov: 45.0)
@@ -47,13 +64,7 @@ final class MotionBlurRenderer: BaseRenderer {
         return r
     }()
 
-    lazy var motionBlurPostProcessor: MotionBlurPostProcessor = {
-        let pp = MotionBlurPostProcessor(context: defaultContext)
-        pp.motionBlurMaterial.shutterAngle = 720 * 64.0
-        pp.motionBlurMaterial.samples = 24
-        pp.motionBlurMaterial.jitter = 0.35
-        return pp
-    }()
+    lazy var motionBlurPostProcessor: MotionBlurPostProcessor = MotionBlurPostProcessor(context: defaultContext)
 
     lazy var compositorMaterial = BasicTextureMaterial(context: defaultContext)
     lazy var compositor = PostProcessor(
@@ -77,7 +88,6 @@ final class MotionBlurRenderer: BaseRenderer {
 
     struct OrbitalGroup {
         let pivot: Object
-        let angularSpeed: Float
     }
 
     var orbitalGroups: [OrbitalGroup] = []
@@ -107,11 +117,12 @@ final class MotionBlurRenderer: BaseRenderer {
     override func update() {
         cameraController.update()
         let now = getTime()
-        let dt = lastTime > 0 ? Float(now - lastTime) : Float(1.0 / 60.0)
+        let dt = lastTime > 0 ? Float(now - lastTime) : 1.0 / 60.0
         lastTime = now
         time += dt
-        for group in orbitalGroups {
-            group.pivot.orientation = simd_quatf(angle: group.angularSpeed * time, axis: [0, 1, 0])
+        for (index, group) in orbitalGroups.enumerated() {
+            let angularSpeed = appParams.get(ringSpeedParameterName(index), as: FloatParameter.self)?.value ?? ringParams[index].speed
+            group.pivot.orientation = simd_quatf(angle: angularSpeed * time, axis: [0, 1, 0])
         }
     }
 
@@ -143,19 +154,11 @@ final class MotionBlurRenderer: BaseRenderer {
         compositor.resize(size: size, scaleFactor: scaleFactor)
     }
 
-#if os(macOS)
-    override func mouseDown(with event: NSEvent) {
-        let mat = motionBlurPostProcessor.motionBlurMaterial
-        if mat.shutterAngle > 0 {
-            savedShutterAngle = mat.shutterAngle
-            mat.shutterAngle = 0
-        } else {
-            mat.shutterAngle = savedShutterAngle
-        }
-    }
-#endif
-
     // MARK: - Environment
+
+    private func ringSpeedParameterName(_ index: Int) -> String {
+        "Ring \(index + 1) Speed"
+    }
 
     private func loadEnvironment() {
         let url = texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")
@@ -201,7 +204,7 @@ final class MotionBlurRenderer: BaseRenderer {
                 pivot.add(mesh)
             }
 
-            orbitalGroups.append(OrbitalGroup(pivot: pivot, angularSpeed: params.speed))
+            orbitalGroups.append(OrbitalGroup(pivot: pivot))
             scene.add(pivot)
         }
 

@@ -2,9 +2,19 @@ import Metal
 import simd
 
 public final class MotionBlurMaterial: Material {
-    private static let shutterAngleRange: ClosedRange<Float> = 0.0 ... 720.0
+    private struct MotionBlurUniformPayload: Equatable {
+        var shutterAngle: Float
+        var samples: Int32
+        var jitter: Float
+        var frame: Int32
+    }
+
+    private static let shutterAngleRange: ClosedRange<Float> = 0.0 ... (720.0 * 64)
     private static let defaultShutterAngle: Float = 180.0
     private static let legacyDefaultDeltaTime: Float = 1.0 / 60.0
+    private static let uniformLayoutLabels = ["Shutter Angle", "Samples", "Jitter", "Frame"]
+    private static let uniformLayoutSize = MemoryLayout<MotionBlurUniformPayload>.size
+    private static let uniformLayoutAlignment = MemoryLayout<MotionBlurUniformPayload>.alignment
 
     public unowned var colorTexture: MTLTexture? {
         didSet { set(colorTexture, index: FragmentTextureIndex.Custom0) }
@@ -88,6 +98,10 @@ public final class MotionBlurMaterial: Material {
         set(depthTexture, index: FragmentTextureIndex.Custom3)
     }
 
+    override public func updateUniforms() {
+        super.updateUniforms()
+    }
+
     private func resolveShutterAngle() -> Float {
         if let shutterAngle = get("Shutter Angle", as: FloatParameter.self)?.value {
             return clampShutterAngle(shutterAngle)
@@ -103,5 +117,14 @@ public final class MotionBlurMaterial: Material {
 
     private func clampShutterAngle(_ value: Float) -> Float {
         min(max(value, Self.shutterAngleRange.lowerBound), Self.shutterAngleRange.upperBound)
+    }
+
+    private func makeUniformPayload() -> MotionBlurUniformPayload {
+        MotionBlurUniformPayload(
+            shutterAngle: shutterAngle,
+            samples: samples,
+            jitter: jitter,
+            frame: frame
+        )
     }
 }
