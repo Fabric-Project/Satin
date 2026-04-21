@@ -165,6 +165,9 @@
 		E101A90D2C070E8E0055FABA /* DepthMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCA2C06A24B00B5A6C8 /* DepthMaterial.swift */; };
 		E101A90E2C070E8E0055FABA /* MatCapMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCB2C06A24B00B5A6C8 /* MatCapMaterial.swift */; };
 		E101A90F2C070E8E0055FABA /* NormalColorMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCC2C06A24B00B5A6C8 /* NormalColorMaterial.swift */; };
+		AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* VelocityMaterial.swift */; };
+		AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* SsaoMaterial.swift */; };
+		AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006AA000006AA000006 /* MotionBlurMaterial.swift */; };
 		E101A9102C070E8E0055FABA /* PhysicalMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */; };
 		E101A9112C070E8E0055FABA /* ShadowMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */; };
 		E101A9122C070E8E0055FABA /* SkyboxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */; };
@@ -413,6 +416,9 @@
 		66D7DDCA2C06A24B00B5A6C8 /* DepthMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DepthMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCB2C06A24B00B5A6C8 /* MatCapMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MatCapMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCC2C06A24B00B5A6C8 /* NormalColorMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = NormalColorMaterial.swift; sourceTree = "<group>"; };
+		AA000002AA000002AA000002 /* VelocityMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VelocityMaterial.swift; sourceTree = "<group>"; };
+		AA000004AA000004AA000004 /* SsaoMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SsaoMaterial.swift; sourceTree = "<group>"; };
+		AA000006AA000006AA000006 /* MotionBlurMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MotionBlurMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhysicalMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShadowMaterial.swift; sourceTree = "<group>"; };
 		66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkyboxMaterial.swift; sourceTree = "<group>"; };
@@ -843,6 +849,9 @@
 				66D7DDCA2C06A24B00B5A6C8 /* DepthMaterial.swift */,
 				66D7DDCB2C06A24B00B5A6C8 /* MatCapMaterial.swift */,
 				66D7DDCC2C06A24B00B5A6C8 /* NormalColorMaterial.swift */,
+				AA000002AA000002AA000002 /* VelocityMaterial.swift */,
+				AA000004AA000004AA000004 /* SsaoMaterial.swift */,
+				AA000006AA000006AA000006 /* MotionBlurMaterial.swift */,
 				66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */,
 				66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */,
 				66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */,
@@ -1461,6 +1470,9 @@
 				E101A90D2C070E8E0055FABA /* DepthMaterial.swift in Sources */,
 				E101A90E2C070E8E0055FABA /* MatCapMaterial.swift in Sources */,
 				E101A90F2C070E8E0055FABA /* NormalColorMaterial.swift in Sources */,
+				AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */,
+				AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */,
+				AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */,
 				E101A9102C070E8E0055FABA /* PhysicalMaterial.swift in Sources */,
 				E101A9112C070E8E0055FABA /* ShadowMaterial.swift in Sources */,
 				E101A9122C070E8E0055FABA /* SkyboxMaterial.swift in Sources */,

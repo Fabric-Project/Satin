@@ -32,6 +32,12 @@ open class Renderer {
 
                 updateStencilTexture = true
                 updateStencilMultisampleTexture = true
+
+                updateNormalTexture = true
+                updateVelocityTexture = true
+                updateSsaoTexture = true
+                updateTaaTexture = true
+                updateMotionBlurTexture = true
             }
         }
     }
@@ -116,6 +122,100 @@ open class Renderer {
 
     public var stencilLoadAction: MTLLoadAction
     public var stencilStoreAction: MTLStoreAction
+
+    // MARK: - Screen-Space Passes
+
+    public var passes: RenderPasses = []
+
+    // Each prepass/pass needs its own Context so the pipeline compiles for the correct pixel format.
+    // normalPassContext uses rgba16Float: world-space normals are signed unit vectors.
+    private lazy var normalPassContext = Context(
+        device: context.device,
+        sampleCount: 1,
+        colorPixelFormat: .rgba16Float,
+        depthPixelFormat: context.depthPixelFormat
+    )
+    // velocityPassContext uses rg16Float: velocity is a signed NDC displacement (can be < 0 or > 1).
+    private lazy var velocityPassContext = Context(
+        device: context.device,
+        sampleCount: 1,
+        colorPixelFormat: .rg16Float,
+        depthPixelFormat: context.depthPixelFormat
+    )
+    private lazy var ssaoPassContext = Context(
+        device: context.device,
+        sampleCount: 1,
+        colorPixelFormat: .r8Unorm
+    )
+    // motionBlurPassContext matches the renderer's own color format — output is just blurred color.
+    private lazy var motionBlurPassContext = Context(
+        device: context.device,
+        sampleCount: 1,
+        colorPixelFormat: context.colorPixelFormat
+    )
+
+    private lazy var normalColorMaterial = NormalColorMaterial(context: normalPassContext)
+    private lazy var velocityMaterial = VelocityMaterial(context: velocityPassContext)
+
+    public private(set) lazy var ssaoMaterial: SsaoMaterial = SsaoMaterial(context: ssaoPassContext)
+    public private(set) lazy var motionBlurMaterial: MotionBlurMaterial = MotionBlurMaterial(context: motionBlurPassContext)
+
+    private lazy var ssaoPostProcessor = PostProcessor(
+        label: label + " SSAO",
+        context: ssaoPassContext,
+        material: ssaoMaterial,
+        clearColor: .one,
+        depthLoadAction: .dontCare,
+        depthStoreAction: .dontCare
+    )
+
+    private lazy var motionBlurPostProcessor = PostProcessor(
+        label: label + " Motion Blur",
+        context: motionBlurPassContext,
+        material: motionBlurMaterial,
+        depthLoadAction: .dontCare,
+        depthStoreAction: .dontCare
+    )
+
+    private var updateNormalTexture = true
+    public private(set) var normalTexture: MTLTexture?
+    public var normalTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != normalTextureStorageMode { updateNormalTexture = true }
+        }
+    }
+
+    private var updateVelocityTexture = true
+    public private(set) var velocityTexture: MTLTexture?
+    public var velocityTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != velocityTextureStorageMode { updateVelocityTexture = true }
+        }
+    }
+
+    private var updateSsaoTexture = true
+    public private(set) var ssaoTexture: MTLTexture?
+    public var ssaoTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != ssaoTextureStorageMode { updateSsaoTexture = true }
+        }
+    }
+
+    private var updateTaaTexture = true
+    public private(set) var taaTexture: MTLTexture?
+    public var taaTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != taaTextureStorageMode { updateTaaTexture = true }
+        }
+    }
+
+    private var updateMotionBlurTexture = true
+    public private(set) var motionBlurTexture: MTLTexture?
+    public var motionBlurTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != motionBlurTextureStorageMode { updateMotionBlurTexture = true }
+        }
+    }
 
     public var viewport = MTLViewport()
 
@@ -462,6 +562,22 @@ open class Renderer {
         renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
         renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
 
+        if passes.contains(.ssao) {
+            setupNormalTexture()
+        }
+        if passes.contains(.taa) || passes.contains(.motionBlur) {
+            setupVelocityTexture()
+        }
+        if passes.contains(.ssao) {
+            setupSsaoTexture()
+        }
+        if passes.contains(.taa) {
+            setupTaaTexture()
+        }
+        if passes.contains(.motionBlur) {
+            setupMotionBlurTexture()
+        }
+
         if renderLists.isEmpty {
             if colorLoadAction == .clear, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
 #if DEBUG
@@ -508,13 +624,180 @@ open class Renderer {
 #endif
                     renderEncoder.endEncoding()
 
-                    // Not sure why this is necessary? 
+                    // Not sure why this is necessary?
 //                    renderPassDescriptor.colorAttachments[0].loadAction = .load
 //                    renderPassDescriptor.depthAttachment.loadAction = .load
 //                    renderPassDescriptor.stencilAttachment.loadAction = .load
                 }
             }
         }
+
+        if !passes.isEmpty, let primaryCamera = cameras.first {
+            // Capture the actual rendered color texture before the defer block restores the RPD
+            let renderedColorTexture: MTLTexture?
+            if context.sampleCount > 1 {
+                renderedColorTexture = renderPassDescriptor.colorAttachments[0].resolveTexture ?? colorTexture
+            } else {
+                renderedColorTexture = renderPassDescriptor.colorAttachments[0].texture ?? colorTexture
+            }
+            let renderedDepthTexture = renderPassDescriptor.depthAttachment.texture ?? depthTexture
+
+            encodeScreenSpacePasses(
+                commandBuffer: commandBuffer,
+                scene: scene,
+                camera: primaryCamera,
+                viewports: viewports,
+                renderPassDescriptor: renderPassDescriptor,
+                renderedColorTexture: renderedColorTexture,
+                renderedDepthTexture: renderedDepthTexture
+            )
+        }
+    }
+
+    private func encodeScreenSpacePasses(
+        commandBuffer: MTLCommandBuffer,
+        scene: Object,
+        camera: Camera,
+        viewports: [MTLViewport],
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        renderedColorTexture: MTLTexture?,
+        renderedDepthTexture: MTLTexture?
+    ) {
+        if passes.contains(.ssao) || passes.contains(.taa) || passes.contains(.motionBlur) {
+            encodeNormalPrepass(commandBuffer: commandBuffer, scene: scene, camera: camera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
+        }
+        if passes.contains(.taa) || passes.contains(.motionBlur) {
+            encodeVelocityPrepass(commandBuffer: commandBuffer, scene: scene, camera: camera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
+        }
+        if passes.contains(.ssao) {
+            encodeSsaoPass(
+                commandBuffer: commandBuffer,
+                camera: camera,
+                renderPassDescriptor: renderPassDescriptor,
+                renderedDepthTexture: renderedDepthTexture
+            )
+        }
+        if passes.contains(.motionBlur) {
+            encodeMotionBlurPass(
+                commandBuffer: commandBuffer,
+                renderPassDescriptor: renderPassDescriptor,
+                renderedColorTexture: renderedColorTexture
+            )
+        }
+    }
+
+    private func encodeNormalPrepass(
+        commandBuffer: MTLCommandBuffer,
+        scene: Object,
+        camera: Camera,
+        viewports: [MTLViewport],
+        renderedDepthTexture: MTLTexture? = nil
+    ) {
+        guard let normalTexture else { return }
+        let rpd = MTLRenderPassDescriptor()
+        rpd.colorAttachments[0].texture = normalTexture
+        rpd.colorAttachments[0].loadAction = .clear
+        rpd.colorAttachments[0].storeAction = .store
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
+        let depthSource = renderedDepthTexture ?? depthTexture
+        if let depthSource {
+            rpd.depthAttachment.texture = depthSource
+            rpd.depthAttachment.loadAction = .load
+            rpd.depthAttachment.storeAction = .dontCare
+        }
+
+        let simd_viewports = viewports.map(\.float4)
+        let renderPassLists = renderLists.sorted { $0.key < $1.key }
+        for (pass, renderPassList) in renderPassLists.enumerated() {
+            let renderables = renderPassList.value.getRenderables(sorted: false)
+            if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
+                renderEncoder.label = label + " Normal Prepass"
+                renderEncoder.setViewports(viewports)
+                encode(
+                    renderEncoder: renderEncoder,
+                    pass: pass,
+                    renderables: renderables,
+                    cameras: [camera],
+                    viewports: simd_viewports,
+                    overrideMaterial: normalColorMaterial
+                )
+                renderEncoder.endEncoding()
+            }
+        }
+    }
+
+    private func encodeVelocityPrepass(
+        commandBuffer: MTLCommandBuffer,
+        scene: Object,
+        camera: Camera,
+        viewports: [MTLViewport],
+        renderedDepthTexture: MTLTexture? = nil
+    ) {
+        guard let velocityTexture else { return }
+        let rpd = MTLRenderPassDescriptor()
+        rpd.colorAttachments[0].texture = velocityTexture
+        rpd.colorAttachments[0].loadAction = .clear
+        rpd.colorAttachments[0].storeAction = .store
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
+        let depthSource = renderedDepthTexture ?? depthTexture
+        if let depthSource {
+            rpd.depthAttachment.texture = depthSource
+            rpd.depthAttachment.loadAction = .load
+            rpd.depthAttachment.storeAction = .dontCare
+        }
+
+        let simd_viewports = viewports.map(\.float4)
+        let renderPassLists = renderLists.sorted { $0.key < $1.key }
+        for (pass, renderPassList) in renderPassLists.enumerated() {
+            let renderables = renderPassList.value.getRenderables(sorted: false)
+            if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
+                renderEncoder.label = label + " Velocity Prepass"
+                renderEncoder.setViewports(viewports)
+                encode(
+                    renderEncoder: renderEncoder,
+                    pass: pass,
+                    renderables: renderables,
+                    cameras: [camera],
+                    viewports: simd_viewports,
+                    overrideMaterial: velocityMaterial
+                )
+                renderEncoder.endEncoding()
+            }
+        }
+    }
+
+    private func encodeSsaoPass(
+        commandBuffer: MTLCommandBuffer,
+        camera: Camera,
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        renderedDepthTexture: MTLTexture? = nil
+    ) {
+        guard let ssaoTexture else { return }
+        ssaoMaterial.depthTexture = renderedDepthTexture ?? depthTexture
+        ssaoMaterial.normalTexture = normalTexture
+        ssaoMaterial.update(camera: camera)
+        ssaoPostProcessor.renderer.resize(size)
+        ssaoPostProcessor.draw(
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            renderTarget: ssaoTexture
+        )
+    }
+
+    private func encodeMotionBlurPass(
+        commandBuffer: MTLCommandBuffer,
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        renderedColorTexture: MTLTexture? = nil
+    ) {
+        guard let motionBlurTexture else { return }
+        motionBlurMaterial.colorTexture = renderedColorTexture ?? colorTexture
+        motionBlurMaterial.velocityTexture = velocityTexture
+        motionBlurPostProcessor.renderer.resize(size)
+        motionBlurPostProcessor.draw(
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            renderTarget: motionBlurTexture
+        )
     }
 
     // MARK: - Internal Update
@@ -695,7 +978,8 @@ open class Renderer {
         pass: Int,
         renderables: [Renderable],
         cameras: [Camera],
-        viewports: [simd_float4]
+        viewports: [simd_float4],
+        overrideMaterial: Material? = nil
     ) {
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
 
@@ -874,18 +1158,32 @@ open class Renderer {
                 renderEncoderState: renderEncoderState,
                 renderable: renderable,
                 cameras: cameras,
-                viewports: viewports
+                viewports: viewports,
+                overrideMaterial: overrideMaterial
             )
         }
     }
 
-    private func _encode(renderEncoder: MTLRenderCommandEncoder, renderEncoderState: RenderEncoderState, renderable: Renderable, cameras: [Camera], viewports: [simd_float4]) {
+    private func _encode(renderEncoder: MTLRenderCommandEncoder, renderEncoderState: RenderEncoderState, renderable: Renderable, cameras: [Camera], viewports: [simd_float4], overrideMaterial: Material? = nil) {
 #if DEBUG
         renderEncoder.pushDebugGroup(renderable.label)
 #endif
+        let savedMaterial = renderable.material
+        // Determine which context to use for pipeline/uniform lookups
+        let renderContext = overrideMaterial?.context ?? context
+
+        if let overrideMaterial {
+            renderable.material = overrideMaterial
+            // Lazily create a vertex uniform buffer for the prepass context if not yet present
+            if renderable.vertexUniforms[renderContext] == nil {
+                renderable.vertexUniforms[renderContext] = VertexUniformBuffer(context: renderContext)
+            }
+        }
+        defer { if overrideMaterial != nil { renderable.material = savedMaterial } }
+
         for i in 0..<context.vertexAmplificationCount {
             renderable.update(
-                renderContext: context,
+                renderContext: renderContext,
                 camera: cameras[i],
                 viewport: viewports[i],
                 index: i
@@ -900,21 +1198,21 @@ open class Renderer {
         if renderable.doubleSided, renderable.cullMode == .none, renderable.opaque == false {
             renderEncoderState.cullMode = .front
             renderable.draw(
-                renderContext: context,
+                renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
                 shadow: false
             )
 
             renderEncoderState.cullMode = .back
             renderable.draw(
-                renderContext: context,
+                renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
                 shadow: false
             )
         } else {
             renderEncoderState.cullMode = renderable.cullMode
             renderable.draw(
-                renderContext: context,
+                renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
                 shadow: false
             )
@@ -1392,5 +1690,87 @@ open class Renderer {
 
     private func updateProjectorTextures() {
         projectorTextures = projectorLights.map(\.projectionTexture)
+    }
+
+    // MARK: - Screen-Space Pass Textures
+
+    private func setupNormalTexture() {
+        guard updateNormalTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = normalTextureStorageMode
+        normalTexture = context.device.makeTexture(descriptor: descriptor)
+        normalTexture?.label = label + " Normal Texture"
+        updateNormalTexture = false
+    }
+
+    private func setupVelocityTexture() {
+        guard updateVelocityTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rg16Float,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = velocityTextureStorageMode
+        velocityTexture = context.device.makeTexture(descriptor: descriptor)
+        velocityTexture?.label = label + " Velocity Texture"
+        updateVelocityTexture = false
+    }
+
+    private func setupSsaoTexture() {
+        guard updateSsaoTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r8Unorm,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+        descriptor.storageMode = ssaoTextureStorageMode
+        ssaoTexture = context.device.makeTexture(descriptor: descriptor)
+        ssaoTexture?.label = label + " SSAO Texture"
+        updateSsaoTexture = false
+    }
+
+    private func setupTaaTexture() {
+        guard updateTaaTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+        descriptor.storageMode = taaTextureStorageMode
+        taaTexture = context.device.makeTexture(descriptor: descriptor)
+        taaTexture?.label = label + " TAA Texture"
+        updateTaaTexture = false
+    }
+
+    private func setupMotionBlurTexture() {
+        guard updateMotionBlurTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: context.colorPixelFormat,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+        descriptor.storageMode = motionBlurTextureStorageMode
+        motionBlurTexture = context.device.makeTexture(descriptor: descriptor)
+        motionBlurTexture?.label = label + " Motion Blur Texture"
+        updateMotionBlurTexture = false
     }
 }

@@ -11,4 +11,7 @@ typedef struct {
     float4 viewport;
     float3 worldCameraPosition;
     float3 worldCameraViewDirection;
+    matrix_float4x4 previousModelMatrix;
+    matrix_float4x4 previousViewProjectionMatrix;
+    matrix_float4x4 previousModelViewProjectionMatrix;
 } VertexUniforms;
