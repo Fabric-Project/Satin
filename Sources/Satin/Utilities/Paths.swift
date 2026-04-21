@@ -75,3 +75,11 @@ public func getPipelinesComputeURL() -> URL? {
 public func getPipelinesComputeURL(_ path: String) -> URL? {
     return getPipelinesComputeURL()?.appendingPathComponent(path)
 }
+
+public func getTexturesURL() -> URL? {
+    return getResourceURL()?.appendingPathComponent("Textures")
+}
+
+public func getTexturesURL(_ path: String) -> URL? {
+    return getTexturesURL()?.appendingPathComponent(path)
+}

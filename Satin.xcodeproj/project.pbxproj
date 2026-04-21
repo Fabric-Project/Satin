@@ -265,6 +265,7 @@
 		E194F69B2D288A22009A5C25 /* RaycastResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6972D288A22009A5C25 /* RaycastResult.swift */; };
 		E1CB8C082CEFB45800781C79 /* Satin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1CB8C072CEFB45800781C79 /* Satin.swift */; };
 		E1DD96BC2C06B00E002524F6 /* Pipelines in Resources */ = {isa = PBXBuildFile; fileRef = E1DD96BB2C06B00E002524F6 /* Pipelines */; };
+		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		E1DDD3592C2FA77400012A44 /* OrbitPerspectiveCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DDD3582C2FA77400012A44 /* OrbitPerspectiveCameraController.swift */; };
 		E1E2E09E2CCF64A700627A2F /* SignedDistanceFunctions.h in Headers */ = {isa = PBXBuildFile; fileRef = E1E2E09D2CCF64A700627A2F /* SignedDistanceFunctions.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		E1E2E0A02CCF64B100627A2F /* SignedDistanceFunctions.mm in Sources */ = {isa = PBXBuildFile; fileRef = E1E2E09F2CCF64B100627A2F /* SignedDistanceFunctions.mm */; };
@@ -540,6 +541,7 @@
 		E194F6972D288A22009A5C25 /* RaycastResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastResult.swift; sourceTree = "<group>"; };
 		E1CB8C072CEFB45800781C79 /* Satin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Satin.swift; sourceTree = "<group>"; };
 		E1DD96BB2C06B00E002524F6 /* Pipelines */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Pipelines; path = Sources/Satin/Pipelines; sourceTree = "<group>"; };
+		AC32791DA39C4460A06E9773 /* Textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Textures; path = Sources/Satin/Textures; sourceTree = "<group>"; };
 		E1DDD3582C2FA77400012A44 /* OrbitPerspectiveCameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitPerspectiveCameraController.swift; sourceTree = "<group>"; };
 		E1E2E09D2CCF64A700627A2F /* SignedDistanceFunctions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SignedDistanceFunctions.h; sourceTree = "<group>"; };
 		E1E2E09F2CCF64B100627A2F /* SignedDistanceFunctions.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SignedDistanceFunctions.mm; sourceTree = "<group>"; };
@@ -571,6 +573,7 @@
 			isa = PBXGroup;
 			children = (
 				E1DD96BB2C06B00E002524F6 /* Pipelines */,
+				AC32791DA39C4460A06E9773 /* Textures */,
 				E13494B22C06FBF000F29F45 /* Satin.h */,
 				66D7DD342C06A23000B5A6C8 /* Products */,
 				66D7DEF92C06A24B00B5A6C8 /* Sources */,
@@ -1250,6 +1253,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E1DD96BC2C06B00E002524F6 /* Pipelines in Resources */,
+				906F65B5767E42CCA53CED24 /* Textures in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

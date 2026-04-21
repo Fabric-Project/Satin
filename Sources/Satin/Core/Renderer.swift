@@ -8,6 +8,7 @@
 
 import Combine
 import Metal
+import MetalKit
 import simd
 
 open class Renderer {
@@ -127,6 +128,8 @@ open class Renderer {
 
     public var passes: RenderPasses = []
 
+    private var lastDrawTime: CFAbsoluteTime = 0
+
     // Each prepass/pass needs its own Context so the pipeline compiles for the correct pixel format.
     // normalPassContext uses rgba16Float: world-space normals are signed unit vectors.
     private lazy var normalPassContext = Context(
@@ -176,6 +179,17 @@ open class Renderer {
         depthLoadAction: .dontCare,
         depthStoreAction: .dontCare
     )
+
+    private lazy var blueNoiseTexture: MTLTexture? = {
+        guard let url = getTexturesURL("blue_noise_rgba.png") else { return nil }
+        let loader = MTKTextureLoader(device: context.device)
+        return try? loader.newTexture(URL: url, options: [
+            .SRGB: false,
+            .generateMipmaps: false,
+            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
+            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
+        ])
+    }()
 
     private var updateNormalTexture = true
     public private(set) var normalTexture: MTLTexture?
@@ -738,7 +752,7 @@ open class Renderer {
         rpd.colorAttachments[0].texture = velocityTexture
         rpd.colorAttachments[0].loadAction = .clear
         rpd.colorAttachments[0].storeAction = .store
-        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
         let depthSource = renderedDepthTexture ?? depthTexture
         if let depthSource {
             rpd.depthAttachment.texture = depthSource
@@ -790,8 +804,15 @@ open class Renderer {
         renderedColorTexture: MTLTexture? = nil
     ) {
         guard let motionBlurTexture else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        if lastDrawTime > 0 {
+            motionBlurMaterial.deltaTime = Float(now - lastDrawTime)
+        }
+        lastDrawTime = now
+        motionBlurMaterial.frame = motionBlurMaterial.frame &+ 1
         motionBlurMaterial.colorTexture = renderedColorTexture ?? colorTexture
         motionBlurMaterial.velocityTexture = velocityTexture
+        motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
         motionBlurPostProcessor.renderer.resize(size)
         motionBlurPostProcessor.draw(
             renderPassDescriptor: renderPassDescriptor,
