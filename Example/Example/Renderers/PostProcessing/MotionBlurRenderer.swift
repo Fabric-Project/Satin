@@ -29,8 +29,8 @@ final class MotionBlurRenderer: BaseRenderer {
         r.passes = [.motionBlur]
         r.colorTextureStorageMode = .private
         r.depthTextureStorageMode = .private
-        r.motionBlurMaterial.strength = 1
-        r.motionBlurMaterial.samples = 16
+        r.motionBlurMaterial.strength = 1.0
+        r.motionBlurMaterial.samples = 32
         return r
     }()
 

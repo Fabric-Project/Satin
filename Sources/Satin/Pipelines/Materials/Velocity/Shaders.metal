@@ -26,5 +26,7 @@ vertex VelocityVertexData velocityVertex(
 fragment half2 velocityFragment(VelocityVertexData in [[stage_in]]) {
     const float2 current = in.currentClipPos.xy / in.currentClipPos.w;
     const float2 previous = in.previousClipPos.xy / in.previousClipPos.w;
-    return half2(current - previous);
+    const float2 delta = current - previous;
+    // Convert NDC delta (+Y up) to UV delta (+V down) so consumers read screen-space velocity directly.
+    return half2(delta.x, -delta.y);
 }
