@@ -23,7 +23,7 @@ final class MotionBlurRenderer: BaseRenderer {
     override var paramKeys: [String] { ["Motion Blur"] }
     override var params: [String: ParameterGroup?] { ["Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters] }
 
-    private var savedStrength: Float = 0.02
+    private var savedShutterAngle: Float = 180.0
 
     // MARK: - Camera
 
@@ -49,7 +49,7 @@ final class MotionBlurRenderer: BaseRenderer {
 
     lazy var motionBlurPostProcessor: MotionBlurPostProcessor = {
         let pp = MotionBlurPostProcessor(context: defaultContext)
-        pp.motionBlurMaterial.strength = 0.02
+        pp.motionBlurMaterial.shutterAngle = 720 * 64.0
         pp.motionBlurMaterial.samples = 24
         pp.motionBlurMaterial.jitter = 0.35
         return pp
@@ -146,11 +146,11 @@ final class MotionBlurRenderer: BaseRenderer {
 #if os(macOS)
     override func mouseDown(with event: NSEvent) {
         let mat = motionBlurPostProcessor.motionBlurMaterial
-        if mat.strength > 0 {
-            savedStrength = mat.strength
-            mat.strength = 0
+        if mat.shutterAngle > 0 {
+            savedShutterAngle = mat.shutterAngle
+            mat.shutterAngle = 0
         } else {
-            mat.strength = savedStrength
+            mat.shutterAngle = savedShutterAngle
         }
     }
 #endif

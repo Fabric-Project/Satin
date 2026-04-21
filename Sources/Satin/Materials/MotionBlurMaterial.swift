@@ -2,6 +2,10 @@ import Metal
 import simd
 
 public final class MotionBlurMaterial: Material {
+    private static let shutterAngleRange: ClosedRange<Float> = 0.0 ... 720.0
+    private static let defaultShutterAngle: Float = 180.0
+    private static let legacyDefaultDeltaTime: Float = 1.0 / 60.0
+
     public unowned var colorTexture: MTLTexture? {
         didSet { set(colorTexture, index: FragmentTextureIndex.Custom0) }
     }
@@ -18,19 +22,19 @@ public final class MotionBlurMaterial: Material {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom3) }
     }
 
-    public var strength: Float {
-        get { get("Strength", as: FloatParameter.self)?.value ?? 1.0 }
-        set { set("Strength", newValue) }
+    public var shutterAngle: Float {
+        get { get("Shutter Angle", as: FloatParameter.self)?.value ?? Self.defaultShutterAngle }
+        set {
+            let clamped = clampShutterAngle(newValue)
+            if let param = get("Shutter Angle", as: FloatParameter.self) {
+                param.value = clamped
+            }
+        }
     }
 
     public var samples: Int32 {
         get { get("Samples", as: IntParameter.self).map { Int32($0.value) } ?? 16 }
         set { set("Samples", Int(newValue)) }
-    }
-
-    public var deltaTime: Float {
-        get { get("Delta Time", as: FloatParameter.self)?.value ?? (1.0 / 60.0) }
-        set { set("Delta Time", newValue) }
     }
 
     public var jitter: Float {
@@ -62,14 +66,42 @@ public final class MotionBlurMaterial: Material {
 
     private func configure() {
         blending = .disabled
-        if get("Strength") == nil { set("Strength", Float(1.0)) }
-        if get("Samples") == nil { set("Samples", 16) }
-        if get("Delta Time") == nil { set("Delta Time", Float(1.0 / 60.0)) }
-        if get("Jitter") == nil { set("Jitter", Float(1.0)) }
-        if get("Frame") == nil { set("Frame", 0) }
+        let orderedParameters = ParameterGroup()
+        orderedParameters.append(
+            FloatParameter(
+                "Shutter Angle",
+                resolveShutterAngle(),
+                Self.shutterAngleRange.lowerBound,
+                Self.shutterAngleRange.upperBound,
+                .slider,
+                "Exposure as degrees of one frame interval. 180 degrees is standard; values above 360 are stylized."
+            )
+        )
+        orderedParameters.append(IntParameter("Samples", get("Samples", as: IntParameter.self)?.value ?? 16, 1, 32))
+        orderedParameters.append(FloatParameter("Jitter", get("Jitter", as: FloatParameter.self)?.value ?? 1.0, 0.0, 1.0, .slider))
+        orderedParameters.append(IntParameter("Frame", get("Frame", as: IntParameter.self)?.value ?? 0))
+        parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
+
         set(colorTexture, index: FragmentTextureIndex.Custom0)
         set(velocityTexture, index: FragmentTextureIndex.Custom1)
         set(blueNoiseTexture, index: FragmentTextureIndex.Custom2)
         set(depthTexture, index: FragmentTextureIndex.Custom3)
+    }
+
+    private func resolveShutterAngle() -> Float {
+        if let shutterAngle = get("Shutter Angle", as: FloatParameter.self)?.value {
+            return clampShutterAngle(shutterAngle)
+        }
+
+        if let legacyStrength = get("Strength", as: FloatParameter.self)?.value {
+            let legacyDeltaTime = max(get("Delta Time", as: FloatParameter.self)?.value ?? Self.legacyDefaultDeltaTime, 1e-4)
+            return clampShutterAngle((legacyStrength / legacyDeltaTime) * 360.0)
+        }
+
+        return Self.defaultShutterAngle
+    }
+
+    private func clampShutterAngle(_ value: Float) -> Float {
+        min(max(value, Self.shutterAngleRange.lowerBound), Self.shutterAngleRange.upperBound)
     }
 }

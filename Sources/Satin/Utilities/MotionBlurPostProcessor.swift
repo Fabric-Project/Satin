@@ -3,7 +3,6 @@
 //  Satin
 //
 
-import CoreFoundation
 import Metal
 import MetalKit
 
@@ -34,7 +33,6 @@ open class MotionBlurPostProcessor: PostProcessor {
     private var blueNoiseTexture: MTLTexture?
     private var fallbackDepthTexture: MTLTexture?
     private var frameCounter: Int32 = 0
-    private var lastDrawTime: CFAbsoluteTime = 0
 
     // MARK: - Init
 
@@ -68,7 +66,6 @@ open class MotionBlurPostProcessor: PostProcessor {
 
     override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         guard let outputTexture else { return }
-        updateDeltaTime()
         motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
         motionBlurMaterial.depthTexture = resolveDepthTexture(commandBuffer: commandBuffer)
         motionBlurMaterial.frame = frameCounter
@@ -77,12 +74,6 @@ open class MotionBlurPostProcessor: PostProcessor {
     }
 
     // MARK: - Helpers
-
-    private func updateDeltaTime() {
-        let now = CFAbsoluteTimeGetCurrent()
-        motionBlurMaterial.deltaTime = lastDrawTime > 0 ? Float(now - lastDrawTime) : Float(1.0 / 60.0)
-        lastDrawTime = now
-    }
 
     private func makeOutputTexture(device: MTLDevice, width: Int, height: Int) -> MTLTexture? {
         guard width > 0, height > 0 else { return nil }

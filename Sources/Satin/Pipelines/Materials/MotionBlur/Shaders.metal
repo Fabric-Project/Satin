@@ -1,10 +1,10 @@
 typedef struct {
-    float strength;
+    float shutterAngle;
     int samples;
-    float deltaTime;
     float jitter;
     int frame;
 } MotionBlurUniforms;
+constant float kMaxShutterAngle = 720.0f;
 
 // PCG4D hash — animates blue noise sample position per frame
 static void pcg4d(thread uint4& v) {
@@ -34,12 +34,14 @@ fragment half4 motionBlurFragment(
     constexpr sampler velSampler(filter::nearest, address::clamp_to_edge);
     const float2 vel = velocityTex.sample(velSampler, uv).rg;
 
-    if (dot(vel, vel) < 1e-9) {
+    const float shutterFraction = clamp(uniforms.shutterAngle, 0.0f, kMaxShutterAngle) / 360.0f;
+    if (dot(vel, vel) < 1e-9 || shutterFraction <= 1e-6f) {
         return half4(colorTex.sample(colorSampler, uv));
     }
 
-    const float dt = max(uniforms.deltaTime, 1e-4);
-    const float2 velocity = vel * (uniforms.strength / dt);
+    // Velocity is stored as one frame of UV-space screen motion, so shutter angle directly
+    // controls what fraction of that frame interval contributes to blur.
+    const float2 velocity = vel * shutterFraction;
 
     // Animate blue noise lookup position per frame using PCG4D.
     const uint frame = uint(uniforms.frame);
