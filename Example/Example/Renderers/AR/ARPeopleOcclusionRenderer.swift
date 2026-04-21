@@ -26,7 +26,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.001, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context: defaultContext, session: session, metalView: metalView, near: 0.001, far: 100.0)
     lazy var renderer = Renderer(context: defaultContext, clearColor: .zero, frameBufferOnly: false)
 
     var backgroundRenderer: ARBackgroundRenderer!

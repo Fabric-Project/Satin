@@ -23,11 +23,11 @@ final class ARRenderer: BaseRenderer {
     private lazy var boxMaterial = UVColorMaterial(context: defaultContext)
     private var meshAnchorMap: [UUID: Mesh] = [:]
 
-    private lazy var scene = Object(context: context, label: "Scene")
+    private lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    private lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
-    private lazy var renderer = Renderer(context: context)
+//    private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
+    private lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    private lazy var renderer = Renderer(context: defaultContext)
 
     private var backgroundRenderer: ARBackgroundRenderer!
 
@@ -88,7 +88,7 @@ final class ARRenderer: BaseRenderer {
         if let currentFrame = session.currentFrame {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
-            let mesh = Mesh(context: context, geometry: boxGeometry, material: boxMaterial)
+            let mesh = Mesh(context: defaultContext, geometry: boxGeometry, material: boxMaterial)
             mesh.worldMatrix = anchor.transform
             meshAnchorMap[anchor.identifier] = mesh
             scene.add(mesh)

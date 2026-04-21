@@ -41,7 +41,7 @@ public class ARBackgroundRenderer: PostProcessor {
     public init(context: Context, session: ARSession) {
         self.session = session
 
-        backgroundMaterial = ARBackgroundMaterial(srgb: false)
+        backgroundMaterial = ARBackgroundMaterial(context:context, srgb: false)
 
         super.init(label: "AR Background Renderer", context: context, material: backgroundMaterial)
 
@@ -88,7 +88,7 @@ public class ARBackgroundRenderer: PostProcessor {
         // Update the texture coordinates of our image plane to aspect fill the viewport
         let displayToCameraTransform = frame.displayTransform(for: interfaceOrientation, viewportSize: viewportSize).inverted()
 
-        let geo = QuadGeometry()
+        let geo = QuadGeometry(context: self.context)
         let vertexCount = Int(geo.geometryData.vertexCount)
         for i in 0 ..< vertexCount {
             let vertex = geo.geometryData.vertexData[i]

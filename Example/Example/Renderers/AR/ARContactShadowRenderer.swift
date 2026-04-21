@@ -24,8 +24,8 @@ fileprivate final class ARObject: Object {
         }
     }
 
-    override init(label: String, visible: Bool = true, _ children: [Object] = []) {
-        super.init(label: label, visible: visible, children)
+    override init(context:Context, label: String, visible: Bool = true, _ children: [Object] = []) {
+        super.init(context:context, label: label, visible: visible, children)
         self.visible = false
     }
 
@@ -37,11 +37,12 @@ fileprivate final class ARObject: Object {
 fileprivate final class Invader: Object {
     let voxelScale: Float = 0.025
 
-    lazy var voxels = Object(context: defaultContext, label: "Voxels")
+    let voxels:Object
 
-    override public init() {
-        super.init(label: "Invader", [voxels])
-        lazy var geometry = BoxGeometry(context: defaultContext, size: voxelScale)
+    override init(context:Context, label: String = "Invader", visible: Bool = true, _ children: [Object] = []) {
+        self.voxels =  Object(context: context, label: "Voxels")
+        super.init(context:context, label: label, visible: visible, [voxels])
+        lazy var geometry = BoxGeometry(context: context, size: voxelScale)
 
         let BDY: simd_float4 = [0.0, 1.0, 0.0, 1.0]
         let _E_: simd_float4 = [1.0, 1.0, 1.0, 1.0]
@@ -69,12 +70,12 @@ fileprivate final class Invader: Object {
                     if let existingMaterial = materialMap[color] {
                         mat = existingMaterial
                     } else {
-                        lazy var newMaterial = StandardMaterial(context: defaultContext, baseColor: color, metallic: 0.1, roughness: 0.25)
+                        lazy var newMaterial = StandardMaterial(context: context, baseColor: color, metallic: 0.1, roughness: 0.25)
                         materialMap[color] = newMaterial
                         mat = newMaterial
                     }
 
-                    lazy var voxel = Mesh(context: defaultContext, geometry: geometry, material: mat!)
+                    lazy var voxel = Mesh(context: context, geometry: geometry, material: mat!)
                     voxel.position = voxelScale * simd_make_float3(Float(x) - 11.0 / 2.0, 4.0 - Float(y), 0)
                     voxels.add(voxel)
                 }
@@ -99,8 +100,8 @@ final class ARContactShadowRenderer: BaseRenderer {
         material: BasicTextureMaterial(context: defaultContext, texture: nil, flipped: false)
     )
 
-    fileprivate lazy var invaderContainer = ARObject(label: "Invader Container", [invader, shadowPlaneMesh])
-    fileprivate var invader = Invader()
+    fileprivate lazy var invaderContainer = ARObject(context:defaultContext, label: "Invader Container", [invader, shadowPlaneMesh])
+    fileprivate lazy var invader = Invader(context:defaultContext)
 
     lazy var shadowRenderer = ObjectShadowRenderer(
         context: context,
@@ -115,7 +116,7 @@ final class ARContactShadowRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [invaderContainer])
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = Renderer(context: context)
 
     var backgroundRenderer: ARBackgroundRenderer!

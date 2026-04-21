@@ -27,7 +27,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = Renderer(context: context)
 
     var backgroundRenderer: ARBackgroundRenderer!
@@ -59,7 +59,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
             for anchor in anchors {
                 if let meshAnchor = anchor as? ARMeshAnchor {
                     let id = anchor.identifier
-                    let mesh = ARLidarMesh(meshAnchor: meshAnchor, material: material)
+                    let mesh = ARLidarMesh(context:defaultContext, meshAnchor: meshAnchor, material: material)
                     mesh.triangleFillMode = .lines
                     self.lidarMeshes[id] = mesh
                     self.scene.add(mesh)

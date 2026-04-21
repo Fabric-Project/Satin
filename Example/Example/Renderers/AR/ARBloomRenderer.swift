@@ -63,20 +63,19 @@ final class ARBloomRenderer: BaseRenderer {
 
     lazy var geometry = IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 3)
 
-    var occlusionMaterial = {
+    lazy var occlusionMaterial = {
         lazy var material = BasicColorMaterial(context: defaultContext, color: [1, 1, 1, 0], blending: .disabled)
         material.depthBias = DepthBias(bias: 10.0, slope: 10.0, clamp: 10.0)
         return material
     }()
 
     var objectAnchorMap: [UUID: Object] = [:]
-    lazy var scene = Object(context: context, label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context: defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = Renderer(
         label: "Renderer",
-        context: context,
+        context: defaultContext,
         colorLoadAction: .load,
         depthLoadAction: .load
     )
@@ -86,14 +85,14 @@ final class ARBloomRenderer: BaseRenderer {
 
     lazy var bloomRenderer = Renderer(
         label: "Bloom Renderer",
-        context: context,
+        context: defaultContext,
         clearColor: .zero,
         depthLoadAction: .load,
         depthStoreAction: .store,
         frameBufferOnly: false
     )
 
-    lazy var bloomedScene = Object(context: context, label: "Bloomed Objects")
+    lazy var bloomedScene = Object(context: defaultContext, label: "Bloomed Objects")
 
     lazy var startTime = getTime()
 
@@ -126,7 +125,7 @@ final class ARBloomRenderer: BaseRenderer {
         setupSessionObservers()
 
         backgroundRenderer = ARBackgroundDepthRenderer(
-            context: context,
+            context: defaultContext,
             session: session,
             sessionPublisher: sessionPublisher,
             metalView: metalView,
@@ -202,7 +201,6 @@ final class ARBloomRenderer: BaseRenderer {
             session.add(anchor: anchor)
 
             lazy var mesh = Mesh(context: defaultContext, 
-                context: context,
                 geometry: geometry,
                 material: BasicColorMaterial(context: defaultContext, color: simd_float4(.random(in: 0.25 ... 1), 0.8), blending: .alpha)
             )
@@ -210,7 +208,7 @@ final class ARBloomRenderer: BaseRenderer {
             mesh.cullMode = .none
             mesh.scale = .init(repeating: .random(in: 0.25 ... 1.0))
 
-            let object = Object(context: context, label: anchor.identifier.uuidString, [mesh])
+            let object = Object(context: defaultContext, label: anchor.identifier.uuidString, [mesh])
 
             scene.attach(object)
             object.worldMatrix = anchor.transform

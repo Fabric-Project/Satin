@@ -52,7 +52,7 @@ public class ARCompositor: ARPostProcessor {
     ) {
         super.init(label: label, context: context, session: session)
 
-        mesh.material = ARCompositorMaterial()
+        mesh.material = ARCompositorMaterial(context: context)
 
         renderer.setClearColor(.zero)
 

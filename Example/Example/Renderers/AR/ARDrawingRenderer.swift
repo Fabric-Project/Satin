@@ -29,7 +29,7 @@ final class ARDrawingRenderer: BaseRenderer {
     lazy var mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.03, resolution: 3), material: material, count: 20000)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
         lazy var renderer = Renderer(context: defaultContext)
         renderer.label = "Content Renderer"
