@@ -649,9 +649,6 @@ open class Renderer {
             if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
                 renderEncoder.label = label + " Velocity Prepass"
                 renderEncoder.setViewports(viewports)
-                // Nudge fragments ~1 ULP closer so re-rendered geometry passes .lessEqual against
-                // the forward-pass depth even when FP rounding differs across shader compilations.
-                renderEncoder.setDepthBias(-1, slopeScale: -1, clamp: -0.001)
                 encode(
                     renderEncoder: renderEncoder,
                     pass: pass,

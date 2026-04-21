@@ -14,6 +14,10 @@ public final class MotionBlurMaterial: Material {
         didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom2) }
     }
 
+    public unowned var depthTexture: MTLTexture? {
+        didSet { set(depthTexture, index: FragmentTextureIndex.Custom3) }
+    }
+
     public var strength: Float {
         get { get("Strength", as: FloatParameter.self)?.value ?? 1.0 }
         set { set("Strength", newValue) }
@@ -66,5 +70,6 @@ public final class MotionBlurMaterial: Material {
         set(colorTexture, index: FragmentTextureIndex.Custom0)
         set(velocityTexture, index: FragmentTextureIndex.Custom1)
         set(blueNoiseTexture, index: FragmentTextureIndex.Custom2)
+        set(depthTexture, index: FragmentTextureIndex.Custom3)
     }
 }

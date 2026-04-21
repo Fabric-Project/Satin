@@ -51,7 +51,7 @@ final class MotionBlurRenderer: BaseRenderer {
         let pp = MotionBlurPostProcessor(context: defaultContext)
         pp.motionBlurMaterial.strength = 0.02
         pp.motionBlurMaterial.samples = 24
-        pp.motionBlurMaterial.jitter = 0.0
+        pp.motionBlurMaterial.jitter = 0.35
         return pp
     }()
 
@@ -125,6 +125,7 @@ final class MotionBlurRenderer: BaseRenderer {
 
         motionBlurPostProcessor.colorTexture = renderer.colorTexture
         motionBlurPostProcessor.velocityTexture = renderer.velocityTexture
+        motionBlurPostProcessor.depthTexture = renderer.depthTexture
         motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         if let blurredTexture = motionBlurPostProcessor.outputTexture {

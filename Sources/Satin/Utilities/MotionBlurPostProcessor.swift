@@ -18,6 +18,10 @@ open class MotionBlurPostProcessor: PostProcessor {
         didSet { motionBlurMaterial.velocityTexture = velocityTexture }
     }
 
+    public var depthTexture: MTLTexture? {
+        didSet { motionBlurMaterial.depthTexture = depthTexture }
+    }
+
     // MARK: - Output
 
     public private(set) var outputTexture: MTLTexture?
@@ -28,6 +32,7 @@ open class MotionBlurPostProcessor: PostProcessor {
     public let motionBlurMaterial: MotionBlurMaterial
     private let colorPixelFormat: MTLPixelFormat
     private var blueNoiseTexture: MTLTexture?
+    private var fallbackDepthTexture: MTLTexture?
     private var frameCounter: Int32 = 0
     private var lastDrawTime: CFAbsoluteTime = 0
 
@@ -65,6 +70,7 @@ open class MotionBlurPostProcessor: PostProcessor {
         guard let outputTexture else { return }
         updateDeltaTime()
         motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
+        motionBlurMaterial.depthTexture = resolveDepthTexture(commandBuffer: commandBuffer)
         motionBlurMaterial.frame = frameCounter
         frameCounter = frameCounter &+ 1
         super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: outputTexture)
@@ -92,6 +98,36 @@ open class MotionBlurPostProcessor: PostProcessor {
         let tex = device.makeTexture(descriptor: descriptor)
         tex?.label = label + " Output"
         return tex
+    }
+
+    private func resolveDepthTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        if let depthTexture {
+            return depthTexture
+        }
+
+        if fallbackDepthTexture == nil {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .depth32Float,
+                width: 1,
+                height: 1,
+                mipmapped: false
+            )
+            descriptor.usage = [.renderTarget, .shaderRead]
+            descriptor.storageMode = .private
+            fallbackDepthTexture = context.device.makeTexture(descriptor: descriptor)
+            fallbackDepthTexture?.label = label + " Fallback Depth"
+        }
+
+        if let fallbackDepthTexture {
+            let renderPassDescriptor = MTLRenderPassDescriptor()
+            renderPassDescriptor.depthAttachment.texture = fallbackDepthTexture
+            renderPassDescriptor.depthAttachment.loadAction = .clear
+            renderPassDescriptor.depthAttachment.storeAction = .store
+            renderPassDescriptor.depthAttachment.clearDepth = 0.0
+            commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)?.endEncoding()
+        }
+
+        return fallbackDepthTexture
     }
 
     private func loadBlueNoiseTexture(device: MTLDevice) -> MTLTexture? {
