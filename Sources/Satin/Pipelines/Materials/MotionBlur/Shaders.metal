@@ -1,10 +1,10 @@
 typedef struct {
-    float shutterAngle; // slider,0,92160,180
+    float shutterAngle; // slider,0,2880,180
     int samples;        // slider,1,32,16
     float jitter;       // slider,0,1,1
     int frame;
 } MotionBlurUniforms;
-constant float kMaxShutterAngle = 92160.0f;
+constant float kMaxShutterAngle = 2880.0f;
 constant float kDepthSoftness = 0.0025f;
 
 // PCG4D hash — animates blue noise sample position per frame
@@ -39,8 +39,7 @@ fragment half4 motionBlurFragment(
     texture2d<float, access::sample> colorTex [[texture(FragmentTextureCustom0)]],
     texture2d<float, access::sample> velocityTex [[texture(FragmentTextureCustom1)]],
     texture2d<float, access::read> blueNoiseTex [[texture(FragmentTextureCustom2)]],
-    depth2d<float, access::sample> depthTex [[texture(FragmentTextureCustom3)]],
-    texture2d<float, access::read> neighborMaxTex [[texture(FragmentTextureCustom4)]]) {
+    depth2d<float, access::sample> depthTex [[texture(FragmentTextureCustom3)]]) {
 
     constexpr sampler colorSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler depthSampler(filter::nearest, address::clamp_to_edge);
@@ -60,19 +59,14 @@ fragment half4 motionBlurFragment(
         return half4(centerColor);
     }
 
-    const uint2 dominantCoord = min(uint2(in.position.xy), uint2(neighborMaxTex.get_width() - 1, neighborMaxTex.get_height() - 1));
-    const float2 dominantVelocityRaw = neighborMaxTex.read(dominantCoord).rg;
-    const float2 dominantVelocity = dominantVelocityRaw * shutterFraction;
-    const float dominantSpeed = length(dominantVelocity);
-    if (dominantSpeed <= pixelRadius) {
-        return half4(centerColor);
-    }
-
     const float2 centerVelocity = centerVelocityRaw * shutterFraction;
     const float centerRadius = motionRadius(centerVelocity, pixelRadius);
     const float centerSpeed = length(centerVelocity);
-    const bool borrowNeighborhoodVelocity = centerSpeed <= pixelRadius;
-    const float2 blurVelocity = borrowNeighborhoodVelocity ? dominantVelocity : centerVelocity;
+    if (centerSpeed <= pixelRadius) {
+        return half4(centerColor);
+    }
+
+    const float2 blurVelocity = centerVelocity;
     const float blurRadius = motionRadius(blurVelocity, pixelRadius);
     const float centerDepth = depthTex.sample(depthSampler, uv);
     const bool hasValidDepth = centerDepth > 0.0f && centerDepth < 1.0f;
@@ -86,7 +80,8 @@ fragment half4 motionBlurFragment(
     const float baseNoise = blueNoiseTex.read(noiseCoord).r;
 
     const int adaptiveSamples = int(ceil(blurRadius / max(pixelRadius * 1.5f, 1e-6f)));
-    const int numSamples = clamp(max(uniforms.samples, adaptiveSamples), 1, 64);
+    const int maxSamples = clamp(uniforms.samples, 1, 64);
+    const int numSamples = clamp(adaptiveSamples, 1, maxSamples);
     if (numSamples == 1) {
         return half4(centerColor);
     }
@@ -110,7 +105,7 @@ fragment half4 motionBlurFragment(
         const float sampleDepth = depthTex.sample(depthSampler, sampleUV);
         const bool sampleHasValidDepth = sampleDepth > 0.0f && sampleDepth < 1.0f;
         const float2 sampleVelocity = velocityTex.sample(velSampler, sampleUV).rg * shutterFraction;
-        const float sampleRadius = max(motionRadius(sampleVelocity, pixelRadius), borrowNeighborhoodVelocity ? blurRadius * 0.35f : pixelRadius);
+        const float sampleRadius = motionRadius(sampleVelocity, pixelRadius);
 
         float sampleWeight = 0.0f;
         if (hasValidDepth && sampleHasValidDepth) {

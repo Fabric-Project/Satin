@@ -6,36 +6,6 @@
 import Metal
 import MetalKit
 
-private final class TileMaxMaterial: Material {
-    public unowned var velocityTexture: MTLTexture? {
-        didSet { set(velocityTexture, index: FragmentTextureIndex.Custom0) }
-    }
-
-    public required init(context: Context) {
-        super.init(context: context)
-        blending = .disabled
-    }
-
-    public required init(from decoder: Decoder) throws {
-        try super.init(from: decoder)
-    }
-}
-
-private final class NeighborMaxMaterial: Material {
-    public unowned var tileMaxTexture: MTLTexture? {
-        didSet { set(tileMaxTexture, index: FragmentTextureIndex.Custom0) }
-    }
-
-    public required init(context: Context) {
-        super.init(context: context)
-        blending = .disabled
-    }
-
-    public required init(from decoder: Decoder) throws {
-        try super.init(from: decoder)
-    }
-}
-
 open class MotionBlurPostProcessor: PostProcessor {
     // MARK: - Inputs
 
@@ -59,43 +29,18 @@ open class MotionBlurPostProcessor: PostProcessor {
     // MARK: - Owned internals
 
     public let motionBlurMaterial: MotionBlurMaterial
-    private let tileMaxMaterial: TileMaxMaterial
-    private let neighborMaxMaterial: NeighborMaxMaterial
-    private let tileMaxPostProcessor: PostProcessor
-    private let neighborMaxPostProcessor: PostProcessor
     private let colorPixelFormat: MTLPixelFormat
-    private let hierarchyPixelFormat: MTLPixelFormat = .rg16Float
     private var blueNoiseTexture: MTLTexture?
     private var fallbackDepthTexture: MTLTexture?
-    private var tileMaxTexture: MTLTexture?
-    private var neighborMaxTexture: MTLTexture?
     private var frameCounter: Int32 = 0
-    private var hierarchyTextureSize: (width: Int, height: Int) = (0, 0)
 
     // MARK: - Init
 
     public required init(context: Context) {
         // Pipeline must not expect a depth attachment — use a depth-free context.
         let blurContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
-        let hierarchyContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: .rg16Float)
         colorPixelFormat = context.colorPixelFormat
         motionBlurMaterial = MotionBlurMaterial(context: blurContext)
-        tileMaxMaterial = TileMaxMaterial(context: hierarchyContext)
-        neighborMaxMaterial = NeighborMaxMaterial(context: hierarchyContext)
-        tileMaxPostProcessor = PostProcessor(
-            label: "Motion Blur Tile Max",
-            context: hierarchyContext,
-            material: tileMaxMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
-        )
-        neighborMaxPostProcessor = PostProcessor(
-            label: "Motion Blur Neighbor Max",
-            context: hierarchyContext,
-            material: neighborMaxMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
-        )
         super.init(
             label: "Motion Blur",
             context: blurContext,
@@ -115,37 +60,15 @@ open class MotionBlurPostProcessor: PostProcessor {
             outputTexture = makeOutputTexture(device: context.device, width: w, height: h)
             outputTextureSize = (w, h)
         }
-
-        if hierarchyTextureSize.width != w || hierarchyTextureSize.height != h {
-            tileMaxTexture = makeVelocityHierarchyTexture(device: context.device, width: w, height: h, label: "Tile Max")
-            neighborMaxTexture = makeVelocityHierarchyTexture(device: context.device, width: w, height: h, label: "Neighbor Max")
-            hierarchyTextureSize = (w, h)
-        }
-
-        let hierarchySize = (width: Float(w), height: Float(h))
-        tileMaxPostProcessor.resize(size: hierarchySize, scaleFactor: 1.0)
-        neighborMaxPostProcessor.resize(size: hierarchySize, scaleFactor: 1.0)
     }
 
     // MARK: - Draw
 
     override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        guard
-            let outputTexture,
-            let velocityTexture,
-            let tileMaxTexture,
-            let neighborMaxTexture
-        else { return }
-
-        tileMaxMaterial.velocityTexture = velocityTexture
-        tileMaxPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, renderTarget: tileMaxTexture)
-
-        neighborMaxMaterial.tileMaxTexture = tileMaxTexture
-        neighborMaxPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, renderTarget: neighborMaxTexture)
+        guard let outputTexture else { return }
 
         motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
         motionBlurMaterial.depthTexture = resolveDepthTexture(commandBuffer: commandBuffer)
-        motionBlurMaterial.neighborMaxTexture = neighborMaxTexture
         motionBlurMaterial.frame = frameCounter
         frameCounter = frameCounter &+ 1
         super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: outputTexture)
@@ -167,22 +90,6 @@ open class MotionBlurPostProcessor: PostProcessor {
         let tex = device.makeTexture(descriptor: descriptor)
         tex?.label = label + " Output"
         return tex
-    }
-
-    private func makeVelocityHierarchyTexture(device: MTLDevice, width: Int, height: Int, label: String) -> MTLTexture? {
-        guard width > 0, height > 0 else { return nil }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: hierarchyPixelFormat,
-            width: width,
-            height: height,
-            mipmapped: false
-        )
-        descriptor.sampleCount = 1
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .private
-        let texture = device.makeTexture(descriptor: descriptor)
-        texture?.label = self.label + " " + label
-        return texture
     }
 
     private func resolveDepthTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
