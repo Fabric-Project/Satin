@@ -9,6 +9,7 @@
 import simd
 
 public final class ShadowMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     override public var receiveShadow: Bool {
         didSet {
             if receiveShadow != true {

@@ -7,4 +7,6 @@
 
 import Metal
 
-public final class UVColorMaterial: Material {}
+public final class UVColorMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
+}

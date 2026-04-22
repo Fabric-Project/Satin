@@ -1,6 +1,7 @@
 import Metal
 
 public final class VelocityMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public required init(context: Context) {
         super.init(context: context)
         blending = .disabled

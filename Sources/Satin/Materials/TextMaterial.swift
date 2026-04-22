@@ -10,6 +10,7 @@ import Metal
 import simd
 
 public final class TextMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public var fontTexture: MTLTexture? {
         didSet {
             set(fontTexture, index: FragmentTextureIndex.Custom0)

@@ -2,6 +2,7 @@ import Metal
 import simd
 
 public final class SsaoMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public unowned var depthTexture: MTLTexture? {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom0) }
     }

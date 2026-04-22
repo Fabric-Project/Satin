@@ -35,6 +35,9 @@ open class Renderer {
 
                 updateNormalTexture = true
                 updateVelocityTexture = true
+                updateAlbedoTexture = true
+                updatePBRTexture = true
+                updateEmissiveTexture = true
             }
         }
     }

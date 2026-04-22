@@ -9,6 +9,7 @@ import Metal
 import simd
 
 public class ARPostMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
     public unowned var contentTexture: MTLTexture? {
         didSet {
             set(contentTexture, index: FragmentTextureIndex.Custom0)

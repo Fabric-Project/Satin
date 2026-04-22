@@ -9,6 +9,7 @@
 import Metal
 
 public final class NormalColorMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public init(context: Context, _ absolute: Bool = false) {
         super.init(context: context)
         set("Absolute", absolute)

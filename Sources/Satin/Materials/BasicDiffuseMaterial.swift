@@ -9,6 +9,8 @@ import Metal
 import simd
 
 public final class BasicDiffuseMaterial: BasicColorMaterial {
+    override public var lightingModel: LightingModel { .surface }
+    override public var supportedOutputs: RendererOutputs { [.color, .albedo, .velocity] }
     public var hardness: Float {
         get {
             get("Hardness", as: FloatParameter.self)!.value

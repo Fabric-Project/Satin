@@ -13,6 +13,8 @@ import ModelIO
 import simd
 
 open class StandardMaterial: Material {
+    override open var lightingModel: LightingModel { .surface }
+    override open var supportedOutputs: RendererOutputs { [.color, .albedo, .normals, .pbr, .velocity, .emissive] }
     public var baseColor: simd_float4 {
         get {
             get("Base Color", as: Float4Parameter.self)!.value

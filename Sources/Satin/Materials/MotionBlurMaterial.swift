@@ -2,6 +2,7 @@ import Metal
 import simd
 
 public final class MotionBlurMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     private struct MotionBlurUniformPayload: Equatable {
         var shutterAngle: Float
         var samples: Int32
