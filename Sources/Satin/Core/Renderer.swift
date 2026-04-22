@@ -875,7 +875,11 @@ open class Renderer {
         viewports: [MTLViewport],
         simdViewports: [simd_float4],
         viewMappings: [MTLVertexAmplificationViewMapping],
-        colorStoreAction: MTLStoreAction
+        colorStoreAction: MTLStoreAction,
+        unlitEntries: [(pass: Int, renderables: [Renderable])] = [],
+        unlitCameras: [Camera] = [],
+        finalDepthStoreAction: MTLStoreAction = .dontCare,
+        finalStencilStoreAction: MTLStoreAction = .dontCare
     ) -> Bool {
         guard albedoTexture != nil,
               normalTexture != nil,
@@ -889,28 +893,31 @@ open class Renderer {
         deferredLightingMesh.update()
         deferredLightingMesh.encode(commandBuffer)
 
-        let depthTexture = renderPassDescriptor.depthAttachment.texture
-        let depthResolveTexture = renderPassDescriptor.depthAttachment.resolveTexture
-        let stencilTexture = renderPassDescriptor.stencilAttachment.texture
-        let stencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
+        let savedDepthTexture = renderPassDescriptor.depthAttachment.texture
+        let savedDepthResolveTexture = renderPassDescriptor.depthAttachment.resolveTexture
+        let savedStencilTexture = renderPassDescriptor.stencilAttachment.texture
+        let savedStencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
 
         defer {
-            renderPassDescriptor.depthAttachment.texture = depthTexture
-            renderPassDescriptor.depthAttachment.resolveTexture = depthResolveTexture
-            renderPassDescriptor.stencilAttachment.texture = stencilTexture
-            renderPassDescriptor.stencilAttachment.resolveTexture = stencilResolveTexture
+            renderPassDescriptor.depthAttachment.texture = savedDepthTexture
+            renderPassDescriptor.depthAttachment.resolveTexture = savedDepthResolveTexture
+            renderPassDescriptor.stencilAttachment.texture = savedStencilTexture
+            renderPassDescriptor.stencilAttachment.resolveTexture = savedStencilResolveTexture
         }
 
-        // Keep depth/stencil textures attached so the pipeline pixel formats match.
-        // The dontCare actions prevent any actual depth reads or writes in this pass.
+        let hasUnlit = !unlitEntries.isEmpty
+        let multipleUnlitPasses = unlitEntries.count > 1
+
+        // When unlit objects follow in the same encoder, load depth/stencil so they can depth-test
+        // against the geometry pass result. Without unlit objects, dontCare avoids unnecessary loads.
         configureMainAttachments(
             renderPassDescriptor: renderPassDescriptor,
             colorLoadAction: .clear,
-            depthLoadAction: .dontCare,
-            stencilLoadAction: .dontCare,
-            colorStoreAction: colorStoreAction,
-            depthStoreAction: .dontCare,
-            stencilStoreAction: .dontCare
+            depthLoadAction: hasUnlit ? .load : .dontCare,
+            stencilLoadAction: hasUnlit ? .load : .dontCare,
+            colorStoreAction: multipleUnlitPasses ? .store : colorStoreAction,
+            depthStoreAction: hasUnlit ? (multipleUnlitPasses ? .store : finalDepthStoreAction) : .dontCare,
+            stencilStoreAction: hasUnlit ? (multipleUnlitPasses ? .store : finalStencilStoreAction) : .dontCare
         )
         configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
 
@@ -944,10 +951,59 @@ open class Renderer {
             phase: .unlit
         )
 
+        if let firstEntry = unlitEntries.first {
+#if DEBUG
+            renderEncoder.pushDebugGroup("Unlit Forward Pass \(firstEntry.pass)")
+#endif
+            encode(
+                renderEncoder: renderEncoder,
+                pass: firstEntry.pass,
+                renderables: firstEntry.renderables,
+                cameras: unlitCameras,
+                viewports: simdViewports,
+                phase: .unlit
+            )
+#if DEBUG
+            renderEncoder.popDebugGroup()
+#endif
+        }
+
 #if DEBUG
         renderEncoder.popDebugGroup()
 #endif
         renderEncoder.endEncoding()
+
+        // Encode any additional unlit render passes (multiple render layers, uncommon case).
+        for (i, entry) in unlitEntries.dropFirst().enumerated() {
+            let isFinal = i == unlitEntries.count - 2
+            renderPassDescriptor.colorAttachments[0].loadAction = .load
+            renderPassDescriptor.depthAttachment.loadAction = .load
+            renderPassDescriptor.stencilAttachment.loadAction = .load
+            renderPassDescriptor.colorAttachments[0].storeAction = isFinal ? colorStoreAction : .store
+            renderPassDescriptor.depthAttachment.storeAction = isFinal ? finalDepthStoreAction : .store
+            renderPassDescriptor.stencilAttachment.storeAction = isFinal ? finalStencilStoreAction : .store
+
+            guard let enc = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
+            enc.label = "\(self.label) Unlit Forward Pass \(entry.pass)"
+#if DEBUG
+            enc.pushDebugGroup("Unlit Forward Pass \(entry.pass)")
+#endif
+            enc.setViewports(viewports)
+            if context.vertexAmplificationCount > 1 {
+                var maps = viewMappings
+                if maps.isEmpty {
+                    maps = (0..<context.vertexAmplificationCount).map {
+                        .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0))
+                    }
+                }
+                enc.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
+            }
+            encode(renderEncoder: enc, pass: entry.pass, renderables: entry.renderables, cameras: unlitCameras, viewports: simdViewports, phase: .unlit)
+#if DEBUG
+            enc.popDebugGroup()
+#endif
+            enc.endEncoding()
+        }
 
         return true
     }
@@ -1189,7 +1245,8 @@ open class Renderer {
             return didEncode
 
         case .deferredGeometry:
-            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (!hasUnlitRenderables && renderLists.isEmpty)
+            let unlitEntries = routePassEntries(route: .unlit)
+            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (unlitEntries.isEmpty && renderLists.isEmpty)
             var didEncode = false
 
             if needsSurfacePass {
@@ -1200,7 +1257,7 @@ open class Renderer {
                     stencilLoadAction: stencilLoadAction,
                     colorStoreAction: .dontCare,
                     depthStoreAction: .store,
-                    stencilStoreAction: hasUnlitRenderables ? .store : finalStencilStoreAction
+                    stencilStoreAction: unlitEntries.isEmpty ? finalStencilStoreAction : .store
                 )
                 let auxiliaryAttachmentIndices = configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor)
                 let surfaceEncoded = encodeRoute(
@@ -1223,38 +1280,42 @@ open class Renderer {
                     viewports: viewports,
                     simdViewports: simdViewports,
                     viewMappings: viewMappings,
-                    colorStoreAction: hasUnlitRenderables ? .store : finalColorStoreAction
+                    colorStoreAction: finalColorStoreAction,
+                    unlitEntries: unlitEntries,
+                    unlitCameras: cameras,
+                    finalDepthStoreAction: finalDepthStoreAction,
+                    finalStencilStoreAction: finalStencilStoreAction
                 )
                 didEncode = surfaceEncoded || resolveEncoded
             } else {
                 configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
-            }
 
-            if hasUnlitRenderables {
-                configureMainAttachments(
-                    renderPassDescriptor: renderPassDescriptor,
-                    colorLoadAction: didEncode ? .load : colorLoadAction,
-                    depthLoadAction: needsSurfacePass ? .load : depthLoadAction,
-                    stencilLoadAction: needsSurfacePass ? .load : stencilLoadAction,
-                    colorStoreAction: finalColorStoreAction,
-                    depthStoreAction: finalDepthStoreAction,
-                    stencilStoreAction: finalStencilStoreAction
-                )
-                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
-                let unlitEncoded = encodeRoute(
-                    renderPassDescriptor: renderPassDescriptor,
-                    commandBuffer: commandBuffer,
-                    route: .unlit,
-                    phase: .unlit,
-                    label: "Unlit Forward",
-                    cameras: cameras,
-                    viewports: viewports,
-                    simdViewports: simdViewports,
-                    viewMappings: viewMappings,
-                    auxiliaryAttachmentIndices: [],
-                    clearWhenEmpty: !didEncode
-                )
-                didEncode = didEncode || unlitEncoded
+                // No surface/geometry pass but unlit objects still need to be rendered.
+                if !unlitEntries.isEmpty {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: colorLoadAction,
+                        depthLoadAction: depthLoadAction,
+                        stencilLoadAction: stencilLoadAction,
+                        colorStoreAction: finalColorStoreAction,
+                        depthStoreAction: finalDepthStoreAction,
+                        stencilStoreAction: finalStencilStoreAction
+                    )
+                    let unlitEncoded = encodeRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        route: .unlit,
+                        phase: .unlit,
+                        label: "Unlit Forward",
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        auxiliaryAttachmentIndices: [],
+                        clearWhenEmpty: true
+                    )
+                    didEncode = unlitEncoded
+                }
             }
 
             return didEncode
