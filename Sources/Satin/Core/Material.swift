@@ -215,6 +215,33 @@ open class Material: Codable {
     public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
 
+    // MARK: - Rendering Path
+
+    /// Controls which render pass this material participates in.
+    ///
+    /// - `.unlit`: Fragment function returns color directly. No G-buffer writes. Material always
+    ///   renders in a forward pass after the main surface pass, regardless of `renderer.renderingMode`.
+    ///   Fragment function signature is unchanged from the traditional `half4` return.
+    /// - `.surface`: Material implements `evaluateSurface()` and includes `SurfaceOutput.metal`.
+    ///   Participates in the G-buffer pass under `.forwardPlus` and `.deferredGeometry` modes.
+    public enum LightingModel {
+        case unlit
+        case surface
+    }
+
+    /// The lighting model for this material. Override in subclasses to change routing.
+    /// Default is `.surface` — override to `.unlit` for fonts, video planes, UI overlays, etc.
+    open var lightingModel: LightingModel { .surface }
+
+    /// Declares which G-buffer outputs this material's shader writes.
+    ///
+    /// The renderer intersects this with `renderer.activeOutputs` per draw call. Outputs not
+    /// declared here receive the attachment clear value (zeros) for this material's pixels —
+    /// declaring an output the shader doesn't write is a silent no-op, not a compile error.
+    /// Surface materials that implement `evaluateSurface()` should override this to declare
+    /// all outputs their shader supports.
+    open var supportedOutputs: RendererOutputs { [.color] }
+
     public required init(context: Context) {
         self.context = context
         setupParameterGroupSubscriptions(parameters)
