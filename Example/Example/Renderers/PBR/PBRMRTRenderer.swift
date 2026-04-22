@@ -62,7 +62,7 @@ final class PBRMRTRenderer: BaseRenderer {
             "Material": material.parameters,
             "SSAO": ssaoPostProcessor.ssaoMaterial.parameters,
             "SSAO Blur": ssaoPostProcessor.blurMaterial.parameters,
-            "SSAO Composite": aoCompositeMaterial.parameters,
+            "SSAO Composite": ssaoPostProcessor.compositeMaterial.parameters,
             "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters
         ]
     }
@@ -71,8 +71,6 @@ final class PBRMRTRenderer: BaseRenderer {
 
     private var model: Object?
     private var outputPreviews: [OutputPreview] = []
-    private var aoCompositeTexture: MTLTexture?
-    private var aoCompositeTextureSize: (width: Int, height: Int) = (0, 0)
 
     private lazy var startTime = getTime()
     private lazy var sceneRenderer: Renderer = {
@@ -113,31 +111,9 @@ final class PBRMRTRenderer: BaseRenderer {
         return renderer
     }()
 
-    private lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
     private lazy var previewGeometry = QuadGeometry(context: overlayContext, size: 1.0)
     private lazy var previewStripMaterial = makeOverlayColorMaterial([0.035, 0.045, 0.06, 0.86])
     private lazy var previewTileMaterial = makeOverlayColorMaterial([0.07, 0.085, 0.11, 0.95])
-    private lazy var aoCompositeMaterial: SourceMaterial = {
-        let material = SourceMaterial(
-            context: postContext,
-            pipelineURL: rendererAssetsURL
-                .appendingPathComponent("Pipelines")
-                .appendingPathComponent("AoComposite")
-                .appendingPathComponent("Shaders.metal")
-        )
-        material.blending = .disabled
-        material.depthWriteEnabled = false
-        material.set("Intensity", Float(1.0))
-        material.set("Lift", Float(0.0))
-        return material
-    }()
-    private lazy var aoCompositeProcessor = PostProcessor(
-        label: "AO Composite",
-        context: postContext,
-        material: aoCompositeMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
-    )
     private lazy var ssaoPostProcessor = SsaoPostProcessor(context: defaultContext)
     private lazy var motionBlurPostProcessor = MotionBlurPostProcessor(context: defaultContext)
 
@@ -262,8 +238,6 @@ final class PBRMRTRenderer: BaseRenderer {
         sceneRenderer.resize(size)
         ssaoPostProcessor.resize(size: size, scaleFactor: scaleFactor)
         motionBlurPostProcessor.resize(size: size, scaleFactor: scaleFactor)
-        aoCompositeProcessor.resize(size: size, scaleFactor: scaleFactor)
-        updateAoCompositeTexture(size: size)
         overlayRenderer.resize(size)
         layoutOverlay(size: size)
     }
@@ -433,25 +407,13 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+        ssaoPostProcessor.colorTexture = sceneRenderer.colorTexture
         ssaoPostProcessor.depthTexture = sceneRenderer.depthTexture
         ssaoPostProcessor.normalTexture = sceneRenderer.normalTexture
         ssaoPostProcessor.sceneCamera = camera
         ssaoPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        var compositeTexture = sceneRenderer.colorTexture
-        if let sceneColorTexture = sceneRenderer.colorTexture,
-           let aoTexture = ssaoPostProcessor.outputTexture,
-           let aoCompositeTexture
-        {
-            aoCompositeMaterial.set(sceneColorTexture, index: FragmentTextureIndex.Custom0)
-            aoCompositeMaterial.set(aoTexture, index: FragmentTextureIndex.Custom1)
-            aoCompositeProcessor.draw(
-                renderPassDescriptor: MTLRenderPassDescriptor(),
-                commandBuffer: commandBuffer,
-                renderTarget: aoCompositeTexture
-            )
-            compositeTexture = aoCompositeTexture
-        }
+        let compositeTexture = ssaoPostProcessor.outputTexture ?? sceneRenderer.colorTexture
 
         motionBlurPostProcessor.colorTexture = compositeTexture
         motionBlurPostProcessor.velocityTexture = sceneRenderer.velocityTexture
@@ -564,41 +526,6 @@ final class PBRMRTRenderer: BaseRenderer {
                 label.position = [centerX, tileBottom + previewHeight + labelGap + labelHeight * 0.5, 2.0]
             }
         }
-    }
-
-    private func updateAoCompositeTexture(size: (width: Float, height: Float)) {
-        let width = Int(max(size.width, 0))
-        let height = Int(max(size.height, 0))
-        guard width > 0, height > 0 else {
-            aoCompositeTexture = nil
-            aoCompositeTextureSize = (0, 0)
-            return
-        }
-
-        guard aoCompositeTextureSize.width != width || aoCompositeTextureSize.height != height else { return }
-        aoCompositeTexture = makePostTexture(
-            label: "AO Composite Texture",
-            width: width,
-            height: height,
-            pixelFormat: colorPixelFormat
-        )
-        aoCompositeTextureSize = (width, height)
-    }
-
-    private func makePostTexture(label: String, width: Int, height: Int, pixelFormat: MTLPixelFormat) -> MTLTexture? {
-        guard width > 0, height > 0 else { return nil }
-        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: pixelFormat,
-            width: width,
-            height: height,
-            mipmapped: false
-        )
-        descriptor.sampleCount = 1
-        descriptor.usage = [.renderTarget, .shaderRead]
-        descriptor.storageMode = .private
-        let texture = device.makeTexture(descriptor: descriptor)
-        texture?.label = label
-        return texture
     }
 
     private func makeOverlayColorMaterial(_ color: simd_float4) -> BasicColorMaterial {

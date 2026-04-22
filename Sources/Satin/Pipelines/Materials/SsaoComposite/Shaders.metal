@@ -1,11 +1,11 @@
 typedef struct {
     float intensity; // slider,0.0,2.0,1.0, Intensity
     float lift;      // slider,0.0,1.0,0.0, Lift
-} AoCompositeUniforms;
+} SsaoCompositeUniforms;
 
-fragment float4 sourceFragment(
+fragment float4 ssaoCompositeFragment(
     VertexData in [[stage_in]],
-    constant AoCompositeUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
+    constant SsaoCompositeUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
     texture2d<float, access::sample> colorTex [[texture(FragmentTextureCustom0)]],
     texture2d<float, access::sample> aoTex [[texture(FragmentTextureCustom1)]]
 ) {

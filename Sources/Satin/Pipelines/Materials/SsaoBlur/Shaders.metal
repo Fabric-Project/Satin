@@ -1,13 +1,18 @@
 typedef struct {
     // depth sensitivity; higher keeps AO sharper at edges
-    float sharpness;   // slider,1.0,2000.0,10.0, Sharpness
+    float sharpness;   // slider,1.0,2000.0,500.0, Sharpness
     // kernel half-size in pixels; 0 = pass-through
-    int blurRadius;    // slider,0,4,2, Blur Radius
+    int blurRadius;    // slider,0,4,4, Blur Radius
 } SsaoBlurUniforms;
+
+typedef struct {
+    float2 direction;
+} SsaoBlurPassUniforms;
 
 fragment half ssaoBlurFragment(
     VertexData in [[stage_in]],
     constant SsaoBlurUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
+    constant SsaoBlurPassUniforms &passUniforms [[buffer(FragmentBufferCustom0)]],
     texture2d<half, access::sample> ssaoTex  [[texture(FragmentTextureCustom0)]],
     depth2d<float, access::sample> depthTex  [[texture(FragmentTextureCustom1)]]
 ) {
@@ -25,19 +30,18 @@ fragment half ssaoBlurFragment(
         1.0 / float(ssaoTex.get_width()),
         1.0 / float(ssaoTex.get_height())
     );
+    const float2 sampleStep = passUniforms.direction * texelSize;
 
     half  totalAO     = 0.0h;
     float totalWeight = 0.0;
 
-    for (int x = -radius; x <= radius; x++) {
-        for (int y = -radius; y <= radius; y++) {
-            const float2 sampleUV    = uv + float2(x, y) * texelSize;
-            const float  sampleDepth = depthTex.sample(s, sampleUV);
-            // Bilateral weight: penalise samples whose depth differs from the centre.
-            const float  weight      = exp(-abs(centerDepth - sampleDepth) * uniforms.sharpness);
-            totalAO     += ssaoTex.sample(s, sampleUV).r * half(weight);
-            totalWeight += weight;
-        }
+    for (int i = -radius; i <= radius; i++) {
+        const float2 sampleUV = uv + sampleStep * float(i);
+        const float sampleDepth = depthTex.sample(s, sampleUV);
+        // Bilateral weight: penalise samples whose depth differs from the centre.
+        const float weight = exp(-abs(centerDepth - sampleDepth) * uniforms.sharpness);
+        totalAO += ssaoTex.sample(s, sampleUV).r * half(weight);
+        totalWeight += weight;
     }
 
     return (totalWeight > 0.0) ? (totalAO / half(totalWeight)) : 1.0h;
