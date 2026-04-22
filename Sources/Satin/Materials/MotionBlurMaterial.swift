@@ -32,6 +32,10 @@ public final class MotionBlurMaterial: Material {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom3) }
     }
 
+    public unowned var neighborMaxTexture: MTLTexture? {
+        didSet { set(neighborMaxTexture, index: FragmentTextureIndex.Custom4) }
+    }
+
     public var shutterAngle: Float {
         get { get("Shutter Angle", as: FloatParameter.self)?.value ?? Self.defaultShutterAngle }
         set {
@@ -96,6 +100,7 @@ public final class MotionBlurMaterial: Material {
         set(velocityTexture, index: FragmentTextureIndex.Custom1)
         set(blueNoiseTexture, index: FragmentTextureIndex.Custom2)
         set(depthTexture, index: FragmentTextureIndex.Custom3)
+        set(neighborMaxTexture, index: FragmentTextureIndex.Custom4)
     }
 
     override public func updateUniforms() {

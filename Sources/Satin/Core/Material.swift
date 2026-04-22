@@ -416,7 +416,12 @@ open class Material: Codable {
     }
 
     open func setupUniforms() {
-        guard parameters.size > 0, uniformsNeedsUpdate else { return }
+        guard parameters.size > 0, uniformsNeedsUpdate
+        else
+        {
+            uniformsNeedsUpdate = false
+            return
+        }
 
         uniforms = UniformBuffer(
             device: context.device,
