@@ -125,26 +125,38 @@ open class Renderer {
 
     // MARK: - Renderer Outputs
 
-    public var outputs: RendererOutputs = []
+    /// Controls whether the renderer runs a traditional forward pass, a forward MRT pass,
+    /// or the deferred geometry stage. Switching modes compiles new pipeline variants on
+    /// the next frame, so avoid changing this every frame.
+    public var renderingMode: RenderingMode
 
-    // Each output prepass needs its own Context so the pipeline compiles for the correct pixel format.
-    // normalPassContext uses rgba16Float: world-space normals are signed unit vectors.
-    private lazy var normalPassContext = Context(
-        device: context.device,
-        sampleCount: 1,
-        colorPixelFormat: .rgba16Float,
-        depthPixelFormat: context.depthPixelFormat
-    )
-    // velocityPassContext uses rg16Float: velocity is a signed NDC displacement (can be < 0 or > 1).
-    private lazy var velocityPassContext = Context(
-        device: context.device,
-        sampleCount: 1,
-        colorPixelFormat: .rg16Float,
-        depthPixelFormat: context.depthPixelFormat
-    )
+    /// Declares which auxiliary outputs the renderer should produce in addition to color.
+    /// Each active flag adds a texture allocation and an extra color attachment write.
+    /// The current MRT path requires `context.sampleCount == 1` whenever auxiliary outputs
+    /// are enabled.
+    public var activeOutputs: RendererOutputs
 
-    private lazy var normalColorMaterial = NormalColorMaterial(context: normalPassContext)
-    private lazy var velocityMaterial = VelocityMaterial(context: velocityPassContext)
+    /// Legacy compatibility bridge for the old prepass API.
+    ///
+    /// Setting this promotes `.forward` renderers to `.forwardPlus` so existing callers that
+    /// requested velocity or normals continue producing those textures.
+    public var outputs: RendererOutputs {
+        get { activeOutputs.subtracting([.color]) }
+        set {
+            activeOutputs = normalizedOutputs(newValue)
+            if renderingMode == .forward, !newValue.isEmpty {
+                renderingMode = .forwardPlus
+            }
+        }
+    }
+
+    private var updateAlbedoTexture = true
+    public private(set) var albedoTexture: MTLTexture?
+    public var albedoTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != albedoTextureStorageMode { updateAlbedoTexture = true }
+        }
+    }
 
     private var updateNormalTexture = true
     public private(set) var normalTexture: MTLTexture?
@@ -154,11 +166,27 @@ open class Renderer {
         }
     }
 
+    private var updatePBRTexture = true
+    public private(set) var pbrTexture: MTLTexture?
+    public var pbrTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != pbrTextureStorageMode { updatePBRTexture = true }
+        }
+    }
+
     private var updateVelocityTexture = true
     public private(set) var velocityTexture: MTLTexture?
     public var velocityTextureStorageMode: MTLStorageMode = .private {
         didSet {
             if oldValue != velocityTextureStorageMode { updateVelocityTexture = true }
+        }
+    }
+
+    private var updateEmissiveTexture = true
+    public private(set) var emissiveTexture: MTLTexture?
+    public var emissiveTextureStorageMode: MTLStorageMode = .private {
+        didSet {
+            if oldValue != emissiveTextureStorageMode { updateEmissiveTexture = true }
         }
     }
     
@@ -173,6 +201,36 @@ open class Renderer {
             }
         }
     }
+
+    private struct RenderContextKey: Hashable {
+        let renderingMode: RenderingMode
+        let activeOutputs: RendererOutputs
+        let colorPixelFormat: MTLPixelFormat
+        let depthPixelFormat: MTLPixelFormat
+        let stencilPixelFormat: MTLPixelFormat
+    }
+
+    private enum MaterialPassType {
+        case forward
+        case surface
+        case unlit
+    }
+
+    private enum RenderRoute {
+        case all
+        case surface
+        case unlit
+    }
+
+    private struct ColorAttachmentState {
+        let texture: MTLTexture?
+        let resolveTexture: MTLTexture?
+        let loadAction: MTLLoadAction
+        let storeAction: MTLStoreAction
+        let clearColor: MTLClearColor
+    }
+
+    private var renderContextCache: [RenderContextKey: Context] = [:]
 
     private var objectList = [Object]()
     private var renderLists = [Int: RenderList]()
@@ -239,6 +297,8 @@ open class Renderer {
         self.label = label
         self.context = context
         self.sortObjects = sortObjects
+        self.renderingMode = context.renderingMode
+        self.activeOutputs = RendererOutputs(rawValue: context.activeOutputs.rawValue | RendererOutputs.color.rawValue)
 
         self.clearColor = MTLClearColor(clearColor)
         self.colorLoadAction = colorLoadAction
@@ -335,6 +395,10 @@ open class Renderer {
         )
     }
 
+    /// Draws the scene using the current render graph.
+    ///
+    /// Shadow passes run before the main scene pass. Surface materials render first according to
+    /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
     public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
         let simd_viewports = viewports.map(\.float4)
         update(
@@ -372,6 +436,16 @@ open class Renderer {
         let inStencilLoadAction = renderPassDescriptor.stencilAttachment.loadAction
         let inStencilTexture = renderPassDescriptor.stencilAttachment.texture
         let inStencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
+        let inAuxiliaryStates: [ColorAttachmentState] = (1...5).map { index in
+            let attachment = renderPassDescriptor.colorAttachments[index]!
+            return ColorAttachmentState(
+                texture: attachment.texture,
+                resolveTexture: attachment.resolveTexture,
+                loadAction: attachment.loadAction,
+                storeAction: attachment.storeAction,
+                clearColor: attachment.clearColor
+            )
+        }
 
         defer {
             renderPassDescriptor.colorAttachments[0].storeAction = inColorStoreAction
@@ -388,6 +462,15 @@ open class Renderer {
             renderPassDescriptor.stencilAttachment.loadAction = inStencilLoadAction
             renderPassDescriptor.stencilAttachment.texture = inStencilTexture
             renderPassDescriptor.stencilAttachment.resolveTexture = inStencilResolveTexture
+
+            for (offset, state) in inAuxiliaryStates.enumerated() {
+                let attachment = renderPassDescriptor.colorAttachments[offset + 1]!
+                attachment.texture = state.texture
+                attachment.resolveTexture = state.resolveTexture
+                attachment.loadAction = state.loadAction
+                attachment.storeAction = state.storeAction
+                attachment.clearColor = state.clearColor
+            }
         }
 
         if context.colorPixelFormat == .invalid {
@@ -509,159 +592,461 @@ open class Renderer {
         renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
         renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
 
-        if outputs.contains(.normals) {
-            setupNormalTexture()
-        }
-        if outputs.contains(.velocity) {
-            setupVelocityTexture()
-        }
+        let finalColorStoreAction = renderPassDescriptor.colorAttachments[0].storeAction
+        let finalDepthStoreAction = renderPassDescriptor.depthAttachment.storeAction
+        let finalStencilStoreAction = renderPassDescriptor.stencilAttachment.storeAction
 
-        if renderLists.isEmpty {
-            if colorLoadAction == .clear, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-#if DEBUG
-                renderEncoder.pushDebugGroup(label + " Empty Pass")
-#endif
-                renderEncoder.setViewports(viewports)
-#if DEBUG
-                renderEncoder.popDebugGroup()
-#endif
-                renderEncoder.endEncoding()
+        setupAuxiliaryTextures()
+
+        _ = encodeMainRenderPasses(
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            cameras: cameras,
+            viewports: viewports,
+            simdViewports: simd_viewports,
+            viewMappings: viewMappings,
+            finalColorStoreAction: finalColorStoreAction,
+            finalDepthStoreAction: finalDepthStoreAction,
+            finalStencilStoreAction: finalStencilStoreAction
+        )
+    }
+
+    private func normalizedOutputs(_ outputs: RendererOutputs) -> RendererOutputs {
+        RendererOutputs(rawValue: outputs.rawValue | RendererOutputs.color.rawValue)
+    }
+
+    private var requestedOutputs: RendererOutputs {
+        normalizedOutputs(activeOutputs)
+    }
+
+    private var requestedAuxiliaryOutputs: RendererOutputs {
+        requestedOutputs.subtracting([.color])
+    }
+
+    private var usesAuxiliaryAttachments: Bool {
+        renderingMode != .forward && !requestedAuxiliaryOutputs.isEmpty
+    }
+
+    private func materials(for renderable: Renderable) -> [Material] {
+        if !renderable.materials.isEmpty {
+            return renderable.materials
+        }
+        return [renderable.material].compactMap { $0 }
+    }
+
+    private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
+        let materials = materials(for: renderable)
+        let hasSurface = materials.contains { $0.lightingModel == .surface }
+        let hasUnlit = materials.contains { $0.lightingModel == .unlit }
+
+        switch route {
+        case .all:
+            return true
+        case .surface:
+            return hasSurface
+        case .unlit:
+            return hasUnlit && !hasSurface
+        }
+    }
+
+    private func routePassEntries(route: RenderRoute) -> [(pass: Int, renderables: [Renderable])] {
+        renderLists
+            .sorted { $0.key < $1.key }
+            .enumerated()
+            .compactMap { pass, entry in
+                let renderables = entry.value
+                    .getRenderables(sorted: sortObjects)
+                    .filter { shouldRender($0, route: route) }
+                return renderables.isEmpty ? nil : (pass, renderables)
             }
+    }
+
+    private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
+        switch phase {
+        case .forward, .unlit:
+            return [.color]
+        case .surface:
+            var outputs: RendererOutputs = [.color]
+            for material in materials(for: renderable) where material.lightingModel == .surface {
+                outputs.formUnion(material.supportedOutputs.intersection(requestedOutputs))
+            }
+            return normalizedOutputs(outputs)
+        }
+    }
+
+    private func renderContext(for renderable: Renderable, phase: MaterialPassType) -> Context {
+        let mode: RenderingMode = phase == .surface ? renderingMode : .forward
+        let outputs = supportedOutputs(for: renderable, phase: phase)
+        let key = RenderContextKey(
+            renderingMode: mode,
+            activeOutputs: outputs,
+            colorPixelFormat: context.colorPixelFormat,
+            depthPixelFormat: context.depthPixelFormat,
+            stencilPixelFormat: context.stencilPixelFormat
+        )
+
+        if let renderContext = renderContextCache[key] {
+            return renderContext
+        }
+
+        let renderContext = Context(
+            device: context.device,
+            sampleCount: context.sampleCount,
+            colorPixelFormat: context.colorPixelFormat,
+            depthPixelFormat: context.depthPixelFormat,
+            stencilPixelFormat: context.stencilPixelFormat,
+            vertexAmplificationCount: context.vertexAmplificationCount,
+            maxBuffersInFlight: context.maxBuffersInFlight,
+            renderingMode: mode,
+            activeOutputs: outputs,
+            albedoPixelFormat: context.albedoPixelFormat,
+            normalsPixelFormat: context.normalsPixelFormat,
+            pbrPixelFormat: context.pbrPixelFormat,
+            velocityPixelFormat: context.velocityPixelFormat,
+            emissivePixelFormat: context.emissivePixelFormat
+        )
+
+        renderContextCache[key] = renderContext
+        return renderContext
+    }
+
+    private func setupAuxiliaryTextures() {
+        if usesAuxiliaryAttachments {
+            precondition(
+                context.sampleCount == 1,
+                "Satin Renderer auxiliary MRT outputs currently require sampleCount == 1."
+            )
+        }
+
+        if requestedAuxiliaryOutputs.contains(.albedo) {
+            setupAlbedoTexture()
         } else {
-            let renderPassLists = renderLists.sorted { $0.key < $1.key }
+            albedoTexture = nil
+            updateAlbedoTexture = true
+        }
 
-            for (pass, renderPassList) in renderPassLists.enumerated() {
-                let renderList = renderPassList.value
-                let renderables = renderList.getRenderables(sorted: sortObjects)
+        if requestedAuxiliaryOutputs.contains(.normals) {
+            setupNormalTexture()
+        } else {
+            normalTexture = nil
+            updateNormalTexture = true
+        }
 
-                if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) {
-                    renderEncoder.label = label + " Pass \(pass)"
+        if requestedAuxiliaryOutputs.contains(.pbr) {
+            setupPBRTexture()
+        } else {
+            pbrTexture = nil
+            updatePBRTexture = true
+        }
+
+        if requestedAuxiliaryOutputs.contains(.velocity) {
+            setupVelocityTexture()
+        } else {
+            velocityTexture = nil
+            updateVelocityTexture = true
+        }
+
+        if requestedAuxiliaryOutputs.contains(.emissive) {
+            setupEmissiveTexture()
+        } else {
+            emissiveTexture = nil
+            updateEmissiveTexture = true
+        }
+    }
+
+    private func configureMainAttachments(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        colorLoadAction: MTLLoadAction,
+        depthLoadAction: MTLLoadAction,
+        stencilLoadAction: MTLLoadAction,
+        colorStoreAction: MTLStoreAction,
+        depthStoreAction: MTLStoreAction,
+        stencilStoreAction: MTLStoreAction
+    ) {
+        renderPassDescriptor.colorAttachments[0].loadAction = colorLoadAction
+        renderPassDescriptor.colorAttachments[0].storeAction = colorStoreAction
+        renderPassDescriptor.colorAttachments[0].clearColor = clearColor
+
+        renderPassDescriptor.depthAttachment.loadAction = depthLoadAction
+        renderPassDescriptor.depthAttachment.storeAction = depthStoreAction
+        renderPassDescriptor.depthAttachment.clearDepth = clearDepth
+
+        renderPassDescriptor.stencilAttachment.loadAction = stencilLoadAction
+        renderPassDescriptor.stencilAttachment.storeAction = stencilStoreAction
+        renderPassDescriptor.stencilAttachment.clearStencil = clearStencil
+    }
+
+    @discardableResult
+    private func configureAuxiliaryAttachments(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        enabled: Bool = true
+    ) -> [Int] {
+        let auxiliaryAttachments: [(Int, RendererOutputs, MTLTexture?)] = [
+            (1, .albedo, albedoTexture),
+            (2, .normals, normalTexture),
+            (3, .pbr, pbrTexture),
+            (4, .velocity, velocityTexture),
+            (5, .emissive, emissiveTexture),
+        ]
+
+        var activeAttachmentIndices = [Int]()
+
+        for (index, flag, texture) in auxiliaryAttachments {
+            let attachment = renderPassDescriptor.colorAttachments[index]!
+            if enabled, requestedAuxiliaryOutputs.contains(flag), let texture {
+                attachment.texture = texture
+                attachment.resolveTexture = nil
+                attachment.loadAction = .clear
+                attachment.storeAction = .store
+                attachment.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0)
+                activeAttachmentIndices.append(index)
+            } else {
+                attachment.texture = nil
+                attachment.resolveTexture = nil
+                attachment.loadAction = .dontCare
+                attachment.storeAction = .dontCare
+                attachment.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0)
+            }
+        }
+
+        return activeAttachmentIndices
+    }
+
+    private func shouldEncodeEmptyPass(renderPassDescriptor: MTLRenderPassDescriptor, auxiliaryAttachmentIndices: [Int]) -> Bool {
+        if renderPassDescriptor.colorAttachments[0].texture != nil,
+           renderPassDescriptor.colorAttachments[0].loadAction == .clear
+        {
+            return true
+        }
+
+        if renderPassDescriptor.depthAttachment.texture != nil,
+           renderPassDescriptor.depthAttachment.loadAction == .clear
+        {
+            return true
+        }
+
+        if renderPassDescriptor.stencilAttachment.texture != nil,
+           renderPassDescriptor.stencilAttachment.loadAction == .clear
+        {
+            return true
+        }
+
+        for index in auxiliaryAttachmentIndices {
+            let attachment = renderPassDescriptor.colorAttachments[index]!
+            if attachment.texture != nil, attachment.loadAction == .clear {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    @discardableResult
+    private func encodeRoute(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer,
+        route: RenderRoute,
+        phase: MaterialPassType,
+        label: String,
+        cameras: [Camera],
+        viewports: [MTLViewport],
+        simdViewports: [simd_float4],
+        viewMappings: [MTLVertexAmplificationViewMapping],
+        auxiliaryAttachmentIndices: [Int],
+        clearWhenEmpty: Bool
+    ) -> Bool {
+        let routeEntries = routePassEntries(route: route)
+        let originalColorStoreAction = renderPassDescriptor.colorAttachments[0].storeAction
+        let originalDepthStoreAction = renderPassDescriptor.depthAttachment.storeAction
+        let originalStencilStoreAction = renderPassDescriptor.stencilAttachment.storeAction
+
+        if routeEntries.isEmpty {
+            guard clearWhenEmpty,
+                  shouldEncodeEmptyPass(renderPassDescriptor: renderPassDescriptor, auxiliaryAttachmentIndices: auxiliaryAttachmentIndices),
+                  let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+            else { return false }
+
+            renderEncoder.label = label + " Empty Pass"
 #if DEBUG
-                    renderEncoder.pushDebugGroup("Pass \(pass)")
+            renderEncoder.pushDebugGroup(label + " Empty Pass")
 #endif
-                    renderEncoder.setViewports(viewports)
-
-                    if context.vertexAmplificationCount > 1 {
-                        var maps = viewMappings
-                        if maps.isEmpty {
-                            maps = (0..<context.vertexAmplificationCount).map { .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0)) }
-                        }
-                        renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
-                    }
-
-                    encode(
-                        renderEncoder: renderEncoder,
-                        pass: pass,
-                        renderables: renderables,
-                        cameras: cameras,
-                        viewports: simd_viewports
-                    )
-
+            renderEncoder.setViewports(viewports)
 #if DEBUG
-                    renderEncoder.popDebugGroup()
+            renderEncoder.popDebugGroup()
 #endif
-                    renderEncoder.endEncoding()
+            renderEncoder.endEncoding()
+            return true
+        }
 
-                    // Not sure why this is necessary?
-//                    renderPassDescriptor.colorAttachments[0].loadAction = .load
-//                    renderPassDescriptor.depthAttachment.loadAction = .load
-//                    renderPassDescriptor.stencilAttachment.loadAction = .load
+        for (index, entry) in routeEntries.enumerated() {
+            let isFinalEntry = index == routeEntries.count - 1
+            if index > 0 {
+                renderPassDescriptor.colorAttachments[0].loadAction = .load
+                renderPassDescriptor.depthAttachment.loadAction = .load
+                renderPassDescriptor.stencilAttachment.loadAction = .load
+                for attachmentIndex in auxiliaryAttachmentIndices {
+                    renderPassDescriptor.colorAttachments[attachmentIndex]!.loadAction = .load
                 }
             }
+
+            renderPassDescriptor.colorAttachments[0].storeAction = isFinalEntry ? originalColorStoreAction : .store
+            renderPassDescriptor.depthAttachment.storeAction = isFinalEntry ? originalDepthStoreAction : .store
+            renderPassDescriptor.stencilAttachment.storeAction = isFinalEntry ? originalStencilStoreAction : .store
+
+            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
+
+            renderEncoder.label = "\(self.label) \(label) Pass \(entry.pass)"
+#if DEBUG
+            renderEncoder.pushDebugGroup("\(label) Pass \(entry.pass)")
+#endif
+            renderEncoder.setViewports(viewports)
+
+            if context.vertexAmplificationCount > 1 {
+                var maps = viewMappings
+                if maps.isEmpty {
+                    maps = (0..<context.vertexAmplificationCount).map {
+                        .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0))
+                    }
+                }
+                renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
+            }
+
+            encode(
+                renderEncoder: renderEncoder,
+                pass: entry.pass,
+                renderables: entry.renderables,
+                cameras: cameras,
+                viewports: simdViewports,
+                phase: phase
+            )
+
+#if DEBUG
+            renderEncoder.popDebugGroup()
+#endif
+            renderEncoder.endEncoding()
         }
 
-        if !outputs.isEmpty, let primaryCamera = cameras.first {
-            // Prefer the resolved (single-sample) depth so prepasses that run at sampleCount=1
-            // don't receive an MSAA multisample texture as their depth attachment.
-            let renderedDepthTexture = renderPassDescriptor.depthAttachment.resolveTexture
-                ?? renderPassDescriptor.depthAttachment.texture
-                ?? depthTexture
-            if outputs.contains(.normals) {
-                encodeNormalPrepass(commandBuffer: commandBuffer, scene: scene, camera: primaryCamera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
-            }
-            if outputs.contains(.velocity) {
-                encodeVelocityPrepass(commandBuffer: commandBuffer, scene: scene, camera: primaryCamera, viewports: viewports, renderedDepthTexture: renderedDepthTexture)
-            }
-        }
+        return true
     }
 
-    private func encodeNormalPrepass(
+    @discardableResult
+    private func encodeMainRenderPasses(
+        renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
-        scene: Object,
-        camera: Camera,
+        cameras: [Camera],
         viewports: [MTLViewport],
-        renderedDepthTexture: MTLTexture? = nil
-    ) {
-        guard let normalTexture else { return }
-        let rpd = MTLRenderPassDescriptor()
-        rpd.colorAttachments[0].texture = normalTexture
-        rpd.colorAttachments[0].loadAction = .clear
-        rpd.colorAttachments[0].storeAction = .store
-        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
-        let depthSource = renderedDepthTexture ?? depthTexture
-        if let depthSource {
-            rpd.depthAttachment.texture = depthSource
-            rpd.depthAttachment.loadAction = .load
-            rpd.depthAttachment.storeAction = .dontCare
-        }
+        simdViewports: [simd_float4],
+        viewMappings: [MTLVertexAmplificationViewMapping],
+        finalColorStoreAction: MTLStoreAction,
+        finalDepthStoreAction: MTLStoreAction,
+        finalStencilStoreAction: MTLStoreAction
+    ) -> Bool {
+        let hasSurfaceRenderables = !routePassEntries(route: .surface).isEmpty
+        let hasUnlitRenderables = !routePassEntries(route: .unlit).isEmpty
 
-        let simd_viewports = viewports.map(\.float4)
-        let renderPassLists = renderLists.sorted { $0.key < $1.key }
-        for (pass, renderPassList) in renderPassLists.enumerated() {
-            let renderables = renderPassList.value.getRenderables(sorted: false)
-            if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
-                renderEncoder.label = label + " Normal Prepass"
-                renderEncoder.setViewports(viewports)
-                encode(
-                    renderEncoder: renderEncoder,
-                    pass: pass,
-                    renderables: renderables,
-                    cameras: [camera],
-                    viewports: simd_viewports,
-                    overrideMaterial: normalColorMaterial
+        switch renderingMode {
+        case .forward:
+            configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+            return encodeRoute(
+                renderPassDescriptor: renderPassDescriptor,
+                commandBuffer: commandBuffer,
+                route: .all,
+                phase: .forward,
+                label: "Forward",
+                cameras: cameras,
+                viewports: viewports,
+                simdViewports: simdViewports,
+                viewMappings: viewMappings,
+                auxiliaryAttachmentIndices: [],
+                clearWhenEmpty: true
+            )
+
+        case .forwardPlus, .deferredGeometry:
+            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (!hasUnlitRenderables && renderLists.isEmpty)
+            var didEncode = false
+
+            if needsSurfacePass {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: colorLoadAction,
+                    depthLoadAction: depthLoadAction,
+                    stencilLoadAction: stencilLoadAction,
+                    colorStoreAction: hasUnlitRenderables ? .store : finalColorStoreAction,
+                    depthStoreAction: hasUnlitRenderables ? .store : finalDepthStoreAction,
+                    stencilStoreAction: hasUnlitRenderables ? .store : finalStencilStoreAction
                 )
-                renderEncoder.endEncoding()
-            }
-        }
-    }
-
-    private func encodeVelocityPrepass(
-        commandBuffer: MTLCommandBuffer,
-        scene: Object,
-        camera: Camera,
-        viewports: [MTLViewport],
-        renderedDepthTexture: MTLTexture? = nil
-    ) {
-        guard let velocityTexture else { return }
-        let rpd = MTLRenderPassDescriptor()
-        rpd.colorAttachments[0].texture = velocityTexture
-        rpd.colorAttachments[0].loadAction = .clear
-        rpd.colorAttachments[0].storeAction = .store
-        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
-        let depthSource = renderedDepthTexture ?? depthTexture
-        if let depthSource {
-            rpd.depthAttachment.texture = depthSource
-            rpd.depthAttachment.loadAction = .load
-            rpd.depthAttachment.storeAction = .dontCare
-        }
-
-        let simd_viewports = viewports.map(\.float4)
-        let renderPassLists = renderLists.sorted { $0.key < $1.key }
-        for (pass, renderPassList) in renderPassLists.enumerated() {
-            let renderables = renderPassList.value.getRenderables(sorted: false)
-            if !renderables.isEmpty, let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: rpd) {
-                renderEncoder.label = label + " Velocity Prepass"
-                renderEncoder.setViewports(viewports)
-                encode(
-                    renderEncoder: renderEncoder,
-                    pass: pass,
-                    renderables: renderables,
-                    cameras: [camera],
-                    viewports: simd_viewports,
-                    overrideMaterial: velocityMaterial
+                let auxiliaryAttachmentIndices = configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor)
+                didEncode = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .surface,
+                    phase: .surface,
+                    label: renderingMode == .deferredGeometry ? "Deferred Geometry" : "Surface MRT",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: auxiliaryAttachmentIndices,
+                    clearWhenEmpty: true
                 )
-                renderEncoder.endEncoding()
+            } else {
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
             }
+
+            if hasUnlitRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: needsSurfacePass ? .load : colorLoadAction,
+                    depthLoadAction: needsSurfacePass ? .load : depthLoadAction,
+                    stencilLoadAction: needsSurfacePass ? .load : stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                let unlitEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .unlit,
+                    phase: .unlit,
+                    label: "Unlit Forward",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: !didEncode
+                )
+                didEncode = didEncode || unlitEncoded
+            }
+
+            if !didEncode {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: colorLoadAction,
+                    depthLoadAction: depthLoadAction,
+                    stencilLoadAction: stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                return encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .surface,
+                    phase: .surface,
+                    label: "Empty",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: true
+                )
+            }
+
+            return didEncode
         }
     }
 
@@ -844,6 +1229,7 @@ open class Renderer {
         renderables: [Renderable],
         cameras: [Camera],
         viewports: [simd_float4],
+        phase: MaterialPassType,
         overrideMaterial: Material? = nil
     ) {
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
@@ -1017,25 +1403,36 @@ open class Renderer {
             }
         }
 
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: false) {
+        for renderable in renderables {
+            let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
+            guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
             _encode(
                 renderEncoder: renderEncoder,
                 renderEncoderState: renderEncoderState,
                 renderable: renderable,
                 cameras: cameras,
                 viewports: viewports,
+                phase: phase,
                 overrideMaterial: overrideMaterial
             )
         }
     }
 
-    private func _encode(renderEncoder: MTLRenderCommandEncoder, renderEncoderState: RenderEncoderState, renderable: Renderable, cameras: [Camera], viewports: [simd_float4], overrideMaterial: Material? = nil) {
+    private func _encode(
+        renderEncoder: MTLRenderCommandEncoder,
+        renderEncoderState: RenderEncoderState,
+        renderable: Renderable,
+        cameras: [Camera],
+        viewports: [simd_float4],
+        phase: MaterialPassType,
+        overrideMaterial: Material? = nil
+    ) {
 #if DEBUG
         renderEncoder.pushDebugGroup(renderable.label)
 #endif
         let savedMaterial = renderable.material
         // Determine which context to use for pipeline/uniform lookups
-        let renderContext = overrideMaterial?.context ?? context
+        let renderContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
 
         if let overrideMaterial {
             renderable.material = overrideMaterial
@@ -1559,10 +1956,26 @@ open class Renderer {
 
     // MARK: - Output Textures
 
+    private func setupAlbedoTexture() {
+        guard updateAlbedoTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: context.albedoPixelFormat,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = albedoTextureStorageMode
+        albedoTexture = context.device.makeTexture(descriptor: descriptor)
+        albedoTexture?.label = label + " Albedo Texture"
+        updateAlbedoTexture = false
+    }
+
     private func setupNormalTexture() {
         guard updateNormalTexture, size.width > 1, size.height > 1 else { return }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float,
+            pixelFormat: context.normalsPixelFormat,
             width: Int(size.width),
             height: Int(size.height),
             mipmapped: false
@@ -1575,10 +1988,26 @@ open class Renderer {
         updateNormalTexture = false
     }
 
+    private func setupPBRTexture() {
+        guard updatePBRTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: context.pbrPixelFormat,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = pbrTextureStorageMode
+        pbrTexture = context.device.makeTexture(descriptor: descriptor)
+        pbrTexture?.label = label + " PBR Texture"
+        updatePBRTexture = false
+    }
+
     private func setupVelocityTexture() {
         guard updateVelocityTexture, size.width > 1, size.height > 1 else { return }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rg16Float,
+            pixelFormat: context.velocityPixelFormat,
             width: Int(size.width),
             height: Int(size.height),
             mipmapped: false
@@ -1589,6 +2018,22 @@ open class Renderer {
         velocityTexture = context.device.makeTexture(descriptor: descriptor)
         velocityTexture?.label = label + " Velocity Texture"
         updateVelocityTexture = false
+    }
+
+    private func setupEmissiveTexture() {
+        guard updateEmissiveTexture, size.width > 1, size.height > 1 else { return }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: context.emissivePixelFormat,
+            width: Int(size.width),
+            height: Int(size.height),
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = emissiveTextureStorageMode
+        emissiveTexture = context.device.makeTexture(descriptor: descriptor)
+        emissiveTexture?.label = label + " Emissive Texture"
+        updateEmissiveTexture = false
     }
 
 }

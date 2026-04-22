@@ -84,15 +84,17 @@ open class SourceShader: Shader {
     public func reloadFromSource() {
         ShaderSourceCache.removeSource(url: self.pipelineURL)
 
-        ShaderLibrarySourceCache.invalidateLibrarySource(
-            configuration: self.configuration.getLibraryConfiguration()
-        )
+        for configuration in configurations.values {
+            ShaderLibrarySourceCache.invalidateLibrarySource(
+                configuration: configuration.getLibraryConfiguration()
+            )
 
-        ShaderLibraryCache.invalidateLibrary(
-            configuration: self.configuration.getLibraryConfiguration()
-        )
+            ShaderLibraryCache.invalidateLibrary(
+                configuration: configuration.getLibraryConfiguration()
+            )
 
-        ShaderPipelineCache.invalidate(configuration: self.configuration)
+            ShaderPipelineCache.invalidate(configuration: configuration)
+        }
 
         self.pipelines.removeAll()
         self.pipelineError = nil

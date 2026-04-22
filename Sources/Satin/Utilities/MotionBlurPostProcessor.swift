@@ -6,6 +6,8 @@
 import Metal
 import MetalKit
 
+/// Fullscreen post-process that consumes the renderer's color and velocity outputs.
+/// Requires `Renderer.activeOutputs` to include `.velocity`.
 open class MotionBlurPostProcessor: PostProcessor {
     // MARK: - Inputs
 

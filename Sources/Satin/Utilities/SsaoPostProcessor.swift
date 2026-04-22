@@ -5,6 +5,8 @@
 
 import Metal
 
+/// Fullscreen post-process that consumes the renderer's depth and normal outputs.
+/// Requires `Renderer.activeOutputs` to include `.normals`.
 open class SsaoPostProcessor: PostProcessor {
     // MARK: - Inputs
 

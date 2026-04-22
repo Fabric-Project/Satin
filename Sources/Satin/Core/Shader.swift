@@ -469,6 +469,17 @@ open class Shader {
         }
     }
 
+    func getConfiguration(renderContext: Context) -> ShaderConfiguration {
+        if let configuration = configurations[renderContext] {
+            return configuration
+        }
+
+        var configuration = self.configuration
+        configuration.context = renderContext
+        configurations[renderContext] = configuration
+        return configuration
+    }
+
     // MARK: - Defines
 
     open func getDefines() -> [ShaderDefine] {
@@ -515,7 +526,17 @@ open class Shader {
     // MARK: - Pipelines
 
     open func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
-        shadow ? shadowPipelines[renderContext] : pipelines[renderContext]
+        if shadow {
+            if shadowPipelines[renderContext] == nil, castShadow {
+                setupShadowPipeline(renderContext: renderContext)
+            }
+            return shadowPipelines[renderContext]
+        } else {
+            if pipelines[renderContext] == nil {
+                setupPipeline(renderContext: renderContext)
+            }
+            return pipelines[renderContext]
+        }
     }
 
     func updatePipeline() {
@@ -529,21 +550,26 @@ open class Shader {
     }
 
     func setupPipeline() {
-        guard pipelines[context] == nil, pipelineError == nil else { return }
+        setupPipeline(renderContext: context)
+    }
+
+    func setupPipeline(renderContext: Context) {
+        guard pipelines[renderContext] == nil else { return }
         do {
-            let result = try makePipeline()
-            pipelines[context] = result.pipeline
-            pipelineReflection = result.reflection
+            let result = try ShaderPipelineCache.getPipeline(configuration: getConfiguration(renderContext: renderContext))
+            pipelines[renderContext] = result.pipeline
+            if pipelineReflection == nil {
+                pipelineReflection = result.reflection
+            }
             pipelineError = nil
         }
         catch {
             print("\(label) Shader Pipeline: \(error.localizedDescription)")
-            if let url = configuration.pipelineURL {
+            if let url = getConfiguration(renderContext: renderContext).pipelineURL {
                 print("\(label) Shader Path: \(url.path)")
             }
             pipelineError = error
-            pipelineReflection = nil
-            pipelines[context] = nil
+            pipelines[renderContext] = nil
         }
         pipelineNeedsUpdate = false
     }
@@ -559,18 +585,22 @@ open class Shader {
     }
 
     func setupShadowPipeline() {
-        guard shadowPipelines[context] == nil, shadowPipelineError == nil, castShadow else { return }
+        setupShadowPipeline(renderContext: context)
+    }
+
+    func setupShadowPipeline(renderContext: Context) {
+        guard shadowPipelines[renderContext] == nil, castShadow else { return }
         do {
-            shadowPipelines[context] = try makeShadowPipeline()
+            shadowPipelines[renderContext] = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
             shadowPipelineError = nil
         }
         catch {
             print("\(label) Shadow Shader Pipeline: \(error.localizedDescription)")
-            if let url = configuration.pipelineURL {
+            if let url = getConfiguration(renderContext: renderContext).pipelineURL {
                 print("\(label) Shader Path: \(url.path)")
             }
             shadowPipelineError = error
-            shadowPipelines[context] = nil
+            shadowPipelines[renderContext] = nil
         }
 
         shadowPipelineNeedsUpdate = false
