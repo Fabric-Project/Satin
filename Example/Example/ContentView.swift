@@ -211,6 +211,17 @@ struct ContentView: View {
             )
         )
 
+        results.append(
+            ExampleSection(
+                title: "Deferred Rendering",
+                items: [
+                    ExampleItem(id: "deferred-rendering", title: "Deferred Rendering", systemImage: "square.stack.3d.down.forward") {
+                        PBRMRTRendererView()
+                    }
+                ]
+            )
+        )
+
         var postProcessingItems: [ExampleItem] = [
             ExampleItem(id: "post-processing", title: "Post Processing", systemImage: "checkerboard.rectangle") { PostProcessingRendererView() },
             ExampleItem(id: "bloom", title: "Bloom", systemImage: "sun.max.fill") { BloomRendererView() },

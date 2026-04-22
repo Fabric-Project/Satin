@@ -15,6 +15,7 @@
 		1B62F68E2F95C9F3007F29E9 /* ShadowConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000012E04100200AAA001 /* ShadowConstants.swift */; };
 		1B7FEE162F98972D0075DA16 /* RenderingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE152F98972D0075DA16 /* RenderingMode.swift */; };
 		1B7FEE182F98974C0075DA16 /* DeferredLightingMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE172F98974C0075DA16 /* DeferredLightingMaterial.swift */; };
+		1B7FEE1E2F9923650075DA16 /* SsaoBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE1D2F9923650075DA16 /* SsaoBlurMaterial.swift */; };
 		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* VelocityMaterial.swift */; };
 		AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* SsaoMaterial.swift */; };
@@ -293,6 +294,7 @@
 		1B62F6892F95C93C007F29E9 /* SpotShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadow.swift; sourceTree = "<group>"; };
 		1B7FEE152F98972D0075DA16 /* RenderingMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderingMode.swift; sourceTree = "<group>"; };
 		1B7FEE172F98974C0075DA16 /* DeferredLightingMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeferredLightingMaterial.swift; sourceTree = "<group>"; };
+		1B7FEE1D2F9923650075DA16 /* SsaoBlurMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsaoBlurMaterial.swift; sourceTree = "<group>"; };
 		1BB12B462E025B3F0075C276 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
@@ -863,6 +865,7 @@
 				66D7DDCC2C06A24B00B5A6C8 /* NormalColorMaterial.swift */,
 				AA000002AA000002AA000002 /* VelocityMaterial.swift */,
 				AA000004AA000004AA000004 /* SsaoMaterial.swift */,
+				1B7FEE1D2F9923650075DA16 /* SsaoBlurMaterial.swift */,
 				AA000006AA000006AA000006 /* MotionBlurMaterial.swift */,
 				66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */,
 				66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */,
@@ -1435,6 +1438,7 @@
 				E101A8DB2C070E8E0055FABA /* BrdfGenerator.swift in Sources */,
 				E101A8DC2C070E8E0055FABA /* CubemapGenerator.swift in Sources */,
 				E101A8DD2C070E8E0055FABA /* DiffuseIBLGenerator.swift in Sources */,
+				1B7FEE1E2F9923650075DA16 /* SsaoBlurMaterial.swift in Sources */,
 				E101A8DE2C070E8E0055FABA /* RandomNoiseGenerator.swift in Sources */,
 				E1FEA9072C3737830002CD80 /* Float+Extensions.swift in Sources */,
 				E101A8DF2C070E8E0055FABA /* SpecularIBLGenerator.swift in Sources */,

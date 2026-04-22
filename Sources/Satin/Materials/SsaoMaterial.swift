@@ -26,6 +26,16 @@ public final class SsaoMaterial: Material {
         set { set("Kernel Size", Int(newValue)) }
     }
 
+    public var power: Float {
+        get { get("Power", as: FloatParameter.self)?.value ?? 1.5 }
+        set { set("Power", newValue) }
+    }
+
+    public var contrast: Float {
+        get { get("Contrast", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Contrast", newValue) }
+    }
+
     public init(context: Context, depthTexture: MTLTexture? = nil, normalTexture: MTLTexture? = nil) {
         self.depthTexture = depthTexture
         self.normalTexture = normalTexture
@@ -47,6 +57,8 @@ public final class SsaoMaterial: Material {
         blending = .disabled
         if get("Radius") == nil { set("Radius", Float(0.5)) }
         if get("Bias") == nil { set("Bias", Float(0.025)) }
+        if get("Power") == nil { set("Power", Float(1.5)) }
+        if get("Contrast") == nil { set("Contrast", Float(1.0)) }
         if get("Kernel Size") == nil { set("Kernel Size", 16) }
         set(depthTexture, index: FragmentTextureIndex.Custom0)
         set(normalTexture, index: FragmentTextureIndex.Custom1)

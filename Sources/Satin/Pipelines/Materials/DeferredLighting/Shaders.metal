@@ -19,7 +19,8 @@ static float3 deferredLightingReconstructViewPosition(
     float depth,
     float4x4 inverseProjectionMatrix
 ) {
-    const float4 clipPosition = float4(uv * 2.0 - 1.0, depth, 1.0);
+    // Satin UV has y=0 at top; Metal clip space has y=+1 at top, so flip Y.
+    const float4 clipPosition = float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
     const float4 viewPosition = inverseProjectionMatrix * clipPosition;
     return viewPosition.xyz / viewPosition.w;
 }
@@ -43,7 +44,9 @@ fragment half4 deferredLightingFragment(
     texture2d<float, access::sample> pbrTexture [[texture(FragmentTextureCustom2)]],
     texture2d<float, access::sample> emissiveTexture [[texture(FragmentTextureCustom3)]],
     depth2d<float, access::sample> depthTexture [[texture(FragmentTextureCustom4)]],
-#include "Chunks/PbrTextures.metal"
+    texturecube<float> reflectionMap [[texture(PBRTextureReflection)]],
+    texturecube<float> irradianceMap [[texture(PBRTextureIrradiance)]],
+    texture2d<float> brdfMap [[texture(PBRTextureBrdf)]]
 ) {
     constexpr sampler gbufferSampler(filter::nearest, address::clamp_to_edge);
 
@@ -96,5 +99,5 @@ fragment half4 deferredLightingFragment(
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 
-    return half4(pbrTonemap(pixel), pixel.material.alpha);
+    return half4(half3(pbrTonemap(pixel)), half(pixel.material.alpha));
 }

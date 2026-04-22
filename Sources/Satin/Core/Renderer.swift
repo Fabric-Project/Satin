@@ -901,11 +901,8 @@ open class Renderer {
             renderPassDescriptor.stencilAttachment.resolveTexture = stencilResolveTexture
         }
 
-        renderPassDescriptor.depthAttachment.texture = nil
-        renderPassDescriptor.depthAttachment.resolveTexture = nil
-        renderPassDescriptor.stencilAttachment.texture = nil
-        renderPassDescriptor.stencilAttachment.resolveTexture = nil
-
+        // Keep depth/stencil textures attached so the pipeline pixel formats match.
+        // The dontCare actions prevent any actual depth reads or writes in this pass.
         configureMainAttachments(
             renderPassDescriptor: renderPassDescriptor,
             colorLoadAction: .clear,
