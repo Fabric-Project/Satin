@@ -36,12 +36,20 @@ public func getPipelinesChunksURL() -> URL? {
     return getPipelinesURL("Chunks")
 }
 
+public func getPipelinesIncludesURL() -> URL? {
+    return getPipelinesURL("Includes")
+}
+
 public func getPipelinesChunksURL(_ path: String) -> URL? {
     return getPipelinesChunksURL()?.appendingPathComponent(path)
 }
 
 public func getPipelinesLibraryURL(_ path: String) -> URL? {
     return getPipelinesLibraryURL()?.appendingPathComponent(path)
+}
+
+public func getPipelinesIncludesURL(_ path: String) -> URL? {
+    return getPipelinesIncludesURL()?.appendingPathComponent(path)
 }
 
 public func getPipelinesSatinURL() -> URL? {

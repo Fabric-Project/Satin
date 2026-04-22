@@ -1,11 +1,12 @@
 #include "../../Library/Dither.metal"
-#include "Includes/FragmentOutput.metal"
+#include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
     float4 position [[position]];
     // inject shadow coords
     float3 viewPosition;
     float3 normal;
+    float3 worldNormal;
 
 #ifdef OUTPUT_VELOCITY
     float4 currentClipPos;
@@ -43,6 +44,7 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     out.viewPosition = viewPosition.xyz;
     out.position = vertexUniforms[amp_id].projectionMatrix * viewPosition;
     out.normal = screenSpaceNormal.xyz;
+    out.worldNormal = normal;
 
     // inject shadow vertex calc
 
@@ -62,7 +64,12 @@ fragment FragmentOutput basicDiffuseFragment(
     BasicDiffuseVertexData in [[stage_in]],
     // inject shadow fragment args
     constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
-    float4 outColor = uniforms.color;
+    float4 outColor;
+
+#if defined(DEFERRED_GEOMETRY)
+    outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
+#else
+    outColor = uniforms.color;
 
     const float3 pos = in.viewPosition;
     const float3 dx = normalize(dfdx(pos));
@@ -74,10 +81,11 @@ fragment FragmentOutput basicDiffuseFragment(
     outColor.rgb *= pow(mix(soft, hard, uniforms.hardness), uniforms.diffusePower);
     // inject shadow fragment calc
     outColor.rgb = dither8x8(in.position.xy, outColor.rgb);
+#endif
 
     SurfaceOutput surface;
     surface.albedo    = half3(uniforms.color.rgb);
-    surface.normal    = half3(0.0h);
+    surface.normal    = half3(normalize(in.worldNormal));
     surface.roughness = 1.0h;
     surface.metalness = 0.0h;
     surface.ao        = 1.0h;

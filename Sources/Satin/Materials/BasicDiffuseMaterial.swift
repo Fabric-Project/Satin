@@ -10,7 +10,7 @@ import simd
 
 public final class BasicDiffuseMaterial: BasicColorMaterial {
     override public var lightingModel: LightingModel { .surface }
-    override public var supportedOutputs: RendererOutputs { [.color, .albedo, .velocity] }
+    override public var supportedOutputs: RendererOutputs { [.color, .albedo, .normals, .pbr, .velocity, .emissive] }
     public var hardness: Float {
         get {
             get("Hardness", as: FloatParameter.self)!.value

@@ -1,4 +1,4 @@
-#include "Includes/RendererAttachments.metal"
+#include "RendererAttachments.metal"
 
 // What a surface material provides. Materials fill this from evaluateSurface(); the framework
 // handles lighting and output routing via buildFragmentOutput() in FragmentOutput.metal.

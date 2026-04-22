@@ -1,4 +1,4 @@
-#include "Includes/SurfaceOutput.metal"
+#include "SurfaceOutput.metal"
 
 // Builds a FragmentOutput from a SurfaceOutput and the already-computed lit color.
 // Velocity is geometry-derived and computed here — materials never need to handle it.

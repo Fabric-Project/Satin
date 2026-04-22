@@ -267,6 +267,28 @@ open class Renderer {
     private var projectorMatricesBuffer: StructBuffer<simd_float4x4>?
     private var projectorTransformsBuffer: StructBuffer<simd_float4x4>?
 
+    private var activeEnvironmentIntensity: Float = 1.0
+    private var activeReflectionTexture: MTLTexture?
+    private var activeIrradianceTexture: MTLTexture?
+    private var activeBrdfTexture: MTLTexture?
+    private var activeReflectionTexcoordTransform = matrix_identity_float3x3
+    private var activeIrradianceTexcoordTransform = matrix_identity_float3x3
+
+    private lazy var deferredLightingMaterial = DeferredLightingMaterial(context: context)
+    private lazy var deferredLightingMesh: Mesh = {
+        let mesh = Mesh(
+            context: context,
+            label: label + " Deferred Lighting Mesh",
+            geometry: QuadGeometry(context: context),
+            material: deferredLightingMaterial
+        )
+        mesh.cullMode = .none
+        mesh.castShadow = false
+        mesh.receiveShadow = false
+        return mesh
+    }()
+    private lazy var deferredLightingCamera = OrthographicCamera(context: context)
+
     var frameBufferOnly: Bool {
         didSet {
             if frameBufferOnly != oldValue {
@@ -615,8 +637,16 @@ open class Renderer {
         RendererOutputs(rawValue: outputs.rawValue | RendererOutputs.color.rawValue)
     }
 
+    private var deferredRequiredOutputs: RendererOutputs {
+        [.albedo, .normals, .pbr, .emissive]
+    }
+
     private var requestedOutputs: RendererOutputs {
-        normalizedOutputs(activeOutputs)
+        var outputs = normalizedOutputs(activeOutputs)
+        if renderingMode == .deferredGeometry {
+            outputs.formUnion(deferredRequiredOutputs)
+        }
+        return outputs
     }
 
     private var requestedAuxiliaryOutputs: RendererOutputs {
@@ -812,6 +842,119 @@ open class Renderer {
         return activeAttachmentIndices
     }
 
+    private func prepareDeferredLightingMaterial(camera: Camera) {
+        deferredLightingMaterial.albedoTexture = albedoTexture
+        deferredLightingMaterial.normalTexture = normalTexture
+        deferredLightingMaterial.pbrTexture = pbrTexture
+        deferredLightingMaterial.emissiveTexture = emissiveTexture
+        deferredLightingMaterial.depthTexture = depthTexture
+
+        deferredLightingMaterial.lightCount = lightList.count
+        deferredLightingMaterial.projectorCount = projectorLights.count
+        deferredLightingMaterial.directShadowCount = directShadowLights.count
+        deferredLightingMaterial.directShadowTextureCount = directShadowTextures.count
+
+        deferredLightingMaterial.environmentIntensity = activeEnvironmentIntensity
+        deferredLightingMaterial.reflectionTexcoordTransform = simd_float4x4(
+            textureTransform: activeReflectionTexcoordTransform
+        )
+        deferredLightingMaterial.irradianceTexcoordTransform = simd_float4x4(
+            textureTransform: activeIrradianceTexcoordTransform
+        )
+        deferredLightingMaterial.reflectionTexture = activeReflectionTexture
+        deferredLightingMaterial.irradianceTexture = activeIrradianceTexture
+        deferredLightingMaterial.brdfTexture = activeBrdfTexture
+        deferredLightingMaterial.update(camera: camera)
+    }
+
+    @discardableResult
+    private func encodeDeferredLightingPass(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer,
+        sceneCamera: Camera,
+        viewports: [MTLViewport],
+        simdViewports: [simd_float4],
+        viewMappings: [MTLVertexAmplificationViewMapping],
+        colorStoreAction: MTLStoreAction
+    ) -> Bool {
+        guard albedoTexture != nil,
+              normalTexture != nil,
+              pbrTexture != nil,
+              emissiveTexture != nil,
+              depthTexture != nil
+        else { return false }
+
+        prepareDeferredLightingMaterial(camera: sceneCamera)
+        deferredLightingCamera.update()
+        deferredLightingMesh.update()
+        deferredLightingMesh.encode(commandBuffer)
+
+        let depthTexture = renderPassDescriptor.depthAttachment.texture
+        let depthResolveTexture = renderPassDescriptor.depthAttachment.resolveTexture
+        let stencilTexture = renderPassDescriptor.stencilAttachment.texture
+        let stencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
+
+        defer {
+            renderPassDescriptor.depthAttachment.texture = depthTexture
+            renderPassDescriptor.depthAttachment.resolveTexture = depthResolveTexture
+            renderPassDescriptor.stencilAttachment.texture = stencilTexture
+            renderPassDescriptor.stencilAttachment.resolveTexture = stencilResolveTexture
+        }
+
+        renderPassDescriptor.depthAttachment.texture = nil
+        renderPassDescriptor.depthAttachment.resolveTexture = nil
+        renderPassDescriptor.stencilAttachment.texture = nil
+        renderPassDescriptor.stencilAttachment.resolveTexture = nil
+
+        configureMainAttachments(
+            renderPassDescriptor: renderPassDescriptor,
+            colorLoadAction: .clear,
+            depthLoadAction: .dontCare,
+            stencilLoadAction: .dontCare,
+            colorStoreAction: colorStoreAction,
+            depthStoreAction: .dontCare,
+            stencilStoreAction: .dontCare
+        )
+        configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+            return false
+        }
+
+        renderEncoder.label = "\(self.label) Deferred Lighting Resolve"
+#if DEBUG
+        renderEncoder.pushDebugGroup("Deferred Lighting Resolve")
+#endif
+        renderEncoder.setViewports(viewports)
+
+        if context.vertexAmplificationCount > 1 {
+            var maps = viewMappings
+            if maps.isEmpty {
+                maps = (0..<context.vertexAmplificationCount).map {
+                    .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0))
+                }
+            }
+            renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
+        }
+
+        let deferredCameras = Array(repeating: deferredLightingCamera, count: max(context.vertexAmplificationCount, 1))
+        encode(
+            renderEncoder: renderEncoder,
+            pass: 0,
+            renderables: [deferredLightingMesh],
+            cameras: deferredCameras,
+            viewports: simdViewports,
+            phase: .unlit
+        )
+
+#if DEBUG
+        renderEncoder.popDebugGroup()
+#endif
+        renderEncoder.endEncoding()
+
+        return true
+    }
+
     private func shouldEncodeEmptyPass(renderPassDescriptor: MTLRenderPassDescriptor, auxiliaryAttachmentIndices: [Int]) -> Bool {
         if renderPassDescriptor.colorAttachments[0].texture != nil,
            renderPassDescriptor.colorAttachments[0].loadAction == .clear
@@ -961,7 +1104,7 @@ open class Renderer {
                 clearWhenEmpty: true
             )
 
-        case .forwardPlus, .deferredGeometry:
+        case .forwardPlus:
             let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (!hasUnlitRenderables && renderLists.isEmpty)
             var didEncode = false
 
@@ -1044,6 +1187,77 @@ open class Renderer {
                     auxiliaryAttachmentIndices: [],
                     clearWhenEmpty: true
                 )
+            }
+
+            return didEncode
+
+        case .deferredGeometry:
+            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (!hasUnlitRenderables && renderLists.isEmpty)
+            var didEncode = false
+
+            if needsSurfacePass {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: colorLoadAction,
+                    depthLoadAction: depthLoadAction,
+                    stencilLoadAction: stencilLoadAction,
+                    colorStoreAction: .dontCare,
+                    depthStoreAction: .store,
+                    stencilStoreAction: hasUnlitRenderables ? .store : finalStencilStoreAction
+                )
+                let auxiliaryAttachmentIndices = configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor)
+                let surfaceEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .surface,
+                    phase: .surface,
+                    label: "Deferred Geometry",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: auxiliaryAttachmentIndices,
+                    clearWhenEmpty: true
+                )
+                let resolveEncoded = encodeDeferredLightingPass(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    sceneCamera: cameras[0],
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    colorStoreAction: hasUnlitRenderables ? .store : finalColorStoreAction
+                )
+                didEncode = surfaceEncoded || resolveEncoded
+            } else {
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+            }
+
+            if hasUnlitRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: needsSurfacePass ? .load : depthLoadAction,
+                    stencilLoadAction: needsSurfacePass ? .load : stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                let unlitEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .unlit,
+                    phase: .unlit,
+                    label: "Unlit Forward",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: !didEncode
+                )
+                didEncode = didEncode || unlitEncoded
             }
 
             return didEncode
@@ -1137,26 +1351,26 @@ open class Renderer {
         let directShadowTextureCount = directShadowTextures.count
         let projectorCount = projectorLights.count
 
-        var environmentIntensity: Float = 1.0
         var cubemapTexture: MTLTexture?
-        var reflectionTexture: MTLTexture?
-        var irradianceTexture: MTLTexture?
-        var brdfTexture: MTLTexture?
-        var reflectionTexcoordTransform = matrix_identity_float3x3
-        var irradianceTexcoordTransform = matrix_identity_float3x3
+        activeEnvironmentIntensity = 1.0
+        activeReflectionTexture = nil
+        activeIrradianceTexture = nil
+        activeBrdfTexture = nil
+        activeReflectionTexcoordTransform = matrix_identity_float3x3
+        activeIrradianceTexcoordTransform = matrix_identity_float3x3
 
         for object in objectList {
             if let environment = object as? IBLEnvironment {
-                environmentIntensity = environment.environmentIntensity
+                activeEnvironmentIntensity = environment.environmentIntensity
                 cubemapTexture = environment.cubemapTexture
 
-                reflectionTexture = environment.reflectionTexture
-                reflectionTexcoordTransform = environment.reflectionTexcoordTransform
+                activeReflectionTexture = environment.reflectionTexture
+                activeReflectionTexcoordTransform = environment.reflectionTexcoordTransform
 
-                irradianceTexture = environment.irradianceTexture
-                irradianceTexcoordTransform = environment.irradianceTexcoordTransform
+                activeIrradianceTexture = environment.irradianceTexture
+                activeIrradianceTexcoordTransform = environment.irradianceTexcoordTransform
 
-                brdfTexture = environment.brdfTexture
+                activeBrdfTexture = environment.brdfTexture
             }
 
             if let renderable = object as? Renderable {
@@ -1184,24 +1398,24 @@ open class Renderer {
                     }
 
                     if let pbrMaterial = material as? StandardMaterial {
-                        pbrMaterial.environmentIntensity = environmentIntensity
-                        if let reflectionTexture = reflectionTexture {
+                        pbrMaterial.environmentIntensity = activeEnvironmentIntensity
+                        if let reflectionTexture = activeReflectionTexture {
                             pbrMaterial.setTexture(reflectionTexture, type: .reflection)
-                            pbrMaterial.setTexcoordTransform(reflectionTexcoordTransform, type: .reflection)
+                            pbrMaterial.setTexcoordTransform(activeReflectionTexcoordTransform, type: .reflection)
                         }
-                        if let irradianceTexture = irradianceTexture {
+                        if let irradianceTexture = activeIrradianceTexture {
                             pbrMaterial.setTexture(irradianceTexture, type: .irradiance)
-                            pbrMaterial.setTexcoordTransform(irradianceTexcoordTransform, type: .irradiance)
+                            pbrMaterial.setTexcoordTransform(activeIrradianceTexcoordTransform, type: .irradiance)
                         }
-                        if let brdfTexture = brdfTexture {
+                        if let brdfTexture = activeBrdfTexture {
                             pbrMaterial.setTexture(brdfTexture, type: .brdf)
                         }
                     }
 
                     if let cubemapTexture = cubemapTexture, let skyboxMaterial = material as? SkyboxMaterial {
                         skyboxMaterial.texture = cubemapTexture
-                        skyboxMaterial.texcoordTransform = simd_float4x4(textureTransform: reflectionTexcoordTransform)
-                        skyboxMaterial.environmentIntensity = environmentIntensity
+                        skyboxMaterial.texcoordTransform = simd_float4x4(textureTransform: activeReflectionTexcoordTransform)
+                        skyboxMaterial.environmentIntensity = activeEnvironmentIntensity
                     }
 
                     material.update()
@@ -1405,6 +1619,9 @@ open class Renderer {
 
         for renderable in renderables {
             let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
+            if renderable.vertexUniforms[drawContext] == nil {
+                renderable.vertexUniforms[drawContext] = VertexUniformBuffer(context: drawContext)
+            }
             guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
             _encode(
                 renderEncoder: renderEncoder,
@@ -1436,10 +1653,6 @@ open class Renderer {
 
         if let overrideMaterial {
             renderable.material = overrideMaterial
-            // Lazily create a vertex uniform buffer for the prepass context if not yet present
-            if renderable.vertexUniforms[renderContext] == nil {
-                renderable.vertexUniforms[renderContext] = VertexUniformBuffer(context: renderContext)
-            }
         }
         defer { if overrideMaterial != nil { renderable.material = savedMaterial } }
 

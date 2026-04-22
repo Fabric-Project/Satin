@@ -2,7 +2,7 @@
 // Albedo is the gamma-corrected base color before lighting accumulation, which is correct
 // for SSGI and other effects that need the pre-lit surface color.
 surface.albedo    = half3(pixel.material.baseColor);
-surface.normal    = pixel.normal;
+surface.normal    = half3(pixel.normal);
 surface.roughness = half(pixel.material.roughness);
 surface.metalness = half(pixel.material.metallic);
 surface.ao        = half(pixel.material.occlusion);

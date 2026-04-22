@@ -1,7 +1,7 @@
 #include "Satin/PbrConstants.metal"
 
 #include "Library/Pbr/Pbr.metal"
-#include "Includes/FragmentOutput.metal"
+#include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
 #include "Chunks/PhysicalUniforms.metal"
@@ -112,9 +112,13 @@ fragment FragmentOutput physicalFragment(
     SurfaceOutput surface;
 #include "Chunks/PixelInfoSurfaceOutput.metal"
 
+#if defined(DEFERRED_GEOMETRY)
+    outColor = float4(pbrTonemap(pixel), pixel.material.alpha);
+#else
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 #include "Chunks/PbrTonemap.metal"
+#endif
 
     return buildFragmentOutput(surface, half4(outColor)
 #ifdef OUTPUT_VELOCITY
