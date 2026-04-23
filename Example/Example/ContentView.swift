@@ -226,7 +226,8 @@ struct ContentView: View {
             ExampleItem(id: "post-processing", title: "Post Processing", systemImage: "checkerboard.rectangle") { PostProcessingRendererView() },
             ExampleItem(id: "bloom", title: "Bloom", systemImage: "sun.max.fill") { BloomRendererView() },
             ExampleItem(id: "fxaa", title: "FXAA", systemImage: "squareshape.split.2x2.dotted") { FXAARendererView() },
-            ExampleItem(id: "motion-blur", title: "Motion Blur", systemImage: "gauge.with.needle") { MotionBlurRendererView() }
+            ExampleItem(id: "motion-blur", title: "Motion Blur", systemImage: "gauge.with.needle") { MotionBlurRendererView() },
+            ExampleItem(id: "ssgi-projector", title: "SSGI Projector", systemImage: "sparkles.tv") { SSGIProjectorRendererView() }
         ]
         #if os(macOS)
             postProcessingItems.append(

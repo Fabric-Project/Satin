@@ -1,0 +1,260 @@
+import Metal
+import simd
+
+open class SsgiPostProcessor: PostProcessor {
+    private static let defaultResolutionScale: Float = 0.5
+    private static let minResolutionScale: Float = 0.25
+    private static let maxResolutionScale: Float = 1.0
+
+    public var colorTexture: MTLTexture? {
+        didSet {
+            ssgiMaterial.colorTexture = colorTexture
+            compositeMaterial.colorTexture = colorTexture
+        }
+    }
+
+    public var depthTexture: MTLTexture? {
+        didSet {
+            ssgiMaterial.depthTexture = depthTexture
+            blurMaterial.depthTexture = depthTexture
+        }
+    }
+
+    public var normalTexture: MTLTexture? {
+        didSet {
+            ssgiMaterial.normalTexture = normalTexture
+            blurMaterial.normalTexture = normalTexture
+        }
+    }
+
+    public var albedoTexture: MTLTexture? {
+        didSet { ssgiMaterial.albedoTexture = albedoTexture }
+    }
+
+    public var pbrTexture: MTLTexture? {
+        didSet { ssgiMaterial.pbrTexture = pbrTexture }
+    }
+
+    public var sceneCamera: Camera?
+
+    public var resolutionScale: Float {
+        get { _resolutionScale }
+        set {
+            let clamped = Self.clampResolutionScale(newValue)
+            guard clamped != _resolutionScale else { return }
+            _resolutionScale = clamped
+            resizeResources()
+        }
+    }
+
+    public private(set) var ssgiTexture: MTLTexture?
+    public private(set) var outputTexture: MTLTexture?
+
+    public let ssgiMaterial: SsgiMaterial
+    public let blurMaterial: SsgiBlurMaterial
+    public let compositeMaterial: SsgiCompositeMaterial
+
+    private let blurProcessor: SeparablePostProcessor
+    private let compositeProcessor: PostProcessor
+    private var rawTexture: MTLTexture?
+    private var rawTextureSize: (width: Int, height: Int) = (0, 0)
+    private var outputTextureSize: (width: Int, height: Int) = (0, 0)
+    private var lastSize: (width: Float, height: Float) = (0, 0)
+    private var neutralTexture: MTLTexture?
+    private var _resolutionScale = SsgiPostProcessor.defaultResolutionScale
+
+    private static func clampResolutionScale(_ value: Float) -> Float {
+        min(max(value, Self.minResolutionScale), Self.maxResolutionScale)
+    }
+
+    private static func makeSsgiContext(context: Context) -> Context {
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float)
+    }
+
+    private static func makeCompositeContext(context: Context) -> Context {
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
+    }
+
+    public required init(context: Context) {
+        let ssgiContext = Self.makeSsgiContext(context: context)
+        let compositeContext = Self.makeCompositeContext(context: context)
+
+        ssgiMaterial = SsgiMaterial(context: ssgiContext)
+        blurMaterial = SsgiBlurMaterial(context: ssgiContext)
+        compositeMaterial = SsgiCompositeMaterial(context: compositeContext)
+
+        blurProcessor = SeparablePostProcessor(
+            label: "SSGI Blur",
+            context: ssgiContext,
+            horizontalMaterial: blurMaterial,
+            verticalMaterial: blurMaterial
+        )
+
+        compositeProcessor = PostProcessor(
+            label: "SSGI Composite",
+            context: compositeContext,
+            material: compositeMaterial,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare
+        )
+
+        super.init(
+            label: "SSGI",
+            context: ssgiContext,
+            material: ssgiMaterial,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare
+        )
+    }
+
+    override open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
+        lastSize = size
+        compositeProcessor.resize(size: size, scaleFactor: scaleFactor)
+        resizeResources()
+    }
+
+    private func resizeResources() {
+        let scaledWidth = Int(max((lastSize.width * resolutionScale).rounded(.up), 0.0))
+        let scaledHeight = Int(max((lastSize.height * resolutionScale).rounded(.up), 0.0))
+        let scaledSize = (width: Float(scaledWidth), height: Float(scaledHeight))
+
+        super.resize(size: scaledSize, scaleFactor: 1.0)
+        blurProcessor.resize(size: lastSize, resolutionScale: resolutionScale)
+
+        ssgiTexture = nil
+
+        if scaledWidth > 0, scaledHeight > 0 {
+            if rawTextureSize.width != scaledWidth || rawTextureSize.height != scaledHeight {
+                rawTexture = makeTexture(
+                    device: context.device,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    pixelFormat: .rgba16Float,
+                    usage: [.renderTarget, .shaderRead],
+                    storageMode: .private,
+                    label: "SSGI Raw"
+                )
+                rawTextureSize = (scaledWidth, scaledHeight)
+            }
+        } else {
+            rawTexture = nil
+            rawTextureSize = (0, 0)
+        }
+
+        let outputWidth = Int(max(lastSize.width.rounded(.up), 0.0))
+        let outputHeight = Int(max(lastSize.height.rounded(.up), 0.0))
+        guard outputWidth > 0, outputHeight > 0 else {
+            outputTexture = nil
+            outputTextureSize = (0, 0)
+            return
+        }
+
+        if outputTextureSize.width != outputWidth || outputTextureSize.height != outputHeight {
+            outputTexture = makeTexture(
+                device: compositeProcessor.context.device,
+                width: outputWidth,
+                height: outputHeight,
+                pixelFormat: compositeProcessor.context.colorPixelFormat,
+                usage: [.renderTarget, .shaderRead],
+                storageMode: .private,
+                label: "SSGI Output"
+            )
+            outputTextureSize = (outputWidth, outputHeight)
+        }
+    }
+
+    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+        let blurOutputTexture = blurProcessor.outputTexture
+        let hasInputs = colorTexture != nil &&
+            depthTexture != nil &&
+            normalTexture != nil &&
+            albedoTexture != nil &&
+            pbrTexture != nil &&
+            rawTexture != nil &&
+            blurOutputTexture != nil &&
+            sceneCamera != nil
+
+        ssgiTexture = hasInputs ? blurOutputTexture : nil
+
+        if hasInputs, let rawTexture, let sceneCamera {
+            ssgiMaterial.update(camera: sceneCamera, viewportHeight: Float(rawTexture.height))
+
+            super.draw(
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: rawTexture
+            )
+
+            blurProcessor.draw(commandBuffer: commandBuffer, inputTexture: rawTexture) { [blurMaterial] pass, inputTexture in
+                blurMaterial.ssgiTexture = inputTexture
+                blurMaterial.direction = pass == .horizontal ? simd_float2(1.0, 0.0) : simd_float2(0.0, 1.0)
+            }
+        }
+
+        guard let colorTexture, let outputTexture else { return }
+        guard let compositeSsgiTexture = hasInputs ? ssgiTexture : fallbackNeutralTexture() else { return }
+
+        compositeMaterial.colorTexture = colorTexture
+        compositeMaterial.ssgiTexture = compositeSsgiTexture
+        compositeProcessor.draw(
+            renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
+            renderTarget: outputTexture
+        )
+    }
+
+    private func fallbackNeutralTexture() -> MTLTexture? {
+        if let neutralTexture {
+            return neutralTexture
+        }
+
+        let texture = makeTexture(
+            device: compositeProcessor.context.device,
+            width: 1,
+            height: 1,
+            pixelFormat: .rgba8Unorm,
+            usage: [.shaderRead],
+            storageMode: .shared,
+            label: "SSGI Neutral"
+        )
+
+        if let texture {
+            let value: [UInt8] = [0, 0, 0, UInt8.max]
+            value.withUnsafeBytes { bytes in
+                texture.replace(
+                    region: MTLRegionMake2D(0, 0, 1, 1),
+                    mipmapLevel: 0,
+                    withBytes: bytes.baseAddress!,
+                    bytesPerRow: value.count
+                )
+            }
+        }
+
+        neutralTexture = texture
+        return texture
+    }
+
+    private func makeTexture(
+        device: MTLDevice,
+        width: Int,
+        height: Int,
+        pixelFormat: MTLPixelFormat,
+        usage: MTLTextureUsage,
+        storageMode: MTLStorageMode,
+        label: String
+    ) -> MTLTexture? {
+        guard width > 0, height > 0 else { return nil }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: pixelFormat,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        descriptor.sampleCount = 1
+        descriptor.usage = usage
+        descriptor.storageMode = storageMode
+        let texture = device.makeTexture(descriptor: descriptor)
+        texture?.label = label
+        return texture
+    }
+}

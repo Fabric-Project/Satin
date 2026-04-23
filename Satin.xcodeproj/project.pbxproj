@@ -19,6 +19,9 @@
 		1B7FEE222F9944B00075DA16 /* SsaoCompositeMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE212F9944B00075DA16 /* SsaoCompositeMaterial.swift */; };
 		1BDACD2D2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDACD2B2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift */; };
 		1BDACD2E2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDACD2C2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift */; };
+		1BF434822F99D59500098934 /* SsgiCompositeMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF434802F99D59500098934 /* SsgiCompositeMaterial.swift */; };
+		1BF434832F99D59500098934 /* SsgiBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF4347F2F99D59500098934 /* SsgiBlurMaterial.swift */; };
+		1BF434842F99D59500098934 /* SsgiMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BF434812F99D59500098934 /* SsgiMaterial.swift */; };
 		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* VelocityMaterial.swift */; };
 		AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* SsaoMaterial.swift */; };
@@ -299,6 +302,9 @@
 		1BB12B462E025B3F0075C276 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		1BDACD2B2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BokehDepthOfFieldCompositeMaterial.swift; sourceTree = "<group>"; };
 		1BDACD2C2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BokehDepthOfFieldNearMaxMaterial.swift; sourceTree = "<group>"; };
+		1BF4347F2F99D59500098934 /* SsgiBlurMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsgiBlurMaterial.swift; sourceTree = "<group>"; };
+		1BF434802F99D59500098934 /* SsgiCompositeMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsgiCompositeMaterial.swift; sourceTree = "<group>"; };
+		1BF434812F99D59500098934 /* SsgiMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsgiMaterial.swift; sourceTree = "<group>"; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
 		66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easings.swift; sourceTree = "<group>"; };
@@ -875,6 +881,9 @@
 				1B7FEE212F9944B00075DA16 /* SsaoCompositeMaterial.swift */,
 				AA000006AA000006AA000006 /* MotionBlurMaterial.swift */,
 				66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */,
+				1BF4347F2F99D59500098934 /* SsgiBlurMaterial.swift */,
+				1BF434802F99D59500098934 /* SsgiCompositeMaterial.swift */,
+				1BF434812F99D59500098934 /* SsgiMaterial.swift */,
 				66D7DDCE2C06A24B00B5A6C8 /* ShadowMaterial.swift */,
 				66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */,
 				66D7DDD02C06A24B00B5A6C8 /* SourceMaterial.swift */,
@@ -1478,6 +1487,9 @@
 				E101A8F62C070E8E0055FABA /* RoundedBoxGeometry.swift in Sources */,
 				E101A8F72C070E8E0055FABA /* RoundedRectGeometry.swift in Sources */,
 				E101A8F82C070E8E0055FABA /* SatinGeometry.swift in Sources */,
+				1BF434822F99D59500098934 /* SsgiCompositeMaterial.swift in Sources */,
+				1BF434832F99D59500098934 /* SsgiBlurMaterial.swift in Sources */,
+				1BF434842F99D59500098934 /* SsgiMaterial.swift in Sources */,
 				E101A8F92C070E8E0055FABA /* SkyboxGeometry.swift in Sources */,
 				E101A8FA2C070E8E0055FABA /* SphereGeometry.swift in Sources */,
 				E101A8FB2C070E8E0055FABA /* SquircleGeometry.swift in Sources */,
