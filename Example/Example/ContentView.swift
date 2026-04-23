@@ -227,6 +227,7 @@ struct ContentView: View {
             ExampleItem(id: "bloom", title: "Bloom", systemImage: "sun.max.fill") { BloomRendererView() },
             ExampleItem(id: "fxaa", title: "FXAA", systemImage: "squareshape.split.2x2.dotted") { FXAARendererView() },
             ExampleItem(id: "motion-blur", title: "Motion Blur", systemImage: "gauge.with.needle") { MotionBlurRendererView() },
+            ExampleItem(id: "ssgi-cornell-box", title: "SSGI Cornell Box", systemImage: "cube.transparent") { SSGICornellBoxRendererView() },
             ExampleItem(id: "ssgi-projector", title: "SSGI Projector", systemImage: "sparkles.tv") { SSGIProjectorRendererView() }
         ]
         #if os(macOS)

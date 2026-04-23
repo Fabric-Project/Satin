@@ -169,6 +169,8 @@
 		E1DEB7702C8659D700D58D21 /* BloomRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */; };
 		BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000002BB000002BB000002 /* MotionBlurRenderer.swift */; };
 		BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BB000004BB000004 /* MotionBlurRendererView.swift */; };
+		D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */; };
+		D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */; };
 		D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */; };
 		D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */; };
 		E1E767D928A6D808005D75AB /* Assets in Resources */ = {isa = PBXBuildFile; fileRef = E1E767D828A6D808005D75AB /* Assets */; };
@@ -349,6 +351,8 @@
 		E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomRendererView.swift; sourceTree = "<group>"; };
 		BB000002BB000002BB000002 /* MotionBlurRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRenderer.swift; sourceTree = "<group>"; };
 		BB000004BB000004BB000004 /* MotionBlurRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRendererView.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRenderer.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRendererView.swift; sourceTree = "<group>"; };
 		D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRenderer.swift; sourceTree = "<group>"; };
 		D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRendererView.swift; sourceTree = "<group>"; };
 		E1E69D1624A4711E00EDA686 /* DepthMaterialRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthMaterialRenderer.swift; sourceTree = "<group>"; };
@@ -669,6 +673,7 @@
 				E19417042C499FD200FE2E2B /* ScreenCaptureRendererView.swift */,
 				E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */,
 				BB000004BB000004BB000004 /* MotionBlurRendererView.swift */,
+				D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */,
 				D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */,
 			);
 			path = PostProcessing;
@@ -708,6 +713,7 @@
 				E19417022C499FAA00FE2E2B /* ScreenCaptureRenderer.swift */,
 				E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */,
 				BB000002BB000002BB000002 /* MotionBlurRenderer.swift */,
+				D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */,
 				D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */,
 			);
 			path = PostProcessing;
@@ -1111,6 +1117,8 @@
 				E1DEB76D2C8659B400D58D21 /* BloomRenderer.swift in Sources */,
 				BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */,
 				BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */,
+				D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */,
+				D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */,
 				D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */,
 				D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */,
 				E1D43BC82C65855A0063E2C9 /* ColorPaletteViewController.swift in Sources */,
