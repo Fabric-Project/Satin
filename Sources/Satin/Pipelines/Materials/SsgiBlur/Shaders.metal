@@ -27,10 +27,11 @@ fragment float4 ssgiBlurFragment(
     texture2d<float, access::sample> ssgiTex [[texture(FragmentTextureCustom0)]],
     depth2d<float, access::sample> depthTex [[texture(FragmentTextureCustom1)]],
     texture2d<float, access::sample> normalTex [[texture(FragmentTextureCustom2)]],
-    texture2d<float, access::read> noiseTex [[texture(FragmentTextureCustom3)]]
+    texture2d<float, access::sample> noiseTex [[texture(FragmentTextureCustom3)]]
 ) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler nearestSampler(filter::nearest, address::clamp_to_edge);
+    constexpr sampler noiseSampler(filter::nearest, address::repeat);
 
     const float2 uv = in.texcoord;
     const float4 centerTexel = ssgiTex.sample(linearSampler, uv);
@@ -49,13 +50,10 @@ fragment float4 ssgiBlurFragment(
     const float2 resolution = float2(ssgiTex.get_width(), ssgiTex.get_height());
     const float clampedRadius = clamp(uniforms.radius, 1.0, 16.0);
 
-    uint2 noiseCoord = uint2(in.position.xy);
-    if (noiseTex.get_width() > 0 && noiseTex.get_height() > 0) {
-        noiseCoord.x %= uint(noiseTex.get_width());
-        noiseCoord.y %= uint(noiseTex.get_height());
-    }
-    const float4 noiseTexel = noiseTex.read(noiseCoord);
-    const int channel = clamp(uniforms.noiseIndex, 0, 3);
+    const float2 noiseResolution = max(float2(noiseTex.get_width(), noiseTex.get_height()), 1.0);
+    const float2 noiseUV = float2(uv.x, 1.0 - uv.y) * (resolution / noiseResolution);
+    const float4 noiseTexel = noiseTex.sample(noiseSampler, noiseUV);
+    const int channel = int(uint(uniforms.noiseIndex) & 3u);
     const float noiseAngle = noiseTexel[channel] * (2.0 * PI);
     const float sinAngle = sin(noiseAngle);
     const float cosAngle = cos(noiseAngle);

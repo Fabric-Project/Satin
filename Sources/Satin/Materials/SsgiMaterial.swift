@@ -97,10 +97,10 @@ public final class SsgiMaterial: Material {
                 FloatParameter(
                     "Radius",
                     12.0,
-                    0.25,
-                    24.0,
+                    1.0,
+                    25.0,
                     .slider,
-                    "View-space sampling radius for indirect diffuse."
+                    "Effective sampling radius in world space."
                 )
             )
         }
@@ -109,10 +109,10 @@ public final class SsgiMaterial: Material {
                 FloatParameter(
                     "Thickness",
                     1.0,
-                    0.05,
-                    6.0,
+                    0.01,
+                    10.0,
                     .slider,
-                    "Depth tolerance used to reject screen-space leaks."
+                    "Constant world-space thickness used to reject screen-space leaks."
                 )
             )
         }
@@ -122,7 +122,7 @@ public final class SsgiMaterial: Material {
                     "Distribution Exponent",
                     2.0,
                     1.0,
-                    4.0,
+                    3.0,
                     .slider,
                     "Biases more samples toward the current pixel when increased."
                 )
@@ -142,10 +142,10 @@ public final class SsgiMaterial: Material {
         }
         if get("Half Projection Scale") == nil { set("Half Projection Scale", Float(1.0)) }
         if get("Slice Count") == nil {
-            parameters.append(IntParameter("Slice Count", 3, 1, 6, .slider, "Angular sampling slices across the hemisphere."))
+            parameters.append(IntParameter("Slice Count", 3, 1, 4, .slider, "Angular sampling slices across the hemisphere."))
         }
         if get("Step Count") == nil {
-            parameters.append(IntParameter("Step Count", 8, 1, 16, .slider, "Steps traced along each slice direction."))
+            parameters.append(IntParameter("Step Count", 8, 1, 32, .slider, "Steps traced along each slice direction."))
         }
 
         set(colorTexture, index: FragmentTextureIndex.Custom0)

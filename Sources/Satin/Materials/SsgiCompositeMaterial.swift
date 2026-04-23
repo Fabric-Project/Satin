@@ -12,17 +12,17 @@ public final class SsgiCompositeMaterial: Material {
     }
 
     public var giIntensity: Float {
-        get { get("GI Intensity", as: FloatParameter.self)?.value ?? 1.0 }
+        get { get("GI Intensity", as: FloatParameter.self)?.value ?? 10.0 }
         set { set("GI Intensity", newValue) }
     }
 
     public var aoIntensity: Float {
-        get { get("AO Intensity", as: FloatParameter.self)?.value ?? 0.35 }
+        get { get("AO Intensity", as: FloatParameter.self)?.value ?? 1.0 }
         set { set("AO Intensity", newValue) }
     }
 
     public var aoLift: Float {
-        get { get("AO Lift", as: FloatParameter.self)?.value ?? 0.2 }
+        get { get("AO Lift", as: FloatParameter.self)?.value ?? 0.0 }
         set { set("AO Lift", newValue) }
     }
 
@@ -42,13 +42,13 @@ public final class SsgiCompositeMaterial: Material {
         depthCompareFunction = .always
 
         if get("GI Intensity") == nil {
-            parameters.append(FloatParameter("GI Intensity", 1.0, 0.0, 4.0, .slider, "Scales the indirect diffuse contribution."))
+            parameters.append(FloatParameter("GI Intensity", 10.0, 0.0, 100.0, .slider, "Scales the indirect diffuse contribution."))
         }
         if get("AO Intensity") == nil {
-            parameters.append(FloatParameter("AO Intensity", 0.35, 0.0, 1.0, .slider, "Scales the ambient-occlusion darkening."))
+            parameters.append(FloatParameter("AO Intensity", 1.0, 0.0, 4.0, .slider, "Power applied to AO visibility, matching the three.js SSGI control."))
         }
         if get("AO Lift") == nil {
-            parameters.append(FloatParameter("AO Lift", 0.2, 0.0, 1.0, .slider, "Minimum visibility preserved after AO darkening."))
+            parameters.append(FloatParameter("AO Lift", 0.0, 0.0, 1.0, .slider, "Minimum visibility preserved after AO darkening."))
         }
 
         set(colorTexture, index: FragmentTextureIndex.Custom0)

@@ -66,6 +66,7 @@ open class SsgiPostProcessor: PostProcessor {
     private var neutralTexture: MTLTexture?
     private var blueNoiseTexture: MTLTexture?
     private var _resolutionScale = SsgiPostProcessor.defaultResolutionScale
+    private var frameIndex: UInt32 = 0
 
     private static func clampResolutionScale(_ value: Float) -> Float {
         min(max(value, Self.minResolutionScale), Self.maxResolutionScale)
@@ -209,12 +210,15 @@ open class SsgiPostProcessor: PostProcessor {
 
             blurMaterial.ssgiTexture = rawTexture
             blurMaterial.blueNoiseTexture = blueNoiseTexture
+            blurMaterial.noiseIndex = Int32(frameIndex & 3)
             blurMaterial.update(camera: sceneCamera)
             blurProcessor.draw(
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
             )
+
+            frameIndex &+= 1
         }
 
         guard let colorTexture, let outputTexture else { return }

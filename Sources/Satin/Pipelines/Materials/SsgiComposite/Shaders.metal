@@ -15,8 +15,9 @@ fragment float4 ssgiCompositeFragment(
     const float2 uv = in.texcoord;
     const float4 color = colorTex.sample(s, uv);
     const float4 ssgi = ssgiTex.sample(s, uv);
-    const float visibility = max(ssgi.a, uniforms.aoLift);
-    const float occlusion = mix(1.0, visibility, clamp(uniforms.aoIntensity, 0.0, 1.0));
+    const float visibility = saturate(max(ssgi.a, uniforms.aoLift));
+    const float aoIntensity = max(uniforms.aoIntensity, 0.0);
+    const float occlusion = aoIntensity > 0.0 ? pow(visibility, aoIntensity) : 1.0;
 
     return float4(color.rgb * occlusion + ssgi.rgb * uniforms.giIntensity, color.a);
 }

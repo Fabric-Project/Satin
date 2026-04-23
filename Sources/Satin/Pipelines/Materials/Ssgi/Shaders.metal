@@ -46,8 +46,8 @@ fragment float4 ssgiFragment(
     const float receiverMetallic = receiverPbr.g;
     const float3 receiverDiffuse = receiverAlbedo * (1.0 - receiverMetallic);
 
-    const int slices = clamp(uniforms.sliceCount, 1, 6);
-    const int steps = clamp(uniforms.stepCount, 1, 16);
+    const int slices = clamp(uniforms.sliceCount, 1, 4);
+    const int steps = clamp(uniforms.stepCount, 1, 32);
     const float2 texelSize = 1.0 / float2(colorTex.get_width(), colorTex.get_height());
     const float projectedRadius = max(
         uniforms.radius * uniforms.halfProjectionScale / max(-viewPosition.z, 1.0e-3),

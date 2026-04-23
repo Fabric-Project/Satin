@@ -16,7 +16,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     }
 
     private lazy var appParams = ParameterGroup("App", [
-        FloatParameter("SSGI Resolution", 0.5, 0.25, 1.0, .slider, "Internal SSGI resolution relative to the main scene."),
+        FloatParameter("SSGI Resolution", 1.0, 0.25, 1.0, .slider, "Internal SSGI resolution relative to the main scene."),
         FloatParameter("Light Intensity", 100.0, 10.0, 220.0, .slider, "Brightness of the Cornell box point light."),
         FloatParameter("Light Radius", 100.0, 10.0, 180.0, .slider, "Attenuation radius of the Cornell box point light."),
         FloatParameter("Light Height", 13.0, 10.0, 14.5, .slider, "Vertical position of the box light beneath the ceiling.")
@@ -52,33 +52,36 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         blending: .disabled
     )
 
+    private let boxSize:Float = 18.0
+    private let boxSizeHalf:Float = 9.0
+
     private lazy var leftWall = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 20.0, height: 15.0, orientation: .yz),
+        geometry: PlaneGeometry(context: defaultContext, width: boxSize, height: boxSize, orientation: .yz),
         material: redWallMaterial
     )
 
     private lazy var rightWall = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 20.0, height: 15.0, orientation: .zy),
+        geometry: PlaneGeometry(context: defaultContext, width: boxSize, height: boxSize, orientation: .zy),
         material: greenWallMaterial
     )
 
     private lazy var floorMesh = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 20.0, height: 20.0, orientation: .zx),
+        geometry: PlaneGeometry(context: defaultContext, width: boxSize, height: boxSize, orientation: .zx),
         material: whiteWallMaterial
     )
 
     private lazy var backWall = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 20.0, height: 15.0, orientation: .xy),
+        geometry: PlaneGeometry(context: defaultContext, width: boxSize, height: boxSize, orientation: .xy),
         material: whiteWallMaterial
     )
 
     private lazy var ceilingMesh = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 20.0, height: 20.0, orientation: .xz),
+        geometry: PlaneGeometry(context: defaultContext, width: boxSize, height: boxSize, orientation: .xz),
         material: whiteWallMaterial
     )
 
@@ -154,6 +157,21 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     override func setup() {
         setupScene()
 
+        ssgiPostProcessor.resolutionScale = 1.0
+        ssgiPostProcessor.ssgiMaterial.radius = 12.0
+        ssgiPostProcessor.ssgiMaterial.thickness = 1.0
+        ssgiPostProcessor.ssgiMaterial.expFactor = 2.0
+        ssgiPostProcessor.ssgiMaterial.jitterStrength = 1.0
+        ssgiPostProcessor.ssgiMaterial.sliceCount = 4
+        ssgiPostProcessor.ssgiMaterial.stepCount = 12
+        ssgiPostProcessor.blurMaterial.radius = 4.0
+        ssgiPostProcessor.blurMaterial.lumaPhi = 5.0
+        ssgiPostProcessor.blurMaterial.depthPhi = 5.0
+        ssgiPostProcessor.blurMaterial.normalPhi = 5.0
+        ssgiPostProcessor.compositeMaterial.giIntensity = 10.0
+        ssgiPostProcessor.compositeMaterial.aoIntensity = 1.0
+        ssgiPostProcessor.compositeMaterial.aoLift = 0.0
+
         camera.lookAt(target: [0.0, 7.0, 0.0])
         cameraController.target.position = [0.0, 7.0, 0.0]
         cameraController.minimumZoomDistance = 8.0
@@ -165,7 +183,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     override func update() {
         cameraController.update()
 
-        ssgiPostProcessor.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 0.5
+        ssgiPostProcessor.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 1.0
 
         let lightHeight = appParams.get("Light Height", as: FloatParameter.self)?.value ?? 13.0
         pointLight.intensity = appParams.get("Light Intensity", as: FloatParameter.self)?.value ?? 100.0
@@ -204,22 +222,22 @@ final class SSGICornellBoxRenderer: BaseRenderer {
 
     private func setupScene() {
         leftWall.label = "Left Wall"
-        leftWall.position = [-10.0, 7.5, 0.0]
+        leftWall.position = [-boxSizeHalf, boxSizeHalf, 0.0]
         leftWall.receiveShadow = true
 
         rightWall.label = "Right Wall"
-        rightWall.position = [10.0, 7.5, 0.0]
+        rightWall.position = [boxSizeHalf, boxSizeHalf, 0.0]
         rightWall.receiveShadow = true
 
         floorMesh.label = "Floor"
         floorMesh.receiveShadow = true
 
         backWall.label = "Back Wall"
-        backWall.position = [0.0, 7.5, -10.0]
+        backWall.position = [0.0, boxSizeHalf, -boxSizeHalf]
         backWall.receiveShadow = true
 
         ceilingMesh.label = "Ceiling"
-        ceilingMesh.position = [0.0, 15.0, 0.0]
+        ceilingMesh.position = [0.0, boxSize, 0.0]
         ceilingMesh.receiveShadow = true
 
         tallBox.label = "Tall Box"
