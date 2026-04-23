@@ -18,6 +18,9 @@
 		1B7FEE1E2F9923650075DA16 /* SsaoBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE1D2F9923650075DA16 /* SsaoBlurMaterial.swift */; };
 		1B7FEE202F9944890075DA16 /* SeparablePostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE1F2F9944890075DA16 /* SeparablePostProcessor.swift */; };
 		1B7FEE222F9944B00075DA16 /* SsaoCompositeMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE212F9944B00075DA16 /* SsaoCompositeMaterial.swift */; };
+		1BDACD2D2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDACD2B2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift */; };
+		1BDACD2E2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDACD2C2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift */; };
+		1BDACD302F99B01700294D80 /* BokehDepthOfFieldPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDACD2F2F99B01700294D80 /* BokehDepthOfFieldPostProcessor.swift */; };
 		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		AA000001AA000001AA000001 /* VelocityMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000002AA000002AA000002 /* VelocityMaterial.swift */; };
 		AA000003AA000003AA000003 /* SsaoMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000004AA000004AA000004 /* SsaoMaterial.swift */; };
@@ -300,6 +303,9 @@
 		1B7FEE1F2F9944890075DA16 /* SeparablePostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeparablePostProcessor.swift; sourceTree = "<group>"; };
 		1B7FEE212F9944B00075DA16 /* SsaoCompositeMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SsaoCompositeMaterial.swift; sourceTree = "<group>"; };
 		1BB12B462E025B3F0075C276 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
+		1BDACD2B2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BokehDepthOfFieldCompositeMaterial.swift; sourceTree = "<group>"; };
+		1BDACD2C2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BokehDepthOfFieldNearMaxMaterial.swift; sourceTree = "<group>"; };
+		1BDACD2F2F99B01700294D80 /* BokehDepthOfFieldPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BokehDepthOfFieldPostProcessor.swift; sourceTree = "<group>"; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
 		66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easings.swift; sourceTree = "<group>"; };
@@ -863,6 +869,8 @@
 				66D7DDC72C06A24B00B5A6C8 /* BasicDiffuseMaterial.swift */,
 				66D7DDC82C06A24B00B5A6C8 /* BasicPointMaterial.swift */,
 				66D7DDC92C06A24B00B5A6C8 /* BasicTextureMaterial.swift */,
+				1BDACD2B2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift */,
+				1BDACD2C2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift */,
 				1B7FEE172F98974C0075DA16 /* DeferredLightingMaterial.swift */,
 				66D7DDCA2C06A24B00B5A6C8 /* DepthMaterial.swift */,
 				66D7DDCB2C06A24B00B5A6C8 /* MatCapMaterial.swift */,
@@ -1007,6 +1015,7 @@
 		66D7DED62C06A24B00B5A6C8 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				1BDACD2F2F99B01700294D80 /* BokehDepthOfFieldPostProcessor.swift */,
 				E18ABF812CBCD89C00F54A6D /* Locks.swift */,
 				66D7DECB2C06A24B00B5A6C8 /* FileWatcher.swift */,
 				66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */,
@@ -1296,6 +1305,7 @@
 				1B7FEE182F98974C0075DA16 /* DeferredLightingMaterial.swift in Sources */,
 				E101A8542C07061D0055FABA /* Bezier.mm in Sources */,
 				E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */,
+				1BDACD302F99B01700294D80 /* BokehDepthOfFieldPostProcessor.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
@@ -1369,6 +1379,8 @@
 				E101A8992C070E8E0055FABA /* ARDepthMaskGenerator.swift in Sources */,
 				E101A89A2C070E8E0055FABA /* ARDepthUpscaler.swift in Sources */,
 				E101A89B2C070E8E0055FABA /* ARFeatheredDepthMaskGenerator.swift in Sources */,
+				1BDACD2D2F99AFBD00294D80 /* BokehDepthOfFieldCompositeMaterial.swift in Sources */,
+				1BDACD2E2F99AFBD00294D80 /* BokehDepthOfFieldNearMaxMaterial.swift in Sources */,
 				E101A89C2C070E8E0055FABA /* ARLidarMesh.swift in Sources */,
 				E101A89D2C070E8E0055FABA /* ARMatteRenderer.swift in Sources */,
 				E101A89E2C070E8E0055FABA /* ARPerspectiveCamera.swift in Sources */,

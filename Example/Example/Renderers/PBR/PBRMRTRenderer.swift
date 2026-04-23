@@ -41,7 +41,7 @@ final class PBRMRTRenderer: BaseRenderer {
 
     private struct OutputPreview {
         let output: PreviewOutput
-        let background: Mesh
+//        let background: Mesh
         let mesh: Mesh
         let label: TextMesh?
     }
@@ -54,7 +54,7 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["Material", "SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur"]
+        ["Material", "SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
@@ -63,7 +63,8 @@ final class PBRMRTRenderer: BaseRenderer {
             "SSAO": ssaoPostProcessor.ssaoMaterial.parameters,
             "SSAO Blur": ssaoPostProcessor.blurMaterial.parameters,
             "SSAO Composite": ssaoPostProcessor.compositeMaterial.parameters,
-            "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters
+            "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters,
+            "DOF": bokehDepthOfFieldPostProcessor.parameters
         ]
     }
 
@@ -102,7 +103,7 @@ final class PBRMRTRenderer: BaseRenderer {
             label: "PBR MRT Overlay Renderer",
             context: overlayContext,
             sortObjects: true,
-            clearColor: [0.01, 0.015, 0.02, 1.0],
+            clearColor: [0, 0, 0, 0],
             colorLoadAction: .clear,
             colorStoreAction: .store,
             depthLoadAction: .dontCare,
@@ -116,6 +117,7 @@ final class PBRMRTRenderer: BaseRenderer {
     private lazy var previewTileMaterial = makeOverlayColorMaterial([0.07, 0.085, 0.11, 0.95])
     private lazy var ssaoPostProcessor = SsaoPostProcessor(context: defaultContext)
     private lazy var motionBlurPostProcessor = MotionBlurPostProcessor(context: defaultContext)
+    private lazy var bokehDepthOfFieldPostProcessor = BokehDepthOfFieldPostProcessor(context: defaultContext)
 
     private lazy var overlayScene = Object(context: overlayContext, label: "MRT Overlay Scene")
     private lazy var overlayCamera = OrthographicCamera(
@@ -238,6 +240,7 @@ final class PBRMRTRenderer: BaseRenderer {
         sceneRenderer.resize(size)
         ssaoPostProcessor.resize(size: size, scaleFactor: scaleFactor)
         motionBlurPostProcessor.resize(size: size, scaleFactor: scaleFactor)
+        bokehDepthOfFieldPostProcessor.resize(size: size, scaleFactor: scaleFactor)
         overlayRenderer.resize(size)
         layoutOverlay(size: size)
     }
@@ -334,7 +337,7 @@ final class PBRMRTRenderer: BaseRenderer {
 
         outputPreviews = PreviewOutput.allCases.map(makePreview(for:))
         for preview in outputPreviews {
-            overlayScene.add(preview.background)
+//            overlayScene.add(preview.background)
             overlayScene.add(preview.mesh)
             if let label = preview.label {
                 overlayScene.add(label)
@@ -345,18 +348,18 @@ final class PBRMRTRenderer: BaseRenderer {
     private func makePreview(for output: PreviewOutput) -> OutputPreview {
         let previewMaterial: Material
         switch output {
-        case .depth:
-            let material = SourceMaterial(
-                context: overlayContext,
-                pipelineURL: sharedAssetsURL
-                    .appendingPathComponent("Pipelines")
-                    .appendingPathComponent("ShadowPost")
-                    .appendingPathComponent("Shaders.metal")
-            )
-            material.blending = .disabled
-            material.depthWriteEnabled = false
-            material.set("Color", simd_float4.one)
-            previewMaterial = material
+//        case .depth:
+//            let material = SourceMaterial(
+//                context: overlayContext,
+//                pipelineURL: sharedAssetsURL
+//                    .appendingPathComponent("Pipelines")
+//                    .appendingPathComponent("ShadowPost")
+//                    .appendingPathComponent("Shaders.metal")
+//            )
+//            material.blending = .disabled
+//            material.depthWriteEnabled = false
+//            material.set("Color", simd_float4.one)
+//            previewMaterial = material
         default:
             let material = BasicTextureMaterial(context: overlayContext)
             material.blending = .disabled
@@ -373,14 +376,14 @@ final class PBRMRTRenderer: BaseRenderer {
         )
         configureOverlay(previewMesh)
 
-        let backgroundMesh = Mesh(
-            context: overlayContext,
-            label: "\(output.title) Preview Background",
-            geometry: previewGeometry,
-            material: previewTileMaterial,
-            renderOrder: 20
-        )
-        configureOverlay(backgroundMesh)
+//        let backgroundMesh = Mesh(
+//            context: overlayContext,
+//            label: "\(output.title) Preview Background",
+//            geometry: previewGeometry,
+//            material: previewTileMaterial,
+//            renderOrder: 20
+//        )
+//        configureOverlay(backgroundMesh)
 
         let labelMesh: TextMesh?
         if let fontAtlas = overlayFontAtlas, let labelMaterial = overlayLabelMaterial {
@@ -400,7 +403,7 @@ final class PBRMRTRenderer: BaseRenderer {
 
         return OutputPreview(
             output: output,
-            background: backgroundMesh,
+//            background: backgroundMesh,
             mesh: previewMesh,
             label: labelMesh
         )
@@ -420,7 +423,17 @@ final class PBRMRTRenderer: BaseRenderer {
         motionBlurPostProcessor.depthTexture = sceneRenderer.depthTexture
         motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        return motionBlurPostProcessor.outputTexture ?? compositeTexture
+        let motionBlurTexture = motionBlurPostProcessor.outputTexture ?? compositeTexture
+
+        bokehDepthOfFieldPostProcessor.colorTexture = motionBlurTexture
+        bokehDepthOfFieldPostProcessor.depthTexture = sceneRenderer.depthTexture
+        bokehDepthOfFieldPostProcessor.sceneCamera = camera
+        bokehDepthOfFieldPostProcessor.draw(
+            renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer
+        )
+
+        return bokehDepthOfFieldPostProcessor.outputTexture ?? motionBlurTexture
     }
 
     private func updatePreviewTextures(beautyTexture: MTLTexture?) {
@@ -430,12 +443,12 @@ final class PBRMRTRenderer: BaseRenderer {
             let isVisible: Bool
 
             switch preview.output {
-            case .depth:
-                let depthTexture = sceneRenderer.depthTexture
-                preview.mesh.material?.set(sceneRenderer.colorTexture, index: FragmentTextureIndex.Custom0)
-                preview.mesh.material?.set(depthTexture, index: FragmentTextureIndex.Custom1)
-                preview.mesh.material?.set("Near Far", [camera.near, camera.far])
-                isVisible = depthTexture != nil
+//            case .depth:
+//                let depthTexture = sceneRenderer.depthTexture
+//                preview.mesh.material?.set(sceneRenderer.colorTexture, index: FragmentTextureIndex.Custom0)
+//                preview.mesh.material?.set(depthTexture, index: FragmentTextureIndex.Custom1)
+//                preview.mesh.material?.set("Near Far", [camera.near, camera.far])
+//                isVisible = depthTexture != nil
             default:
                 let texture = texture(for: preview.output)
                 if let material = preview.mesh.material as? BasicTextureMaterial {
@@ -444,7 +457,7 @@ final class PBRMRTRenderer: BaseRenderer {
                 isVisible = texture != nil
             }
 
-            preview.background.visible = isVisible
+//            preview.background.visible = isVisible
             preview.mesh.visible = isVisible
             preview.label?.visible = isVisible
         }
@@ -514,8 +527,8 @@ final class PBRMRTRenderer: BaseRenderer {
         for (index, preview) in outputPreviews.enumerated() {
             let centerX = startX + Float(index) * (previewWidth + gap)
 
-            preview.background.position = [centerX, tileCenterY, 1.0]
-            preview.background.scale = [previewWidth + tileBorder * 2.0, previewHeight + tileBorder * 2.0, 1.0]
+//            preview.background.position = [centerX, tileCenterY, 1.0]
+//            preview.background.scale = [previewWidth + tileBorder * 2.0, previewHeight + tileBorder * 2.0, 1.0]
 
             preview.mesh.position = [centerX, tileCenterY, 1.5]
             preview.mesh.scale = [previewWidth, previewHeight, 1.0]

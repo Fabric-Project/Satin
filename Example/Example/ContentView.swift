@@ -37,7 +37,7 @@ private struct ExampleSection: Identifiable {
 
 struct ContentView: View {
     #if os(macOS)
-        @State private var selection: String? = "pbr-standard-material"
+        @State private var selection: String? = "deferred-rendering"
     #else
         @State private var selection: String?
     #endif
@@ -266,7 +266,9 @@ struct ContentView: View {
             } else {
                 ContentUnavailableView("Select an Example", systemImage: "square.stack.3d.up")
             }
+            
         }
+        
     }
 }
 

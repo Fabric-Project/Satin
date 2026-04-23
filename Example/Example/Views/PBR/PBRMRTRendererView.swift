@@ -11,7 +11,7 @@ import SwiftUI
 struct PBRMRTRendererView: View {
     var body: some View {
         SatinMetalView(renderer: PBRMRTRenderer())
-            .ignoresSafeArea()
+//            .ignoresSafeArea()
             .navigationTitle("Deferred Rendering")
     }
 }
