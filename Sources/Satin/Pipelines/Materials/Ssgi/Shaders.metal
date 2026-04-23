@@ -7,9 +7,10 @@ typedef struct {
     float4x4 projectionMatrix;
     float4x4 inverseProjectionMatrix;
     float4x4 viewMatrix;
-    float radius;              // slider,0.25,24.0,12.0
+    float radius;              // slider,0.25,48.0,12.0
     float thickness;           // slider,0.05,6.0,1.0
     float expFactor;           // slider,1.0,4.0,2.0
+    float jitterStrength;      // slider,0.0,1.0,1.0
     float halfProjectionScale;
     int sliceCount;            // slider,1,6,3
     int stepCount;             // slider,1,16,8
@@ -50,24 +51,39 @@ fragment float4 ssgiFragment(
     const float2 texelSize = 1.0 / float2(colorTex.get_width(), colorTex.get_height());
     const float projectedRadius = max(
         uniforms.radius * uniforms.halfProjectionScale / max(-viewPosition.z, 1.0e-3),
-        float(steps)
+        1.0
     );
-    const float noise = random(float2(in.position.xy));
+    const float angularNoise = random(float2(in.position.xy));
+    const float radialNoise = random(float2(in.position.xy) + float2(19.19, 73.17));
+    const float jitterStrength = clamp(uniforms.jitterStrength, 0.0, 1.0);
 
     float3 indirect = 0.0;
     float occlusion = 0.0;
-    float validSamples = 0.0;
+    float indirectWeightSum = 0.0;
+    float occlusionWeightSum = 0.0;
 
     for (int slice = 0; slice < slices; slice++) {
-        const float angle = (float(slice) + noise) * PI / float(slices);
+        const float angleJitter = fract(angularNoise + float(slice) * 0.61803398875);
+        const float angle = (float(slice) + angleJitter) * PI / float(slices);
         const float2 axis = float2(cos(angle), sin(angle));
 
         for (int side = -1; side <= 1; side += 2) {
             const float2 direction = axis * float(side);
+            const float intervalNoise = fract(
+                radialNoise
+                    + float(slice) * 0.754877666
+                    + (side < 0 ? 0.245122334 : 0.745122334)
+            );
+            const float stepOffset = mix(0.5, intervalNoise, jitterStrength);
 
             for (int step = 0; step < steps; step++) {
-                const float stepAlpha = pow((float(step) + 1.0) / float(steps + 1), uniforms.expFactor);
-                const float pixelOffset = max(projectedRadius * stepAlpha, float(step + 1));
+                const float stepFraction = clamp(
+                    (float(step) + stepOffset) / float(steps),
+                    1.0e-3,
+                    1.0
+                );
+                const float stepAlpha = pow(stepFraction, uniforms.expFactor);
+                const float pixelOffset = max(projectedRadius * stepAlpha, 1.0);
                 const float2 sampleUV = uv + direction * texelSize * pixelOffset;
 
                 if (!satinUvInside(sampleUV)) {
@@ -121,30 +137,34 @@ fragment float4 ssgiFragment(
                 const float sourceBounce = 1.0 - samplePbr.g;
                 const float distanceWeight = saturate(1.0 - distanceToSample / uniforms.radius);
                 const float attenuation = distanceWeight * distanceWeight;
-                const float sampleWeight = receiverWeight * emitterWeight * thicknessWeight * attenuation * sourceBounce;
+                const float visibilityWeight = receiverWeight * attenuation;
+                const float sampleWeight = visibilityWeight * emitterWeight * thicknessWeight * sourceBounce;
 
                 if (sampleWeight <= 1.0e-4) {
                     continue;
                 }
 
                 indirect += colorTex.sample(linearSampler, sampleUV).rgb * sampleWeight;
-                occlusion += receiverWeight * thicknessWeight * attenuation;
-                validSamples += 1.0;
+                indirectWeightSum += sampleWeight;
+                occlusion += visibilityWeight * thicknessWeight;
+                occlusionWeightSum += visibilityWeight;
             }
         }
     }
 
-    if (validSamples <= 0.0) {
+    if (indirectWeightSum <= 0.0) {
         return float4(0.0, 0.0, 0.0, 1.0);
     }
 
-    indirect = (indirect / validSamples) * receiverDiffuse;
+    indirect = (indirect / indirectWeightSum) * receiverDiffuse;
 
     const float indirectLuminance = luminance(indirect);
     if (indirectLuminance > 8.0) {
         indirect *= 8.0 / indirectLuminance;
     }
 
-    const float visibility = saturate(1.0 - occlusion / validSamples);
+    const float visibility = occlusionWeightSum > 0.0
+        ? saturate(1.0 - occlusion / occlusionWeightSum)
+        : 1.0;
     return float4(max(indirect, 0.0), visibility);
 }

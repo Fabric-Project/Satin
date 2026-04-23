@@ -54,6 +54,11 @@ public final class SsgiMaterial: Material {
         set { set("Distribution Exponent", newValue) }
     }
 
+    public var jitterStrength: Float {
+        get { get("Jitter Strength", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Jitter Strength", newValue) }
+    }
+
     public var halfProjectionScale: Float {
         get { get("Half Projection Scale", as: FloatParameter.self)?.value ?? 1.0 }
         set { set("Half Projection Scale", newValue) }
@@ -120,6 +125,18 @@ public final class SsgiMaterial: Material {
                     4.0,
                     .slider,
                     "Biases more samples toward the current pixel when increased."
+                )
+            )
+        }
+        if get("Jitter Strength") == nil {
+            parameters.append(
+                FloatParameter(
+                    "Jitter Strength",
+                    1.0,
+                    0.0,
+                    1.0,
+                    .slider,
+                    "Offsets sample positions along each slice to trade banding for denoisable noise."
                 )
             )
         }

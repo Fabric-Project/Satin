@@ -4,17 +4,6 @@ import simd
 public final class SsgiBlurMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    private struct BlurPassUniforms {
-        var direction: simd_float2
-    }
-
-    private lazy var passUniformsBuffer = StructBuffer<BlurPassUniforms>(
-        device: context.device,
-        count: 1,
-        label: "SSGI Blur Pass Uniforms"
-    )
-    private var passUniformsNeedUpdate = true
-
     public unowned var ssgiTexture: MTLTexture? {
         didSet { set(ssgiTexture, index: FragmentTextureIndex.Custom0) }
     }
@@ -27,23 +16,43 @@ public final class SsgiBlurMaterial: Material {
         didSet { set(normalTexture, index: FragmentTextureIndex.Custom2) }
     }
 
-    public var blurStrength: Float {
-        get { get("Blur Strength", as: FloatParameter.self)?.value ?? 0.65 }
-        set { set("Blur Strength", newValue) }
+    public unowned var blueNoiseTexture: MTLTexture? {
+        didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom3) }
     }
 
-    public var depthSharpness: Float {
-        get { get("Depth Sharpness", as: FloatParameter.self)?.value ?? 500.0 }
-        set { set("Depth Sharpness", newValue) }
+    public var inverseProjectionMatrix: simd_float4x4 {
+        get { get("Inverse Projection Matrix", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4 }
+        set { set("Inverse Projection Matrix", newValue) }
     }
 
-    public var normalSharpness: Float {
-        get { get("Normal Sharpness", as: FloatParameter.self)?.value ?? 32.0 }
-        set { set("Normal Sharpness", newValue) }
+    public var viewMatrix: simd_float4x4 {
+        get { get("View Matrix", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4 }
+        set { set("View Matrix", newValue) }
     }
 
-    var direction: simd_float2 = simd_float2(1.0, 0.0) {
-        didSet { passUniformsNeedUpdate = true }
+    public var radius: Float {
+        get { get("Denoise Radius", as: FloatParameter.self)?.value ?? 5.0 }
+        set { set("Denoise Radius", newValue) }
+    }
+
+    public var lumaPhi: Float {
+        get { get("Luma Phi", as: FloatParameter.self)?.value ?? 5.0 }
+        set { set("Luma Phi", newValue) }
+    }
+
+    public var depthPhi: Float {
+        get { get("Depth Phi", as: FloatParameter.self)?.value ?? 5.0 }
+        set { set("Depth Phi", newValue) }
+    }
+
+    public var normalPhi: Float {
+        get { get("Normal Phi", as: FloatParameter.self)?.value ?? 5.0 }
+        set { set("Normal Phi", newValue) }
+    }
+
+    public var noiseIndex: Int32 {
+        get { get("Noise Index", as: IntParameter.self).map { Int32($0.value) } ?? 0 }
+        set { set("Noise Index", Int(newValue)) }
     }
 
     public required init(context: Context) {
@@ -61,54 +70,66 @@ public final class SsgiBlurMaterial: Material {
         depthWriteEnabled = false
         depthCompareFunction = .always
 
-        if get("Blur Strength") == nil {
+        if get("Inverse Projection Matrix") == nil { set("Inverse Projection Matrix", matrix_identity_float4x4) }
+        if get("View Matrix") == nil { set("View Matrix", matrix_identity_float4x4) }
+        if get("Denoise Radius") == nil {
             parameters.append(
                 FloatParameter(
-                    "Blur Strength",
-                    0.65,
-                    0.0,
+                    "Denoise Radius",
+                    5.0,
                     1.0,
+                    16.0,
                     .slider,
-                    "Scales the bilateral denoise radius."
+                    "Radius of the rotated denoise kernel in low-resolution SSGI texels."
                 )
             )
         }
-        if get("Depth Sharpness") == nil {
+        if get("Luma Phi") == nil {
             parameters.append(
                 FloatParameter(
-                    "Depth Sharpness",
-                    500.0,
-                    1.0,
-                    2000.0,
+                    "Luma Phi",
+                    5.0,
+                    0.1,
+                    20.0,
                     .slider,
-                    "Higher values preserve depth edges more aggressively."
+                    "Tolerance for luminance variation between neighboring SSGI samples."
                 )
             )
         }
-        if get("Normal Sharpness") == nil {
+        if get("Depth Phi") == nil {
             parameters.append(
                 FloatParameter(
-                    "Normal Sharpness",
-                    32.0,
-                    1.0,
-                    128.0,
+                    "Depth Phi",
+                    5.0,
+                    0.1,
+                    20.0,
                     .slider,
-                    "Higher values preserve normal edges more aggressively."
+                    "Tolerance for view-space depth variation along the center normal."
                 )
             )
         }
+        if get("Normal Phi") == nil {
+            parameters.append(
+                FloatParameter(
+                    "Normal Phi",
+                    5.0,
+                    0.1,
+                    64.0,
+                    .slider,
+                    "Exponent used to preserve normal discontinuities during denoising."
+                )
+            )
+        }
+        if get("Noise Index") == nil { set("Noise Index", 0) }
 
-        set(passUniformsBuffer, index: FragmentBufferIndex.Custom0)
         set(ssgiTexture, index: FragmentTextureIndex.Custom0)
         set(depthTexture, index: FragmentTextureIndex.Custom1)
         set(normalTexture, index: FragmentTextureIndex.Custom2)
+        set(blueNoiseTexture, index: FragmentTextureIndex.Custom3)
     }
 
-    override public func update() {
-        if passUniformsNeedUpdate {
-            passUniformsBuffer.update(data: [BlurPassUniforms(direction: direction)])
-            passUniformsNeedUpdate = false
-        }
-        super.update()
+    public func update(camera: Camera) {
+        inverseProjectionMatrix = camera.projectionMatrix.inverse
+        viewMatrix = camera.viewMatrix
     }
 }

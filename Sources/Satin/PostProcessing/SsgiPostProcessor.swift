@@ -1,4 +1,5 @@
 import Metal
+import MetalKit
 import simd
 
 open class SsgiPostProcessor: PostProcessor {
@@ -54,13 +55,16 @@ open class SsgiPostProcessor: PostProcessor {
     public let blurMaterial: SsgiBlurMaterial
     public let compositeMaterial: SsgiCompositeMaterial
 
-    private let blurProcessor: SeparablePostProcessor
+    private let blurProcessor: PostProcessor
     private let compositeProcessor: PostProcessor
     private var rawTexture: MTLTexture?
+    private var denoisedTexture: MTLTexture?
     private var rawTextureSize: (width: Int, height: Int) = (0, 0)
+    private var denoisedTextureSize: (width: Int, height: Int) = (0, 0)
     private var outputTextureSize: (width: Int, height: Int) = (0, 0)
     private var lastSize: (width: Float, height: Float) = (0, 0)
     private var neutralTexture: MTLTexture?
+    private var blueNoiseTexture: MTLTexture?
     private var _resolutionScale = SsgiPostProcessor.defaultResolutionScale
 
     private static func clampResolutionScale(_ value: Float) -> Float {
@@ -83,11 +87,12 @@ open class SsgiPostProcessor: PostProcessor {
         blurMaterial = SsgiBlurMaterial(context: ssgiContext)
         compositeMaterial = SsgiCompositeMaterial(context: compositeContext)
 
-        blurProcessor = SeparablePostProcessor(
-            label: "SSGI Blur",
+        blurProcessor = PostProcessor(
+            label: "SSGI Denoise",
             context: ssgiContext,
-            horizontalMaterial: blurMaterial,
-            verticalMaterial: blurMaterial
+            material: blurMaterial,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare
         )
 
         compositeProcessor = PostProcessor(
@@ -105,6 +110,9 @@ open class SsgiPostProcessor: PostProcessor {
             depthLoadAction: .dontCare,
             depthStoreAction: .dontCare
         )
+
+        blueNoiseTexture = loadBlueNoiseTexture(device: context.device)
+        blurMaterial.blueNoiseTexture = blueNoiseTexture
     }
 
     override open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
@@ -119,7 +127,7 @@ open class SsgiPostProcessor: PostProcessor {
         let scaledSize = (width: Float(scaledWidth), height: Float(scaledHeight))
 
         super.resize(size: scaledSize, scaleFactor: 1.0)
-        blurProcessor.resize(size: lastSize, resolutionScale: resolutionScale)
+        blurProcessor.resize(size: scaledSize, scaleFactor: 1.0)
 
         ssgiTexture = nil
 
@@ -136,9 +144,24 @@ open class SsgiPostProcessor: PostProcessor {
                 )
                 rawTextureSize = (scaledWidth, scaledHeight)
             }
+
+            if denoisedTextureSize.width != scaledWidth || denoisedTextureSize.height != scaledHeight {
+                denoisedTexture = makeTexture(
+                    device: context.device,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    pixelFormat: .rgba16Float,
+                    usage: [.renderTarget, .shaderRead],
+                    storageMode: .private,
+                    label: "SSGI Denoised"
+                )
+                denoisedTextureSize = (scaledWidth, scaledHeight)
+            }
         } else {
             rawTexture = nil
             rawTextureSize = (0, 0)
+            denoisedTexture = nil
+            denoisedTextureSize = (0, 0)
         }
 
         let outputWidth = Int(max(lastSize.width.rounded(.up), 0.0))
@@ -164,19 +187,18 @@ open class SsgiPostProcessor: PostProcessor {
     }
 
     override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        let blurOutputTexture = blurProcessor.outputTexture
         let hasInputs = colorTexture != nil &&
             depthTexture != nil &&
             normalTexture != nil &&
             albedoTexture != nil &&
             pbrTexture != nil &&
             rawTexture != nil &&
-            blurOutputTexture != nil &&
+            denoisedTexture != nil &&
             sceneCamera != nil
 
-        ssgiTexture = hasInputs ? blurOutputTexture : nil
+        ssgiTexture = hasInputs ? denoisedTexture : nil
 
-        if hasInputs, let rawTexture, let sceneCamera {
+        if hasInputs, let rawTexture, let denoisedTexture, let sceneCamera {
             ssgiMaterial.update(camera: sceneCamera, viewportHeight: Float(rawTexture.height))
 
             super.draw(
@@ -185,10 +207,14 @@ open class SsgiPostProcessor: PostProcessor {
                 renderTarget: rawTexture
             )
 
-            blurProcessor.draw(commandBuffer: commandBuffer, inputTexture: rawTexture) { [blurMaterial] pass, inputTexture in
-                blurMaterial.ssgiTexture = inputTexture
-                blurMaterial.direction = pass == .horizontal ? simd_float2(1.0, 0.0) : simd_float2(0.0, 1.0)
-            }
+            blurMaterial.ssgiTexture = rawTexture
+            blurMaterial.blueNoiseTexture = blueNoiseTexture
+            blurMaterial.update(camera: sceneCamera)
+            blurProcessor.draw(
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: denoisedTexture
+            )
         }
 
         guard let colorTexture, let outputTexture else { return }
@@ -255,6 +281,44 @@ open class SsgiPostProcessor: PostProcessor {
         descriptor.storageMode = storageMode
         let texture = device.makeTexture(descriptor: descriptor)
         texture?.label = label
+        return texture
+    }
+
+    private func loadBlueNoiseTexture(device: MTLDevice) -> MTLTexture? {
+        if let url = getTexturesURL("blue_noise_rgba.png") {
+            let loader = MTKTextureLoader(device: device)
+            if let texture = try? loader.newTexture(URL: url, options: [
+                .SRGB: false,
+                .generateMipmaps: false,
+                .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
+                .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
+            ]) {
+                return texture
+            }
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        texture.label = "SSGI Noise Fallback"
+
+        let value: [UInt8] = [64, 128, 192, 255]
+        value.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, 1, 1),
+                mipmapLevel: 0,
+                withBytes: bytes.baseAddress!,
+                bytesPerRow: value.count
+            )
+        }
+
         return texture
     }
 }
