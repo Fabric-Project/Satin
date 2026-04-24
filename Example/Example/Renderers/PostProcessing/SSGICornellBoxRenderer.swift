@@ -16,7 +16,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     }
 
     private lazy var appParams = ParameterGroup("App", [
-        FloatParameter("SSGI Resolution", 1.0, 0.25, 1.0, .slider, "Internal SSGI resolution relative to the main scene."),
+        FloatParameter("SSGI Resolution", 0.333, 0.25, 1.0, .slider, "Internal SSGI resolution relative to the main scene."),
         FloatParameter("Light Intensity", 100.0, 10.0, 220.0, .slider, "Brightness of the Cornell box point light."),
         FloatParameter("Light Radius", 100.0, 10.0, 180.0, .slider, "Attenuation radius of the Cornell box point light."),
         FloatParameter("Light Height", 13.0, 10.0, 14.5, .slider, "Vertical position of the box light beneath the ceiling.")
@@ -158,12 +158,12 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         setupScene()
 
         ssgiPostProcessor.resolutionScale = 1.0
-        ssgiPostProcessor.ssgiMaterial.radius = 12.0
+        ssgiPostProcessor.ssgiMaterial.radius = 24.0
         ssgiPostProcessor.ssgiMaterial.thickness = 1.0
         ssgiPostProcessor.ssgiMaterial.expFactor = 2.0
         ssgiPostProcessor.ssgiMaterial.jitterStrength = 1.0
-        ssgiPostProcessor.ssgiMaterial.sliceCount = 4
-        ssgiPostProcessor.ssgiMaterial.stepCount = 12
+        ssgiPostProcessor.ssgiMaterial.sliceCount = 5
+        ssgiPostProcessor.ssgiMaterial.stepCount = 8
         ssgiPostProcessor.blurMaterial.radius = 4.0
         ssgiPostProcessor.blurMaterial.lumaPhi = 5.0
         ssgiPostProcessor.blurMaterial.depthPhi = 5.0

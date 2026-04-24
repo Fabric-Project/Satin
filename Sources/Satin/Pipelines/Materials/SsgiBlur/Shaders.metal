@@ -12,14 +12,26 @@ typedef struct {
     int noiseIndex;
 } SsgiBlurUniforms;
 
-static float3 ssgiDenoiseViewNormal(
-    texture2d<float, access::sample> normalTex,
-    sampler nearestSampler,
-    float2 uv,
-    float4x4 viewMatrix
-) {
-    return normalize(satinDecodeViewNormal(normalTex.sample(nearestSampler, uv).xyz, viewMatrix));
-}
+// Direct port of three.js PoissonDenoiseShader's generated sample kernel:
+// generatePdSamplePointInitializer( 16, 2, 1 )
+constant float3 ssgiPoissonDisk[16] = {
+    float3( 1.000000000,  0.000000000, 0.000000000),
+    float3( 0.707106781,  0.707106781, 0.066666667),
+    float3( 0.000000000,  1.000000000, 0.133333333),
+    float3(-0.707106781,  0.707106781, 0.200000000),
+    float3(-1.000000000,  0.000000000, 0.266666667),
+    float3(-0.707106781, -0.707106781, 0.333333333),
+    float3( 0.000000000, -1.000000000, 0.400000000),
+    float3( 0.707106781, -0.707106781, 0.466666667),
+    float3( 1.000000000,  0.000000000, 0.533333333),
+    float3( 0.707106781,  0.707106781, 0.600000000),
+    float3( 0.000000000,  1.000000000, 0.666666667),
+    float3(-0.707106781,  0.707106781, 0.733333333),
+    float3(-1.000000000,  0.000000000, 0.800000000),
+    float3(-0.707106781, -0.707106781, 0.866666667),
+    float3( 0.000000000, -1.000000000, 0.933333333),
+    float3( 0.707106781, -0.707106781, 1.000000000)
+};
 
 fragment float4 ssgiBlurFragment(
     VertexData in [[stage_in]],
@@ -51,7 +63,7 @@ fragment float4 ssgiBlurFragment(
     const float clampedRadius = clamp(uniforms.radius, 1.0, 16.0);
 
     const float2 noiseResolution = max(float2(noiseTex.get_width(), noiseTex.get_height()), 1.0);
-    const float2 noiseUV = float2(uv.x, 1.0 - uv.y) * (resolution / noiseResolution);
+    const float2 noiseUV = uv * (resolution / noiseResolution);
     const float4 noiseTexel = noiseTex.sample(noiseSampler, noiseUV);
     const int channel = int(uint(uniforms.noiseIndex) & 3u);
     const float noiseAngle = noiseTexel[channel] * (2.0 * PI);
@@ -63,17 +75,17 @@ fragment float4 ssgiBlurFragment(
     const float safeLumaPhi = max(uniforms.lumaPhi, 1.0e-4);
     const float safeDepthPhi = max(uniforms.depthPhi, 1.0e-4);
     const float safeNormalPhi = max(uniforms.normalPhi, 1.0e-4);
+    const float2x2 rotationMatrix = float2x2(
+        float2(cosAngle, sinAngle),
+        float2(-sinAngle, cosAngle)
+    );
 
     for (int i = 0; i < 16; i++) {
-        const float sampleAngle = 2.0 * PI * 2.0 * float(i) / 16.0;
-        const float ringRadius = float(i) / 15.0;
-        const float2 sampleDirection = float2(cos(sampleAngle), sin(sampleAngle));
-        const float2 rotatedDirection = float2(
-            cosAngle * sampleDirection.x - sinAngle * sampleDirection.y,
-            sinAngle * sampleDirection.x + cosAngle * sampleDirection.y
+        const float3 sampleDir = ssgiPoissonDisk[i];
+        const float2 offset = rotationMatrix * (
+            sampleDir.xy * (1.0 + sampleDir.z * (clampedRadius - 1.0)) / resolution
         );
-        const float sampleRadius = 1.0 + ringRadius * (clampedRadius - 1.0);
-        const float2 sampleUV = uv + rotatedDirection * (sampleRadius / resolution);
+        const float2 sampleUV = uv + offset;
 
         if (!satinUvInside(sampleUV)) {
             continue;

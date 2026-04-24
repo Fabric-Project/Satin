@@ -36,7 +36,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
             context: defaultContext,
             baseColor: [0.92, 0.94, 0.98, 1.0],
             metallic: 0.0,
-            roughness: 0.98
+            roughness: 0.5
         )
     )
 
@@ -47,7 +47,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
             context: defaultContext,
             baseColor: [0.9, 0.92, 0.96, 1.0],
             metallic: 0.0,
-            roughness: 0.99
+            roughness: 0.5
         )
     )
 

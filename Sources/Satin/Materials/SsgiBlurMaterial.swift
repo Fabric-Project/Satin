@@ -31,7 +31,7 @@ public final class SsgiBlurMaterial: Material {
     }
 
     public var radius: Float {
-        get { get("Denoise Radius", as: FloatParameter.self)?.value ?? 5.0 }
+        get { get("Denoise Radius", as: FloatParameter.self)?.value ?? 4.0 }
         set { set("Denoise Radius", newValue) }
     }
 
@@ -76,11 +76,11 @@ public final class SsgiBlurMaterial: Material {
             parameters.append(
                 FloatParameter(
                     "Denoise Radius",
-                    5.0,
+                    4.0,
                     1.0,
                     16.0,
                     .slider,
-                    "Radius of the rotated denoise kernel in low-resolution SSGI texels."
+                    "Radius of the rotated Poisson denoise kernel in low-resolution SSGI texels."
                 )
             )
         }
