@@ -93,7 +93,8 @@ public final class SlugFontAtlas {
     private let lock = PThreadMutex(type: .normal)
     private var glyphCache: [CGGlyph: SlugGlyphInfo] = [:]
 
-    private var curvePixels = Array(repeating: Float16.zero, count: maxCurveTexels * 4)
+    // TODO: Drop Intel mac support and this can just be Float16
+    private var curvePixels = Array(repeating: UInt16.zero, count: maxCurveTexels * 4)
     private var bandPixels = Array(repeating: UInt16.zero, count: maxBandTexels * 2)
     private var curveTexelCursor = 0
     private var bandTexelCursor = 0
@@ -368,10 +369,10 @@ public final class SlugFontAtlas {
 
     private func writeCurveTexel(_ r: Float, _ g: Float, _ b: Float, _ a: Float) {
         let base = curveTexelCursor * 4
-        curvePixels[base + 0] = Float16(r)
-        curvePixels[base + 1] = Float16(g)
-        curvePixels[base + 2] = Float16(b)
-        curvePixels[base + 3] = Float16(a)
+        curvePixels[base + 0] = floatToHalfBits(r)
+        curvePixels[base + 1] = floatToHalfBits(g)
+        curvePixels[base + 2] = floatToHalfBits(b)
+        curvePixels[base + 3] = floatToHalfBits(a)
         curveTexelCursor += 1
     }
 
@@ -392,7 +393,7 @@ public final class SlugFontAtlas {
                     region: MTLRegionMake2D(0, 0, Self.curveTextureWidth, curveHeight),
                     mipmapLevel: 0,
                     withBytes: bytes.baseAddress!,
-                    bytesPerRow: MemoryLayout<Float16>.stride * Self.curveTextureWidth * 4
+                    bytesPerRow: MemoryLayout<UInt16>.stride * Self.curveTextureWidth * 4
                 )
             }
         }
@@ -504,6 +505,52 @@ public final class SlugFontAtlas {
                 p2: simd_make_float2(Float(p3.x), Float(p3.y))
             ),
         ]
+    }
+
+    // This is stupid and from Codex - Because macOS on Intel doesnt support Swift Float16 natively
+    // We use UInt16 and do dumb shit™ to massage bits.
+    private func floatToHalfBits(_ value: Float) -> UInt16 {
+        let bits = value.bitPattern
+        let sign = UInt16((bits >> 16) & 0x8000)
+        var exponent = Int((bits >> 23) & 0xff) - 127 + 15
+        var mantissa = bits & 0x7fffff
+
+        if exponent <= 0 {
+            if exponent < -10 {
+                return sign
+            }
+
+            mantissa |= 0x0080_0000
+            let shift = UInt32(14 - exponent)
+            var halfMantissa = UInt16(mantissa >> shift)
+
+            if (mantissa & (UInt32(1) << (shift - 1))) != 0 {
+                halfMantissa &+= 1
+            }
+
+            return sign | halfMantissa
+        }
+
+        if exponent >= 0x1f {
+            if mantissa == 0 {
+                return sign | 0x7c00
+            }
+
+            let halfMantissa = UInt16(mantissa >> 13)
+            return sign | 0x7c00 | max(halfMantissa, 1)
+        }
+
+        mantissa &+= 0x0000_1000
+        if (mantissa & 0x0080_0000) != 0 {
+            mantissa = 0
+            exponent += 1
+        }
+
+        if exponent >= 0x1f {
+            return sign | 0x7c00
+        }
+
+        return sign | UInt16(exponent << 10) | UInt16(mantissa >> 13)
     }
 
     private func lerp(_ lhs: CGPoint, _ rhs: CGPoint, _ t: CGFloat) -> CGPoint {
