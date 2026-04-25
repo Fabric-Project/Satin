@@ -34,18 +34,18 @@ public final class RoundedBoxGeometry: SatinGeometry {
         }
     }
 
-    public init(size: Float = 2, radius: Float = 0.25, resolution: Int = 1) {
+    public init(context: Context, size: Float = 2, radius: Float = 0.25, resolution: Int = 1) {
         self.size = .init(repeating: size)
         self.radius = radius
         self.resolution = resolution
-        super.init()
+        super.init(context: context)
     }
 
-    public init(size: simd_float3 = .init(repeating: 2.0), radius: Float = 0.25, resolution: Int = 1) {
+    public init(context: Context, size: simd_float3 = .init(repeating: 2.0), radius: Float = 0.25, resolution: Int = 1) {
         self.size = size
         self.radius = radius
         self.resolution = resolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

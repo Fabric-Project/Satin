@@ -134,37 +134,23 @@ open class StandardMaterial: Material {
         }
     }
 
-    public func setTexcoordTransform(_ transform: simd_float3x3, type: PBRTextureType) {
+    public func setTextureTransform(_ transform: simd_float4x4, type: PBRTextureType) {
         set(type.texcoordName.titleCase, transform)
+    }
+
+    public func setTexcoordTransform(_ transform: simd_float4x4, type: PBRTextureType) {
+        setTextureTransform(transform, type: type)
+    }
+
+    public func setTexcoordTransform(_ transform: simd_float3x3, type: PBRTextureType) {
+        setTextureTransform(simd_float4x4(textureTransform: transform), type: type)
     }
 
     public func setTexcoordTransform(offset: simd_float2, scale: simd_float2, rotation: Float, type: PBRTextureType) {
-        let ct = cos(rotation)
-        let st = sin(rotation)
-
-        let rotateTransform = simd_float3x3(
-            simd_make_float3(ct, st, 0.0),
-            simd_make_float3(-st, ct, 0.0),
-            simd_make_float3(0.0, 0.0, 0.0)
-        )
-
-        let offsetTransform = simd_float3x3(
-            simd_make_float3(1.0, 0.0, 0.0),
-            simd_make_float3(0.0, 1.0, 0.0),
-            simd_make_float3(offset.x, offset.y, 0.0)
-        )
-
-        let scaleTransform = simd_float3x3(
-            simd_make_float3(scale.x, 0.0, 0.0),
-            simd_make_float3(0.0, scale.y, 0.0),
-            simd_make_float3(0.0, 0.0, 0.0)
-        )
-
-        let transform = rotateTransform * scaleTransform * offsetTransform
-        set(type.texcoordName.titleCase, transform)
+        setTextureTransform(.textureTransform(offset: offset, scale: scale, rotation: rotation), type: type)
     }
 
-    public init(baseColor: simd_float4 = .one,
+    public init(context: Context, baseColor: simd_float4 = .one,
                 metallic: Float = 0.0,
                 roughness: Float = 0.2,
                 specular: Float = 0.5,
@@ -172,7 +158,7 @@ open class StandardMaterial: Material {
                 emissiveColor: simd_float4 = .zero,
                 maps: [PBRTextureType: MTLTexture?] = [:])
     {
-        super.init()
+        super.init(context: context)
         self.baseColor = baseColor
         self.metallic = metallic
         self.roughness = roughness
@@ -191,7 +177,9 @@ open class StandardMaterial: Material {
 
     func initalizeTexcoordParameters() {
         for type in PBRTextureType.allTexcoordCases {
-            set(type.texcoordName.titleCase, matrix_identity_float3x3)
+            if get(type.texcoordName.titleCase) == nil {
+                set(type.texcoordName.titleCase, matrix_identity_float4x4)
+            }
         }
     }
 
@@ -199,10 +187,11 @@ open class StandardMaterial: Material {
         try super.init(from: decoder)
         lighting = true
         blending = .disabled
+        initalize()
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         self.baseColor = .one
         self.metallic = 0.0
         self.roughness = 0.2
@@ -223,7 +212,7 @@ open class StandardMaterial: Material {
     }
 
     override open func createShader() -> Shader {
-        StandardShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        StandardShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     override open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {

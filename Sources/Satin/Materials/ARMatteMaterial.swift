@@ -8,6 +8,15 @@
 import Metal
 
 public class ARMatteMaterial: Material {
+    public var textureTransform: simd_float4x4 {
+        get {
+            get("Texture Transform", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4
+        }
+        set {
+            set("Texture Transform", newValue)
+        }
+    }
+
     public var alphaTexture: MTLTexture? {
         didSet {
             alphaTexture?.label = "ARMatteAlpha Texture"
@@ -22,11 +31,15 @@ public class ARMatteMaterial: Material {
         }
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
+        set("Texture Transform", matrix_identity_float4x4)
     }
 
     required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
+        if get("Texture Transform") == nil {
+            set("Texture Transform", matrix_identity_float4x4)
+        }
     }
 }

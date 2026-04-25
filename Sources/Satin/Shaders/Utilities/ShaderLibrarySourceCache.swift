@@ -133,6 +133,12 @@ public final class ShaderLibrarySourceCache: Sendable {
             lighting: configuration.lighting
         )
 
+        injectDirectShadowArgs(
+            source: &source,
+            directShadowCount: configuration.directShadowCount,
+            directShadowTextureCount: configuration.directShadowTextureCount
+        )
+
         queue.sync(flags: .barrier) {
             cache[configuration] = source
         }

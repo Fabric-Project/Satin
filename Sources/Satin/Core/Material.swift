@@ -27,6 +27,14 @@ public struct DepthBias: Codable, Equatable {
 }
 
 open class Material: Codable {
+    private static func vertexDescriptorHasAttributes(_ descriptor: MTLVertexDescriptor) -> Bool {
+        for attribute in VertexAttributeIndex.allCases {
+            if descriptor.attributes[attribute.rawValue].format != .invalid {
+                return true
+            }
+        }
+        return false
+    }
     
     let id: String = UUID().uuidString
 
@@ -130,13 +138,7 @@ open class Material: Codable {
 
     public let updatedPublisher = PassthroughSubject<Material, Never>()
 
-    public var context: Context? {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public let context: Context
 
     public var instancing: Bool {
         get { renderingConfiguration.instancing }
@@ -161,6 +163,21 @@ open class Material: Codable {
     public var shadowCount: Int {
         get { renderingConfiguration.shadowCount }
         set { renderingConfiguration.shadowCount = newValue }
+    }
+
+    public var directShadowCount: Int {
+        get { renderingConfiguration.directShadowCount }
+        set { renderingConfiguration.directShadowCount = newValue }
+    }
+
+    public var directShadowTextureCount: Int {
+        get { renderingConfiguration.directShadowTextureCount }
+        set { renderingConfiguration.directShadowTextureCount = newValue }
+    }
+
+    public var projectorCount: Int {
+        get { renderingConfiguration.projectorCount }
+        set { renderingConfiguration.projectorCount = newValue }
     }
 
     public var lightCount: Int {
@@ -198,9 +215,14 @@ open class Material: Codable {
     public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
 
-    public required init() {}
+    public required init(context: Context) {
+        self.context = context
+        setupParameterGroupSubscriptions(parameters)
+        parametersSetPublisher.send(parameters)
+    }
 
     public init(shader: Shader) {
+        self.context = shader.context
         self.shader = shader
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
@@ -208,7 +230,6 @@ open class Material: Codable {
         setupParameterGroupSubscriptions(parameters)
         uniformsNeedsUpdate = true
         parametersSetPublisher.send(parameters)
-
     }
 
     // MARK: - CodingKeys
@@ -237,7 +258,9 @@ open class Material: Codable {
     // MARK: - Decode
 
     public required init(from decoder: Decoder) throws {
+        context = try decoder.requireSatinContext(typeName: String(describing: Self.self))
         try decode(from: decoder)
+        setupParameterGroupSubscriptions(parameters)
     }
 
     public func decode(from decoder: Decoder) throws {
@@ -329,8 +352,7 @@ open class Material: Codable {
     }
 
     func setupDepthStencilState() {
-        guard let context,
-              context.depthPixelFormat != .invalid,
+        guard context.depthPixelFormat != .invalid,
               depthNeedsUpdate || depthStencilState == nil
         else { return }
 
@@ -347,10 +369,7 @@ open class Material: Codable {
     // MARK: - Shader
 
     open func createShader() -> Shader {
-        SourceShader(
-            label: label,
-            pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal")
-        )
+        SourceShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     open func setupShader() {
@@ -362,7 +381,7 @@ open class Material: Codable {
             isClone = false
         }
 
-        shader?.context = context
+        guard Self.vertexDescriptorHasAttributes(vertexDescriptor) else { return }
         shader?.setup()
     }
 
@@ -372,8 +391,12 @@ open class Material: Codable {
     }
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
+        var receivedInitialParameters = false
         parametersSubscription = shader.parametersPublisher.sink { [weak self] newParameters in
             guard let self else { return }
+
+            let isInitialParameters = !receivedInitialParameters
+            receivedInitialParameters = true
 
             self.parameters.setFrom(newParameters)
 
@@ -385,14 +408,15 @@ open class Material: Codable {
 
             self.parametersSetPublisher.send(self.parameters)
 
-            self.updatedPublisher.send(self)
-
-            self.delegate?.updated(material: self)
+            if !isInitialParameters {
+                self.updatedPublisher.send(self)
+                self.delegate?.updated(material: self)
+            }
         }
     }
 
     open func setupUniforms() {
-        guard let context, parameters.size > 0, uniformsNeedsUpdate else { return }
+        guard parameters.size > 0, uniformsNeedsUpdate else { return }
 
         uniforms = UniformBuffer(
             device: context.device,
@@ -412,6 +436,7 @@ open class Material: Codable {
 
     open func updateShader() {
         if shader == nil { setupShader() }
+        guard Self.vertexDescriptorHasAttributes(vertexDescriptor) else { return }
         shader?.update()
     }
 
@@ -749,11 +774,15 @@ open class Material: Codable {
         shader = nil
     }
 
-    open func clone() -> Material {
-        let clone: Material = type(of: self).init()
+    open func clone(context: Context) -> Material {
+        let clone: Material = type(of: self).init(context: context)
         clone.isClone = true
         cloneProperties(clone: clone)
         return clone
+    }
+
+    open func clone() -> Material {
+        clone(context: context)
     }
 
     public func cloneProperties(clone: Material) {

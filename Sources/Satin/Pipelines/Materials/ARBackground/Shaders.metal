@@ -1,6 +1,9 @@
+#include "Library/TextureTransform.metal"
+
 typedef struct {
     float4 color; // color
     bool srgb;    // toggle
+    float4x4 textureTransform;
 } ARBackgroundUniforms;
 
 static constexpr sampler s(mag_filter::linear, min_filter::linear);
@@ -15,10 +18,11 @@ fragment float4 arbackgroundFragment(
         float4(+0.0000f, -0.3441f, +1.7720f, +0.0000f),
         float4(+1.4020f, -0.7141f, +0.0000f, +0.0000f),
         float4(-0.7010f, +0.5291f, -0.8860f, +1.0000f));
+    const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
 
     float4 color = ycbcrToRGBTransform * float4(
-                                             capturedImageTextureY.sample(s, in.texcoord).r,
-                                             capturedImageTextureCbCr.sample(s, in.texcoord).rg,
+                                             capturedImageTextureY.sample(s, uv).r,
+                                             capturedImageTextureCbCr.sample(s, uv).rg,
                                              1.0);
     color.rgb = mix(color.rgb, pow(color.rgb, 2.2), float(uniforms.srgb));
     return uniforms.color * color;

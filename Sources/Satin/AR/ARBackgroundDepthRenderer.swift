@@ -105,6 +105,7 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
         backgroundDepthMaterial.set("Near Far Delta", [near, far, far - near])
 
         depthMesh = Mesh(
+            context: context,
             label: "AR Depth Mesh",
             geometry: Geometry(),
             material: backgroundDepthMaterial,
@@ -243,6 +244,7 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
         for anchor in anchors {
             if usePlaneDepth, let planeAnchor = anchor as? ARPlaneAnchor {
                 let planeMesh = ARPlaneMesh(
+                    context: context,
                     label: anchor.identifier.uuidString,
                     anchor: planeAnchor,
                     material: depthMaterial
@@ -251,7 +253,7 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
                 depthScene.add(planeMesh)
             }
             else if useMeshDepth, let meshAnchor = anchor as? ARMeshAnchor {
-                let lidarMesh = ARLidarMesh(meshAnchor: meshAnchor, material: depthLidarMaterial)
+                let lidarMesh = ARLidarMesh(context: context, meshAnchor: meshAnchor, material: depthLidarMaterial)
                 depthAnchorLidarMeshMap[anchor.identifier] = lidarMesh
                 depthScene.add(lidarMesh)
             }

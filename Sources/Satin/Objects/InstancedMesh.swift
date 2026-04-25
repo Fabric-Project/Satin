@@ -69,14 +69,14 @@ public class InstancedMesh: Mesh {
         }
     }
 
-    public init(label: String = "Instanced Mesh", geometry: Geometry, material: Material?, count: Int) {
+    public init(context: Context, label: String = "Instanced Mesh", geometry: Geometry, material: Material?, count: Int) {
         material?.instancing = true
 
         instanceMatricesUniforms = .init(repeating: InstanceMatrixUniforms(modelMatrix: matrix_identity_float4x4, normalMatrix: matrix_identity_float3x3), count: count)
 
         instanceMatrices = .init(repeating: matrix_identity_float4x4, count: count)
 
-        super.init(label: label, geometry: geometry, material: material)
+        super.init(context: context, label: label, geometry: geometry, material: material)
 
         instanceCount = count
 
@@ -151,7 +151,7 @@ public class InstancedMesh: Mesh {
     // MARK: - Private Instancing
 
     func setupInstanceBuffer() {
-        guard let context, instanceCount > 0 else { return }
+        guard instanceCount > 0 else { return }
         instanceMatrixBuffer = InstanceMatrixUniformBuffer(device: context.device, count: instanceCount)
         _setupInstanceMatrixBuffer = false
         _updateInstanceMatrixBuffer = true

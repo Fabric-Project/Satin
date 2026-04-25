@@ -17,7 +17,8 @@ struct DiskRendererView: View {
     }
 }
 
-#Preview {
-    DiskRendererView()
-}
-
+#if false
+    #Preview {
+        DiskRendererView()
+    }
+#endif

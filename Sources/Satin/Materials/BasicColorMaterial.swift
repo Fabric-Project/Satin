@@ -19,14 +19,14 @@ open class BasicColorMaterial: Material {
         }
     }
 
-    public init(color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .alpha) {
-        super.init()
+    public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .alpha) {
+        super.init(context: context)
         set("Color", color)
         self.blending = blending
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         set("Color", simd_float4.one)
         blending = .alpha
     }

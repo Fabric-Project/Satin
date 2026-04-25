@@ -102,7 +102,7 @@ final class SuperShapeGeometry: SatinGeometry {
         }
     }}
 
-    init(r1: Float, a1: Float, b1: Float, m1: Float, n11: Float, n21: Float, n31: Float, r2: Float, a2: Float, b2: Float, m2: Float, n12: Float, n22: Float, n32: Float, res: Int) {
+    init(context: Context, r1: Float, a1: Float, b1: Float, m1: Float, n11: Float, n21: Float, n31: Float, r2: Float, a2: Float, b2: Float, m2: Float, n12: Float, n22: Float, n32: Float, res: Int) {
         self.r1 = r1
         self.a1 = a1
         self.b1 = b1
@@ -118,7 +118,7 @@ final class SuperShapeGeometry: SatinGeometry {
         self.n22 = n22
         self.n32 = n32
         self.res = res
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {
@@ -167,7 +167,7 @@ final class SuperShapesRenderer: BaseRenderer {
         n32Param,
     ])
 
-    lazy var geometry = SuperShapeGeometry(
+    lazy var geometry = SuperShapeGeometry(context: defaultContext, 
         r1: r1Param.value,
         a1: a1Param.value,
         b1: b1Param.value,
@@ -188,11 +188,11 @@ final class SuperShapesRenderer: BaseRenderer {
     var parametersSubscription: AnyCancellable?
 
     lazy var startTime = getTime()
-    lazy var mesh = Mesh(geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.7))
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
-    var camera = PerspectiveCamera(position: simd_make_float3(2.0, 1.0, 4.0), near: 0.001, far: 200.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(2.0, 1.0, 4.0), near: 0.001, far: 200.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     override func setup() {

@@ -61,16 +61,16 @@ final class ARBloomRenderer: BaseRenderer {
     lazy var sessionPublisher = ARSessionPublisher(session: session)
     var sessionSubscriptions = Set<AnyCancellable>()
 
-    let geometry = IcoSphereGeometry(radius: 0.1, resolution: 3)
+    lazy var geometry = IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 3)
 
     var occlusionMaterial = {
-        let material = BasicColorMaterial(color: [1, 1, 1, 0], blending: .disabled)
+        lazy var material = BasicColorMaterial(context: defaultContext, color: [1, 1, 1, 0], blending: .disabled)
         material.depthBias = DepthBias(bias: 10.0, slope: 10.0, clamp: 10.0)
         return material
     }()
 
     var objectAnchorMap: [UUID: Object] = [:]
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: context, label: "Scene")
 
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
@@ -93,12 +93,14 @@ final class ARBloomRenderer: BaseRenderer {
         frameBufferOnly: false
     )
 
-    let bloomedScene = Object(label: "Bloomed Objects")
+    lazy var bloomedScene = Object(context: context, label: "Bloomed Objects")
 
     lazy var startTime = getTime()
 
+    lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
+
     lazy var postMaterial: BloomMaterial = {
-        let material = BloomMaterial(pipelinesURL: pipelinesURL)
+        lazy var material = BloomMaterial(context: postContext, pipelinesURL: pipelinesURL)
         material.depthWriteEnabled = false
         material.blending = .additive
         return material
@@ -106,7 +108,7 @@ final class ARBloomRenderer: BaseRenderer {
 
     lazy var postProcessor = PostProcessor(
         label: "Bloom Post Processor",
-        context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
+        context: postContext,
         material: postMaterial
     )
 
@@ -122,8 +124,6 @@ final class ARBloomRenderer: BaseRenderer {
 
     override func setup() {
         setupSessionObservers()
-
-        geometry.context = context
 
         backgroundRenderer = ARBackgroundDepthRenderer(
             context: context,
@@ -201,15 +201,16 @@ final class ARBloomRenderer: BaseRenderer {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
 
-            let mesh = Mesh(
+            lazy var mesh = Mesh(context: defaultContext, 
+                context: context,
                 geometry: geometry,
-                material: BasicColorMaterial(color: simd_float4(.random(in: 0.25 ... 1), 0.8), blending: .alpha)
+                material: BasicColorMaterial(context: defaultContext, color: simd_float4(.random(in: 0.25 ... 1), 0.8), blending: .alpha)
             )
             mesh.doubleSided = true
             mesh.cullMode = .none
             mesh.scale = .init(repeating: .random(in: 0.25 ... 1.0))
 
-            let object = Object(label: anchor.identifier.uuidString, [mesh])
+            let object = Object(context: context, label: anchor.identifier.uuidString, [mesh])
 
             scene.attach(object)
             object.worldMatrix = anchor.transform

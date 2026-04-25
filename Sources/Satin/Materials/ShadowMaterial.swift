@@ -18,15 +18,15 @@ public final class ShadowMaterial: Material {
         }
     }
 
-    public init(_ color: simd_float4 = simd_make_float4(0.0, 0.0, 0.0, 0.25)) {
-        super.init()
+    public init(context: Context, _ color: simd_float4 = simd_make_float4(0.0, 0.0, 0.0, 0.25)) {
+        super.init(context: context)
         blending = .alpha
         set("Color", color)
         receiveShadow = true
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         blending = .alpha
         set("Color", [0.0, 0.0, 0.0, 0.25])
         receiveShadow = true

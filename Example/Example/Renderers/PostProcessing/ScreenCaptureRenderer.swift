@@ -143,12 +143,12 @@ final class ScreenCaptureManager: NSObject, SCStreamDelegate, SCStreamOutput {
 }
 
 final class ScreenCaptureRenderer: BaseRenderer {
-    let material = BasicTextureMaterial()
-    lazy var mesh = Mesh(label: "Quad", geometry: QuadGeometry(), material: material)
+    lazy var material = BasicTextureMaterial(context: defaultContext)
+    lazy var mesh = Mesh(context: defaultContext, label: "Quad", geometry: QuadGeometry(context: defaultContext), material: material)
 
-    var camera = OrthographicCamera(left: -2, right: 2, bottom: -2, top: 2, near: 0.0, far: 1)
+    lazy var camera = OrthographicCamera(context: defaultContext, left: -2, right: 2, bottom: -2, top: 2, near: 0.0, far: 1)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 1.0)
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     let captureManager = ScreenCaptureManager()

@@ -46,12 +46,12 @@ public final class RoundedRectGeometry: SatinGeometry {
     public var edgeX: Int32 { Int32(Float(angularResolution) * size.x / radius) / 6 }
     public var edgeY: Int32 { Int32(Float(angularResolution) * size.y / radius) / 6 }
 
-    public init(width: Float, height: Float, radius: Float, angularResolution: Int, radialResolution: Int) {
+    public init(context: Context, width: Float, height: Float, radius: Float, angularResolution: Int, radialResolution: Int) {
         self.size = simd_make_float2(width, height)
         self.radius = radius
         self.angularResolution = angularResolution
         self.radialResolution = radialResolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

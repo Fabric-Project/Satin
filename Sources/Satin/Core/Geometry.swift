@@ -18,13 +18,7 @@ import SatinCore
 open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
     public var id: String = UUID().uuidString
 
-    public var context: Context? {
-        didSet {
-            if oldValue == nil, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public let context: Context
 
     public var windingOrder: MTLWinding = .counterClockwise
     public var primitiveType: MTLPrimitiveType = .triangle {
@@ -112,9 +106,11 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Init
 
-    public init(primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+    public init(context: Context, primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+        self.context = context
         self.windingOrder = windingOrder
         self.primitiveType = primitiveType
+        setup()
     }
 
     open func setup() {
@@ -233,7 +229,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Setup Vertex Buffers
 
     private func setupVertexBuffers() {
-        guard let device = context?.device else { return }
+        let device = context.device
         for (attributeIndex, attribute) in vertexAttributes {
             if let bufferAttribute = attribute as? any BufferAttribute {
                 setupBufferAttribute(device, attribute: bufferAttribute, for: attributeIndex)
@@ -247,8 +243,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Setup Index Buffer
 
     private func setupIndexBuffer() {
-        guard let device = context?.device, let elementBuffer else { return }
-        indexBuffer = elementBuffer.getBuffer(device: device)
+        guard let elementBuffer else { return }
+        indexBuffer = elementBuffer.getBuffer(device: context.device)
     }
 
     // MARK: - Setup Vertex Attributes

@@ -10,7 +10,7 @@ import Metal
 
 public final class ShaderLibraryCache: Sendable {
     private nonisolated(unsafe) static var cache: [ShaderLibraryConfiguration: MTLLibrary] = [:]
-    private nonisolated(unsafe) static var defaultLibrary: MTLLibrary?
+    private nonisolated(unsafe) static var defaultLibraries: [ObjectIdentifier: MTLLibrary] = [:]
 
     private static let defaultLibraryQueue = DispatchQueue(label: "ShaderLibraryCacheDefaultLibraryQueue", attributes: .concurrent)
     private static let libraryQueue = DispatchQueue(label: "ShaderLibraryCacheQueue", attributes: .concurrent)
@@ -22,10 +22,11 @@ public final class ShaderLibraryCache: Sendable {
     }
 
     public static func getDefaultLibrary(device: MTLDevice) -> MTLLibrary? {
+        let deviceID = ObjectIdentifier(device)
         var library: MTLLibrary?
 
         defaultLibraryQueue.sync {
-            library = self.defaultLibrary
+            library = self.defaultLibraries[deviceID]
         }
 
         if let library {
@@ -35,7 +36,7 @@ public final class ShaderLibraryCache: Sendable {
         library = device.makeDefaultLibrary()
 
         defaultLibraryQueue.sync(flags: .barrier) {
-            self.defaultLibrary = library
+            self.defaultLibraries[deviceID] = library
         }
 
         return library

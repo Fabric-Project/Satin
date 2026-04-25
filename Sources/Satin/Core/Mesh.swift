@@ -70,7 +70,7 @@ open class Mesh: Renderable {
     }
 
 
-    open var geometry = Geometry() {
+    open var geometry: Geometry! {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
@@ -96,9 +96,9 @@ open class Mesh: Renderable {
         }
     }
 
-    public init(label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
         self.geometry = geometry
-        super.init(label: label, visible: visible)
+        super.init(context: context, label: label, visible: visible)
         self.material = material
         self.renderOrder = renderOrder
         self.renderPass = renderPass
@@ -133,7 +133,7 @@ open class Mesh: Renderable {
     // MARK: - Setup Uniforms
 
     open func setupVertexUniforms() {
-        guard let context, vertexUniforms[context] == nil else { return }
+        guard vertexUniforms[context] == nil else { return }
         vertexUniforms[context] = VertexUniformBuffer(context: context)
     }
 
@@ -142,28 +142,28 @@ open class Mesh: Renderable {
     }
 
     open func setupGeometry() {
-        guard let context else { return }
+        if geometry == nil {
+            geometry = Geometry(context: context)
+        }
         geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
             guard let self = self else { return }
             self.updateBounds = true
             self.material?.vertexDescriptor = geo.vertexDescriptor
         }
-        geometry.context = context
     }
 
     open func setupSubmeshes() {
-        guard let context else { return }
         for submesh in submeshes {
-            submesh.context = context
+            assert(submesh.context == context, "Submesh context mismatch")
         }
     }
 
     open func setupMaterial() {
-        guard let context, let material else { return }
+        guard let material else { return }
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
-        material.context = context
-        
+        material.setup()
+
         self.updateAllMaterials()
     }
 
@@ -280,6 +280,7 @@ open class Mesh: Renderable {
     }
 
     open func addSubmesh(_ submesh: Submesh) {
+        assert(submesh.context == context, "Submesh context mismatch")
         submesh.parent = self
         submeshes.append(submesh)
     }

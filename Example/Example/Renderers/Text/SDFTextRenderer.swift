@@ -25,15 +25,15 @@ final class SDFTextRenderer: BaseRenderer {
         }
     }()
 
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
     lazy var textMesh: TextMesh = {
         let fontAtlas = try! FontAtlas.load(url: sharedAssetsURL.appendingPathComponent("Fonts/SFProRounded/SFProRoundedBold64.json"))
-        return TextMesh(geometry: TextGeometry(text: "Hello World", font: fontAtlas), material: TextMaterial(color: .one, fontTexture: fontTexture))
+        return TextMesh(context: defaultContext, geometry: TextGeometry(context: defaultContext, text: "Hello World", font: fontAtlas), material: TextMaterial(context: defaultContext, color: .one, fontTexture: fontTexture))
     }()
 
     override func setup() {
@@ -48,14 +48,10 @@ final class SDFTextRenderer: BaseRenderer {
 #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
-    var frame: Float = 0
+    private var frame: Int = 0
     override func update() {
-        textMesh.text = "\(frame)"
-        frame -= 1
+        textMesh.text = "Satin 2.0\nframe: \(frame)"
+        frame += 1
         cameraController.update()
     }
 

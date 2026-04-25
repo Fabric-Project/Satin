@@ -15,17 +15,17 @@ final class DiskRenderer: BaseRenderer {
     final class DiskMaterial: SourceMaterial {}
 
     lazy var renderer = Renderer(context: defaultContext)
-    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     lazy var scene: Object = {
-        let geometry = UVDiskGeometry()
-        let material = DiskMaterial(pipelinesURL: pipelinesURL, live: true)
+        lazy var geometry = UVDiskGeometry(context: defaultContext)
+        let material = DiskMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
 
-        let scene = Object(label: "Scene")
+        lazy var scene = Object(context: defaultContext, label: "Scene")
         let count = 1000
-        let mesh = InstancedMesh(geometry: geometry, material: material, count: count)
-        let object = Object()
+        lazy var mesh = InstancedMesh(context: defaultContext, geometry: geometry, material: material, count: count)
+        lazy var object = Object(context: defaultContext)
         for i in 0 ..< count {
             let scale = Float.random(in: 0.1 ... 0.5)
             let magnitude: Float = 10.0
@@ -54,10 +54,6 @@ final class DiskRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
-    }
-
-    deinit {
-        cameraController.disable()
     }
 
     override func update() {

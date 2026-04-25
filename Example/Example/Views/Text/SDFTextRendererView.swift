@@ -17,6 +17,8 @@ struct SDFTextRendererView: View {
     }
 }
 
-#Preview {
-    TextRendererView()
-}
+#if false
+    #Preview {
+        TextRendererView()
+    }
+#endif

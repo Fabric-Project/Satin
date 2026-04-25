@@ -67,9 +67,9 @@ public class ARLidarMesh: Renderable {
 
     public var meshAnchor: ARMeshAnchor?
 
-    public init(meshAnchor: ARMeshAnchor, material: Material) {
+    public init(context: Context, meshAnchor: ARMeshAnchor, material: Material) {
         self.meshAnchor = meshAnchor
-        super.init(label: "Lidar Mesh \(meshAnchor.identifier)")
+        super.init(context: context, label: "Lidar Mesh \(meshAnchor.identifier)")
         material.vertexDescriptor = ARLidarMeshVertexDescriptor()
         self.material = material
     }
@@ -79,13 +79,10 @@ public class ARLidarMesh: Renderable {
         setupMaterial()
     }
 
-    func setupMaterial() {
-        guard let context, let material else { return }
-        material.context = context
-    }
+    func setupMaterial() {}
 
     func setupUniforms() {
-        guard let context, vertexUniforms[context] == nil else { return }
+        guard vertexUniforms[context] == nil else { return }
         vertexUniforms[context] = VertexUniformBuffer(context: context)
     }
 

@@ -20,11 +20,11 @@ final class ARLidarMeshRenderer: BaseRenderer {
     private var anchorsUpdatedSubscription: AnyCancellable?
     private var anchorsAddedSubscription: AnyCancellable?
 
-    var material = BasicColorMaterial()
+    lazy var material = BasicColorMaterial(context: defaultContext)
 
     var lidarMeshes: [UUID: ARLidarMesh] = [:]
 
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)

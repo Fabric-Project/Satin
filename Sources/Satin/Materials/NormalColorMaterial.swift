@@ -9,13 +9,13 @@
 import Metal
 
 public final class NormalColorMaterial: Material {
-    public init(_ absolute: Bool = false) {
-        super.init()
+    public init(context: Context, _ absolute: Bool = false) {
+        super.init(context: context)
         set("Absolute", absolute)
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         set("Absolute", false)
     }
 

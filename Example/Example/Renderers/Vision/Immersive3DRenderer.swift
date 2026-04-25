@@ -16,27 +16,27 @@ import Satin
 final class Immersive3DRenderer: ImmersiveBaseRenderer {
     final class GridMaterial: SourceMaterial {}
 
-    let mesh = Mesh(
+    lazy var mesh = Mesh(context: defaultContext, 
         label: "Blob",
-        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
-        material: NormalColorMaterial(true)
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
+        material: NormalColorMaterial(context: defaultContext, true)
     )
 
-    lazy var background = Mesh(
+    lazy var background = Mesh(context: defaultContext, 
         label: "Background",
-        geometry: SkyboxGeometry(size: 200),
-        material: GridMaterial(pipelinesURL: pipelinesURL, live: true)
+        geometry: SkyboxGeometry(context: defaultContext, size: 200),
+        material: GridMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
     )
 
-    let floor = Mesh(
+    lazy var floor = Mesh(context: defaultContext, 
         label: "Floor",
-        geometry: PlaneGeometry(size: 3.0, orientation: .zx, centered: true),
-        material: UVColorMaterial(),
+        geometry: PlaneGeometry(context: defaultContext, size: 3.0, orientation: .zx, centered: true),
+        material: UVColorMaterial(context: defaultContext),
         visible: false
     )
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [
+    lazy var scene = Object(context: defaultContext, label: "Scene", [
 //        background,
         mesh,
         floor

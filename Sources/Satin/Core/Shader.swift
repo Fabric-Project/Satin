@@ -84,13 +84,7 @@ open class Shader {
     public internal(set) var fragmentWantsVertexUniforms: Bool = false
     public internal(set) var fragmentWantsMaterialUniforms: Bool = false
 
-    public var context: Context? {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public let context: Context
 
     // MARK: - Configurations
 
@@ -269,6 +263,33 @@ open class Shader {
         }
     }
 
+    public var directShadowCount: Int {
+        get {
+            renderingConfiguration.directShadowCount
+        }
+        set {
+            renderingConfiguration.directShadowCount = newValue
+        }
+    }
+
+    public var directShadowTextureCount: Int {
+        get {
+            renderingConfiguration.directShadowTextureCount
+        }
+        set {
+            renderingConfiguration.directShadowTextureCount = newValue
+        }
+    }
+
+    public var projectorCount: Int {
+        get {
+            renderingConfiguration.projectorCount
+        }
+        set {
+            renderingConfiguration.projectorCount = newValue
+        }
+    }
+
     public var vertexDescriptor: MTLVertexDescriptor {
         get {
             renderingConfiguration.vertexDescriptor
@@ -332,7 +353,11 @@ open class Shader {
             if configurationNeedsUpdate {
                 configurations.removeAll()
                 pipelines.removeAll()
+                pipelineReflection = nil
+                pipelineError = nil
                 shadowPipelines.removeAll()
+                shadowPipelineReflection = nil
+                shadowPipelineError = nil
             }
         }
     }
@@ -368,10 +393,21 @@ open class Shader {
     }
 
     public required init(configuration: ShaderConfiguration) {
+        guard let ctx = configuration.context else {
+            preconditionFailure("\(Self.self) requires ShaderConfiguration.context to be non-nil")
+        }
+        self.context = ctx
         self.configuration = configuration
     }
 
-    public init(
+    public convenience init(context: Context, configuration: ShaderConfiguration) {
+        var configuration = configuration
+        configuration.context = context
+        self.init(configuration: configuration)
+    }
+
+    public convenience init(
+        context: Context,
         label: String,
         vertexFunctionName: String? = nil,
         fragmentFunctionName: String? = nil,
@@ -379,7 +415,7 @@ open class Shader {
         libraryURL: URL? = nil,
         pipelineURL: URL? = nil
     ) {
-        configuration = ShaderConfiguration(
+        var configuration = ShaderConfiguration(
             label: label,
             vertexFunctionName: vertexFunctionName ?? label.camelCase + "Vertex",
             fragmentFunctionName: fragmentFunctionName ?? label.camelCase + "Fragment",
@@ -387,6 +423,8 @@ open class Shader {
             libraryURL: libraryURL,
             pipelineURL: pipelineURL
         )
+        configuration.context = context
+        self.init(configuration: configuration)
     }
 
     public func setup() {
@@ -414,7 +452,7 @@ open class Shader {
     // MARK: - Configuration
 
     func setupConfiguration() {
-        guard let context, configurations[context] == nil else { return }
+        guard configurations[context] == nil else { return }
 
         configuration.context = context
         configurations[context] = configuration
@@ -491,7 +529,7 @@ open class Shader {
     }
 
     func setupPipeline() {
-        guard let context, pipelines[context] == nil, pipelineError == nil else { return }
+        guard pipelines[context] == nil, pipelineError == nil else { return }
         do {
             let result = try makePipeline()
             pipelines[context] = result.pipeline
@@ -521,7 +559,7 @@ open class Shader {
     }
 
     func setupShadowPipeline() {
-        guard let context, shadowPipelines[context] == nil, shadowPipelineError == nil, castShadow else { return }
+        guard shadowPipelines[context] == nil, shadowPipelineError == nil, castShadow else { return }
         do {
             shadowPipelines[context] = try makeShadowPipeline()
             shadowPipelineError = nil
@@ -554,6 +592,7 @@ open class Shader {
         let clone: Shader = type(of: self).init(configuration: configuration)
         return clone
     }
+
 }
 
 extension Shader: Equatable {
