@@ -10,10 +10,34 @@ import Satin
 import SwiftUI
 
 struct TextRendererView: View {
+    let renderer: TextRenderer
+    @State private var selectedFont: String
+
+    init() {
+        let r = TextRenderer()
+        renderer = r
+        _selectedFont = State(initialValue: r.fontParam.value)
+    }
+
     var body: some View {
-        SatinMetalView(renderer: TextRenderer())
-            .ignoresSafeArea()
-            .navigationTitle("Text Geometry")
+        ZStack(alignment: .bottom) {
+            SatinMetalView(renderer: renderer)
+                .ignoresSafeArea()
+                .navigationTitle("Text Geometry")
+
+            Picker("Font", selection: $selectedFont) {
+                ForEach(renderer.fontParam.options, id: \.self) { font in
+                    Text(font).tag(font)
+                }
+            }
+            .pickerStyle(.menu)
+            .padding(8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding()
+        }
+        .onChange(of: selectedFont) { newValue in
+            renderer.fontParam.value = newValue
+        }
     }
 }
 

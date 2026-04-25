@@ -366,36 +366,63 @@ public class TesselatedTextGeometry: SatinGeometry {
                 freeTriangleData(&triData)
             } else {
                 print("⚠️ Triangulation FAILED: '\(char)' font=\(fontName) contours=\(_lengths.count)")
-                for (i, len) in _lengths.enumerated() {
-                    print("   contour[\(i)]: \(len) pts")
-                    if let pts = _paths[i] {
-                        var minDist: Float = .infinity
-                        for j in 0 ..< Int(len) {
-                            let a = pts[j]
-                            let b = pts[(j + 1) % Int(len)]
-                            let d = simd_distance(a, b)
-                            if d < minDist { minDist = d }
-                        }
-                        print("   contour[\(i)]: min consecutive dist = \(minDist)")
-                    }
+
+                func cross(_ a: simd_float2, _ b: simd_float2, _ c: simd_float2) -> Float {
+                    (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
                 }
-                var elemIdx = 0
-                glyphPath.applyWithBlock { ep in
-                    let e = ep.pointee
-                    switch e.type {
-                    case .moveToPoint:
-                        print("   raw[\(elemIdx)]: moveTo \(e.points[0])")
-                    case .addLineToPoint:
-                        print("   raw[\(elemIdx)]: lineTo \(e.points[0])")
-                    case .addQuadCurveToPoint:
-                        print("   raw[\(elemIdx)]: quadTo ctrl=\(e.points[0]) end=\(e.points[1])")
-                    case .addCurveToPoint:
-                        print("   raw[\(elemIdx)]: cubicTo cp1=\(e.points[0]) cp2=\(e.points[1]) end=\(e.points[2])")
-                    case .closeSubpath:
-                        print("   raw[\(elemIdx)]: closePath")
-                    default: break
+
+                func onSeg(_ p: simd_float2, _ a: simd_float2, _ b: simd_float2, eps: Float = 1e-5) -> Bool {
+                    if abs(cross(a, b, p)) > eps { return false }
+                    return p.x >= min(a.x, b.x) - eps && p.x <= max(a.x, b.x) + eps &&
+                           p.y >= min(a.y, b.y) - eps && p.y <= max(a.y, b.y) + eps
+                }
+
+                func segHit(_ a1: simd_float2, _ a2: simd_float2, _ b1: simd_float2, _ b2: simd_float2, eps: Float = 1e-5) -> Bool {
+                    let d1 = cross(a1, a2, b1)
+                    let d2 = cross(a1, a2, b2)
+                    let d3 = cross(b1, b2, a1)
+                    let d4 = cross(b1, b2, a2)
+
+                    if ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+                       ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps)) {
+                        return true
                     }
-                    elemIdx += 1
+
+                    return (abs(d1) <= eps && onSeg(b1, a1, a2, eps: eps)) ||
+                           (abs(d2) <= eps && onSeg(b2, a1, a2, eps: eps)) ||
+                           (abs(d3) <= eps && onSeg(a1, b1, b2, eps: eps)) ||
+                           (abs(d4) <= eps && onSeg(a2, b1, b2, eps: eps))
+                }
+
+                for (i, len) in _lengths.enumerated() {
+                    guard let pts = _paths[i] else { continue }
+                    let n = Int(len)
+
+                    var colinear = 0
+                    for j in 0 ..< n {
+                        let a = pts[(j + n - 1) % n]
+                        let b = pts[j]
+                        let c = pts[(j + 1) % n]
+                        if abs(cross(a, b, c)) < 1e-5 { colinear += 1 }
+                    }
+
+                    var hits: [String] = []
+                    outer: for a in 0 ..< n {
+                        let a0 = pts[a]
+                        let a1 = pts[(a + 1) % n]
+                        for b in (a + 1) ..< n {
+                            if b == a || b == (a + 1) % n || (b + 1) % n == a { continue }
+                            if a == 0 && b == n - 1 { continue }
+                            let b0 = pts[b]
+                            let b1 = pts[(b + 1) % n]
+                            if segHit(a0, a1, b0, b1) {
+                                hits.append("\(a)-\(b)")
+                                if hits.count == 8 { break outer }
+                            }
+                        }
+                    }
+
+                    print("   contour[\(i)]: colinearTriples=\(colinear) selfIntersections=\(hits.count) sample=\(hits)")
                 }
             }
 
