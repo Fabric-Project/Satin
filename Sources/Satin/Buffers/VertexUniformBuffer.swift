@@ -21,6 +21,9 @@ public final class VertexUniformBuffer {
     private var uniforms: UnsafeMutablePointer<VertexUniforms>!
     private let alignedSize = ((MemoryLayout<VertexUniforms>.size + 255) / 256) * 256
 
+    private var previousModelMatrix: simd_float4x4 = matrix_identity_float4x4
+    private var previousViewProjectionMatrix: simd_float4x4 = matrix_identity_float4x4
+
     public init(context: Context) {
         self.context = context
         let totalSlots = context.maxBuffersInFlight * Satin.maxSubPassesPerFrame
@@ -39,17 +42,28 @@ public final class VertexUniformBuffer {
 
         uniforms = UnsafeMutableRawPointer(buffer.contents() + offset).bindMemory(to: VertexUniforms.self, capacity: context.vertexAmplificationCount)
 
-        uniforms[index].modelMatrix = object.worldMatrix
+        let currentModelMatrix = object.worldMatrix
+        let currentViewProjectionMatrix = camera.viewProjectionMatrix
+
+        uniforms[index].modelMatrix = currentModelMatrix
         uniforms[index].viewMatrix = camera.viewMatrix
-        uniforms[index].modelViewMatrix = camera.viewMatrix * object.worldMatrix
+        uniforms[index].modelViewMatrix = camera.viewMatrix * currentModelMatrix
         uniforms[index].projectionMatrix = camera.projectionMatrix
-        uniforms[index].viewProjectionMatrix = camera.viewProjectionMatrix
-        uniforms[index].modelViewProjectionMatrix = camera.viewProjectionMatrix * object.worldMatrix
+        uniforms[index].viewProjectionMatrix = currentViewProjectionMatrix
+        uniforms[index].modelViewProjectionMatrix = currentViewProjectionMatrix * currentModelMatrix
         uniforms[index].inverseModelViewProjectionMatrix = uniforms[index].modelViewProjectionMatrix.inverse
         uniforms[index].inverseViewMatrix = camera.worldMatrix
         uniforms[index].normalMatrix = object.normalMatrix
         uniforms[index].viewport = viewport
         uniforms[index].worldCameraPosition = camera.worldPosition
         uniforms[index].worldCameraViewDirection = camera.viewDirection
+        uniforms[index].previousModelMatrix = previousModelMatrix
+        uniforms[index].previousViewProjectionMatrix = previousViewProjectionMatrix
+        uniforms[index].previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
+
+        if index == 0 {
+            previousModelMatrix = currentModelMatrix
+            previousViewProjectionMatrix = currentViewProjectionMatrix
+        }
     }
 }

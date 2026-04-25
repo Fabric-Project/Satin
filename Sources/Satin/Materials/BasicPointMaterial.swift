@@ -9,6 +9,7 @@ import Metal
 import simd
 
 open class BasicPointMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
     public var color: simd_float4 {
         get {
             get("Color", as: Float4Parameter.self)!.value

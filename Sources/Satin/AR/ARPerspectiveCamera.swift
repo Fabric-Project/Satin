@@ -19,10 +19,10 @@ open class ARPerspectiveCamera: PerspectiveCamera {
     public private(set) var intrinsics: matrix_float3x3 = matrix_identity_float3x3
     public private(set) var localToWorld: matrix_float4x4 = matrix_identity_float4x4
 
-    public init(session: ARSession, metalView: MetalView, near: Float, far: Float) {
+    public init(context: Context, session: ARSession, metalView: MetalView, near: Float, far: Float) {
         self.session = session
         self.metalView = metalView
-        super.init()
+        super.init(context: context)
         label = "AR Perspective Camera"
         self.near = near
         self.far = far

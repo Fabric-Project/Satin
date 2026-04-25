@@ -8,6 +8,7 @@
 import Metal
 
 public final class DepthMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public var color: Bool {
         get {
             get("Color", as: BoolParameter.self)!.value

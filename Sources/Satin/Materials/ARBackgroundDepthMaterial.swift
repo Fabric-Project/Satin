@@ -11,6 +11,7 @@ import ARKit
 import Metal
 
 public class ARBackgroundDepthMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
     public var textureTransform: simd_float4x4 {
         get {
             get("Texture Transform", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4

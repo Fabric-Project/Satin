@@ -11,6 +11,7 @@ import ARKit
 import Metal
 
 public final class ARBackgroundMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public var textureTransform: simd_float4x4 {
         set {
             set("Texture Transform", newValue)

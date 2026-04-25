@@ -23,7 +23,7 @@ public class ARMatteRenderer {
 
     var material: ARMatteMaterial
     private var mesh: Mesh
-    private var camera = OrthographicCamera()
+    private let camera:OrthographicCamera
 
     public internal(set) var alphaTexture: MTLTexture?
     public internal(set) var dilatedDepthTexture: MTLTexture?
@@ -43,6 +43,8 @@ public class ARMatteRenderer {
         renderer.setClearColor(.zero)
         renderer.label = "AR Matte Renderer"
 
+        self.camera = OrthographicCamera(context: context)
+        
         mesh.material = material
         material.set("Near Far Delta", [near, far, far - near])
 
@@ -91,7 +93,7 @@ public class ARMatteRenderer {
         // Update the texture coordinates of our image plane to aspect fill the viewport
         let displayToCameraTransform = frame.displayTransform(for: interfaceOrientation, viewportSize: viewportSize).inverted()
 
-        let geo = QuadGeometry()
+        let geo = QuadGeometry(context: self.context)
         let vertexCount = Int(geo.geometryData.vertexCount)
         for i in 0 ..< vertexCount {
             let vertex = geo.geometryData.vertexData[i]

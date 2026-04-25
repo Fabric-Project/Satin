@@ -61,7 +61,7 @@ public final class MetalFileCompiler {
 
         guard !files.contains(fileURLResolved) else { return "" }
 
-        let baseURL = fileURL.deletingLastPathComponent()
+        var baseURL = fileURL.deletingLastPathComponent()
         var watchFile = false
         var content = ""
 
@@ -109,10 +109,24 @@ public final class MetalFileCompiler {
                     fileURLResolved = frameworkFileURL
                     watchFile = true
                 }
+            } else if let index = pathComponents.lastIndex(of: "Includes"),
+                      var frameworkFileURL = getPipelinesIncludesURL()
+            {
+                for i in (index + 1) ..< pathComponents.count {
+                    frameworkFileURL.appendPathComponent(pathComponents[i])
+                }
+
+                if !files.contains(frameworkFileURL) {
+                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
+                    fileURLResolved = frameworkFileURL
+                    watchFile = true
+                }
             } else {
                 throw MetalFileCompilerError.invalidFile(fileURLResolved)
             }
         }
+
+        baseURL = fileURLResolved.deletingLastPathComponent()
 
         if watchFile {
             watchers.append(

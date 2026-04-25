@@ -21,7 +21,7 @@ final class Renderer2D: BaseRenderer {
     lazy var intersectionMesh: Mesh = {
         lazy var mesh = Mesh(context: defaultContext, geometry: CircleGeometry(context: defaultContext, radius: 10), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
-        mesh.renderPass = 1
+        mesh.renderLayer = .overlay
         mesh.visible = false
         return mesh
     }()

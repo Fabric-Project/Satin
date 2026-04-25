@@ -38,8 +38,8 @@ final class ARPlaneGeometry: Geometry {
         }
     }
 
-    public init() {
-        super.init()
+    public init(context:Context) {
+        super.init(context: context)
         addAttribute(positionBuffer, for: .Position)
         addAttribute(texcoodsBuffer, for: .Texcoord)
         setElements(indicesBuffer)
@@ -53,22 +53,23 @@ final class ARPlaneContainer: Object {
         }
     }
 
-    lazy var geometry = ARPlaneGeometry(context: defaultContext)
+    var geometry:ARPlaneGeometry
     var planeMesh: Mesh
     var meshWireframe: Mesh
 
-    init(label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
+    init(context:Context, label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
         self.anchor = anchor
-
+        self.geometry  = ARPlaneGeometry(context: context)
         let mat = material.clone()
         mat.set("Color", [Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), 0.25])
 
-        planeMesh = Mesh(context: defaultContext, geometry: geometry, material: mat)
-        meshWireframe = Mesh(context: defaultContext, geometry: geometry, material: mat)
+        planeMesh = Mesh(context: context, geometry: geometry, material: mat)
+        meshWireframe = Mesh(context: context, geometry: geometry, material: mat)
         meshWireframe.triangleFillMode = .lines
         planeMesh.add(meshWireframe)
 
-        super.init(label: label, [planeMesh])
+        super.init(context:context, label: label, [planeMesh])
+
         updateAnchor()
     }
 
@@ -108,7 +109,7 @@ final class ARPlanesRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
         let renderer = Renderer(label: "Content Renderer", context: defaultContext)
         renderer.colorLoadAction = .load
@@ -140,7 +141,7 @@ final class ARPlanesRenderer: BaseRenderer {
             guard let self else { return }
             for anchor in anchors {
                 if self.planesMap[anchor] == nil, let planeAnchor = anchor as? ARPlaneAnchor {
-                    let planeContainer = ARPlaneContainer(label: "\(planeAnchor.identifier)", anchor: planeAnchor, material: self.planeMaterial)
+                    let planeContainer = ARPlaneContainer(context:defaultContext, label: "\(planeAnchor.identifier)", anchor: planeAnchor, material: self.planeMaterial)
                     self.planesMap[anchor] = planeContainer
                     self.scene.add(planeContainer)
                 }

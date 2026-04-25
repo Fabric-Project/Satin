@@ -21,7 +21,7 @@ open class TessellationMesh: Mesh {
 
     public let tessellatePublisher = PassthroughSubject<Bool, Never>()
 
-    public init(context: Context, label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderLayer: RenderLayer = .opaque) {
         self.tessellator = tessellator
         self.tessellate = tessellate
         super.init(
@@ -31,7 +31,7 @@ open class TessellationMesh: Mesh {
             material: material,
             visible: visible,
             renderOrder: renderOrder,
-            renderPass: renderPass
+            renderLayer: renderLayer
         )
     }
 

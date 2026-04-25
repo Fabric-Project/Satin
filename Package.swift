@@ -39,7 +39,7 @@ let package = Package(
             name: "Satin",
             dependencies: ["SatinCore"],
             path: "Sources/Satin",
-            resources: [.copy("Pipelines")]
+            resources: [.copy("Pipelines"), .copy("Textures")]
         ),
         .testTarget(
             name: "SatinTests",

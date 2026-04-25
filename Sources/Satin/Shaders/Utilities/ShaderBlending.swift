@@ -55,8 +55,25 @@ public func setupRenderPipelineDescriptorContext(context: Context, descriptor: i
     descriptor.depthAttachmentPixelFormat = context.depthPixelFormat
     descriptor.stencilAttachmentPixelFormat = context.stencilPixelFormat
 
-    let vertexAmplificationCount = context.vertexAmplificationCount
+    // Configure auxiliary G-buffer attachments. Indices match RendererOutputs bit positions
+    // and the ATTACHMENT_* constants in Includes/RendererAttachments.metal.
+    // Auxiliary attachments never blend — blending is attachment 0 only.
+    let outputs = context.activeOutputs
+    let auxiliaryAttachments: [(RendererOutputs, MTLPixelFormat)] = [
+        (.albedo,   context.albedoPixelFormat),
+        (.normals,  context.normalsPixelFormat),
+        (.pbr,      context.pbrPixelFormat),
+        (.velocity, context.velocityPixelFormat),
+        (.emissive, context.emissivePixelFormat),
+    ]
+    for (i, (flag, format)) in auxiliaryAttachments.enumerated() {
+        if outputs.contains(flag) {
+            descriptor.colorAttachments[i + 1].pixelFormat = format
+            descriptor.colorAttachments[i + 1].isBlendingEnabled = false
+        }
+    }
 
+    let vertexAmplificationCount = context.vertexAmplificationCount
     if vertexAmplificationCount > 1, context.device.supportsVertexAmplificationCount(vertexAmplificationCount) {
         descriptor.maxVertexAmplificationCount = vertexAmplificationCount
     }

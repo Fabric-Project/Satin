@@ -37,7 +37,7 @@ private struct ExampleSection: Identifiable {
 
 struct ContentView: View {
     #if os(macOS)
-        @State private var selection: String? = "pbr-standard-material"
+        @State private var selection: String? = "deferred-rendering"
     #else
         @State private var selection: String?
     #endif
@@ -211,10 +211,24 @@ struct ContentView: View {
             )
         )
 
+        results.append(
+            ExampleSection(
+                title: "Deferred Rendering",
+                items: [
+                    ExampleItem(id: "deferred-rendering", title: "Deferred Rendering", systemImage: "square.stack.3d.down.forward") {
+                        PBRMRTRendererView()
+                    }
+                ]
+            )
+        )
+
         var postProcessingItems: [ExampleItem] = [
             ExampleItem(id: "post-processing", title: "Post Processing", systemImage: "checkerboard.rectangle") { PostProcessingRendererView() },
             ExampleItem(id: "bloom", title: "Bloom", systemImage: "sun.max.fill") { BloomRendererView() },
-            ExampleItem(id: "fxaa", title: "FXAA", systemImage: "squareshape.split.2x2.dotted") { FXAARendererView() }
+            ExampleItem(id: "fxaa", title: "FXAA", systemImage: "squareshape.split.2x2.dotted") { FXAARendererView() },
+            ExampleItem(id: "motion-blur", title: "Motion Blur", systemImage: "gauge.with.needle") { MotionBlurRendererView() },
+            ExampleItem(id: "ssgi-cornell-box", title: "SSGI Cornell Box", systemImage: "cube.transparent") { SSGICornellBoxRendererView() },
+            ExampleItem(id: "ssgi-projector", title: "SSGI Projector", systemImage: "sparkles.tv") { SSGIProjectorRendererView() }
         ]
         #if os(macOS)
             postProcessingItems.append(
@@ -254,7 +268,9 @@ struct ContentView: View {
             } else {
                 ContentUnavailableView("Select an Example", systemImage: "square.stack.3d.up")
             }
+            
         }
+        
     }
 }
 

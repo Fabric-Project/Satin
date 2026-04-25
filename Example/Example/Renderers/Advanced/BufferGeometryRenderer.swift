@@ -29,7 +29,7 @@ final class BufferGeometryRenderer: BaseRenderer {
     lazy var intersectionMesh: Mesh = {
         lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 2), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
-        mesh.renderPass = 1
+        mesh.renderLayer = .overlay
         mesh.visible = false
         return mesh
     }()

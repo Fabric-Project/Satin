@@ -10,6 +10,7 @@ import Metal
 import simd
 
 open class BasicColorMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
     public var color: simd_float4 {
         set {
             set("Color", newValue)

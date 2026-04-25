@@ -1,6 +1,7 @@
 #include "Satin/PbrConstants.metal"
 
 #include "Library/Pbr/Pbr.metal"
+#include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
 #include "Chunks/StandardUniforms.metal"
@@ -21,6 +22,11 @@ typedef struct {
 #endif
     float3 worldPosition;
     float3 cameraPosition;
+
+#ifdef OUTPUT_VELOCITY
+    float4 currentClipPos;
+    float4 previousClipPos;
+#endif
 } CustomVertexData;
 
 vertex CustomVertexData standardVertex(
@@ -63,10 +69,15 @@ vertex CustomVertexData standardVertex(
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
 
+#ifdef OUTPUT_VELOCITY
+    out.currentClipPos = out.position;
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * worldPosition;
+#endif
+
     return out;
 }
 
-fragment float4 standardFragment(
+fragment FragmentOutput standardFragment(
     CustomVertexData in [[stage_in]],
 // inject lighting args
 #if defined(PROJECTOR_COUNT)
@@ -84,8 +95,21 @@ fragment float4 standardFragment(
     float4 outColor;
 #include "Chunks/PixelInfoInit.metal"
 #include "Chunks/PbrInit.metal"
+
+    SurfaceOutput surface;
+#include "Chunks/PixelInfoSurfaceOutput.metal"
+
+#if defined(DEFERRED_GEOMETRY)
+    outColor = float4(pbrTonemap(pixel), pixel.material.alpha);
+#else
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 #include "Chunks/PbrTonemap.metal"
-    return outColor;
+#endif
+
+    return buildFragmentOutput(surface, half4(outColor)
+#ifdef OUTPUT_VELOCITY
+        , in.currentClipPos, in.previousClipPos
+#endif
+    );
 }

@@ -67,11 +67,13 @@
 		E103E1392B603FC50017588F /* PBRSubmeshRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */; };
 		E103E13A2B603FC50017588F /* PBRStandardMaterialRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */; };
 		E103E13B2B603FC50017588F /* PBRRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E168FC76248ECCA2004B8407 /* PBRRenderer.swift */; };
+		A1B2C3D42E7F000100000001 /* PBRMRTRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */; };
 		E103E13C2B603FCA0017588F /* PBRStandardMaterialRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A1EDA291EFB1D00A71453 /* PBRStandardMaterialRendererView.swift */; };
 		E103E13D2B603FCA0017588F /* PBRSubmeshRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F7529BBB01D00A934A0 /* PBRSubmeshRendererView.swift */; };
 		E103E13E2B603FCA0017588F /* PBRCustomizationRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */; };
 		E103E13F2B603FCA0017588F /* PBREnhancedRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1EB6DE929690DD90029E4FC /* PBREnhancedRendererView.swift */; };
 		E103E1402B603FCA0017588F /* PBRRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E7680228A72E50005D75AB /* PBRRendererView.swift */; };
+		A1B2C3D52E7F000100000001 /* PBRMRTRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */; };
 		E103E1412B603FF40017588F /* PostProcessingRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767F128A6F43C005D75AB /* PostProcessingRendererView.swift */; };
 		E103E1422B603FF40017588F /* FXAARendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767FD28A6FCBC005D75AB /* FXAARendererView.swift */; };
 		E103E1432B603FF70017588F /* DirectionalShadowRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F6E29BAB0A000A934A0 /* DirectionalShadowRendererView.swift */; };
@@ -165,6 +167,12 @@
 		E1DDD35D2C3105F100012A44 /* JumpFloodOutlineRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DDD35C2C3105F100012A44 /* JumpFloodOutlineRendererView.swift */; };
 		E1DEB76D2C8659B400D58D21 /* BloomRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */; };
 		E1DEB7702C8659D700D58D21 /* BloomRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */; };
+		BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000002BB000002BB000002 /* MotionBlurRenderer.swift */; };
+		BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BB000004BB000004 /* MotionBlurRendererView.swift */; };
+		D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */; };
+		D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */; };
+		D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */; };
+		D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */; };
 		E1E767D928A6D808005D75AB /* Assets in Resources */ = {isa = PBXBuildFile; fileRef = E1E767D828A6D808005D75AB /* Assets */; };
 		E1E767E228A6E84A005D75AB /* TorusKnotGenerator.c in Sources */ = {isa = PBXBuildFile; fileRef = E192F05D24874CE700C7EE74 /* TorusKnotGenerator.c */; };
 		E1E7681328A736BB005D75AB /* AudioInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17D2C1126BBB7DF005A136A /* AudioInput.swift */; };
@@ -216,6 +224,8 @@
 		E1077F4E2A096B0900C2FB89 /* ARPointCloudRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARPointCloudRendererView.swift; sourceTree = "<group>"; };
 		E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRCustomizationRenderer.swift; sourceTree = "<group>"; };
 		E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRCustomizationRendererView.swift; sourceTree = "<group>"; };
+		A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRenderer.swift; sourceTree = "<group>"; };
+		A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRendererView.swift; sourceTree = "<group>"; };
 		E10E2FD529C508EC00C4EAFF /* MeshShaderRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshShaderRenderer.swift; sourceTree = "<group>"; };
 		E10E2FD729C5092700C4EAFF /* MeshShaderRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshShaderRendererView.swift; sourceTree = "<group>"; };
 		E11325C828ADC4520049CACC /* CustomInstancingRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomInstancingRenderer.swift; sourceTree = "<group>"; };
@@ -339,6 +349,12 @@
 		E1DDD35C2C3105F100012A44 /* JumpFloodOutlineRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpFloodOutlineRendererView.swift; sourceTree = "<group>"; };
 		E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomRenderer.swift; sourceTree = "<group>"; };
 		E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomRendererView.swift; sourceTree = "<group>"; };
+		BB000002BB000002BB000002 /* MotionBlurRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRenderer.swift; sourceTree = "<group>"; };
+		BB000004BB000004BB000004 /* MotionBlurRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRendererView.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRenderer.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRendererView.swift; sourceTree = "<group>"; };
+		D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRenderer.swift; sourceTree = "<group>"; };
+		D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRendererView.swift; sourceTree = "<group>"; };
 		E1E69D1624A4711E00EDA686 /* DepthMaterialRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthMaterialRenderer.swift; sourceTree = "<group>"; };
 		E1E767BE28A6D2A2005D75AB /* Renderer3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer3DView.swift; sourceTree = "<group>"; };
 		E1E767C128A6D341005D75AB /* Renderer2DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer2DView.swift; sourceTree = "<group>"; };
@@ -554,6 +570,7 @@
 				E1707F7529BBB01D00A934A0 /* PBRSubmeshRendererView.swift */,
 				E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */,
 				E1EB6DE929690DD90029E4FC /* PBREnhancedRendererView.swift */,
+				A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */,
 				E1E7680228A72E50005D75AB /* PBRRendererView.swift */,
 				E18A1EDA291EFB1D00A71453 /* PBRStandardMaterialRendererView.swift */,
 			);
@@ -655,6 +672,9 @@
 				E1E767F128A6F43C005D75AB /* PostProcessingRendererView.swift */,
 				E19417042C499FD200FE2E2B /* ScreenCaptureRendererView.swift */,
 				E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */,
+				BB000004BB000004BB000004 /* MotionBlurRendererView.swift */,
+				D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */,
+				D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */,
 			);
 			path = PostProcessing;
 			sourceTree = "<group>";
@@ -692,6 +712,9 @@
 				E105CC36252BDE7F009EE563 /* FXAARenderer.swift */,
 				E19417022C499FAA00FE2E2B /* ScreenCaptureRenderer.swift */,
 				E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */,
+				BB000002BB000002BB000002 /* MotionBlurRenderer.swift */,
+				D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */,
+				D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */,
 			);
 			path = PostProcessing;
 			sourceTree = "<group>";
@@ -764,6 +787,7 @@
 				E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */,
 				E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */,
 				E1EB6DE729690C5B0029E4FC /* PBREnhancedRenderer.swift */,
+				A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */,
 				E168FC76248ECCA2004B8407 /* PBRRenderer.swift */,
 				E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */,
 			);
@@ -1020,6 +1044,7 @@
 				E103E15C2B60404C0017588F /* TessellationRenderer.swift in Sources */,
 				E103E0532B5DDEDF0017588F /* VisionsView.swift in Sources */,
 				E103E13A2B603FC50017588F /* PBRStandardMaterialRenderer.swift in Sources */,
+				A1B2C3D42E7F000100000001 /* PBRMRTRenderer.swift in Sources */,
 				E103E1282B603E7C0017588F /* CubemapRendererView.swift in Sources */,
 				E11325D028AEAEB50049CACC /* SuperShapeGenerator.c in Sources */,
 				E103E1482B6040010017588F /* BufferGeometryRendererView.swift in Sources */,
@@ -1072,6 +1097,7 @@
 				E1D43BBA2C65855A0063E2C9 /* UISpacer.swift in Sources */,
 				E103E1002B60348C0017588F /* InstancedMeshRenderer.swift in Sources */,
 				E103E13C2B603FCA0017588F /* PBRStandardMaterialRendererView.swift in Sources */,
+				A1B2C3D52E7F000100000001 /* PBRMRTRendererView.swift in Sources */,
 				E1903C122B6046B4004AB175 /* ARPointCloudRendererView.swift in Sources */,
 				E1D43BCC2C65855A0063E2C9 /* ParameterGroupViewController.swift in Sources */,
 				E103E1442B603FF70017588F /* ContactShadowRendererView.swift in Sources */,
@@ -1089,6 +1115,12 @@
 				E103E1492B6040010017588F /* MeshShaderRendererView.swift in Sources */,
 				E1DDD35B2C3105CA00012A44 /* JumpFloodOutlineRenderer.swift in Sources */,
 				E1DEB76D2C8659B400D58D21 /* BloomRenderer.swift in Sources */,
+				BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */,
+				BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */,
+				D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */,
+				D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */,
+				D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */,
+				D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */,
 				E1D43BC82C65855A0063E2C9 /* ColorPaletteViewController.swift in Sources */,
 				E1D43BBC2C65855A0063E2C9 /* InspectorWindow.swift in Sources */,
 				E103E1612B60404C0017588F /* RayMarchingRenderer.swift in Sources */,

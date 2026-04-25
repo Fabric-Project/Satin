@@ -25,7 +25,7 @@ public class ARPostProcessor: PostProcessor {
 
     public init(label: String, context: Context, session: ARSession) {
         self.session = session
-        super.init(label: label, context: context, material: ARPostMaterial())
+        super.init(label: label, context: context, material: ARPostMaterial(context: context))
         renderer.colorLoadAction = .load
     }
 

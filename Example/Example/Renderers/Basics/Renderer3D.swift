@@ -23,7 +23,7 @@ final class Renderer3D: BaseRenderer {
         geometry: IcoSphereGeometry(context: defaultContext, radius: 0.05, resolution: 2),
         material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
         visible: false,
-        renderPass: 1
+         renderLayer: .overlay
     )
 
     lazy var startTime = getTime()

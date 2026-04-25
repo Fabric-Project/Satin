@@ -23,31 +23,32 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
     private var sessionPublisher: ARSessionPublisher
     private var sessionSubscriptions = Set<AnyCancellable>()
 
-    private lazy var background = Object(label: "AR Background", [depthMesh, mesh])
+    
+    private lazy var background = Object(context: self.context, label: "AR Background", [depthMesh, mesh])
 
     private var depthRenderer: Renderer
     private var depthAnchorPlaneMeshMap: [UUID: ARPlaneMesh] = [:]
     private var depthAnchorLidarMeshMap: [UUID: ARLidarMesh] = [:]
 
-    private var depthScene = Object(label: "Depth Scene")
+    private lazy var depthScene = Object(context: self.context, label: "Depth Scene")
     private var depthMesh: Mesh
     private var depthCamera: ARPerspectiveCamera
 
     private var depthUpscaler: ARDepthUpscaler
 
-    private var depthMaterial = {
-        let material = BasicColorMaterial(color: [1, 1, 1, 0], blending: .alpha)
+    private lazy var depthMaterial = {
+        let material = BasicColorMaterial(context: self.context, color: [1, 1, 1, 0], blending: .alpha)
         material.depthBias = DepthBias(bias: 5, slope: 5, clamp: 5)
         return material
     }()
 
-    private var depthLidarMaterial = {
-        let material = BasicColorMaterial(color: [1, 1, 1, 0], blending: .alpha)
+    private lazy var depthLidarMaterial = {
+        let material = BasicColorMaterial(context: self.context, color: [1, 1, 1, 0], blending: .alpha)
         material.depthBias = DepthBias(bias: 5, slope: 5, clamp: 5)
         return material
     }()
 
-    private let backgroundDepthMaterial = ARBackgroundDepthMaterial()
+    private var backgroundDepthMaterial:ARBackgroundDepthMaterial
 
     public private(set) var sceneDepthTexture: CVMetalTexture? {
         didSet {
@@ -98,16 +99,17 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
             frameBufferOnly: false
         )
 
-        depthCamera = ARPerspectiveCamera(session: session, metalView: metalView, near: near, far: far)
+        depthCamera = ARPerspectiveCamera(context: context, session: session, metalView: metalView, near: near, far: far)
 
         self.sessionPublisher = sessionPublisher
 
-        backgroundDepthMaterial.set("Near Far Delta", [near, far, far - near])
+        self.backgroundDepthMaterial = ARBackgroundDepthMaterial(context: context)
+        self.backgroundDepthMaterial.set("Near Far Delta", [near, far, far - near])
 
         depthMesh = Mesh(
             context: context,
             label: "AR Depth Mesh",
-            geometry: Geometry(),
+            geometry: Geometry(context: context),
             material: backgroundDepthMaterial,
             visible: false
         )

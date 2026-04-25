@@ -1,6 +1,7 @@
 #include "Satin/PbrConstants.metal"
 
 #include "Library/Pbr/Pbr.metal"
+#include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
 #include "Chunks/PhysicalUniforms.metal"
@@ -27,6 +28,11 @@ typedef struct {
     float3 cameraPosition;
 #if defined(HAS_TRANSMISSION)
     float3 thickness;
+#endif
+
+#ifdef OUTPUT_VELOCITY
+    float4 currentClipPos;
+    float4 previousClipPos;
 #endif
 } CustomVertexData;
 
@@ -75,10 +81,15 @@ vertex CustomVertexData physicalVertex(
     out.thickness = uniforms.thickness * modelScale;
 #endif
 
+#ifdef OUTPUT_VELOCITY
+    out.currentClipPos = out.position;
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * worldPosition;
+#endif
+
     return out;
 }
 
-fragment float4 physicalFragment(
+fragment FragmentOutput physicalFragment(
     CustomVertexData in [[stage_in]],
 // inject lighting args
 #if defined(PROJECTOR_COUNT)
@@ -97,8 +108,21 @@ fragment float4 physicalFragment(
 
 #include "Chunks/PixelInfoInit.metal"
 #include "Chunks/PbrInit.metal"
+
+    SurfaceOutput surface;
+#include "Chunks/PixelInfoSurfaceOutput.metal"
+
+#if defined(DEFERRED_GEOMETRY)
+    outColor = float4(pbrTonemap(pixel), pixel.material.alpha);
+#else
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 #include "Chunks/PbrTonemap.metal"
-    return outColor;
+#endif
+
+    return buildFragmentOutput(surface, half4(outColor)
+#ifdef OUTPUT_VELOCITY
+        , in.currentClipPos, in.previousClipPos
+#endif
+    );
 }
