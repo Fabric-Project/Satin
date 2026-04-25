@@ -14,37 +14,37 @@ import ModelIO
 import SatinCore
 #endif
 
-public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> Object? {
+public func loadAsset(url: URL, textureLoader: MTKTextureLoader? = nil) -> Object? {
     let asset = MDLAsset(url: url)
 
     if textureLoader != nil { asset.loadTextures() }
 
     let fileName = url.lastPathComponent.replacingOccurrences(of: url.pathExtension, with: "")
-    let container = Object(context: context, label: fileName)
+    let container = Object(label: fileName)
 
     for i in 0 ..< asset.count {
         let mdlObject = asset.object(at: i)
         var stnObject: Object
         if let mdlMesh = mdlObject as? MDLMesh {
-            stnObject = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
+            stnObject = loadMesh(mdlMesh: mdlMesh, textureLoader: textureLoader)
         }
         else {
-            stnObject = Object(context: context, label: mdlObject.name)
+            stnObject = Object(label: mdlObject.name)
         }
         container.add(stnObject)
 
         if let transform = mdlObject.transform {
             stnObject.localMatrix = transform.matrix
         }
-        loadAssetChildren(parent: stnObject, children: mdlObject.children.objects, context: context, textureLoader: textureLoader)
+        loadAssetChildren(parent: stnObject, children: mdlObject.children.objects, textureLoader: textureLoader)
     }
 
     return container
 }
 
-func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?) -> Mesh {
-    let geometry = Geometry(context: context)
-    let stnMesh = Mesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil)
+func loadMesh(mdlMesh: MDLMesh, textureLoader: MTKTextureLoader?) -> Mesh {
+    let geometry = Geometry()
+    let stnMesh = Mesh(label: mdlMesh.name, geometry: geometry, material: nil)
     stnMesh.cullMode = .none
 
     mdlMesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.0)
@@ -172,14 +172,13 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
 
                         var material: Material?
                         if let mdlMaterial = mdlSubmesh.material, let textureLoader = textureLoader {
-                            let mat = PhysicalMaterial(context: context)
+                            let mat = PhysicalMaterial()
                             mat.setPropertiesFrom(material: mdlMaterial, textureLoader: textureLoader)
                             material = mat
                         }
 
                         stnMesh.addSubmesh(
                             Submesh(
-                                context: context,
                                 label: mdlSubmesh.name,
                                 parent: stnMesh,
                                 elementBuffer: ElementBuffer(
@@ -198,7 +197,7 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
         else {
             if let mdlSubmesh = submeshes.object(at: 0) as? MDLSubmesh {
                 if let mdlMaterial = mdlSubmesh.material, let textureLoader = textureLoader {
-                    let mat = PhysicalMaterial(context: context)
+                    let mat = PhysicalMaterial()
                     mat.setPropertiesFrom(material: mdlMaterial, textureLoader: textureLoader)
                     stnMesh.material = mat
                 }
@@ -218,20 +217,20 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
     return stnMesh
 }
 
-func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, textureLoader: MTKTextureLoader?) {
+func loadAssetChildren(parent: Object, children: [MDLObject], textureLoader: MTKTextureLoader?) {
     for child in children {
         var stnObject: Object
         if let mdlMesh = child as? MDLMesh {
-            stnObject = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
+            stnObject = loadMesh(mdlMesh: mdlMesh, textureLoader: textureLoader)
         }
         else {
-            stnObject = Object(context: context, label: child.name)
+            stnObject = Object(label: child.name)
         }
 
         if let transform = child.transform {
             stnObject.localMatrix = transform.matrix
         }
         parent.add(stnObject)
-        loadAssetChildren(parent: stnObject, children: child.children.objects, context: context, textureLoader: textureLoader)
+        loadAssetChildren(parent: stnObject, children: child.children.objects, textureLoader: textureLoader)
     }
 }

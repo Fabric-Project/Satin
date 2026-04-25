@@ -19,10 +19,9 @@ public class ARMatteRenderer {
     private var _updateGeometry = true
     private var _updateTextures = true
     private var renderer: Renderer
-    private let context: Context
 
-    var material: ARMatteMaterial
-    private var mesh: Mesh
+    var material = ARMatteMaterial()
+    private var mesh = Mesh(geometry: QuadGeometry(), material: nil)
     private var camera = OrthographicCamera()
 
     public internal(set) var alphaTexture: MTLTexture?
@@ -31,15 +30,10 @@ public class ARMatteRenderer {
     unowned var session: ARSession
 
     public init(device: MTLDevice, session: ARSession, matteResolution: ARMatteGenerator.Resolution, near: Float, far: Float) {
-        let context = Context(device: device, sampleCount: 1, colorPixelFormat: .r32Float, depthPixelFormat: .depth32Float)
         self.device = device
-        self.context = context
         self.session = session
         self.matteGenerator = ARMatteGenerator(device: device, matteResolution: matteResolution)
-        let material = ARMatteMaterial(context: context)
-        self.material = material
-        self.mesh = Mesh(context: context, geometry: QuadGeometry(context: context), material: nil)
-        self.renderer = Renderer(context: context)
+        self.renderer = Renderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: .r32Float, depthPixelFormat: .depth32Float))
         renderer.setClearColor(.zero)
         renderer.label = "AR Matte Renderer"
 

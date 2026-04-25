@@ -13,7 +13,7 @@ struct PBREnhancedRendererView: View {
     var body: some View {
         SatinMetalView(renderer: PBREnhancedRenderer())
             .ignoresSafeArea()
-            .navigationTitle("PBR Physical Point Shadows")
+            .navigationTitle("PBR Physical Material")
     }
 }
 

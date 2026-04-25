@@ -1,8 +1,5 @@
-#include "Library/TextureTransform.metal"
-
 typedef struct {
     float4 color; // color
-    float4x4 textureTransform;
 } TextUniforms;
 
 typedef struct {
@@ -35,8 +32,7 @@ fragment half4 textFragment(
     texture2d<half> fontTexture [[texture(FragmentTextureCustom0)]]) {
     constexpr sampler s = sampler(min_filter::linear, mag_filter::linear);
 
-    const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
-    float sample = fontTexture.sample(s, uv).r;
+    float sample = fontTexture.sample(s, in.texcoord).r;
     float sigDist = sample - 0.5;
     float fsigDist = fwidth(sigDist);
     float alpha = saturate(smoothstep(-fsigDist, fsigDist, sigDist));

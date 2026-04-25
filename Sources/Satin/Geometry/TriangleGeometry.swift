@@ -19,9 +19,9 @@ public final class TriangleGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, size: Float = 1) {
+    public init(size: Float = 1) {
         self.size = size
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

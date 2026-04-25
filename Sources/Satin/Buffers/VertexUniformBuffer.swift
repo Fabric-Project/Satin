@@ -23,8 +23,7 @@ public final class VertexUniformBuffer {
 
     public init(context: Context) {
         self.context = context
-        let totalSlots = context.maxBuffersInFlight * Satin.maxSubPassesPerFrame
-        let length = alignedSize * totalSlots * context.vertexAmplificationCount
+        let length = alignedSize * context.maxBuffersInFlight * context.vertexAmplificationCount
         guard let buffer = context.device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else { fatalError("Couldn't not create Vertex Uniform Buffer") }
         self.buffer = buffer
         self.buffer.label = "Vertex Uniforms"
@@ -32,8 +31,7 @@ public final class VertexUniformBuffer {
 
     public func update(object: Object, camera: Camera, viewport: simd_float4, index: Int) {
         if index == 0 {
-            let totalSlots = context.maxBuffersInFlight * Satin.maxSubPassesPerFrame
-            self.index = (self.index + 1) % totalSlots
+            self.index = (self.index + 1) % context.maxBuffersInFlight
             offset = alignedSize * self.index * context.vertexAmplificationCount
         }
 

@@ -18,14 +18,14 @@ final class BufferComputeRenderer: BaseRenderer {
     lazy var particleSystem = ParticleComputeSystem(device: device, pipelinesURL: pipelinesURL, count: 8192, live: true)
 
     lazy var spriteMaterial: SpriteMaterial = {
-        lazy var material = SpriteMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+        let material = SpriteMaterial(pipelinesURL: pipelinesURL)
         material.blending = .additive
         material.depthWriteEnabled = false
         return material
     }()
 
     lazy var mesh: Mesh = {
-        lazy var mesh = Mesh(context: defaultContext, geometry: PointGeometry(context: defaultContext), material: spriteMaterial)
+        let mesh = Mesh(geometry: PointGeometry(), material: spriteMaterial)
         mesh.instanceCount = particleSystem.count
         mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
             if let buffer = self.particleSystem.getBuffer("Particle") {
@@ -35,9 +35,9 @@ final class BufferComputeRenderer: BaseRenderer {
         return mesh
     }()
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 100.0], near: 0.001, far: 1000.0)
+    let camera = PerspectiveCamera(position: [0.0, 0.0, 100.0], near: 0.001, far: 1000.0)
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -48,10 +48,9 @@ final class BufferComputeRenderer: BaseRenderer {
     var renderTexture: MTLTexture!
     var _updateRenderTexture = true
 
-    lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
-    lazy var chromaMaterial = ChromaMaterial(context: postContext, pipelinesURL: pipelinesURL)
+    lazy var chromaMaterial = ChromaMaterial(pipelinesURL: pipelinesURL)
 
-    lazy var chromaticProcessor = PostProcessor(label: "Chroma Processor", context: postContext, material: chromaMaterial)
+    lazy var chromaticProcessor = PostProcessor(label: "Chroma Processor", context: Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat), material: chromaMaterial)
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
@@ -59,6 +58,10 @@ final class BufferComputeRenderer: BaseRenderer {
 
     override func setup() {
         startTime = CFAbsoluteTimeGetCurrent()
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     override func update() {

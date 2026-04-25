@@ -113,7 +113,6 @@ open class PhysicalMaterial: StandardMaterial {
     }
 
     public init(
-        context: Context,
         baseColor: simd_float4 = .one,
         metallic: Float = 1.0,
         roughness: Float = 1.0,
@@ -134,7 +133,6 @@ open class PhysicalMaterial: StandardMaterial {
         maps: [PBRTextureType: MTLTexture?] = [:]
     ) {
         super.init(
-            context: context,
             baseColor: baseColor,
             metallic: metallic,
             roughness: roughness,
@@ -166,12 +164,12 @@ open class PhysicalMaterial: StandardMaterial {
         try super.init(from: decoder)
     }
 
-    public required init(context: Context) {
-        super.init(context: context)
+    public required init() {
+        super.init()
     }
 
     override open func createShader() -> Shader {
-        PhysicalShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        PhysicalShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     override func setTextureMultiplierUniformToOne(type: PBRTextureType) {

@@ -17,10 +17,10 @@ final class IcosahedronGeometry: SatinGeometry {
     var size: Float = 2
     var resolution: Int = 1
 
-    public init(context: Context, size: Float = 2, resolution: Int = 1) {
+    public init(size: Float = 2, resolution: Int = 1) {
         self.size = size
         self.resolution = resolution
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {
@@ -29,8 +29,8 @@ final class IcosahedronGeometry: SatinGeometry {
 }
 
 final class CustomGeometryRenderer: BaseRenderer {
-    lazy var scene = Object(context: defaultContext, label: "Scene")
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 6.0], near: 0.001, far: 100.0)
+    let scene = Object(label: "Scene")
+    let camera = PerspectiveCamera(position: [0.0, 0.0, 6.0], near: 0.001, far: 100.0)
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
@@ -46,11 +46,15 @@ final class CustomGeometryRenderer: BaseRenderer {
 #endif
     }
 
+    deinit {
+        cameraController.disable()
+    }
+
     func setupMesh() {
-        mesh = Mesh(context: defaultContext, 
+        mesh = Mesh(
             label: "Icosahedron",
-            geometry: IcosahedronGeometry(context: defaultContext, size: 1.0, resolution: 4),
-            material: NormalColorMaterial(context: defaultContext, true)
+            geometry: IcosahedronGeometry(size: 1.0, resolution: 4),
+            material: NormalColorMaterial(true)
         )
         mesh.triangleFillMode = .lines
         scene.add(mesh)

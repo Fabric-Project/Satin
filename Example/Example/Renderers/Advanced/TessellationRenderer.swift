@@ -22,13 +22,12 @@ final class TessellationRenderer: BaseRenderer {
         geometry: tessGeometry
     )
 
-    lazy var tessGeometry = TessellationGeometry(
-        baseGeometry: IcoSphereGeometry(context: defaultContext, radius: 1, resolution: 1)
+    let tessGeometry = TessellationGeometry(
+        baseGeometry: IcoSphereGeometry(radius: 1, resolution: 1)
     )
 
-    lazy var tessMaterial = TessellatedMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+    lazy var tessMaterial = TessellatedMaterial(pipelinesURL: pipelinesURL)
     lazy var tessMesh = TessellationMesh(
-        context: defaultContext,
         label: "Tessellated Fill",
         geometry: tessGeometry,
         material: tessMaterial,
@@ -37,17 +36,16 @@ final class TessellationRenderer: BaseRenderer {
     )
 
     lazy var tessWireMesh = TessellationMesh(
-        context: defaultContext,
         label: "Tessellated Wire",
         geometry: tessGeometry,
-        material: TessellatedMaterial(context: defaultContext, pipelinesURL: pipelinesURL),
+        material: TessellatedMaterial(pipelinesURL: pipelinesURL),
         tessellator: tessellator,
         tessellate: false
     )
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [tessMesh, tessWireMesh])
+    lazy var scene = Object(label: "Scene", [tessMesh, tessWireMesh])
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 4.0), near: 0.01, far: 50.0, fov: 30)
+    let camera = PerspectiveCamera(position: .init(repeating: 4.0), near: 0.01, far: 50.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -56,11 +54,15 @@ final class TessellationRenderer: BaseRenderer {
 
         tessMesh.material?.depthBias = DepthBias(bias: -1, slope: -1, clamp: -1)
 
-        tessWireMesh.triangleFillMode = MTLTriangleFillMode.lines
-        tessWireMesh.material?.blending = Blending.additive
+        tessWireMesh.triangleFillMode = .lines
+        tessWireMesh.material?.blending = .additive
 
         tessWireMesh.material?.depthBias = DepthBias(bias: 1, slope: 1, clamp: 1)
         tessWireMesh.material?.set("Color", [1.0, 1.0, 1.0, 0.33])
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     lazy var startTime = getTime()

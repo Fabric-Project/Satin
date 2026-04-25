@@ -13,9 +13,6 @@ public class Light: Object {
     public var type: LightType { fatalError("Subclasses must overload") }
     
     public var data: LightData { fatalError("Subclasses must overload") }
-
-    var shadowIndex: Int = -1
-    var projectorIndex: Int = -1
     
     public var color: simd_float3 = .zero {
         didSet {
@@ -34,29 +31,31 @@ public class Light: Object {
     
     public let publisher = PassthroughSubject<Light, Never>()
     
-    override public init(context: Context, label: String = "Light", visible: Bool = true, _ children: [Object] = []) {
-        shadow = Shadow(context: context, label: "Empty Shadow")
-        super.init(context: context, label: label, visible: visible, children)
+    override init(label: String = "Light", visible: Bool = true, _ children: [Object] = [])
+    {
+        shadow = Shadow(label: "Empty Shadow")
+        
+        super.init()
     }
-
+    
     private enum CodingKeys: String, CodingKey {
         case color
         case intensity
     }
-
+    
     override public func encode(to encoder: Encoder) throws {
         try super.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(color, forKey: .color)
         try container.encode(intensity, forKey: .intensity)
     }
-
+    
     public required init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         color = try values.decode(simd_float3.self, forKey: .color)
         intensity = try values.decode(Float.self, forKey: .intensity)
-        let ctx = try decoder.requireSatinContext(typeName: "Light")
-        shadow = Shadow(context: ctx, label: "Empty Shadow")
+        shadow = Shadow(label: "Empty Shadow")
+
         try super.init(from: decoder)
     }
 }

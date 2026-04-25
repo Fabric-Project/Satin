@@ -17,8 +17,6 @@ struct BufferGeometryRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        BufferGeometryRendererView()
-    }
-#endif
+#Preview {
+    BufferGeometryRendererView()
+}

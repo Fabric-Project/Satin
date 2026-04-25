@@ -55,8 +55,6 @@ public struct ShaderConfiguration {
         let resolvedConstants = constants + rendering.getConstants()
 
         return ShaderLibraryConfiguration(
-            contextID: context?.id,
-            deviceID: context.map { ObjectIdentifier($0.device) },
             label: label,
             libraryURL: libraryURL,
             pipelineURL: pipelineURL,
@@ -66,8 +64,6 @@ public struct ShaderConfiguration {
             castShadow: rendering.castShadow,
             receiveShadow: rendering.receiveShadow,
             shadowCount: rendering.shadowCount,
-            directShadowCount: rendering.directShadowCount,
-            directShadowTextureCount: rendering.directShadowTextureCount,
             defines: resolvedDefines,
             constants: resolvedConstants
         )
@@ -76,7 +72,17 @@ public struct ShaderConfiguration {
 
 extension ShaderConfiguration: Equatable {
     public static func == (lhs: ShaderConfiguration, rhs: ShaderConfiguration) -> Bool {
-        lhs.context == rhs.context &&
+        var contextPipelineEquivalence = true
+        if let lhsContext = lhs.context, let rhsContext = rhs.context {
+            contextPipelineEquivalence =
+                lhsContext.sampleCount == rhsContext.sampleCount &&
+                lhsContext.colorPixelFormat == rhsContext.colorPixelFormat &&
+                lhsContext.depthPixelFormat == rhsContext.depthPixelFormat &&
+                lhsContext.stencilPixelFormat == rhsContext.stencilPixelFormat &&
+                lhsContext.vertexAmplificationCount == rhsContext.vertexAmplificationCount
+        }
+
+        return contextPipelineEquivalence &&
             lhs.label == rhs.label &&
             lhs.vertexFunctionName == rhs.vertexFunctionName &&
             lhs.fragmentFunctionName == rhs.fragmentFunctionName &&
@@ -91,7 +97,6 @@ extension ShaderConfiguration: Equatable {
 
 extension ShaderConfiguration: Hashable {
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(context)
         hasher.combine(label)
 
         if !vertexFunctionName.isEmpty { hasher.combine(vertexFunctionName) }

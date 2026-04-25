@@ -12,24 +12,24 @@ import MetalKit
 import Satin
 
 final class Renderer3D: BaseRenderer {
-    lazy var mesh = Mesh(context: defaultContext, 
+    let mesh = Mesh(
         label: "Sphere",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
+        material: BasicDiffuseMaterial(hardness: 0.7)
     )
 
-    lazy var intersectionMesh = Mesh(context: defaultContext, 
+    let intersectionMesh = Mesh(
         label: "Intersection Mesh",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.05, resolution: 2),
-        material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
+        geometry: IcoSphereGeometry(radius: 0.05, resolution: 2),
+        material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
         visible: false,
         renderPass: 1
     )
 
     lazy var startTime = getTime()
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     override var sampleCount: Int { 1 }
@@ -43,6 +43,10 @@ final class Renderer3D: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
         #endif
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     override func update() {

@@ -37,11 +37,11 @@ fileprivate final class ARObject: Object {
 fileprivate final class Invader: Object {
     let voxelScale: Float = 0.025
 
-    lazy var voxels = Object(context: defaultContext, label: "Voxels")
+    let voxels = Object(label: "Voxels")
 
     override public init() {
         super.init(label: "Invader", [voxels])
-        lazy var geometry = BoxGeometry(context: defaultContext, size: voxelScale)
+        let geometry = BoxGeometry(size: voxelScale)
 
         let BDY: simd_float4 = [0.0, 1.0, 0.0, 1.0]
         let _E_: simd_float4 = [1.0, 1.0, 1.0, 1.0]
@@ -69,12 +69,12 @@ fileprivate final class Invader: Object {
                     if let existingMaterial = materialMap[color] {
                         mat = existingMaterial
                     } else {
-                        lazy var newMaterial = StandardMaterial(context: defaultContext, baseColor: color, metallic: 0.1, roughness: 0.25)
+                        let newMaterial = StandardMaterial(baseColor: color, metallic: 0.1, roughness: 0.25)
                         materialMap[color] = newMaterial
                         mat = newMaterial
                     }
 
-                    lazy var voxel = Mesh(context: defaultContext, geometry: geometry, material: mat!)
+                    let voxel = Mesh(geometry: geometry, material: mat!)
                     voxel.position = voxelScale * simd_make_float3(Float(x) - 11.0 / 2.0, 4.0 - Float(y), 0)
                     voxels.add(voxel)
                 }
@@ -94,9 +94,9 @@ final class ARContactShadowRenderer: BaseRenderer {
     private let sessionPublisher = ARSessionPublisher(session: ARSession())
     private var anchorsSubscription: AnyCancellable?
 
-    lazy var shadowPlaneMesh = Mesh(context: defaultContext, 
-        geometry: PlaneGeometry(context: defaultContext, size: 1.0, orientation: .zx),
-        material: BasicTextureMaterial(context: defaultContext, texture: nil, flipped: false)
+    var shadowPlaneMesh = Mesh(
+        geometry: PlaneGeometry(size: 1.0, orientation: .zx),
+        material: BasicTextureMaterial(texture: nil, flipped: false)
     )
 
     fileprivate lazy var invaderContainer = ARObject(label: "Invader Container", [invader, shadowPlaneMesh])
@@ -113,7 +113,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         color: [0.0, 0.0, 0.0, 0.66]
     )
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [invaderContainer])
+    lazy var scene = Object(label: "Scene", [invaderContainer])
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = Renderer(context: context)
@@ -138,7 +138,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         var lights = [PointLight]()
         var positions: [simd_float3] = [[1, 1, 1], [-1, 1, 1], [-1, 1, -1], [1, 1, -1]]
         for position in positions {
-            lazy var l = PointLight(context: defaultContext, color: .one, intensity: 3.0)
+            let l = PointLight(color: .one, intensity: 3.0)
             l.position = position
             lights.append(l)
         }

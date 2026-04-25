@@ -6,9 +6,6 @@
 // inject constants
 
 #include "LightData.metal"
-#include "ShadowData.metal"
-#include "../Library/Shadow.metal"
-#include "../Library/RealtimeShadows.metal"
 
 // inject shadow data
 // inject shadow buffer

@@ -36,11 +36,11 @@ class TextureComputeRenderer: BaseRenderer {
         )
     }()
 
-    lazy var material = DisplacementMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
-    lazy var mesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 2.0, resolution: 512, orientation: .xy), material: material)
+    lazy var material = DisplacementMaterial(pipelinesURL: pipelinesURL, live: true)
+    lazy var mesh = Mesh(geometry: PlaneGeometry(size: 2.0, resolution: 512, orientation: .xy), material: material)
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
+    lazy var scene = Object(label: "Scene", [mesh])
+    let camera = PerspectiveCamera(position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -70,6 +70,10 @@ class TextureComputeRenderer: BaseRenderer {
         metalView.backgroundColor = .clear
 #endif
         super.setup()
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     override func update() {

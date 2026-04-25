@@ -16,37 +16,31 @@ import Satin
 final class ImmersivePostRenderer: ImmersiveBaseRenderer {
     final class GridMaterial: SourceMaterial {}
 
-    lazy var background = Mesh(context: defaultContext, 
+    lazy var background = Mesh(
         label: "Background",
-        geometry: SkyboxGeometry(context: defaultContext, size: 200),
-        material: GridMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
+        geometry: SkyboxGeometry(size: 200),
+        material: GridMaterial(pipelinesURL: pipelinesURL, live: true)
     )
 
-    lazy var mesh = Mesh(context: defaultContext, 
+    let mesh = Mesh(
         label: "Blob",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial(context: defaultContext)
+        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
+        material: BasicDiffuseMaterial()
     )
 
-    lazy var floor = Mesh(context: defaultContext, 
+    let floor = Mesh(
         label: "Floor",
-        geometry: PlaneGeometry(context: defaultContext, size: 3.0, orientation: .zx, centered: true),
-        material: UVColorMaterial(context: defaultContext),
+        geometry: PlaneGeometry(size: 3.0, orientation: .zx, centered: true),
+        material: UVColorMaterial(),
         visible: false
     )
 
     final class PostMaterial: SourceMaterial {}
 
-    lazy var postContext = Context(
-        device: device,
-        sampleCount: 1,
-        colorPixelFormat: colorPixelFormat,
-        vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
-    )
-    lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
+    lazy var postMaterial = PostMaterial(pipelinesURL: pipelinesURL)
 
     lazy var startTime = getTime()
-    lazy var scene = Object(context: defaultContext, label: "Scene", [background, floor, mesh])
+    lazy var scene = Object(label: "Scene", [background, floor, mesh])
 
     var renderTexture: MTLTexture?
 
@@ -56,7 +50,12 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
     )
 
     lazy var postProcessor = PostProcessor(
-        context: postContext,
+        context: Context(
+            device: device,
+            sampleCount: 1,
+            colorPixelFormat: colorPixelFormat,
+            vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
+        ),
         material: postMaterial
     )
 

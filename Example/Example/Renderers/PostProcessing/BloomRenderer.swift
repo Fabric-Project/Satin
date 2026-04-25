@@ -32,12 +32,12 @@ final class BloomRenderer: BaseRenderer {
     var renderTexture: MTLTexture?
 
     lazy var scene: Object = {
-        lazy var scene = Object(context: defaultContext, label: "Scene")
-        lazy var mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 4), material: StandardMaterial(context: defaultContext, baseColor: [0.25, 0.25, 0.25, 1], metallic: 1, roughness: 0.2, specular: 1.0), count: 10)
+        let scene = Object(label: "Scene")
+        let mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 1.0, resolution: 4), material: StandardMaterial(baseColor: [0.25, 0.25, 0.25, 1], metallic: 1, roughness: 0.2, specular: 1.0), count: 10)
         for index in 0 ..< 10 {
             let scale = Float.random(in: 0.1 ... 0.5)
             let magnitude = (1.0 - scale) * 10.0
-            lazy var object = Object(context: defaultContext)
+            let object = Object()
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))
@@ -46,26 +46,26 @@ final class BloomRenderer: BaseRenderer {
         }
         scene.add(mesh)
 
-        lazy var directionlLight = DirectionalLight(context: defaultContext, color: [1, 1, 1], intensity: 2.0)
+        let directionlLight = DirectionalLight(color: [1, 1, 1], intensity: 2.0)
         directionlLight.position = [10, 10, 10]
         directionlLight.lookAt(target: .zero)
         scene.add(directionlLight)
 
-        lazy var directionlLight2 = DirectionalLight(context: defaultContext, color: [1, 1, 1], intensity: 2.0)
+        let directionlLight2 = DirectionalLight(color: [1, 1, 1], intensity: 2.0)
         directionlLight2.position = [-10, 10, 10]
         directionlLight2.lookAt(target: .zero)
         scene.add(directionlLight2)
 
-        lazy var directionlLight3 = DirectionalLight(context: defaultContext, color: [1, 1, 1], intensity: 2.0)
+        let directionlLight3 = DirectionalLight(color: [1, 1, 1], intensity: 2.0)
         directionlLight3.position = [10, -10, -10]
         directionlLight3.lookAt(target: .zero)
         scene.add(directionlLight3)
 
-        lazy var boxMesh = InstancedMesh(context: defaultContext, geometry: RoundedBoxGeometry(context: defaultContext, size: 1.0, radius: 0.25, resolution: 3), material: StandardMaterial(context: defaultContext, baseColor: [0.5, 0.5, 0.5, 1], metallic: 1.0, roughness: 0.1), count: 20)
+        let boxMesh = InstancedMesh(geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 3), material: StandardMaterial(baseColor: [0.5, 0.5, 0.5, 1], metallic: 1.0, roughness: 0.1), count: 20)
         for index in 0 ..< 20 {
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 10.0
-            lazy var object = Object(context: defaultContext)
+            let object = Object()
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))
@@ -74,11 +74,11 @@ final class BloomRenderer: BaseRenderer {
         }
         scene.add(boxMesh)
 
-        lazy var capusleMesh = InstancedMesh(context: defaultContext, geometry: CapsuleGeometry(context: defaultContext, radius: 0.5, height: 2.0), material: StandardMaterial(context: defaultContext, baseColor: [0.93, 0.36, 0.46, 1], metallic: 1.0, roughness: 0.0), count: 20)
+        let capusleMesh = InstancedMesh(geometry: CapsuleGeometry(radius: 0.5, height: 2.0), material: StandardMaterial(baseColor: [0.93, 0.36, 0.46, 1], metallic: 1.0, roughness: 0.0), count: 20)
         for index in 0 ..< 20 {
             let scale = Float.random(in: 0.1 ... 0.75)
             let magnitude = (1.0 - scale) * 10.0
-            lazy var object = Object(context: defaultContext)
+            let object = Object()
             object.scale = simd_float3(repeating: scale)
             object.position = [Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude), Float.random(in: -magnitude ... magnitude)]
             object.orientation = simd_quatf(angle: Float.random(in: -Float.pi ... Float.pi), axis: simd_normalize(object.position))
@@ -90,19 +90,26 @@ final class BloomRenderer: BaseRenderer {
         return scene
     }()
 
-    lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
-    lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL, live: true)
+    lazy var postMaterial = PostMaterial(pipelinesURL: pipelinesURL, live: true)
     lazy var postProcessor = PostProcessor(
         label: "Bloom Post Processor",
-        context: postContext,
+        context: Context(
+            device: device,
+            sampleCount: sampleCount,
+            colorPixelFormat: colorPixelFormat
+        ),
         material: postMaterial
     )
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 45.0)
+    var camera = PerspectiveCamera(position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 45.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
     lazy var bloomGenerator = BloomGenerator(device: device, levels: 5)
+
+    deinit {
+        cameraController.disable()
+    }
 
     override func update() {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {

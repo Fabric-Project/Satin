@@ -67,15 +67,15 @@ public final class CapsuleGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, radius: Float, height: Float, axis: Axis = .y) {
+    public init(radius: Float, height: Float, axis: Axis = .y) {
         self.radius = radius
         self.height = height
         self.axis = axis
 
-        super.init(context: context)
+        super.init()
     }
 
-    public init(context: Context, radius: Float, height: Float, angularResolution: Int = 60, radialResolution: Int = 30, verticalResolution: Int = 1, axis: Axis = .y) {
+    public init(radius: Float, height: Float, angularResolution: Int = 60, radialResolution: Int = 30, verticalResolution: Int = 1, axis: Axis = .y) {
         self.radius = radius
         self.height = height
         self.angularResolution = angularResolution
@@ -83,7 +83,7 @@ public final class CapsuleGeometry: SatinGeometry {
         self.verticalResolution = verticalResolution
         self.axis = axis
 
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

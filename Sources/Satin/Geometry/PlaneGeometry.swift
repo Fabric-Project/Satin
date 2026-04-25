@@ -70,20 +70,20 @@ public final class PlaneGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, size: Float = 2, resolution: Int = 1, orientation: PlaneOrientation = .xy, centered: Bool = true) {
+    public init(size: Float = 2, resolution: Int = 1, orientation: PlaneOrientation = .xy, centered: Bool = true) {
         self.size = .init(repeating: size)
         self.resolution = .init(repeating: Int32(resolution))
         self.orientation = orientation
         self.centered = centered
-        super.init(context: context)
+        super.init()
     }
 
-    public init(context: Context, width: Float = 2, height: Float = 2, widthResolution: Int = 1, heightResolution: Int = 1, orientation: PlaneOrientation = .xy, centered: Bool = true) {
+    public init(width: Float = 2, height: Float = 2, widthResolution: Int = 1, heightResolution: Int = 1, orientation: PlaneOrientation = .xy, centered: Bool = true) {
         self.size = simd_make_float2(width, height)
         self.resolution = simd_make_int2(Int32(widthResolution), Int32(heightResolution))
         self.orientation = orientation
         self.centered = centered
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

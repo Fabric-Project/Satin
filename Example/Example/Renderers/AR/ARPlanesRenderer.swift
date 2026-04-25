@@ -53,7 +53,7 @@ final class ARPlaneContainer: Object {
         }
     }
 
-    lazy var geometry = ARPlaneGeometry(context: defaultContext)
+    var geometry = ARPlaneGeometry()
     var planeMesh: Mesh
     var meshWireframe: Mesh
 
@@ -63,8 +63,8 @@ final class ARPlaneContainer: Object {
         let mat = material.clone()
         mat.set("Color", [Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), 0.25])
 
-        planeMesh = Mesh(context: defaultContext, geometry: geometry, material: mat)
-        meshWireframe = Mesh(context: defaultContext, geometry: geometry, material: mat)
+        planeMesh = Mesh(geometry: geometry, material: mat)
+        meshWireframe = Mesh(geometry: geometry, material: mat)
         meshWireframe.triangleFillMode = .lines
         planeMesh.add(meshWireframe)
 
@@ -97,7 +97,7 @@ final class ARPlanesRenderer: BaseRenderer {
     private var anchorsUpdatedSubscription: AnyCancellable?
 
     lazy var planeMaterial: Satin.Material = {
-        lazy var material = BasicColorMaterial(context: defaultContext, color: .one, blending: .additive)
+        let material = BasicColorMaterial(color: .one, blending: .additive)
         material.depthWriteEnabled = false
         return material
     }()
@@ -106,7 +106,7 @@ final class ARPlanesRenderer: BaseRenderer {
 
     // MARK: - 3D
 
-    lazy var scene = Object(context: defaultContext, label: "Scene")
+    lazy var scene = Object(label: "Scene")
 
     lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {

@@ -12,33 +12,33 @@ import MetalKit
 import Satin
 
 final class OcclusionRenderer: BaseRenderer {
-    lazy var mesh = Mesh(context: defaultContext, 
+    let mesh = Mesh(
         label: "Mesh",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 0),
-        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        geometry: IcoSphereGeometry(radius: 1.0, resolution: 0),
+        material: BasicDiffuseMaterial(hardness: 0.7)
     )
-    lazy var intersectionMesh = Mesh(context: defaultContext, 
+    let intersectionMesh = Mesh(
         label: "Intersection Mesh",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 2),
-        material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
+        geometry: IcoSphereGeometry(radius: 0.1, resolution: 2),
+        material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
         visible: false
     )
 
-    lazy var occlusionGeometry = BoxGeometry(context: defaultContext, width: 4.0, height: 1.0, depth: 4.0)
+    let occlusionGeometry = BoxGeometry(width: 4.0, height: 1.0, depth: 4.0)
 
     lazy var occlusionMesh: Mesh = {
-        lazy var meshMaterial = BasicColorMaterial(context: defaultContext, color: .zero, blending: .disabled)
-        lazy var mesh = Mesh(context: defaultContext, 
+        let meshMaterial = BasicColorMaterial(color: .zero, blending: .disabled)
+        let mesh = Mesh(
             geometry: occlusionGeometry,
             material: meshMaterial
         )
         mesh.position.y = -0.5
 
-        lazy var wireframeMaterial = BasicColorMaterial(context: defaultContext, color: .init(1.0, 1.0, 1.0, 0.5), blending: .additive)
+        let wireframeMaterial = BasicColorMaterial(color: .init(1.0, 1.0, 1.0, 0.5), blending: .additive)
         wireframeMaterial.depthBias = DepthBias(bias: 1.0, slope: 1.0, clamp: 1.0)
         wireframeMaterial.depthWriteEnabled = false
 
-        lazy var meshWireframe = Mesh(context: defaultContext, 
+        let meshWireframe = Mesh(
             geometry: occlusionGeometry,
             material: wireframeMaterial
         )
@@ -49,15 +49,19 @@ final class OcclusionRenderer: BaseRenderer {
         return mesh
     }()
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [occlusionMesh, mesh, intersectionMesh])
+    lazy var scene = Object(label: "Scene", [occlusionMesh, mesh, intersectionMesh])
     lazy var camera: PerspectiveCamera = {
-        lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 8.0), near: 0.01, far: 1000.0, fov: 30)
+        let camera = PerspectiveCamera(position: .init(repeating: 8.0), near: 0.01, far: 1000.0, fov: 30)
         camera.lookAt(target: .zero, up: Satin.worldUpDirection)
         return camera
     }()
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
+
+    deinit {
+        cameraController.disable()
+    }
 
     override func update() {
         cameraController.update()

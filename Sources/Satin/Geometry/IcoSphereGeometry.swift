@@ -27,10 +27,10 @@ public final class IcoSphereGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, radius: Float, resolution: Int) {
+    public init(radius: Float, resolution: Int) {
         self.radius = radius
         self.resolution = resolution
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

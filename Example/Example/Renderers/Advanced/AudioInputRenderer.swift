@@ -15,7 +15,7 @@ final class AudioInputRenderer: BaseRenderer {
     lazy var audioInput: AudioInput = .init(context: defaultContext)
 
     lazy var audioMaterial: BasicTextureMaterial = {
-        lazy var mat = BasicTextureMaterial(context: defaultContext)
+        let mat = BasicTextureMaterial()
 
         let desc = MTLSamplerDescriptor()
         desc.label = "Audio Texture Sampler"
@@ -30,9 +30,9 @@ final class AudioInputRenderer: BaseRenderer {
         return mat
     }()
 
-    lazy var mesh: Mesh = .init(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 700), material: audioMaterial)
-    lazy var camera = OrthographicCamera(context: defaultContext)
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var mesh: Mesh = .init(geometry: PlaneGeometry(size: 700), material: audioMaterial)
+    var camera = OrthographicCamera()
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     override var depthPixelFormat: MTLPixelFormat {

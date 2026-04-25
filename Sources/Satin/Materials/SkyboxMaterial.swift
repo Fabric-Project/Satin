@@ -17,12 +17,12 @@ open class SkyboxMaterial: BasicTextureMaterial {
         }
     }
 
-    public var texcoordTransform: simd_float4x4 {
+    public var texcoordTransform: simd_float3x3 {
         get {
-            textureTransform
+            get("Texcoord Transform", as: Float3x3Parameter.self)!.value
         }
         set {
-            textureTransform = newValue
+            set("Texcoord Transform", newValue)
         }
     }
 
@@ -61,19 +61,19 @@ open class SkyboxMaterial: BasicTextureMaterial {
         }
     }
 
-    public init(context: Context, tonemapping: Tonemapping = .aces, gammaCorrection: Float = 1.0) {
-        super.init(context: context)
+    public init(tonemapping: Tonemapping = .aces, gammaCorrection: Float = 1.0) {
+        super.init()
         depthWriteEnabled = false
         initalizeParameters(tonemapping: tonemapping, gammaCorrection: gammaCorrection)
     }
 
-    public init(context: Context, texture: MTLTexture, sampler: MTLSamplerState? = nil, tonemapping: Tonemapping = .aces, gammaCorrection: Float = 1.0) {
-        super.init(context: context)
+    public init(texture: MTLTexture, sampler: MTLSamplerState? = nil, tonemapping: Tonemapping = .aces, gammaCorrection: Float = 1.0) {
+        super.init()
         if texture.textureType != .typeCube {
             fatalError("SkyboxMaterial expects a Cube texture")
         }
         self.texture = texture
-        if let sampler { self.sampler = sampler }
+        self.sampler = sampler
         depthWriteEnabled = false
         initalizeParameters(tonemapping: tonemapping, gammaCorrection: gammaCorrection)
     }
@@ -83,16 +83,16 @@ open class SkyboxMaterial: BasicTextureMaterial {
         gammaCorrection: Float = 1.0,
         environmentIntensity: Float = 1.0,
         blur: Float = 0.0,
-        texcoordTransform: simd_float4x4 = matrix_identity_float4x4
+        texcoordTransform: simd_float3x3 = matrix_identity_float3x3
     ) {
         self.tonemapping = tonemapping
         self.gammaCorrection = gammaCorrection
         self.environmentIntensity = environmentIntensity
-        textureTransform = texcoordTransform
+        self.texcoordTransform = texcoordTransform
     }
 
-    public required init(context: Context) {
-        super.init(context: context)
+    public required init() {
+        super.init()
         depthWriteEnabled = false
         initalizeParameters()
     }
@@ -102,13 +102,13 @@ open class SkyboxMaterial: BasicTextureMaterial {
         depthWriteEnabled = false
     }
 
-    override public init(context: Context, texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
-        super.init(context: context)
+    override public init(texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
+        super.init(texture: texture, sampler: sampler, flipped: flipped)
         if let texture = texture, texture.textureType != .typeCube {
             fatalError("SkyboxMaterial expects a Cube texture")
         }
         self.texture = texture
-        if let sampler { self.sampler = sampler }
+        self.sampler = sampler
         depthWriteEnabled = false
         initalizeParameters()
     }
@@ -120,6 +120,6 @@ open class SkyboxMaterial: BasicTextureMaterial {
     }
 
     override open func createShader() -> Shader {
-        return SkyboxShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        return SkyboxShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 }

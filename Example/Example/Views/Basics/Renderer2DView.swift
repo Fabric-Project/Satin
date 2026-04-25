@@ -17,8 +17,6 @@ struct Renderer2DView: View {
     }
 }
 
-#if false
-    #Preview {
-        Renderer2DView()
-    }
-#endif
+#Preview {
+    Renderer2DView()
+}

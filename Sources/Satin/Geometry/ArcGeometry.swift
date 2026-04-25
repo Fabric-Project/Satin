@@ -61,7 +61,7 @@ public final class ArcGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, radius: (inner: Float, outer: Float), angle: (start: Float, end: Float), res: (angular: Int, radial: Int)) {
+    public init(radius: (inner: Float, outer: Float), angle: (start: Float, end: Float), res: (angular: Int, radial: Int)) {
         self.innerRadius = radius.inner
         self.outerRadius = radius.outer
         self.startAngle = angle.start
@@ -69,7 +69,7 @@ public final class ArcGeometry: SatinGeometry {
         self.angularResolution = res.angular
         self.radialResolution = res.radial
 
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

@@ -35,10 +35,10 @@ public final class TextGeometry: Geometry {
     private var indices: [UInt32] = []
     private let indexElementBuffer = ElementBuffer(type: .uint32, data: nil, count: 0, source: nil)
 
-    public init(context: Context, text: String, font: FontAtlas) {
+    public init(text: String, font: FontAtlas) {
         self.text = text
         self.font = font
-        super.init(context: context)
+        super.init()
 
         addAttribute(positionBuffer, for: .Position)
         addAttribute(texcoordBuffer, for: .Texcoord)

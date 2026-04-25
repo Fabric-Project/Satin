@@ -26,8 +26,8 @@ public final class TextMesh: Mesh {
         }
     }
 
-    public init(context: Context, label: String = "TextMesh", geometry: TextGeometry, material: TextMaterial?) {
-        super.init(context: context, label: label, geometry: geometry, material: material)
+    public init(label: String = "TextMesh", geometry: TextGeometry, material: TextMaterial?) {
+        super.init(label: label, geometry: geometry, material: material)
     }
 
     required init(from decoder: Decoder) throws {

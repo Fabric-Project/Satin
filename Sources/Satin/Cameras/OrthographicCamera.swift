@@ -85,8 +85,8 @@ open class OrthographicCamera: Camera {
         }
     }
 
-    override public init(context: Context, label: String = "Orthographic Camera") {
-        super.init(context: context, label: label)
+    override public init(label: String = "Orthographic Camera") {
+        super.init(label: label)
         left = -1
         right = 1
         bottom = -1
@@ -95,8 +95,8 @@ open class OrthographicCamera: Camera {
         far = 100
     }
 
-    public init(context: Context, label: String = "Orthographic Camera", left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) {
-        super.init(context: context, label: label)
+    public init(label: String = "Orthographic Camera", left: Float, right: Float, bottom: Float, top: Float, near: Float, far: Float) {
+        super.init(label: label)
         self.left = left
         self.right = right
         self.bottom = bottom

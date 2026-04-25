@@ -30,8 +30,8 @@ open class BasicPointMaterial: Material {
         }
     }
 
-    public init(context: Context, color: simd_float4, size: Float, blending: Blending = .alpha, depthWriteEnabled: Bool = true, depthCompareFunction: MTLCompareFunction = .greaterEqual) {
-        super.init(context: context)
+    public init(color: simd_float4, size: Float, blending: Blending = .alpha, depthWriteEnabled: Bool = true, depthCompareFunction: MTLCompareFunction = .greaterEqual) {
+        super.init()
 
         self.blending = blending
         self.depthWriteEnabled = depthWriteEnabled
@@ -42,8 +42,8 @@ open class BasicPointMaterial: Material {
         updateSize()
     }
 
-    public required init(context: Context) {
-        super.init(context: context)
+    public required init() {
+        super.init()
 
         blending = .alpha
 

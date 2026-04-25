@@ -28,57 +28,36 @@ open class SourceShader: Shader {
 
     public var live = false {
         didSet {
-            if live {
-                setupShaderCompiler()
-            }
-            compiler?.watch = live
+            compiler.watch = live
         }
     }
 
     var compilerSubscription: AnyCancellable?
-    private var compiler: MetalFileCompiler? {
+    private lazy var compiler = MetalFileCompiler(watch: live) {
         didSet {
-            compilerSubscription?.cancel()
-            compilerSubscription = nil
-
-            compilerSubscription = compiler?.onUpdatePublisher.sink { [weak self] _ in
+            compilerSubscription = compiler.onUpdatePublisher.sink { [weak self] _ in
                 self?.reloadFromSource()
             }
         }
     }
 
-    public convenience init(context: Context, label: String, pipelineURL: URL, pipelineDescriptor: MTLRenderPipelineDescriptor? = nil) {
-        var configuration = ShaderConfiguration(
-            label: label,
-            vertexFunctionName: label.camelCase + "Vertex",
-            fragmentFunctionName: label.camelCase + "Fragment",
-            shadowFunctionName: label.camelCase + "ShadowVertex",
-            pipelineURL: pipelineURL
-        )
-        configuration.context = context
-        self.init(configuration: configuration)
+    public init(label: String, pipelineURL: URL, pipelineDescriptor: MTLRenderPipelineDescriptor? = nil) {
+        super.init(label: label, pipelineURL: pipelineURL)
+        setupShaderCompiler()
     }
 
     public required init(configuration: ShaderConfiguration) {
         super.init(configuration: configuration)
         setupShaderCompiler()
     }
-
-    public convenience init(context: Context, configuration: ShaderConfiguration) {
-        var configuration = configuration
-        configuration.context = context
-        self.init(configuration: configuration)
-    }
     
     deinit {
         compilerSubscription?.cancel()
-        compilerSubscription = nil
-        compiler = nil
     }
 
     open func setupShaderCompiler() {
-        guard compiler == nil, live else { return }
-        compiler = MetalFileCompiler(watch: live)
+        compiler = ShaderSourceCache.getCompiler(url: pipelineURL)
+        compiler.watch = live
     }
 
     public func reloadFromSource() {

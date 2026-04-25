@@ -13,7 +13,7 @@ struct ContactShadowRendererView: View {
     var body: some View {
         SatinMetalView(renderer:  ContactShadowRenderer())
             .ignoresSafeArea()
-            .navigationTitle("Contact Shadow (Utility)")
+            .navigationTitle("Contact Shadow")
             .preferredColorScheme(.light)
     }
 }

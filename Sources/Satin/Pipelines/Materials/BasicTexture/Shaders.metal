@@ -1,8 +1,6 @@
-#include "Library/TextureTransform.metal"
-
 typedef struct {
     float4 color; // color
-    float4x4 textureTransform;
+    bool flipped;
 } BasicTextureUniforms;
 
 typedef struct {
@@ -34,7 +32,9 @@ fragment half4 basicTextureFragment(
     constant BasicTextureUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
     texture2d<float> tex [[texture(FragmentTextureCustom0)]],
     sampler texSampler [[sampler(FragmentSamplerCustom0)]]) {
-    const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
+    float2 uv = in.texcoord;
+    uv.y = mix(uv.y, 1.0 - uv.y, uniforms.flipped);
+
     const float4 texSample = tex.sample(texSampler, uv);
     if (texSample.a == 0.0) { discard_fragment(); }
 

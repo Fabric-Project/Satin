@@ -1,8 +1,5 @@
-#include "Library/TextureTransform.metal"
-
 typedef struct {
     float3 nearFarDelta;
-    float4x4 textureTransform;
 } ARMatteUniforms;
 
 struct FragOut {
@@ -17,7 +14,7 @@ fragment FragOut armatteFragment(
     constant ARMatteUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
     texture2d<float> alphaTexture [[texture(FragmentTextureCustom0)]],
     depth2d<float> depthTexture [[texture(FragmentTextureCustom1)]]) {
-    const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
+    const float2 uv = in.texcoord;
 
     FragOut out;
     out.color = alphaTexture.sample(s, uv);

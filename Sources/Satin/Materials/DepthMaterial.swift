@@ -44,8 +44,8 @@ public final class DepthMaterial: Material {
         }
     }
 
-    public init(context: Context, color: Bool = true, invert: Bool = false, camera: Camera? = nil) {
-        super.init(context: context)
+    public init(color: Bool = true, invert: Bool = false, camera: Camera? = nil) {
+        super.init()
         set("Color", color)
         set("Invert", invert)
         if let camera = camera {
@@ -57,8 +57,8 @@ public final class DepthMaterial: Material {
         }
     }
 
-    public required init(context: Context) {
-        super.init(context: context)
+    public required init() {
+        super.init()
         set("Color", true)
         set("Invert", false)
         set("Near", -1.0)

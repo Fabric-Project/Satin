@@ -43,9 +43,6 @@ public struct RenderingConfiguration: Hashable {
     var castShadow: Bool = false
     var receiveShadow: Bool = false
     var shadowCount: Int = 0
-    var directShadowCount: Int = 0
-    var directShadowTextureCount: Int = 0
-    var projectorCount: Int = 0
 
     var defines: [ShaderDefine] = []
     var constants: [String] = []
@@ -61,9 +58,6 @@ public struct RenderingConfiguration: Hashable {
         hasher.combine(castShadow)
         hasher.combine(receiveShadow)
         hasher.combine(shadowCount)
-        hasher.combine(directShadowCount)
-        hasher.combine(directShadowTextureCount)
-        hasher.combine(projectorCount)
 
         if !defines.isEmpty { hasher.combine(defines) }
         if !constants.isEmpty { hasher.combine(constants) }
@@ -86,9 +80,6 @@ public struct RenderingConfiguration: Hashable {
         if lightCount > 0 { results.append(ShaderDefine(key: "MAX_LIGHTS", value: NSNumber(value: lightCount))) }
         if receiveShadow { results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true"))) }
         if shadowCount > 0 { results.append(ShaderDefine(key: "SHADOW_COUNT", value: NSNumber(value: shadowCount))) }
-        if directShadowCount > 0 { results.append(ShaderDefine(key: "DIRECT_SHADOW_COUNT", value: NSNumber(value: directShadowCount))) }
-        if directShadowTextureCount > 0 { results.append(ShaderDefine(key: "DIRECT_SHADOW_TEXTURE_COUNT", value: NSNumber(value: directShadowTextureCount))) }
-        if projectorCount > 0 { results.append(ShaderDefine(key: "PROJECTOR_COUNT", value: NSNumber(value: projectorCount))) }
 
         return results
     }
@@ -108,9 +99,6 @@ extension RenderingConfiguration: Equatable {
             lhs.castShadow == rhs.castShadow &&
             lhs.receiveShadow == rhs.receiveShadow &&
             lhs.shadowCount == rhs.shadowCount &&
-            lhs.directShadowCount == rhs.directShadowCount &&
-            lhs.directShadowTextureCount == rhs.directShadowTextureCount &&
-            lhs.projectorCount == rhs.projectorCount &&
             lhs.defines == rhs.defines &&
             lhs.constants == rhs.constants &&
             lhs.tessellationDescriptor == rhs.tessellationDescriptor
@@ -129,9 +117,6 @@ extension RenderingConfiguration: CustomStringConvertible {
         output += "\t\t castShadow: \(castShadow)\n"
         output += "\t\t receiveShadow: \(receiveShadow)\n"
         output += "\t\t shadowCount: \(shadowCount)\n"
-        output += "\t\t directShadowCount: \(directShadowCount)\n"
-        output += "\t\t directShadowTextureCount: \(directShadowTextureCount)\n"
-        output += "\t\t projectorCount: \(projectorCount)\n"
 
         output += "\t\t vertexDecriptor: \(vertexDescriptor)\n"
         if let tessellationDescriptor {

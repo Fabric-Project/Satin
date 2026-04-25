@@ -1,5 +1,5 @@
 #if defined(NORMAL_MAP) && defined(HAS_TEXCOORD)
-const float2 normalTexcoord = applyTextureTransform(in.texcoord, uniforms.normalTexcoordTransform);
+const float2 normalTexcoord = (uniforms.normalTexcoordTransform * float3(in.texcoord, 1.0)).xy;
 float3 mapNormal = normalMap.sample(normalSampler, normalTexcoord).rgb * 2.0 - 1.0;
 
 #if defined(HAS_TANGENT) && defined(HAS_BITANGENT)

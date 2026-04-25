@@ -1,4 +1,5 @@
 typedef struct {
-    float4 parameters; // (strength, bias, normalBias, radius)
-    uint4 indices; // (textureIndex, matrixIndex, viewCount, unused)
+    float strength;
+    float bias;
+    float radius;
 } ShadowData;

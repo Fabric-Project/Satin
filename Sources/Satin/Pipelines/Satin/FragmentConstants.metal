@@ -14,11 +14,7 @@ typedef enum FragmentBufferIndex {
     FragmentBufferCustom7 = 12,
     FragmentBufferCustom8 = 13,
     FragmentBufferCustom9 = 14,
-    FragmentBufferCustom10 = 15,
-    FragmentBufferProjectorMatrices = 16,
-    FragmentBufferProjectorTransforms = 17,
-    FragmentBufferDirectShadows = 18,
-    FragmentBufferDirectShadowMatrices = 19
+    FragmentBufferCustom10 = 15
 } FragmentBufferIndex;
 
 typedef enum FragmentTextureIndex {
@@ -52,9 +48,7 @@ typedef enum FragmentTextureIndex {
     FragmentTextureShadow4 = 27,
     FragmentTextureShadow5 = 28,
     FragmentTextureShadow6 = 29,
-    FragmentTextureShadow7 = 30,
-    FragmentTextureProjector0 = 31,
-    FragmentTextureDirectShadow0 = 39
+    FragmentTextureShadow7 = 30
 } FragmentTextureIndex;
 
 typedef enum FragmentSamplerIndex {

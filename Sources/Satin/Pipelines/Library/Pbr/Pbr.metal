@@ -1,4 +1,3 @@
-#include "../TextureTransform.metal"
 #include "Lighting.metal"
 #include "Material.metal"
 #include "PixelInfo.metal"

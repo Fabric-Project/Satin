@@ -20,10 +20,8 @@ struct ScreenCaptureRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        ScreenCaptureRendererView()
-    }
-#endif
+#Preview {
+    ScreenCaptureRendererView()
+}
 
 #endif

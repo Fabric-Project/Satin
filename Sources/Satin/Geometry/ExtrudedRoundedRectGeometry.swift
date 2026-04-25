@@ -62,13 +62,13 @@ public final class ExtrudedRoundedRectGeometry: SatinGeometry {
         Int32(Float(angularResolution) * size.y / radius) / 6
     }
 
-    public init(context: Context, width: Float, height: Float, depth: Float, radius: Float, angularResolution: Int, radialResolution: Int, depthResolution: Int) {
+    public init(width: Float, height: Float, depth: Float, radius: Float, angularResolution: Int, radialResolution: Int, depthResolution: Int) {
         self.size = simd_make_float3(width, height, depth)
         self.radius = radius
         self.angularResolution = angularResolution
         self.radialResolution = radialResolution
         self.depthResolution = depthResolution
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

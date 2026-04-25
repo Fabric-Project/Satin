@@ -14,7 +14,7 @@ class MatcapRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    lazy var scene = Object(context: defaultContext, label: "Scene")
+    var scene = Object(label: "Scene")
 
     lazy var matcapTexture: MTLTexture? = {
         // from https://github.com/nidorx/matcaps
@@ -31,7 +31,7 @@ class MatcapRenderer: BaseRenderer {
         }
     }()
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 8.0], near: 0.001, far: 100.0, fov: 45)
+    let camera = PerspectiveCamera(position: [0.0, 0.0, 8.0], near: 0.001, far: 100.0, fov: 45)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -51,10 +51,14 @@ class MatcapRenderer: BaseRenderer {
 #endif
     }
 
+    deinit {
+        cameraController.disable()
+    }
+
     func loadModel() {
         let asset = MDLAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"))
 
-        lazy var geometry = Geometry(context: defaultContext)
+        let geometry = Geometry()
         let object0 = asset.object(at: 0)
         if let object = object0 as? MDLMesh {
             object.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.0)
@@ -127,13 +131,13 @@ class MatcapRenderer: BaseRenderer {
         }
 
         scene.add(
-            Mesh(context: defaultContext, label: "Suzanne", geometry: geometry, material: MatCapMaterial(context: defaultContext, texture: matcapTexture!))
+            Mesh(label: "Suzanne", geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
         )
     }
 
     func loadKnot() {
         let twoPi = Float.pi * 2.0
-        lazy var geometry = ParametricGeometry(context: defaultContext, rangeU: 0.0...twoPi, rangeV: 0.0...twoPi, resolution: [300, 16], generator: { u, v in
+        let geometry = ParametricGeometry(rangeU: 0.0...twoPi, rangeV: 0.0...twoPi, resolution: [300, 16], generator: { u, v in
             let R: Float = 1.0
             let r: Float = 0.25
             let c: Float = 0.05
@@ -142,8 +146,8 @@ class MatcapRenderer: BaseRenderer {
             return torusKnotGenerator(u, v, R, r, c, q, p)
         })
 
-        lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: MatCapMaterial(context: defaultContext, texture: matcapTexture!))
-        mesh.cullMode = MTLCullMode.none
+        let mesh = Mesh(geometry: geometry, material: MatCapMaterial(texture: matcapTexture!))
+        mesh.cullMode = .none
         mesh.label = "Knot"
         mesh.scale = .init(repeating: 2.5)
         scene.add(mesh)

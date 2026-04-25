@@ -35,11 +35,11 @@ public final class SphereGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, radius: Float = 1.0, angularResolution: Int = 60, verticalResolution: Int = 30) {
+    public init(radius: Float = 1.0, angularResolution: Int = 60, verticalResolution: Int = 30) {
         self.radius = radius
         self.angularResolution = angularResolution
         self.verticalResolution = verticalResolution
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

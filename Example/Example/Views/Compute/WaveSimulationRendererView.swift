@@ -17,8 +17,6 @@ struct WaveSimulationRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        WaveSimulationRendererView()
-    }
-#endif
+#Preview {
+    WaveSimulationRendererView()
+}

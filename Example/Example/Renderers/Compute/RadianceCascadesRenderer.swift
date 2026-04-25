@@ -28,15 +28,15 @@ final class RadianceCascadesRenderer: BaseRenderer {
         live: true
     )
 
-    lazy var mesh = Mesh(context: defaultContext, 
+    lazy var mesh = Mesh(
         label: "Quad",
-        geometry: QuadGeometry(context: defaultContext),
-        material: PostMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
+        geometry: QuadGeometry(),
+        material: PostMaterial(pipelinesURL: pipelinesURL, live: true)
     )
 
-    lazy var camera = OrthographicCamera(context: defaultContext)
+    var camera = OrthographicCamera()
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 0.00125)
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 
     override func setup() {

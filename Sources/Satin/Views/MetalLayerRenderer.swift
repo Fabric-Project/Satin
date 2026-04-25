@@ -62,19 +62,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
 
     public var frameIndex: Int = -1
 
-    private lazy var cachedDefaultContext = makeDefaultContext()
-
     public var defaultContext: Context {
-        cachedDefaultContext
-    }
-
-    private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
-
-    var onDisappearAction: (() -> Void)?
-
-    public init() {}
-
-    open func makeDefaultContext() -> Context {
         Context(
             device: device,
             sampleCount: sampleCount,
@@ -83,6 +71,12 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
             vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
         )
     }
+
+    private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
+
+    var onDisappearAction: (() -> Void)?
+
+    public init() {}
 
     public func onDisappear(perform action: @escaping () -> Void) -> Self {
         onDisappearAction = action

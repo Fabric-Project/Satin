@@ -4,14 +4,12 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
-    // inject shadow coords
 } ShadowVertexData;
 
 vertex ShadowVertexData shadowVertex(
     Vertex in [[stage_in]],
     ushort amp_id [[amplification_id]],
     // inject instancing args
-    // inject shadow vertex args
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
     ShadowVertexData out;
 
@@ -21,8 +19,6 @@ vertex ShadowVertexData shadowVertex(
 #else
     out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * float4(in.position, 1.0);
 #endif
-
-    // inject shadow vertex calc
 
     return out;
 }

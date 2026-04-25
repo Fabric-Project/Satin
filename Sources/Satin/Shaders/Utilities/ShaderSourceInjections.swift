@@ -133,20 +133,14 @@ public func injectLightingArgs(source: inout String, lighting: Bool) {
     source = source.replacingOccurrences(of: "// inject lighting args\n", with: lighting ? injection : "")
 }
 
-public func injectDirectShadowArgs(source: inout String, directShadowCount: Int, directShadowTextureCount: Int) {
-    var injection = ""
-    if directShadowCount > 0 && directShadowTextureCount > 0 {
-        injection += "\tconstant ShadowData *directShadows [[buffer(FragmentBufferDirectShadows)]],\n"
-        injection += "\tconstant float4x4 *directShadowMatrices [[buffer(FragmentBufferDirectShadowMatrices)]],\n"
-        injection += "\tarray<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],\n"
-    }
-    source = source.replacingOccurrences(of: "// inject direct shadow args\n", with: injection)
-}
-
 // MARK: - Shadows
 
 public func injectShadowData(source: inout String, receiveShadow: Bool, shadowCount: Int) {
-    source = source.replacingOccurrences(of: "// inject shadow data\n", with: "")
+    var injection = ""
+    if receiveShadow, shadowCount > 0, let shadowDataSource = ShadowDataSource.get() {
+        injection = shadowDataSource
+    }
+    source = source.replacingOccurrences(of: "// inject shadow data\n", with: injection)
 }
 
 public func injectShadowBuffer(source: inout String, receiveShadow: Bool, shadowCount: Int) {
@@ -161,7 +155,11 @@ public func injectShadowBuffer(source: inout String, receiveShadow: Bool, shadow
 }
 
 public func injectShadowFunction(source: inout String, receiveShadow: Bool, shadowCount: Int) {
-    source = source.replacingOccurrences(of: "// inject shadow function\n", with: "")
+    var injection = ""
+    if receiveShadow, shadowCount > 0, let shadowFunctionSource = ShadowFunctionSource.get() {
+        injection = shadowFunctionSource
+    }
+    source = source.replacingOccurrences(of: "// inject shadow function\n", with: injection)
 }
 
 public func injectPassThroughShadowVertex(label: String, source: inout String) {

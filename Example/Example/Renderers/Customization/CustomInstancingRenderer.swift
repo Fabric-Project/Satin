@@ -19,17 +19,17 @@ final class CustomInstancingRenderer: BaseRenderer {
     var dataBuffer: MTLBuffer?
 
     lazy var instanceMaterial: InstanceMaterial = {
-        lazy var material = InstanceMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+        let material = InstanceMaterial(pipelinesURL: pipelinesURL)
         material.onBind = { [unowned self] renderEncoder in
             renderEncoder.setVertexBuffer(self.dataBuffer, offset: 0, index: VertexBufferIndex.Custom0.rawValue)
         }
         return material
     }()
 
-    lazy var camera = OrthographicCamera(context: defaultContext)
+    let camera = OrthographicCamera()
 
-    lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: instanceMaterial)
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var mesh = Mesh(geometry: QuadGeometry(), material: instanceMaterial)
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 2.0)
     lazy var renderer = Renderer(context: defaultContext)
 

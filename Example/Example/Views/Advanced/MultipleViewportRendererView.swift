@@ -17,8 +17,7 @@ struct MultipleViewportRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        MultipleViewportRendererView()
-    }
-#endif
+#Preview {
+    MultipleViewportRendererView()
+}
+

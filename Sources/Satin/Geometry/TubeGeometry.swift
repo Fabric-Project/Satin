@@ -58,14 +58,14 @@ public final class TubeGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, radius: Float, height: Float, startAngle: Float, endAngle: Float, angularResolution: Int, verticalResolution: Int) {
+    public init(radius: Float, height: Float, startAngle: Float, endAngle: Float, angularResolution: Int, verticalResolution: Int) {
         self.radius = radius
         self.height = height
         self.startAngle = startAngle
         self.endAngle = endAngle
         self.angularResolution = angularResolution
         self.verticalResolution = verticalResolution
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

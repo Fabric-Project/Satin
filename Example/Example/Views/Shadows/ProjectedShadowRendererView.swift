@@ -13,7 +13,7 @@ struct ProjectedShadowRendererView: View {
     var body: some View {
         SatinMetalView(renderer: ProjectedShadowRenderer())
             .ignoresSafeArea()
-            .navigationTitle("Projected Shadow (Utility)")
+            .navigationTitle("Projected Shadow")
             .preferredColorScheme(.light)
     }
 }

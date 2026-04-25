@@ -18,8 +18,6 @@ struct JumpFloodOutlineRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        JumpFloodOutlineRendererView()
-    }
-#endif
+#Preview {
+    JumpFloodOutlineRendererView()
+}

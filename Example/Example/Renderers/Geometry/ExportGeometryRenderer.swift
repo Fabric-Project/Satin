@@ -13,33 +13,37 @@ import ModelIO
 import Satin
 
 final class ExportGeometryRenderer: BaseRenderer {
-    lazy var material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.9)
+    lazy var material = BasicDiffuseMaterial(hardness: 0.9)
 
     lazy var metal: Mesh = {
-        lazy var geo = ExtrudedTextGeometry(context: defaultContext, text: "SATIN", fontName: "Ariel", fontSize: 1, distance: 0.5)
-        lazy var mesh = Mesh(context: defaultContext, label: "SATIN", geometry: geo, material: material)
+        let geo = ExtrudedTextGeometry(text: "SATIN", fontName: "Ariel", fontSize: 1, distance: 0.5)
+        let mesh = Mesh(label: "SATIN", geometry: geo, material: material)
         mesh.position = [0, 0.25, 0]
         return mesh
     }()
 
     lazy var rocks: Mesh = {
-        lazy var mesh = Mesh(context: defaultContext, label: "PRO", geometry: ExtrudedTextGeometry(context: defaultContext, text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
+        let mesh = Mesh(label: "PRO", geometry: ExtrudedTextGeometry(text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
                         material: material)
         mesh.position = [0, -0.75, 0]
         return mesh
     }()
 
     lazy var scene: Object = {
-        lazy var scene = Object(context: defaultContext)
+        let scene = Object()
         scene.add(metal)
         scene.add(rocks)
         scene.localMatrix = lookAtMatrix3f([0, 0, -1], [0, 1, 1], worldUpDirection)
         return scene
     }()
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.001, far: 100.0)
+    var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
+
+    deinit {
+        cameraController.disable()
+    }
 
     override func setup() {
         #if os(visionOS)

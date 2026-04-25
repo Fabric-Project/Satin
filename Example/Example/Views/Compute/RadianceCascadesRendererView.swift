@@ -17,8 +17,6 @@ struct RadianceCascadesRendererView: View {
     }
 }
 
-#if false
-    #Preview{
-        RadianceCascadesRendererView()
-    }
-#endif
+#Preview{
+    RadianceCascadesRendererView()
+}

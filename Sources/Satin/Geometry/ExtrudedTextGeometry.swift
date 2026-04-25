@@ -25,9 +25,9 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
     var geometryExtrudeCache: [Character: GeometryData] = [:]
     var geometryReverseCache: [Character: GeometryData] = [:]
 
-    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, distance: Float = 1.0, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0) {
+    public init(text: String, fontName: String = "Helvetica", fontSize: Float, distance: Float = 1.0, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0) {
         self.distance = distance
-        super.init(context: context, text: text, fontName: fontName, fontSize: fontSize, bounds: bounds, pivot: pivot, textAlignment: textAlignment, verticalAlignment: verticalAlignment, kern: kern, lineSpacing: lineSpacing)
+        super.init(text: text, fontName: fontName, fontSize: fontSize, bounds: bounds, pivot: pivot, textAlignment: textAlignment, verticalAlignment: verticalAlignment, kern: kern, lineSpacing: lineSpacing)
     }
 
     override func addGlyphGeometryData(_ gData: inout GeometryData, _ charOffset: Int, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {

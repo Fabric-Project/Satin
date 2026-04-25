@@ -19,30 +19,33 @@ final class FXAARenderer: BaseRenderer {
     var renderTexture: MTLTexture!
     var updateRenderTexture = true
 
-    lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
-    lazy var fxaaMaterial = FxaaMaterial(context: postContext, pipelinesURL: pipelinesURL)
-    lazy var fxaaProcessor = PostProcessor(label: "FXAA Post Processor", context: postContext, material: fxaaMaterial)
+    lazy var fxaaMaterial = FxaaMaterial(pipelinesURL: pipelinesURL)
+    lazy var fxaaProcessor = PostProcessor(label: "FXAA Post Processor", context: Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat), material: fxaaMaterial)
 
     lazy var mesh: Mesh = {
-        lazy var mesh = Mesh(context: defaultContext, 
+        let mesh = Mesh(
             geometry:
-            ExtrudedTextGeometry(context: defaultContext, 
+            ExtrudedTextGeometry(
                 text: "FXAA",
                 fontName: "Helvetica",
                 fontSize: 1,
                 distance: 0.5,
                 pivot: [0, 0]
             ),
-            material: BasicDiffuseMaterial(context: defaultContext, hardness: 1.0)
+            material: BasicDiffuseMaterial(hardness: 1.0)
         )
         return mesh
     }()
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 9], near: 0.001, far: 100.0)
+    var camera = PerspectiveCamera(position: [0, 0, 9], near: 0.001, far: 100.0)
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var scene = Object(label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
+
+    deinit {
+        cameraController.disable()
+    }
 
     override func update() {
         if updateRenderTexture {

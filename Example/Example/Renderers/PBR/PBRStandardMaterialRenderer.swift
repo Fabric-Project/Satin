@@ -39,13 +39,13 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
 
     var model: Object?
     lazy var startTime = getTime()
-    lazy var skybox: Mesh = .init(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(context: defaultContext, size: 250), material: SkyboxMaterial(context: defaultContext))
-    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox])
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
+    lazy var skybox: Mesh = .init(label: "Skybox", geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())
+    lazy var scene = IBLScene(label: "Scene", [skybox])
+    lazy var camera = PerspectiveCamera(position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
-    lazy var material = StandardMaterial(context: defaultContext)
+    let material = StandardMaterial()
 
     override func setup() {
         loadHdri()
@@ -59,6 +59,10 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
         metalView.backgroundColor = .clear
         skybox.visible = false
 #endif
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     override func update() {
@@ -98,7 +102,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
         ]
 
         for (index, position) in positions.enumerated() {
-            lazy var light = DirectionalLight(context: defaultContext, color: .one, intensity: 0.5)
+            let light = DirectionalLight(color: .one, intensity: 0.5)
             light.position = position
             light.lookAt(target: .zero, up: ups[index])
             scene.add(light)
@@ -110,7 +114,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
     lazy var textureLoader = MTKTextureLoader(device: device)
 
     func setupScene() {
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"), context: defaultContext) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")) {
             var mesh: Mesh?
             model.apply { obj in
                 if let m = obj as? Mesh {

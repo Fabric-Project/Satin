@@ -16,8 +16,6 @@ struct GridRendererView: View {
     }
 }
 
-#if false
-    #Preview {
-        GridRendererView()
-    }
-#endif
+#Preview {
+    GridRendererView()
+}

@@ -65,20 +65,7 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
     open var stencilTextureStorageMode: MTLStorageMode { .memoryless }
     open var stencilTextureUsage: MTLTextureUsage { .renderTarget }
 
-    private lazy var cachedDefaultContext = makeDefaultContext()
-
     public var defaultContext: Context {
-        cachedDefaultContext
-    }
-
-    private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
-    private var inFlightSemaphoreWait = 0
-    private var inFlightSemaphoreRelease = 0
-    public var frameIndex: Int = -1
-
-    public init() {}
-
-    open func makeDefaultContext() -> Context {
         Context(
             device: device,
             sampleCount: sampleCount,
@@ -87,6 +74,13 @@ open class MetalViewRenderer: MetalViewRendererDelegate {
             stencilPixelFormat: stencilPixelFormat
         )
     }
+
+    private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
+    private var inFlightSemaphoreWait = 0
+    private var inFlightSemaphoreRelease = 0
+    public var frameIndex: Int = -1
+
+    public init() {}
 
     open func setup() {}
 

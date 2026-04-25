@@ -19,9 +19,9 @@ public final class QuadGeometry: SatinGeometry {
         }
     }
 
-    public init(context: Context, size: Float = 2) {
+    public init(size: Float = 2) {
         self.size = size
-        super.init(context: context)
+        super.init()
     }
 
     override public func generateGeometryData() -> GeometryData {

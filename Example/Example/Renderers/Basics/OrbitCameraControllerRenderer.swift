@@ -15,20 +15,20 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
     var gridInterval: Float = 1.0
 
     lazy var grid: Object = {
-        lazy var object = Object(context: defaultContext)
-        lazy var material = BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
+        let object = Object()
+        let material = BasicColorMaterial(color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
         let intervals = 5
         let intervalsf = Float(intervals)
-        lazy var geometryX = CapsuleGeometry(context: defaultContext, radius: 0.005, height: intervalsf, axis: .x)
-        lazy var geometryZ = CapsuleGeometry(context: defaultContext, radius: 0.005, height: intervalsf, axis: .z)
+        let geometryX = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .x)
+        let geometryZ = CapsuleGeometry(radius: 0.005, height: intervalsf, axis: .z)
         for i in 0 ... intervals {
             let fi = Float(i)
-            lazy var meshX = Mesh(context: defaultContext, geometry: geometryX, material: material)
+            let meshX = Mesh(geometry: geometryX, material: material)
             let offset = remap(fi, 0.0, Float(intervals), -intervalsf * 0.5, intervalsf * 0.5)
             meshX.position = [0.0, 0.0, offset]
             object.add(meshX)
 
-            lazy var meshZ = Mesh(context: defaultContext, geometry: geometryZ, material: material)
+            let meshZ = Mesh(geometry: geometryZ, material: material)
             meshZ.position = [offset, 0.0, 0.0]
             object.add(meshZ)
         }
@@ -36,38 +36,38 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
     }()
 
     lazy var axisMesh: Object = {
-        lazy var object = Object(context: defaultContext)
+        let object = Object()
         let intervals = 5
         let intervalsf = Float(intervals)
         let radius = Float(0.005)
         let height = intervalsf
 
-        lazy var x = Mesh(context: defaultContext, 
-            geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .x),
-            material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 0.0, 0.0, 1.0))
+        let x = Mesh(
+            geometry: CapsuleGeometry(radius: radius, height: height, axis: .x),
+            material: BasicColorMaterial(color: simd_make_float4(1.0, 0.0, 0.0, 1.0))
         )
         x.position.x += height * 0.5
         object.add(x)
 
-        lazy var y = Mesh(context: defaultContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .y), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 1.0, 0.0, 1.0)))
+        let y = Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .y), material: BasicColorMaterial(color: simd_make_float4(0.0, 1.0, 0.0, 1.0)))
         y.position.y += height * 0.5
         object.add(y)
 
-        lazy var z = Mesh(context: defaultContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .z), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 0.0, 1.0, 1.0)))
+        let z = Mesh(geometry: CapsuleGeometry(radius: radius, height: height, axis: .z), material: BasicColorMaterial(color: simd_make_float4(0.0, 0.0, 1.0, 1.0)))
         z.position.z += height * 0.5
         object.add(z)
 
         return object
     }()
 
-    lazy var targetMesh = Mesh(context: defaultContext, 
-        geometry: RoundedBoxGeometry(context: defaultContext, size: 1.0, radius: 0.25, resolution: 3),
-        material: NormalColorMaterial(context: defaultContext, true)
+    let targetMesh = Mesh(
+        geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 3),
+        material: NormalColorMaterial(true)
     )
 
-    lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(5.0, 5.0, 5.0), near: 0.001, far: 200.0)
+    let camera = PerspectiveCamera(position: simd_make_float3(5.0, 5.0, 5.0), near: 0.001, far: 200.0)
 
-    lazy var scene = Object(context: defaultContext, label: "Scene", [grid, axisMesh])
+    lazy var scene = Object(label: "Scene", [grid, axisMesh])
     lazy var cameraController = OrbitPerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = Renderer(context: defaultContext)
 
@@ -80,6 +80,10 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
+    }
+
+    deinit {
+        cameraController.disable()
     }
 
     override func update() {
