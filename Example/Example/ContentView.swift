@@ -95,6 +95,7 @@ struct ContentView: View {
                 title: "Text",
                 items: [
                     ExampleItem(id: "sdf-text", title: "SDF Text", systemImage: "f.cursive") { SDFTextRendererView() },
+                    ExampleItem(id: "slug-text", title: "SLUG Text", systemImage: "textformat.alt") { SlugTextRendererView() },
                     ExampleItem(id: "text-geometry", title: "Text Geometry", systemImage: "textformat") { TextRendererView() },
                     ExampleItem(id: "extruded-text", title: "Extruded Text", systemImage: "square.3.layers.3d.down.right") { ExtrudedTextRendererView() }
                 ]

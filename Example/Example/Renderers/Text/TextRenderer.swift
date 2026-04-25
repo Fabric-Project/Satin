@@ -8,7 +8,6 @@
 
 import Combine
 import CoreGraphics
-import CoreText
 
 import Metal
 import MetalKit
@@ -22,13 +21,21 @@ final class TextRenderer: BaseRenderer {
     lazy var renderer = Renderer(context: defaultContext)
 
     var geo: TesselatedTextGeometry?
+    lazy var parameters = ParameterGroup("Text", [fontParam])
 
     lazy var fontParam: StringParameter = {
-        let families = (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
-        return StringParameter("Font", "Helvetica", families, .dropdown)
+        StringParameter("Font", "Helvetica", availableFontFamilyNames, .dropdown)
     }()
 
     private var cancellable: AnyCancellable?
+
+    override var paramKeys: [String] {
+        ["Text"]
+    }
+
+    override var params: [String: ParameterGroup?] {
+        ["Text": parameters]
+    }
 
     override func setup() {
         setupText()
@@ -37,6 +44,7 @@ final class TextRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
+        super.setup()
     }
 
     func setupText() {
@@ -61,7 +69,10 @@ final class TextRenderer: BaseRenderer {
         }
     }
 
+    private var frame: Int = 0
     override func update() {
+        geo?.text = "Satin 2.0\nframe: \(frame)"
+        frame += 1
         cameraController.update()
     }
 

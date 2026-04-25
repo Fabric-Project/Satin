@@ -8,6 +8,7 @@
 
 import Foundation
 import Metal
+import CoreText
 import Satin
 
 #if canImport(AppKit)
@@ -35,6 +36,10 @@ class BaseRenderer: MetalViewRenderer {
 
     var params: [String: ParameterGroup?] {
         return [:]
+    }
+
+    var availableFontFamilyNames: [String] {
+        (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
     }
 
     override func setup() {

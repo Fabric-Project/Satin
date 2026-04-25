@@ -28,9 +28,11 @@
 		E103E10D2B603DBD0017588F /* ARPointCloudRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1077F4C2A096ABD00C2FB89 /* ARPointCloudRenderer.swift */; };
 		E103E10E2B603DBD0017588F /* ARPeopleOcclusionRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14C122E29E5D67A009D3C8C /* ARPeopleOcclusionRenderer.swift */; };
 		E103E1102B603DE30017588F /* SDFTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C967742B409E1E00271541 /* SDFTextRenderer.swift */; };
+		F0B200012E06000100AAA001 /* SlugTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA001 /* SlugTextRenderer.swift */; };
 		E103E1112B603DE30017588F /* TextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F1B32324BAA91F00563923 /* TextRenderer.swift */; };
 		E103E1122B603DE30017588F /* ExtrudedTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E182809B24C52061000810D1 /* ExtrudedTextRenderer.swift */; };
 		E103E1132B603DEA0017588F /* SDFTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C967772B409E7E00271541 /* SDFTextRendererView.swift */; };
+		F0B200012E06000100AAA002 /* SlugTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA002 /* SlugTextRendererView.swift */; };
 		E103E1142B603DEA0017588F /* ExtrudedTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767C328A6D41B005D75AB /* ExtrudedTextRendererView.swift */; };
 		E103E1152B603DEA0017588F /* TextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767C828A6D41B005D75AB /* TextRendererView.swift */; };
 		E103E1162B603E210017588F /* FlockingRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E7685028ADAF6F005D75AB /* FlockingRenderer.swift */; };
@@ -292,6 +294,8 @@
 		E1BCF33F29DA3C210076C163 /* TessellationRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TessellationRendererView.swift; sourceTree = "<group>"; };
 		E1C967742B409E1E00271541 /* SDFTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDFTextRenderer.swift; sourceTree = "<group>"; };
 		E1C967772B409E7E00271541 /* SDFTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDFTextRendererView.swift; sourceTree = "<group>"; };
+		F0B200012E06000200AAA001 /* SlugTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRenderer.swift; sourceTree = "<group>"; };
+		F0B200012E06000200AAA002 /* SlugTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRendererView.swift; sourceTree = "<group>"; };
 		E1CC09892489751A00B92285 /* CustomGeometryRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomGeometryRenderer.swift; sourceTree = "<group>"; };
 		E1CC099D2489797300B92285 /* Example-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Example-Bridging-Header.h"; sourceTree = "<group>"; };
 		E1CC099E2489797300B92285 /* IcosahedronGenerator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IcosahedronGenerator.h; sourceTree = "<group>"; };
@@ -774,6 +778,7 @@
 			isa = PBXGroup;
 			children = (
 				E1C967742B409E1E00271541 /* SDFTextRenderer.swift */,
+				F0B200012E06000200AAA001 /* SlugTextRenderer.swift */,
 				E1F1B32324BAA91F00563923 /* TextRenderer.swift */,
 				E182809B24C52061000810D1 /* ExtrudedTextRenderer.swift */,
 			);
@@ -786,6 +791,7 @@
 				E1E767C328A6D41B005D75AB /* ExtrudedTextRendererView.swift */,
 				E1E767C828A6D41B005D75AB /* TextRendererView.swift */,
 				E1C967772B409E7E00271541 /* SDFTextRendererView.swift */,
+				F0B200012E06000200AAA002 /* SlugTextRendererView.swift */,
 			);
 			path = Text;
 			sourceTree = "<group>";
@@ -1043,6 +1049,7 @@
 				E103E1652B60404C0017588F /* AudioInputRenderer.swift in Sources */,
 				E1D225392D068A0400CFEA24 /* RadianceCascadesRenderer.swift in Sources */,
 				E103E1132B603DEA0017588F /* SDFTextRendererView.swift in Sources */,
+				F0B200012E06000100AAA002 /* SlugTextRendererView.swift in Sources */,
 				E19417052C499FD200FE2E2B /* ScreenCaptureRendererView.swift in Sources */,
 				E1903C162B6046B4004AB175 /* ARRendererView.swift in Sources */,
 				E1D43BCB2C65855A0063E2C9 /* ToggleViewController.swift in Sources */,
@@ -1138,6 +1145,7 @@
 				E103E1332B603F940017588F /* VertexAttributesRenderer.swift in Sources */,
 				E1D43BC92C65855A0063E2C9 /* DropDownViewController.swift in Sources */,
 				E103E1102B603DE30017588F /* SDFTextRenderer.swift in Sources */,
+				F0B200012E06000100AAA001 /* SlugTextRenderer.swift in Sources */,
 				E103E1082B603DBD0017588F /* ARRenderer.swift in Sources */,
 				E103E13B2B603FC50017588F /* PBRRenderer.swift in Sources */,
 				E103E10E2B603DBD0017588F /* ARPeopleOcclusionRenderer.swift in Sources */,
