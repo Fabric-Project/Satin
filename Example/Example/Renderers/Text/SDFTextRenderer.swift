@@ -48,10 +48,10 @@ final class SDFTextRenderer: BaseRenderer {
 #endif
     }
 
-    var frame: Float = 0
+    private var frame: Int = 0
     override func update() {
-        textMesh.text = "\(frame)"
-        frame -= 1
+        textMesh.text = "Satin 2.0\nframe: \(frame)"
+        frame += 1
         cameraController.update()
     }
 

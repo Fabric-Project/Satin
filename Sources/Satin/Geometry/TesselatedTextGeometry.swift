@@ -365,7 +365,65 @@ public class TesselatedTextGeometry: SatinGeometry {
                 copyTriangleDataToGeometryData(&triData, &cData)
                 freeTriangleData(&triData)
             } else {
-                print("Triangulation for \(char) FAILED!")
+                print("⚠️ Triangulation FAILED: '\(char)' font=\(fontName) contours=\(_lengths.count)")
+
+                func cross(_ a: simd_float2, _ b: simd_float2, _ c: simd_float2) -> Float {
+                    (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+                }
+
+                func onSeg(_ p: simd_float2, _ a: simd_float2, _ b: simd_float2, eps: Float = 1e-5) -> Bool {
+                    if abs(cross(a, b, p)) > eps { return false }
+                    return p.x >= min(a.x, b.x) - eps && p.x <= max(a.x, b.x) + eps &&
+                           p.y >= min(a.y, b.y) - eps && p.y <= max(a.y, b.y) + eps
+                }
+
+                func segHit(_ a1: simd_float2, _ a2: simd_float2, _ b1: simd_float2, _ b2: simd_float2, eps: Float = 1e-5) -> Bool {
+                    let d1 = cross(a1, a2, b1)
+                    let d2 = cross(a1, a2, b2)
+                    let d3 = cross(b1, b2, a1)
+                    let d4 = cross(b1, b2, a2)
+
+                    if ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+                       ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps)) {
+                        return true
+                    }
+
+                    return (abs(d1) <= eps && onSeg(b1, a1, a2, eps: eps)) ||
+                           (abs(d2) <= eps && onSeg(b2, a1, a2, eps: eps)) ||
+                           (abs(d3) <= eps && onSeg(a1, b1, b2, eps: eps)) ||
+                           (abs(d4) <= eps && onSeg(a2, b1, b2, eps: eps))
+                }
+
+                for (i, len) in _lengths.enumerated() {
+                    guard let pts = _paths[i] else { continue }
+                    let n = Int(len)
+
+                    var colinear = 0
+                    for j in 0 ..< n {
+                        let a = pts[(j + n - 1) % n]
+                        let b = pts[j]
+                        let c = pts[(j + 1) % n]
+                        if abs(cross(a, b, c)) < 1e-5 { colinear += 1 }
+                    }
+
+                    var hits: [String] = []
+                    outer: for a in 0 ..< n {
+                        let a0 = pts[a]
+                        let a1 = pts[(a + 1) % n]
+                        for b in (a + 1) ..< n {
+                            if b == a || b == (a + 1) % n || (b + 1) % n == a { continue }
+                            if a == 0 && b == n - 1 { continue }
+                            let b0 = pts[b]
+                            let b1 = pts[(b + 1) % n]
+                            if segHit(a0, a1, b0, b1) {
+                                hits.append("\(a)-\(b)")
+                                if hits.count == 8 { break outer }
+                            }
+                        }
+                    }
+
+                    print("   contour[\(i)]: colinearTriples=\(colinear) selfIntersections=\(hits.count) sample=\(hits)")
+                }
             }
 
             geometryCache[char] = cData
@@ -378,6 +436,20 @@ public class TesselatedTextGeometry: SatinGeometry {
         combineAndOffsetGeometryData(&gData, &cData, simd_make_float3(glyphOffset, 0.0))
     }
 
+    private func cubicToQuadratic(
+        _ p0: simd_float2, _ c1: simd_float2,
+        _ c2: simd_float2, _ p3: simd_float2
+    ) -> (q0: (simd_float2, simd_float2, simd_float2),
+          q1: (simd_float2, simd_float2, simd_float2)) {
+        let m01  = (p0 + c1) * 0.5
+        let m12  = (c1 + c2) * 0.5
+        let m23  = (c2 + p3) * 0.5
+        let m012 = (m01 + m12) * 0.5
+        let m123 = (m12 + m23) * 0.5
+        let mid  = (m012 + m123) * 0.5
+        return ((p0, m012, mid), (mid, m123, p3))
+    }
+
     func getPolylines(_ glyphPath: CGPath, _ angleLimit: Float, _ distanceLimit: Float) -> [Polyline2D] {
         var glyphPaths = [Polyline2D]()
         var path = Polyline2D(count: 0, capacity: 0, data: nil)
@@ -388,6 +460,10 @@ public class TesselatedTextGeometry: SatinGeometry {
 
             switch element.type {
             case .moveToPoint:
+                if path.count > 0 {
+                    freePolyline2D(&path)
+                    path = Polyline2D(count: 0, capacity: 0, data: nil)
+                }
                 addPointToPolyline2D(pt, &path)
             case .addLineToPoint:
                 let a = path.data[Int(path.count) - 1]
@@ -411,10 +487,15 @@ public class TesselatedTextGeometry: SatinGeometry {
                 let c = simd_make_float2(Float(pointsPtr.pointee.x), Float(pointsPtr.pointee.y))
                 pointsPtr += 1
                 let d = simd_make_float2(Float(pointsPtr.pointee.x), Float(pointsPtr.pointee.y))
-                var curve = getAdaptiveCubicBezierPath2(a, b, c, d, angleLimit)
-                removeFirstPointInPolyline2D(&curve)
-                appendPolyline2D(&path, &curve)
-                freePolyline2D(&curve)
+                let (q0, q1) = cubicToQuadratic(a, b, c, d)
+                var curve0 = getAdaptiveQuadraticBezierPath2(q0.0, q0.1, q0.2, angleLimit)
+                removeFirstPointInPolyline2D(&curve0)
+                appendPolyline2D(&path, &curve0)
+                freePolyline2D(&curve0)
+                var curve1 = getAdaptiveQuadraticBezierPath2(q1.0, q1.1, q1.2, angleLimit)
+                removeFirstPointInPolyline2D(&curve1)
+                appendPolyline2D(&path, &curve1)
+                freePolyline2D(&curve1)
             case .closeSubpath:
                 if isEqual2(path.data[0], path.data[Int(path.count - 1)]) {
                     removeLastPointInPolyline2D(&path)
@@ -431,6 +512,11 @@ public class TesselatedTextGeometry: SatinGeometry {
             default:
                 break
             }
+        }
+        if path.count > 2 {
+            glyphPaths.append(path)
+        } else if path.count > 0 {
+            freePolyline2D(&path)
         }
         return glyphPaths
     }
