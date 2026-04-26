@@ -495,6 +495,8 @@ open class Material: Codable {
             renderEncoderState.vertexMaterialUniforms = uniforms
         }
 
+        // We dont need to bind textures for sampling when doing shadows
+        // this reduces a smidge of rendering time / binding time
         if !shadow, shader.fragmentWantsMaterialUniforms {
             renderEncoderState.fragmentMaterialUniforms = uniforms
         }
@@ -578,7 +580,9 @@ open class Material: Codable {
             renderEncoderState: renderEncoderState
         )
         bindBuffers(renderEncoderState: renderEncoderState)
-        bindTextures(renderEncoderState: renderEncoderState)
+        if !shadow {
+            bindTextures(renderEncoderState: renderEncoderState)
+        }
         bindPipeline(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,
