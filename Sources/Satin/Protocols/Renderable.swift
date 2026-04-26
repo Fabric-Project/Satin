@@ -11,7 +11,7 @@ import simd
 
 open class Renderable : Object {
 
-    open var opaque: Bool { material!.blending == .disabled }
+    open var opaque: Bool { material?.blending == .disabled }
     
     final let doubleSidedPublisher = PassthroughSubject<Bool, Never>()
     open var doubleSided: Bool = false {

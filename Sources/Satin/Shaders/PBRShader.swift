@@ -10,9 +10,10 @@ import Foundation
 import Metal
 
 open class PBRShader: SourceShader {
-    open var maps: [PBRTextureType: MTLTexture?] = [:] {
+    open var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.allCases.count) {
         didSet {
-            if oldValue.keys != maps.keys {
+            let activeSetChanged = zip(oldValue, maps).contains { ($0 == nil) != ($1 == nil) }
+            if activeSetChanged {
                 definesNeedsUpdate = true
             }
         }
@@ -47,10 +48,10 @@ open class PBRShader: SourceShader {
     override open func getDefines() -> [ShaderDefine] {
         var results = super.getDefines()
 
-        if !maps.isEmpty { results.append(ShaderDefine(key: "HAS_MAPS", value: NSString(string: "true"))) }
+        if maps.contains(where: { $0 != nil }) { results.append(ShaderDefine(key: "HAS_MAPS", value: NSString(string: "true"))) }
 
-        for pbrTexType in PBRTextureType.allCases where maps[pbrTexType] != nil {
-            results.append(ShaderDefine(key: pbrTexType.shaderDefine, value: NSString(string: "true")))
+        for type in PBRTextureType.allCases where maps[type.index] != nil {
+            results.append(ShaderDefine(key: type.shaderDefine, value: NSString(string: "true")))
         }
 
         results.append(ShaderDefine(key: tonemapping.shaderDefine, value: NSString(string: "true")))

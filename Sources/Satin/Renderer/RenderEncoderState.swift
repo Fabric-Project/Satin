@@ -170,10 +170,13 @@ public final class RenderEncoderState {
     }
 
     public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
-        let i = type.index
-        if let cached = fragmentPBRTextureSlots[i], cached === texture { return }
-        fragmentPBRTextureSlots[i] = .some(texture)
-        renderEncoder.setFragmentTexture(texture, index: i)
+        setFragmentPBRTexture(texture, index: type.index)
+    }
+
+    public func setFragmentPBRTexture(_ texture: MTLTexture?, index: Int) {
+        if let cached = fragmentPBRTextureSlots[index], cached === texture { return }
+        fragmentPBRTextureSlots[index] = .some(texture)
+        renderEncoder.setFragmentTexture(texture, index: index)
     }
 
     public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {

@@ -95,10 +95,11 @@ public final class DeferredLightingMaterial: Material {
         }
     }
 
-    private var maps: [PBRTextureType: MTLTexture?] = [:] {
+    private var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.allCases.count) {
         didSet {
-            if oldValue.keys != maps.keys, let shader = shader as? PBRShader {
-                shader.maps = maps.filter { $0.value != nil }
+            let activeSetChanged = zip(oldValue, maps).contains { ($0 == nil) != ($1 == nil) }
+            if activeSetChanged, let shader = shader as? PBRShader {
+                shader.maps = maps
             }
         }
     }
@@ -161,7 +162,7 @@ public final class DeferredLightingMaterial: Material {
     override public func setupShaderRenderingConfiguration(_ shader: Shader) {
         super.setupShaderRenderingConfiguration(shader)
         guard let pbrShader = shader as? PBRShader else { return }
-        pbrShader.maps = maps.filter { $0.value != nil }
+        pbrShader.maps = maps
         pbrShader.samplers = samplers.filter { $0.value != nil }
         pbrShader.tonemapping = tonemapping
     }
@@ -169,15 +170,17 @@ public final class DeferredLightingMaterial: Material {
     override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow)
         if !shadow {
-            for (type, texture) in maps {
-                renderEncoderState.setFragmentPBRTexture(texture, type: type)
+            for i in maps.indices {
+                if let texture = maps[i] {
+                    renderEncoderState.setFragmentPBRTexture(texture, index: i)
+                }
             }
         }
     }
 
     private func setEnvironmentTexture(_ texture: MTLTexture?, type: PBRTextureType) {
         if let texture {
-            maps[type] = texture
+            maps[type.index] = texture
             if samplers[type] == nil {
                 let sampler = MTLSamplerDescriptor()
                 sampler.minFilter = .linear
@@ -186,7 +189,7 @@ public final class DeferredLightingMaterial: Material {
                 samplers[type] = sampler
             }
         } else {
-            maps.removeValue(forKey: type)
+            maps[type.index] = nil
             samplers.removeValue(forKey: type)
         }
     }
