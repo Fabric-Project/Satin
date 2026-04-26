@@ -49,7 +49,7 @@ open class TessellationMesh: Mesh {
     // MARK: - Draw
 
     override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext], let material, !geometry.vertexBuffers.isEmpty else { return }
+        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext.id], let material, !geometry.vertexBuffers.isEmpty else { return }
 
         renderEncoderState.vertexVertexUniforms = vertexUniforms
 

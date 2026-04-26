@@ -50,7 +50,7 @@ open class Mesh: Renderable {
     override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
               !geometry.vertexBuffers.isEmpty,
-              vertexUniforms[renderContext] != nil
+              vertexUniforms[renderContext.id] != nil
         else { return false }
 
         if submeshes.isEmpty, let material = material, material.getPipeline(renderContext: renderContext, shadow: shadow) != nil {
@@ -133,12 +133,12 @@ open class Mesh: Renderable {
     // MARK: - Setup Uniforms
 
     open func setupVertexUniforms() {
-        guard vertexUniforms[context] == nil else { return }
-        vertexUniforms[context] = VertexUniformBuffer(context: context)
+        guard vertexUniforms[context.id] == nil else { return }
+        vertexUniforms[context.id] = VertexUniformBuffer(context: context)
     }
 
     open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
-        vertexUniforms[renderContext]
+        vertexUniforms[renderContext.id]
     }
 
     open func setupGeometry() {
@@ -175,12 +175,13 @@ open class Mesh: Renderable {
     }
 
     open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
-        guard let shader = material?.shader else { return }
+        guard let material, let shader = material.shader else { return }
+        let buffer = vertexUniforms[renderContext.id]
         if shader.vertexWantsVertexUniforms {
-            renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext]
+            renderEncoderState.vertexVertexUniforms = buffer
         }
         if shader.fragmentWantsVertexUniforms {
-            renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext]
+            renderEncoderState.fragmentVertexUniforms = buffer
         }
     }
 
@@ -209,7 +210,7 @@ open class Mesh: Renderable {
     }
 
     override open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms[renderContext]?.update(
+        vertexUniforms[renderContext.id]?.update(
             object: self,
             camera: camera,
             viewport: viewport,

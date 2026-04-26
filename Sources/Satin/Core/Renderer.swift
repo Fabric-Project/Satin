@@ -1677,8 +1677,8 @@ open class Renderer {
 
         for renderable in renderables {
             let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
-            if renderable.vertexUniforms[drawContext] == nil {
-                renderable.vertexUniforms[drawContext] = VertexUniformBuffer(context: drawContext)
+            if renderable.vertexUniforms[drawContext.id] == nil {
+                renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(context: drawContext)
             }
             guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
             _encode(

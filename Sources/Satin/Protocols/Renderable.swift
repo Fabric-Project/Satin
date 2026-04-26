@@ -68,7 +68,7 @@ open class Renderable : Object {
         }
     }
     
-    open var vertexUniforms: [Context: VertexUniformBuffer] = [:]
+    open var vertexUniforms: [UUID: VertexUniformBuffer] = [:]
 
     open var material: Material? = nil
     open var materials: [Material] = []

@@ -12,7 +12,7 @@ import Metal
 open class Shader {
     // MARK: - Main Pipeline
 
-    public internal(set) var pipelines: [Context: MTLRenderPipelineState] = [:]
+    public internal(set) var pipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var pipelineError: Error?
     public internal(set) var pipelineReflection: MTLRenderPipelineReflection? {
         didSet {
@@ -70,7 +70,7 @@ open class Shader {
 
     // MARK: - Shadow Pipeline
 
-    public internal(set) var shadowPipelines: [Context: MTLRenderPipelineState] = [:]
+    public internal(set) var shadowPipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var shadowPipelineError: Error?
     public internal(set) var shadowPipelineReflection: MTLRenderPipelineReflection?
 
@@ -88,7 +88,7 @@ open class Shader {
 
     // MARK: - Configurations
 
-    public internal(set) var configurations: [Context: ShaderConfiguration] = [:]
+    public internal(set) var configurations: [UUID: ShaderConfiguration] = [:]
 
     public internal(set) var renderingConfiguration = RenderingConfiguration() {
         didSet {
@@ -452,10 +452,10 @@ open class Shader {
     // MARK: - Configuration
 
     func setupConfiguration() {
-        guard configurations[context] == nil else { return }
+        guard configurations[context.id] == nil else { return }
 
         configuration.context = context
-        configurations[context] = configuration
+        configurations[context.id] = configuration
 
         pipelineNeedsUpdate = true
         shadowPipelineNeedsUpdate = true
@@ -470,13 +470,13 @@ open class Shader {
     }
 
     func getConfiguration(renderContext: Context) -> ShaderConfiguration {
-        if let configuration = configurations[renderContext] {
+        if let configuration = configurations[renderContext.id] {
             return configuration
         }
 
         var configuration = self.configuration
         configuration.context = renderContext
-        configurations[renderContext] = configuration
+        configurations[renderContext.id] = configuration
         return configuration
     }
 
@@ -526,16 +526,17 @@ open class Shader {
     // MARK: - Pipelines
 
     open func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
+        let id = renderContext.id
         if shadow {
-            if shadowPipelines[renderContext] == nil, castShadow {
+            if shadowPipelines[id] == nil, castShadow {
                 setupShadowPipeline(renderContext: renderContext)
             }
-            return shadowPipelines[renderContext]
+            return shadowPipelines[id]
         } else {
-            if pipelines[renderContext] == nil {
+            if pipelines[id] == nil {
                 setupPipeline(renderContext: renderContext)
             }
-            return pipelines[renderContext]
+            return pipelines[id]
         }
     }
 
@@ -554,10 +555,10 @@ open class Shader {
     }
 
     func setupPipeline(renderContext: Context) {
-        guard pipelines[renderContext] == nil else { return }
+        guard pipelines[renderContext.id] == nil else { return }
         do {
             let result = try ShaderPipelineCache.getPipeline(configuration: getConfiguration(renderContext: renderContext))
-            pipelines[renderContext] = result.pipeline
+            pipelines[renderContext.id] = result.pipeline
             if pipelineReflection == nil {
                 pipelineReflection = result.reflection
             }
@@ -569,7 +570,7 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             pipelineError = error
-            pipelines[renderContext] = nil
+            pipelines[renderContext.id] = nil
         }
         pipelineNeedsUpdate = false
     }
@@ -589,9 +590,9 @@ open class Shader {
     }
 
     func setupShadowPipeline(renderContext: Context) {
-        guard shadowPipelines[renderContext] == nil, castShadow else { return }
+        guard shadowPipelines[renderContext.id] == nil, castShadow else { return }
         do {
-            shadowPipelines[renderContext] = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
+            shadowPipelines[renderContext.id] = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
             shadowPipelineError = nil
         }
         catch {
@@ -600,7 +601,7 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             shadowPipelineError = error
-            shadowPipelines[renderContext] = nil
+            shadowPipelines[renderContext.id] = nil
         }
 
         shadowPipelineNeedsUpdate = false
