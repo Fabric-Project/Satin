@@ -134,61 +134,60 @@ public final class RenderEncoderState {
         }
     }
 
-    private var vertexBuffers = [VertexBufferIndex: MTLBuffer]()
-    private var vertexTextures = [VertexTextureIndex: MTLTexture?]()
+    // Fixed-size arrays replace [Enum: MTLBuffer/MTLTexture] dictionaries.
+    // Each index is the enum's rawValue; the outer Optional distinguishes
+    // "never bound" (nil) from "bound to this buffer/texture" (.some).
+    // For textures the value is MTLTexture?? so nil-textures can be cached too:
+    //   nil         = slot never touched
+    //   .some(nil)  = slot was explicitly set to nil
+    //   .some(t)    = slot was set to t
+    //
+    // Sizes: VertexBufferIndex max rawValue = 31 (32 slots)
+    //        VertexTextureIndex max rawValue = 16 (17 slots)
+    //        FragmentBufferIndex max rawValue = 19 (20 slots)
+    //        FragmentTextureIndex max rawValue = 39 (40 slots)
+    //        PBRTextureType.index max = 23 (24 slots)
 
-    private var fragmentBuffers = [FragmentBufferIndex: MTLBuffer]()
-    private var fragmentPBRTextures = [PBRTextureType: MTLTexture?]()
-    private var fragmentTextures = [FragmentTextureIndex: MTLTexture?]()
+    private var vertexBuffers = [MTLBuffer?](repeating: nil, count: 32)
+    private var vertexTextureSlots = [MTLTexture??](repeating: nil, count: 17)
+
+    private var fragmentBuffers = [MTLBuffer?](repeating: nil, count: 20)
+    private var fragmentPBRTextureSlots = [MTLTexture??](repeating: nil, count: 24)
+    private var fragmentTextureSlots = [MTLTexture??](repeating: nil, count: 40)
 
     public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, index: VertexBufferIndex) {
-        if let existingBuffer = vertexBuffers[index], existingBuffer === buffer {
-            return
-        }
-        else {
-            renderEncoder.setVertexBuffer(buffer, offset: offset, index: index.rawValue)
-            vertexBuffers[index] = buffer
-        }
+        let i = index.rawValue
+        if let existing = vertexBuffers[i], existing === buffer { return }
+        vertexBuffers[i] = buffer
+        renderEncoder.setVertexBuffer(buffer, offset: offset, index: i)
     }
 
     public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
-        if let existingBuffer = fragmentBuffers[index], existingBuffer === buffer {
-            return
-        }
-        else {
-            renderEncoder.setFragmentBuffer(buffer, offset: offset, index: index.rawValue)
-            fragmentBuffers[index] = buffer
-        }
+        let i = index.rawValue
+        if let existing = fragmentBuffers[i], existing === buffer { return }
+        fragmentBuffers[i] = buffer
+        renderEncoder.setFragmentBuffer(buffer, offset: offset, index: i)
     }
 
     public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
-        if let existingTexture = fragmentPBRTextures[type], existingTexture === texture {
-            return
-        }
-        else {
-            renderEncoder.setFragmentTexture(texture, index: type.index)
-            fragmentPBRTextures[type] = texture
-        }
+        let i = type.index
+        if let cached = fragmentPBRTextureSlots[i], cached === texture { return }
+        fragmentPBRTextureSlots[i] = .some(texture)
+        renderEncoder.setFragmentTexture(texture, index: i)
     }
 
     public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
-        if let existingTexture = vertexTextures[index], existingTexture === texture {
-            return
-        }
-        else {
-            renderEncoder.setVertexTexture(texture, index: index.rawValue)
-            vertexTextures[index] = texture
-        }
+        let i = index.rawValue
+        if let cached = vertexTextureSlots[i], cached === texture { return }
+        vertexTextureSlots[i] = .some(texture)
+        renderEncoder.setVertexTexture(texture, index: i)
     }
 
     public func setFragmentTexture(_ texture: MTLTexture?, index: FragmentTextureIndex) {
-        if let existingTexture = fragmentTextures[index], existingTexture === texture {
-            return
-        }
-        else {
-            renderEncoder.setFragmentTexture(texture, index: index.rawValue)
-            fragmentTextures[index] = texture
-        }
+        let i = index.rawValue
+        if let cached = fragmentTextureSlots[i], cached === texture { return }
+        fragmentTextureSlots[i] = .some(texture)
+        renderEncoder.setFragmentTexture(texture, index: i)
     }
 
     init(renderEncoder: MTLRenderCommandEncoder) {
