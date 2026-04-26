@@ -86,42 +86,19 @@ public struct Context {
 }
 
 extension Context: Hashable {
+    // id is a UUID assigned once at init and never changes — it uniquely identifies
+    // this Context instance, so hashing only id avoids hashing 14 fields including
+    // multiple MTLPixelFormat RawRepresentables through protocol witness chains.
+    // This matters in the hot render loop where Context is used as a dictionary key
+    // on every pipeline lookup and vertex-uniform lookup (including 6x per point shadow face).
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
-        hasher.combine(ObjectIdentifier(device))
-        hasher.combine(sampleCount)
-        hasher.combine(colorPixelFormat)
-        hasher.combine(depthPixelFormat)
-        hasher.combine(stencilPixelFormat)
-        hasher.combine(vertexAmplificationCount)
-        hasher.combine(maxBuffersInFlight)
-        hasher.combine(renderingMode)
-        hasher.combine(activeOutputs)
-        hasher.combine(albedoPixelFormat)
-        hasher.combine(normalsPixelFormat)
-        hasher.combine(pbrPixelFormat)
-        hasher.combine(velocityPixelFormat)
-        hasher.combine(emissivePixelFormat)
     }
 }
 
 extension Context: Equatable {
     public static func == (lhs: Context, rhs: Context) -> Bool {
-        lhs.id == rhs.id &&
-            lhs.device === rhs.device &&
-            lhs.sampleCount == rhs.sampleCount &&
-            lhs.colorPixelFormat == rhs.colorPixelFormat &&
-            lhs.depthPixelFormat == rhs.depthPixelFormat &&
-            lhs.stencilPixelFormat == rhs.stencilPixelFormat &&
-            lhs.vertexAmplificationCount == rhs.vertexAmplificationCount &&
-            lhs.maxBuffersInFlight == rhs.maxBuffersInFlight &&
-            lhs.renderingMode == rhs.renderingMode &&
-            lhs.activeOutputs == rhs.activeOutputs &&
-            lhs.albedoPixelFormat == rhs.albedoPixelFormat &&
-            lhs.normalsPixelFormat == rhs.normalsPixelFormat &&
-            lhs.pbrPixelFormat == rhs.pbrPixelFormat &&
-            lhs.velocityPixelFormat == rhs.velocityPixelFormat &&
-            lhs.emissivePixelFormat == rhs.emissivePixelFormat
+        lhs.id == rhs.id
     }
 }
 
