@@ -40,6 +40,19 @@ public class ARLidarMesh: Renderable {
         return true
     }
 
+    override func makeRenderStateSnapshot() -> RenderStateSnapshot {
+        let material = self.material
+        return RenderStateSnapshot(
+            cullMode: cullMode,
+            windingOrder: windingOrder,
+            triangleFillMode: triangleFillMode,
+            doubleSided: doubleSided,
+            opaque: material?.blending == .disabled,
+            castShadow: castShadow,
+            receiveShadow: receiveShadow
+        )
+    }
+
 
     public var indexBuffer: MTLBuffer? {
         meshAnchor?.geometry.faces.buffer ?? nil
