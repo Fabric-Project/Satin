@@ -346,35 +346,24 @@ open class Material: Codable {
     private func setupParameterGroupSubscriptions(_ parameterGroup: ParameterGroup) {
         parameterGroupSubscriptions.removeAll()
 
-        parameterGroup.parameterAddedPublisher.sink { [weak self] _ in
-            guard let self else { return }
+        parameterGroup.parameterAddedPublisher.sink { [unowned self] _ in
             self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
-        parameterGroup.parameterRemovedPublisher.sink { [weak self] _ in
-            guard let self else { return }
+        parameterGroup.parameterRemovedPublisher.sink { [unowned self] _ in
             self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
-        parameterGroup.parameterUpdatedPublisher.sink { [weak self] _ in
-            guard let self else { return }
+        parameterGroup.parameterUpdatedPublisher.sink { [unowned self] _ in
             self.uniformsNeedsUpdate = true
-
-            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
-        parameterGroup.loadedPublisher.sink { [weak self] _ in
-            guard let self else { return }
+        parameterGroup.loadedPublisher.sink { [unowned self] _ in
             self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
 
-        parameterGroup.clearedPublisher.sink { [weak self] _ in
-            guard let self else { return }
+        parameterGroup.clearedPublisher.sink { [unowned self] _ in
             self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
         }.store(in: &parameterGroupSubscriptions)
     }
 
@@ -419,20 +408,13 @@ open class Material: Codable {
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
         var receivedInitialParameters = false
-        parametersSubscription = shader.parametersPublisher.sink { [weak self] newParameters in
-            guard let self else { return }
-
+        parametersSubscription = shader.parametersPublisher.sink { [unowned self] newParameters in
             let isInitialParameters = !receivedInitialParameters
             receivedInitialParameters = true
 
             self.parameters.setFrom(newParameters)
-
             self.parameters.label = newParameters.label
-
             self.uniformsNeedsUpdate = true
-
-            //self.objectWillChange.send()
-
             self.parametersSetPublisher.send(self.parameters)
 
             if !isInitialParameters {
@@ -509,6 +491,31 @@ open class Material: Codable {
         renderEncoderState.depthClipMode = depthClipMode
     }
 
+    open func bindVertexBuffers(renderEncoderState: RenderEncoderState) {
+        guard let shader else { return }
+        for index in shader.vertexBufferBindingIsUsed {
+            if let uniformBuffer = vertexUniformBuffers[index] {
+                renderEncoderState.setVertexBuffer(
+                    uniformBuffer.buffer,
+                    offset: uniformBuffer.offset,
+                    index: index
+                )
+            } else if let structBuffer = vertexStructBuffers[index] {
+                renderEncoderState.setVertexBuffer(
+                    structBuffer.buffer,
+                    offset: structBuffer.offset,
+                    index: index
+                )
+            } else if let buffer = vertexBuffers[index] {
+                renderEncoderState.setVertexBuffer(
+                    buffer,
+                    offset: 0,
+                    index: index
+                )
+            }
+        }
+    }
+
     open func bindBuffers(renderEncoderState: RenderEncoderState) {
         guard let shader else { return }
 
@@ -579,8 +586,10 @@ open class Material: Codable {
             renderContext: renderContext,
             renderEncoderState: renderEncoderState
         )
-        bindBuffers(renderEncoderState: renderEncoderState)
-        if !shadow {
+        if shadow {
+            bindVertexBuffers(renderEncoderState: renderEncoderState)
+        } else {
+            bindBuffers(renderEncoderState: renderEncoderState)
             bindTextures(renderEncoderState: renderEncoderState)
         }
         bindPipeline(

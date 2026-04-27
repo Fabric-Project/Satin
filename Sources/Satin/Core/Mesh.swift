@@ -158,8 +158,7 @@ open class Mesh: Renderable {
         if geometry == nil {
             geometry = Geometry(context: context)
         }
-        geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
-            guard let self = self else { return }
+        geometrySubscription = geometry.onUpdate.sink { [unowned self] geo in
             self.updateBounds = true
             self.material?.vertexDescriptor = geo.vertexDescriptor
         }
