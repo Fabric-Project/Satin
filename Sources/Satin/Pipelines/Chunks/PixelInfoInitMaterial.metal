@@ -1,7 +1,25 @@
 #if defined(BASE_COLOR_MAP) && defined(HAS_TEXCOORD)
 const float2 baseColorTexcoord =
     applyTextureTransform(in.texcoord, uniforms.baseColorTexcoordTransform);
-pixel.material.baseColor = baseColorMap.sample(baseColorSampler, baseColorTexcoord).rgb;
+float4 baseColor = baseColorMap.sample(baseColorSampler, baseColorTexcoord);
+
+const float baseColorAlpha = saturate(baseColor.a);
+const uint2 screenPos = uint2(in.position.xy);
+const uint bayerIndex = ((screenPos.y & 3u) << 2u) | (screenPos.x & 3u);
+const float bayerThresholds[16] = {
+    0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0,
+    12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0,
+    3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0,
+    15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0
+};
+
+// Ordered dithering softens alpha-cutout edges without requiring MSAA/A2C.
+if (baseColorAlpha <= 0.0 || baseColorAlpha < bayerThresholds[bayerIndex])
+{
+    discard_fragment();
+}
+
+pixel.material.baseColor = baseColor.rgb;
 pixel.material.baseColor *= uniforms.baseColor.rgb;
 #else
 pixel.material.baseColor = uniforms.baseColor.rgb;
