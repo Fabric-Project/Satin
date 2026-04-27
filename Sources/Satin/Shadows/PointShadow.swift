@@ -127,11 +127,7 @@ public final class PointShadow: Shadow {
         let viewport = MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0)
         let viewportFloat4 = simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
 
-        // Filter once before the 6-face loop so isDrawable (which hits the pipeline cache)
-        // is not evaluated 6 times per renderable per frame.
-        let shadowRenderables = renderables.filter {
-            $0.castShadow && $0.isDrawable(renderContext: context, shadow: true)
-        }
+        let shadowRenderables = shadowRenderables(context: context, renderables: renderables)
 
         for (faceIndex, faceTexture) in depthTextures.enumerated() {
             guard let faceTexture else { continue }
@@ -152,12 +148,12 @@ public final class PointShadow: Shadow {
 
             let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
             let camera = cameras[faceIndex]
-            for renderable in shadowRenderables {
-                renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
-                renderEncoderState.cullMode = renderable.cullMode
-                renderEncoderState.windingOrder = renderable.windingOrder
-                renderEncoderState.triangleFillMode = renderable.triangleFillMode
-                renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
+            for submission in shadowRenderables {
+                submission.renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
+                renderEncoderState.cullMode = submission.cullMode
+                renderEncoderState.windingOrder = submission.windingOrder
+                renderEncoderState.triangleFillMode = submission.triangleFillMode
+                submission.renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
             }
 
             renderEncoder.endEncoding()

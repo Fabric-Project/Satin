@@ -69,3 +69,24 @@ public class Shadow {
         fatalError("Subclasses must overload")
     }
 }
+
+struct ShadowRenderable {
+    let renderable: Renderable
+    let cullMode: MTLCullMode?
+    let windingOrder: MTLWinding?
+    let triangleFillMode: MTLTriangleFillMode?
+}
+
+extension Shadow {
+    func shadowRenderables(context: Context, renderables: [Renderable]) -> [ShadowRenderable] {
+        renderables.compactMap { renderable in
+            guard renderable.castShadow, renderable.isDrawable(renderContext: context, shadow: true) else { return nil }
+            return ShadowRenderable(
+                renderable: renderable,
+                cullMode: renderable.cullMode,
+                windingOrder: renderable.windingOrder,
+                triangleFillMode: renderable.triangleFillMode
+            )
+        }
+    }
+}

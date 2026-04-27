@@ -9,6 +9,16 @@ import Combine
 import Metal
 import simd
 
+struct RenderStateSnapshot {
+    let cullMode: MTLCullMode
+    let windingOrder: MTLWinding
+    let triangleFillMode: MTLTriangleFillMode
+    let doubleSided: Bool
+    let opaque: Bool
+    let castShadow: Bool
+    let receiveShadow: Bool
+}
+
 open class Renderable : Object {
 
     open var opaque: Bool { material?.blending == .disabled }
@@ -77,6 +87,25 @@ open class Renderable : Object {
 
     open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         fatalError("Subclasses must implement this method")
+    }
+
+    func renderMaterialsForRouting() -> [Material] {
+        if !materials.isEmpty {
+            return materials
+        }
+        return [material].compactMap { $0 }
+    }
+
+    func makeRenderStateSnapshot() -> RenderStateSnapshot {
+        RenderStateSnapshot(
+            cullMode: cullMode,
+            windingOrder: windingOrder,
+            triangleFillMode: triangleFillMode,
+            doubleSided: doubleSided,
+            opaque: opaque,
+            castShadow: castShadow,
+            receiveShadow: receiveShadow
+        )
     }
     
 //    func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {

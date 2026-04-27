@@ -122,22 +122,22 @@ public final class DirectionalShadow: Shadow {
         renderEncoder.label = label + " Shadow Encoder"
         renderEncoder.setViewport(viewport)
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
+        for submission in shadowRenderables(context: context, renderables: renderables) {
             #if DEBUG
-            renderEncoder.pushDebugGroup(renderable.label)
+            renderEncoder.pushDebugGroup(submission.renderable.label)
             #endif
-            renderable.update(
+            submission.renderable.update(
                 renderContext: context,
                 camera: camera,
                 viewport: _viewport,
                 index: 0
             )
 
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
+            renderEncoderState.cullMode = submission.cullMode
+            renderEncoderState.windingOrder = submission.windingOrder
+            renderEncoderState.triangleFillMode = submission.triangleFillMode
 
-            renderable.draw(
+            submission.renderable.draw(
                 renderContext: context,
                 renderEncoderState: renderEncoderState,
                 shadow: true

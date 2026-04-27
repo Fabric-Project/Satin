@@ -62,6 +62,19 @@ open class Mesh: Renderable {
         }
     }
 
+    override func makeRenderStateSnapshot() -> RenderStateSnapshot {
+        let material = self.material
+        return RenderStateSnapshot(
+            cullMode: cullMode,
+            windingOrder: geometry.windingOrder,
+            triangleFillMode: triangleFillMode,
+            doubleSided: doubleSided,
+            opaque: material?.blending == .disabled,
+            castShadow: castShadow,
+            receiveShadow: receiveShadow
+        )
+    }
+
     public let instanceCountPublisher = PassthroughSubject<Int, Never>()
     public var instanceCount = 1 {
         didSet {

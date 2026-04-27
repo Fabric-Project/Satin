@@ -230,6 +230,12 @@ open class Renderer {
         let clearColor: MTLClearColor
     }
 
+    private struct RenderSubmission {
+        let renderable: Renderable
+        let state: RenderStateSnapshot
+        let renderContext: Context
+    }
+
     private var renderContextCache: [RenderContextKey: Context] = [:]
 
     private var objectList = [Object]()
@@ -657,15 +663,7 @@ open class Renderer {
         renderingMode != .forward && !requestedAuxiliaryOutputs.isEmpty
     }
 
-    private func materials(for renderable: Renderable) -> [Material] {
-        if !renderable.materials.isEmpty {
-            return renderable.materials
-        }
-        return [renderable.material].compactMap { $0 }
-    }
-
-    private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
-        let materials = materials(for: renderable)
+    private func shouldRender(_ materials: [Material], route: RenderRoute) -> Bool {
         let hasSurface = materials.contains { $0.lightingModel == .surface }
         let hasUnlit = materials.contains { $0.lightingModel == .unlit }
 
@@ -679,34 +677,48 @@ open class Renderer {
         }
     }
 
-    private func routePassEntries(route: RenderRoute) -> [(pass: Int, renderables: [Renderable])] {
+    private func makeRenderSubmission(for renderable: Renderable, phase: MaterialPassType, materialsForRouting: [Material]) -> RenderSubmission {
+        RenderSubmission(
+            renderable: renderable,
+            state: renderable.makeRenderStateSnapshot(),
+            renderContext: renderContext(for: materialsForRouting, phase: phase)
+        )
+    }
+
+    private func routePassEntries(route: RenderRoute, phase: MaterialPassType) -> [(pass: Int, submissions: [RenderSubmission])] {
         renderLists
             .sorted { $0.key < $1.key }
             .enumerated()
             .compactMap { pass, entry in
-                let renderables = entry.value
+                let submissions = entry.value
                     .getRenderables(sorted: sortObjects)
-                    .filter { shouldRender($0, route: route) }
-                return renderables.isEmpty ? nil : (pass, renderables)
+                    .compactMap { renderable -> RenderSubmission? in
+                        let materials = renderable.renderMaterialsForRouting()
+                        guard shouldRender(materials, route: route) else {
+                            return nil
+                        }
+                        return makeRenderSubmission(for: renderable, phase: phase, materialsForRouting: materials)
+                    }
+                return submissions.isEmpty ? nil : (pass, submissions)
             }
     }
 
-    private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
+    private func supportedOutputs(for materials: [Material], phase: MaterialPassType) -> RendererOutputs {
         switch phase {
         case .forward, .unlit:
             return [.color]
         case .surface:
             var outputs: RendererOutputs = [.color]
-            for material in materials(for: renderable) where material.lightingModel == .surface {
+            for material in materials where material.lightingModel == .surface {
                 outputs.formUnion(material.supportedOutputs.intersection(requestedOutputs))
             }
             return normalizedOutputs(outputs)
         }
     }
 
-    private func renderContext(for renderable: Renderable, phase: MaterialPassType) -> Context {
+    private func renderContext(for materials: [Material], phase: MaterialPassType) -> Context {
         let mode: RenderingMode = phase == .surface ? renderingMode : .forward
-        let outputs = supportedOutputs(for: renderable, phase: phase)
+        let outputs = supportedOutputs(for: materials, phase: phase)
         let key = RenderContextKey(
             renderingMode: mode,
             activeOutputs: outputs,
@@ -876,7 +888,7 @@ open class Renderer {
         simdViewports: [simd_float4],
         viewMappings: [MTLVertexAmplificationViewMapping],
         colorStoreAction: MTLStoreAction,
-        unlitEntries: [(pass: Int, renderables: [Renderable])] = [],
+        unlitEntries: [(pass: Int, submissions: [RenderSubmission])] = [],
         unlitCameras: [Camera] = [],
         finalDepthStoreAction: MTLStoreAction = .dontCare,
         finalStencilStoreAction: MTLStoreAction = .dontCare
@@ -942,13 +954,16 @@ open class Renderer {
         }
 
         let deferredCameras = Array(repeating: deferredLightingCamera, count: max(context.vertexAmplificationCount, 1))
+        let deferredSubmission = makeRenderSubmission(
+            for: deferredLightingMesh,
+            phase: .unlit,
+            materialsForRouting: deferredLightingMesh.renderMaterialsForRouting()
+        )
         encode(
             renderEncoder: renderEncoder,
-            pass: 0,
-            renderables: [deferredLightingMesh],
+            submissions: [deferredSubmission],
             cameras: deferredCameras,
-            viewports: simdViewports,
-            phase: .unlit
+            viewports: simdViewports
         )
 
         if let firstEntry = unlitEntries.first {
@@ -957,11 +972,9 @@ open class Renderer {
 #endif
             encode(
                 renderEncoder: renderEncoder,
-                pass: firstEntry.pass,
-                renderables: firstEntry.renderables,
+                submissions: firstEntry.submissions,
                 cameras: unlitCameras,
-                viewports: simdViewports,
-                phase: .unlit
+                viewports: simdViewports
             )
 #if DEBUG
             renderEncoder.popDebugGroup()
@@ -998,7 +1011,7 @@ open class Renderer {
                 }
                 enc.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
             }
-            encode(renderEncoder: enc, pass: entry.pass, renderables: entry.renderables, cameras: unlitCameras, viewports: simdViewports, phase: .unlit)
+            encode(renderEncoder: enc, submissions: entry.submissions, cameras: unlitCameras, viewports: simdViewports)
 #if DEBUG
             enc.popDebugGroup()
 #endif
@@ -1041,8 +1054,7 @@ open class Renderer {
     private func encodeRoute(
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
-        route: RenderRoute,
-        phase: MaterialPassType,
+        entries: [(pass: Int, submissions: [RenderSubmission])],
         label: String,
         cameras: [Camera],
         viewports: [MTLViewport],
@@ -1051,12 +1063,11 @@ open class Renderer {
         auxiliaryAttachmentIndices: [Int],
         clearWhenEmpty: Bool
     ) -> Bool {
-        let routeEntries = routePassEntries(route: route)
         let originalColorStoreAction = renderPassDescriptor.colorAttachments[0].storeAction
         let originalDepthStoreAction = renderPassDescriptor.depthAttachment.storeAction
         let originalStencilStoreAction = renderPassDescriptor.stencilAttachment.storeAction
 
-        if routeEntries.isEmpty {
+        if entries.isEmpty {
             guard clearWhenEmpty,
                   shouldEncodeEmptyPass(renderPassDescriptor: renderPassDescriptor, auxiliaryAttachmentIndices: auxiliaryAttachmentIndices),
                   let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
@@ -1074,8 +1085,8 @@ open class Renderer {
             return true
         }
 
-        for (index, entry) in routeEntries.enumerated() {
-            let isFinalEntry = index == routeEntries.count - 1
+        for (index, entry) in entries.enumerated() {
+            let isFinalEntry = index == entries.count - 1
             if index > 0 {
                 renderPassDescriptor.colorAttachments[0].loadAction = .load
                 renderPassDescriptor.depthAttachment.loadAction = .load
@@ -1109,11 +1120,9 @@ open class Renderer {
 
             encode(
                 renderEncoder: renderEncoder,
-                pass: entry.pass,
-                renderables: entry.renderables,
+                submissions: entry.submissions,
                 cameras: cameras,
-                viewports: simdViewports,
-                phase: phase
+                viewports: simdViewports
             )
 
 #if DEBUG
@@ -1137,8 +1146,10 @@ open class Renderer {
         finalDepthStoreAction: MTLStoreAction,
         finalStencilStoreAction: MTLStoreAction
     ) -> Bool {
-        let hasSurfaceRenderables = !routePassEntries(route: .surface).isEmpty
-        let hasUnlitRenderables = !routePassEntries(route: .unlit).isEmpty
+        let surfaceEntries = routePassEntries(route: .surface, phase: .surface)
+        let unlitEntries = routePassEntries(route: .unlit, phase: .unlit)
+        let hasSurfaceRenderables = !surfaceEntries.isEmpty
+        let hasUnlitRenderables = !unlitEntries.isEmpty
 
         switch renderingMode {
         case .forward:
@@ -1146,8 +1157,7 @@ open class Renderer {
             return encodeRoute(
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
-                route: .all,
-                phase: .forward,
+                entries: routePassEntries(route: .all, phase: .forward),
                 label: "Forward",
                 cameras: cameras,
                 viewports: viewports,
@@ -1175,8 +1185,7 @@ open class Renderer {
                 didEncode = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
+                    entries: surfaceEntries,
                     label: renderingMode == .deferredGeometry ? "Deferred Geometry" : "Surface MRT",
                     cameras: cameras,
                     viewports: viewports,
@@ -1203,8 +1212,7 @@ open class Renderer {
                 let unlitEncoded = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .unlit,
-                    phase: .unlit,
+                    entries: unlitEntries,
                     label: "Unlit Forward",
                     cameras: cameras,
                     viewports: viewports,
@@ -1230,8 +1238,7 @@ open class Renderer {
                 return encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
+                    entries: [],
                     label: "Empty",
                     cameras: cameras,
                     viewports: viewports,
@@ -1245,7 +1252,6 @@ open class Renderer {
             return didEncode
 
         case .deferredGeometry:
-            let unlitEntries = routePassEntries(route: .unlit)
             let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (unlitEntries.isEmpty && renderLists.isEmpty)
             var didEncode = false
 
@@ -1263,8 +1269,7 @@ open class Renderer {
                 let surfaceEncoded = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
+                    entries: surfaceEntries,
                     label: "Deferred Geometry",
                     cameras: cameras,
                     viewports: viewports,
@@ -1304,8 +1309,7 @@ open class Renderer {
                     let unlitEncoded = encodeRoute(
                         renderPassDescriptor: renderPassDescriptor,
                         commandBuffer: commandBuffer,
-                        route: .unlit,
-                        phase: .unlit,
+                        entries: unlitEntries,
                         label: "Unlit Forward",
                         cameras: cameras,
                         viewports: viewports,
@@ -1497,12 +1501,9 @@ open class Renderer {
 
     private func encode(
         renderEncoder: MTLRenderCommandEncoder,
-        pass: Int,
-        renderables: [Renderable],
+        submissions: [RenderSubmission],
         cameras: [Camera],
-        viewports: [simd_float4],
-        phase: MaterialPassType,
-        overrideMaterial: Material? = nil
+        viewports: [simd_float4]
     ) {
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
 
@@ -1675,8 +1676,9 @@ open class Renderer {
             }
         }
 
-        for renderable in renderables {
-            let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
+        for submission in submissions {
+            let renderable = submission.renderable
+            let drawContext = submission.renderContext
             if renderable.vertexUniforms[drawContext.id] == nil {
                 renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(context: drawContext)
             }
@@ -1684,11 +1686,9 @@ open class Renderer {
             _encode(
                 renderEncoder: renderEncoder,
                 renderEncoderState: renderEncoderState,
-                renderable: renderable,
+                submission: submission,
                 cameras: cameras,
-                viewports: viewports,
-                phase: phase,
-                overrideMaterial: overrideMaterial
+                viewports: viewports
             )
         }
     }
@@ -1696,23 +1696,16 @@ open class Renderer {
     private func _encode(
         renderEncoder: MTLRenderCommandEncoder,
         renderEncoderState: RenderEncoderState,
-        renderable: Renderable,
+        submission: RenderSubmission,
         cameras: [Camera],
-        viewports: [simd_float4],
-        phase: MaterialPassType,
-        overrideMaterial: Material? = nil
+        viewports: [simd_float4]
     ) {
+        let renderable = submission.renderable
 #if DEBUG
         renderEncoder.pushDebugGroup(renderable.label)
 #endif
-        let savedMaterial = renderable.material
-        // Determine which context to use for pipeline/uniform lookups
-        let renderContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
-
-        if let overrideMaterial {
-            renderable.material = overrideMaterial
-        }
-        defer { if overrideMaterial != nil { renderable.material = savedMaterial } }
+        let renderContext = submission.renderContext
+        let state = submission.state
 
         for i in 0..<context.vertexAmplificationCount {
             renderable.update(
@@ -1725,10 +1718,10 @@ open class Renderer {
 
         renderable.preDraw?(renderEncoder)
 
-        renderEncoderState.windingOrder = renderable.windingOrder
-        renderEncoderState.triangleFillMode = renderable.triangleFillMode
+        renderEncoderState.windingOrder = state.windingOrder
+        renderEncoderState.triangleFillMode = state.triangleFillMode
 
-        if renderable.doubleSided, renderable.cullMode == .none, renderable.opaque == false {
+        if state.doubleSided, state.cullMode == .none, !state.opaque {
             renderEncoderState.cullMode = .front
             renderable.draw(
                 renderContext: renderContext,
@@ -1743,7 +1736,7 @@ open class Renderer {
                 shadow: false
             )
         } else {
-            renderEncoderState.cullMode = renderable.cullMode
+            renderEncoderState.cullMode = state.cullMode
             renderable.draw(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,

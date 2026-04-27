@@ -121,12 +121,12 @@ public final class SpotShadow: Shadow {
         renderEncoder.setViewport(viewport)
 
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-            renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
-            renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
+        for submission in shadowRenderables(context: context, renderables: renderables) {
+            submission.renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
+            renderEncoderState.cullMode = submission.cullMode
+            renderEncoderState.windingOrder = submission.windingOrder
+            renderEncoderState.triangleFillMode = submission.triangleFillMode
+            submission.renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
         }
 
         renderEncoder.endEncoding()
