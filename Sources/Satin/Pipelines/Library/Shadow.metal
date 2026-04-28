@@ -1,10 +1,14 @@
 float calculateShadow(
     float4 shadowCoord, depth2d<float> shadowTex, ShadowData data, sampler shadowSampler) {
+    // Perspective shadow (SpotLight): fragments behind the camera have w <= 0
+    if (shadowCoord.w <= 0.0) return 1.0;
+
     shadowCoord.xyz /= shadowCoord.w;
 
-    // SDF Box Calculation to see if we are within the shadow frustrum
+    // Early-exit outside shadow frustum — avoids running PCF on the majority of pixels
+    // that are outside the spotlight cone or directional shadow volume.
     const float3 v = abs(shadowCoord.xyz) - 1.0;
-    const float inFrustum = step(max(max(v.x, v.y), v.z), 0.0);
+    if (max(max(v.x, v.y), v.z) > 0.0) return 1.0;
 
     shadowCoord.y *= -1.0;
     shadowCoord.xy = 0.5 + shadowCoord.xy * 0.5;
@@ -22,6 +26,5 @@ float calculateShadow(
         }
     }
 
-//    return mix(1.0, (shadow / samples), data.parameters.x * inFrustum);
-    return clamp(mix(1.0, (shadow / samples), data.parameters.x * inFrustum), 0.0, 1.0);
+    return clamp(mix(1.0, shadow / samples, data.parameters.x), 0.0, 1.0);
 }
