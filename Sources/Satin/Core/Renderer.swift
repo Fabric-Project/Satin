@@ -1439,7 +1439,10 @@ open class Renderer {
                 for material in renderable.materials {
                     if material.lighting {
                         material.lightCount = lightCount
-                        material.projectorCount = projectorCount
+                        // In deferred geometry mode projectors are resolved by deferredLightingMaterial;
+                        // propagating projectorCount to G-buffer materials causes a pipeline recompile
+                        // cascade on every scene change without benefit.
+                        material.projectorCount = renderingMode == .deferredGeometry ? 0 : projectorCount
                     } else {
                         material.lightCount = 0
                         material.projectorCount = 0
