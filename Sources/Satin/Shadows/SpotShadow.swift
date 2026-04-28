@@ -92,7 +92,7 @@ public final class SpotShadow: Shadow {
         camera.lookAt(target: light.worldPosition + light.worldForwardDirection, up: Satin.worldUpDirection)
         camera.aspect = 1.0
         camera.fov = light.angleOuter * 2.0
-        camera.near = 0.01
+        camera.near = max(0.01, light.radius * 0.001)
         camera.far = max(light.radius, camera.near + 0.01)
 
         needsUpdate = true
@@ -121,7 +121,7 @@ public final class SpotShadow: Shadow {
         renderEncoder.setViewport(viewport)
 
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for submission in shadowRenderables(context: context, renderables: renderables) {
+        for submission in shadowRenderables(context: context, renderables: renderables, frustum: ShadowFrustum(camera.viewProjectionMatrix)) {
             submission.renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
             renderEncoderState.cullMode = submission.cullMode
             renderEncoderState.windingOrder = submission.windingOrder

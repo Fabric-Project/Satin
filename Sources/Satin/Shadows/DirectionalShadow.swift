@@ -122,7 +122,7 @@ public final class DirectionalShadow: Shadow {
         renderEncoder.label = label + " Shadow Encoder"
         renderEncoder.setViewport(viewport)
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for submission in shadowRenderables(context: context, renderables: renderables) {
+        for submission in shadowRenderables(context: context, renderables: renderables, frustum: ShadowFrustum(camera.viewProjectionMatrix)) {
             #if DEBUG
             renderEncoder.pushDebugGroup(submission.renderable.label)
             #endif

@@ -127,10 +127,13 @@ public final class PointShadow: Shadow {
         let viewport = MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0)
         let viewportFloat4 = simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
 
-        let shadowRenderables = shadowRenderables(context: context, renderables: renderables)
+        let candidates = shadowRenderables(context: context, renderables: renderables)
 
         for (faceIndex, faceTexture) in depthTextures.enumerated() {
             guard let faceTexture else { continue }
+
+            let faceCamera = cameras[faceIndex]
+            let faceFrustum = ShadowFrustum(faceCamera.viewProjectionMatrix)
 
             let renderPassDescriptor = MTLRenderPassDescriptor()
             renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
@@ -147,9 +150,9 @@ public final class PointShadow: Shadow {
             renderEncoder.setViewport(viewport)
 
             let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-            let camera = cameras[faceIndex]
-            for submission in shadowRenderables {
-                submission.renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
+            for submission in candidates {
+                guard faceFrustum.contains(submission.renderable.worldBounds) else { continue }
+                submission.renderable.update(renderContext: context, camera: faceCamera, viewport: viewportFloat4, index: 0)
                 renderEncoderState.cullMode = submission.cullMode
                 renderEncoderState.windingOrder = submission.windingOrder
                 renderEncoderState.triangleFillMode = submission.triangleFillMode
