@@ -12,6 +12,10 @@ import Metal
 open class Shader {
     // MARK: - Main Pipeline
 
+    // Single-slot cache avoids UUID dict lookup on every draw call for shared materials.
+    private var _cachedContextID: UUID? = nil
+    private var _cachedPipeline: MTLRenderPipelineState? = nil
+
     public internal(set) var pipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var pipelineError: Error?
     public internal(set) var pipelineReflection: MTLRenderPipelineReflection? {
@@ -69,6 +73,9 @@ open class Shader {
     }
 
     // MARK: - Shadow Pipeline
+
+    private var _cachedShadowContextID: UUID? = nil
+    private var _cachedShadowPipeline: MTLRenderPipelineState? = nil
 
     public internal(set) var shadowPipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var shadowPipelineError: Error?
@@ -349,6 +356,8 @@ open class Shader {
                 shadowPipelines.removeAll()
                 shadowPipelineReflection = nil
                 shadowPipelineError = nil
+                _cachedContextID = nil; _cachedPipeline = nil
+                _cachedShadowContextID = nil; _cachedShadowPipeline = nil
             }
         }
     }
@@ -519,15 +528,23 @@ open class Shader {
     open func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
         let id = renderContext.id
         if shadow {
+            if id == _cachedShadowContextID { return _cachedShadowPipeline }
             if shadowPipelines[id] == nil, castShadow {
                 setupShadowPipeline(renderContext: renderContext)
             }
-            return shadowPipelines[id]
+            let pipeline = shadowPipelines[id]
+            _cachedShadowContextID = id
+            _cachedShadowPipeline = pipeline
+            return pipeline
         } else {
+            if id == _cachedContextID { return _cachedPipeline }
             if pipelines[id] == nil {
                 setupPipeline(renderContext: renderContext)
             }
-            return pipelines[id]
+            let pipeline = pipelines[id]
+            _cachedContextID = id
+            _cachedPipeline = pipeline
+            return pipeline
         }
     }
 
@@ -562,6 +579,7 @@ open class Shader {
             }
             pipelineError = error
             pipelines[renderContext.id] = nil
+            _cachedContextID = nil; _cachedPipeline = nil
         }
         pipelineNeedsUpdate = false
     }
@@ -593,6 +611,7 @@ open class Shader {
             }
             shadowPipelineError = error
             shadowPipelines[renderContext.id] = nil
+            _cachedShadowContextID = nil; _cachedShadowPipeline = nil
         }
 
         shadowPipelineNeedsUpdate = false
@@ -604,10 +623,12 @@ open class Shader {
         pipelines.removeAll()
         pipelineReflection = nil
         pipelineError = nil
+        _cachedContextID = nil; _cachedPipeline = nil
 
         shadowPipelines.removeAll()
         shadowPipelineReflection = nil
         shadowPipelineError = nil
+        _cachedShadowContextID = nil; _cachedShadowPipeline = nil
     }
 
     public func clone() -> Shader {

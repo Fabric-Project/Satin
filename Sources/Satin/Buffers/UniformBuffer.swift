@@ -22,6 +22,9 @@ public final class UniformBuffer {
     public private(set) var offset = 0
     public private(set) var alignedSize: Int
     public private(set) var maxBuffersInFlight: Int
+    // Count of ring-buffer slots still needing a copy after the last dirty transition.
+    // Counts down from maxBuffersInFlight to 0; copyMemory is skipped at 0.
+    private var dirtySlots: Int = 0
 
     public init(device: MTLDevice, parameters: ParameterGroup, options: MTLResourceOptions = [.cpuCacheModeWriteCombined], maxBuffersInFlight: Int = Satin.maxBuffersInFlight) {
         self.parameters = parameters
@@ -38,7 +41,14 @@ public final class UniformBuffer {
     public func update() {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
+        if parameters.isDirty {
+            // New dirty transition: ensure all ring-buffer slots receive the updated data.
+            dirtySlots = maxBuffersInFlight
+            parameters.isDirty = false
+        }
+        guard dirtySlots > 0 else { return }
         (buffer.contents() + offset).copyMemory(from: parameters.data, byteCount: parameters.size)
+        dirtySlots -= 1
     }
 
     public func reset() {

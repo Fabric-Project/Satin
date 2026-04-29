@@ -38,6 +38,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
             _updateAlignment = true
             _reallocateData = true
             _updateData = true
+            isDirty = true
         }
     }
 
@@ -82,9 +83,10 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
         paramsMap[param.label] = param
         paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
             guard let self = self
-//                  let param 
+//                  let param
             else { return }
             self._updateData = true
+            self.isDirty = true
 //            self.objectWillChange.send()
 //            self.parameterUpdatedPublisher.send(param)
         }
@@ -415,6 +417,8 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     private var _updateStride = true
     private var _updateAlignment = true
     private var _updateData = true
+    // Dirty flag consumed by UniformBuffer to skip redundant GPU memcpy for static materials.
+    public internal(set) var isDirty: Bool = true
 
     private func updateSize() {
         var result = 0

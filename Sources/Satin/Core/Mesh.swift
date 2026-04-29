@@ -53,7 +53,13 @@ open class Mesh: Renderable {
               vertexUniforms[renderContext.id] != nil
         else { return false }
 
-        if submeshes.isEmpty, let material = material, material.getPipeline(renderContext: renderContext, shadow: shadow) != nil {
+        // Trade-off (shadow path): skip the dict lookup + compile trigger during culling.
+        // Use shader.castShadow as a lightweight proxy instead of materialising the pipeline.
+        // First-frame effect: a mesh whose shadow pipeline hasn't compiled yet is still included
+        // in the shadow list; bindPipeline compiles it on that same draw call, so shadows appear
+        // from frame 1. Revert this heuristic if you see first-frame shadow pop-in on new materials.
+        if submeshes.isEmpty, let material = material,
+           shadow ? (material.shader?.castShadow == true) : (material.getPipeline(renderContext: renderContext, shadow: false) != nil) {
             return true
         } else if let submesh = submeshes.first, let material = submesh.material, material.getPipeline(renderContext: renderContext, shadow: false) != nil {
             return true

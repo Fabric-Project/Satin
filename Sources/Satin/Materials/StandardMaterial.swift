@@ -69,11 +69,16 @@ open class StandardMaterial: Material {
         }
     }
 
+    // Cached to avoid a String dict lookup on every frame in Renderer.updateScene.
+    // The backing var is the source of truth for the getter; the ParameterGroup stays in sync
+    // via the setter. If something writes "Environment Intensity" directly through parameters,
+    // call the public setter instead to keep _environmentIntensity in sync.
+    private var _environmentIntensity: Float = 1.0
     public var environmentIntensity: Float {
-        get {
-            get("Environment Intensity", as: FloatParameter.self)!.value
-        }
+        get { _environmentIntensity }
         set {
+            guard newValue != _environmentIntensity else { return }
+            _environmentIntensity = newValue
             set("Environment Intensity", newValue)
         }
     }
