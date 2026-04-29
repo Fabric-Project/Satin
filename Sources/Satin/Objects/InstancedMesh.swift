@@ -49,6 +49,7 @@ public class InstancedMesh: Mesh {
                     instanceMatrices.append(matrix_identity_float4x4)
                     instanceMatricesUniforms.append(InstanceMatrixUniforms(modelMatrix: matrix_identity_float4x4, normalMatrix: matrix_identity_float3x3))
                 }
+                updateLocalBounds = true
                 _setupInstanceMatrixBuffer = true
             }
         }
@@ -95,6 +96,7 @@ public class InstancedMesh: Mesh {
         self.instanceMatrices = matrices
         
         self.updateInstanceMatricesUniforms()
+        updateLocalBounds = true
         
         _updateInstanceMatrixBuffer = true
 
@@ -112,6 +114,7 @@ public class InstancedMesh: Mesh {
             simd_make_float3(n.columns.2)
         )
 
+        updateLocalBounds = true
         _updateInstanceMatrixBuffer = true
     }
 
