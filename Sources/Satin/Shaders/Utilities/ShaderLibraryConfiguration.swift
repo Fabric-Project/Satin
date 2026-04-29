@@ -28,7 +28,6 @@ public struct ShaderLibraryConfiguration {
     // Shadows
     var castShadow: Bool
     var receiveShadow: Bool
-    var shadowCount: Int
     var directShadowCount: Int
     var directShadowTextureCount: Int
 
@@ -48,7 +47,6 @@ extension ShaderLibraryConfiguration: Equatable {
             lhs.lighting == rhs.lighting &&
             lhs.castShadow == rhs.castShadow &&
             lhs.receiveShadow == rhs.receiveShadow &&
-            lhs.shadowCount == rhs.shadowCount &&
             lhs.directShadowCount == rhs.directShadowCount &&
             lhs.directShadowTextureCount == rhs.directShadowTextureCount &&
             lhs.defines == rhs.defines &&
@@ -71,7 +69,6 @@ extension ShaderLibraryConfiguration: Hashable {
 
         hasher.combine(castShadow)
         hasher.combine(receiveShadow)
-        hasher.combine(shadowCount)
         hasher.combine(directShadowCount)
         hasher.combine(directShadowTextureCount)
 

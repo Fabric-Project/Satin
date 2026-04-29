@@ -160,11 +160,6 @@ open class Material: Codable {
         set { renderingConfiguration.lighting = newValue }
     }
 
-    public var shadowCount: Int {
-        get { renderingConfiguration.shadowCount }
-        set { renderingConfiguration.shadowCount = newValue }
-    }
-
     public var directShadowCount: Int {
         get { renderingConfiguration.directShadowCount }
         set { renderingConfiguration.directShadowCount = newValue }

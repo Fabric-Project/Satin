@@ -249,20 +249,6 @@ open class Renderer {
 
     private var shadowCasters = [Renderable]()
     private var shadowReceivers = [Renderable]()
-    private var shadowList = [Shadow]()
-    private var _updateShadowMatrices = false
-    private var shadowMatricesBuffer: StructBuffer<simd_float4x4>?
-    private var shadowMatricesSubscriptions = Set<AnyCancellable>()
-
-//    to do: fix this so we actually listen to texture updates and update the arg encoder
-    private var _updateShadowData = false
-    private var _updateShadowTextures = false
-    private var shadowArgumentEncoder: MTLArgumentEncoder?
-    private var shadowArgumentBuffer: MTLBuffer?
-    private var shadowDataBuffer: StructBuffer<ShadowData>?
-    private var shadowTextureSubscriptions = Set<AnyCancellable>()
-    private var shadowBufferSubscriptions = Set<AnyCancellable>()
-
     private var directShadowLights = [Light]()
     private var directShadowTextures = [MTLTexture?]()
     private var directShadowDataBuffer: StructBuffer<ShadowData>?
@@ -1341,7 +1327,6 @@ open class Renderer {
         lightList.removeAll(keepingCapacity: true)
         lightReceivers.removeAll(keepingCapacity: true)
 
-        shadowList.removeAll(keepingCapacity: true)
         shadowCasters.removeAll(keepingCapacity: true)
         shadowReceivers.removeAll(keepingCapacity: true)
 
@@ -1357,7 +1342,6 @@ open class Renderer {
         )
 
         updateLights()
-        updateShadows()
     }
 
     private func updateLists(object: Object, visible: Bool) {
@@ -1370,9 +1354,6 @@ open class Renderer {
                 light.shadowIndex = -1
                 light.projectorIndex = -1
                 lightList.append(light)
-                if light.castShadow, light.shadow.isLegacyPlanarCompatible {
-                    shadowList.append(light.shadow)
-                }
             }
 
             if let renderable = object as? Renderable {
@@ -1408,7 +1389,6 @@ open class Renderer {
         updateDirectLightingState()
 
         let lightCount = lightList.count
-        let shadowCount = shadowList.count
         let directShadowCount = directShadowLights.count
         let directShadowTextureCount = directShadowTextures.count
         let projectorCount = projectorLights.count
@@ -1446,12 +1426,6 @@ open class Renderer {
                     } else {
                         material.lightCount = 0
                         material.projectorCount = 0
-                    }
-
-                    if renderable.receiveShadow {
-                        material.shadowCount = shadowCount
-                    } else {
-                        material.shadowCount = 0
                     }
 
                     if material.lighting, renderable.receiveShadow {
@@ -1569,88 +1543,6 @@ open class Renderer {
             )
         }
         
-        // cache of old working code
-        // but had a bug which Fabric seemed to trigger
-        // causing a crash -
-//        if !shadowReceivers.isEmpty {
-//            for shadow in shadowList {
-//                if let shadowTexture = shadow.texture {
-//                    renderEncoder.useResource(shadowTexture, usage: .read, stages: .fragment)
-//                }
-//            }
-//
-//            if let shadowDataBuffer = shadowDataBuffer {
-//                renderEncoder.useResource(shadowDataBuffer.buffer, usage: .read, stages: .fragment)
-//            }
-//
-//            if let shadowBuffer = shadowMatricesBuffer {
-//                renderEncoder.setVertexBuffer(
-//                    shadowBuffer.buffer,
-//                    offset: shadowBuffer.offset,
-//                    index: VertexBufferIndex.ShadowMatrices.rawValue
-//                )
-//            }
-//
-//            if let shadowArgumentBuffer = shadowArgumentBuffer {
-//                renderEncoder.setFragmentBuffer(
-//                    shadowArgumentBuffer,
-//                    offset: 0,
-//                    index: FragmentBufferIndex.Shadows.rawValue
-//                )
-//            }
-//        }
-        
-        // This fixes a crash only in Fabric
-        // (at least, i couldnt trigger it in Satin's Examples)
-
-        // Do not gate shadow buffer bindings on `shadowReceivers`.
-        // Shader variants for Physical / Standard materials may still expect
-        // `shadowMatrices` (vertex index) and `shadows` (fragment index) even
-        // in frames where no objects currently receive shadows.
-        //
-        // If the shadow buffers exist (created when at least one shadow-casting
-        // light is active), they *must always* be bound to their expected buffer
-        // indices to satisfy the pipeline’s argument layout. Failing to bind them
-        // results in Metal validation errors such as:
-        //
-        //   missing buffer binding at index 4 for shadowMatrices[0]
-        //   missing buffer binding at index 3 for shadows[0]
-        //
-        // We therefore bind the shadow buffers whenever they are non-nil,
-        // regardless of how many receivers are present this frame.
-        
-        if let shadowBuffer = shadowMatricesBuffer {
-            // Always bind shadow matrices if we have a buffer
-            renderEncoder.setVertexBuffer(
-                shadowBuffer.buffer,
-                offset: shadowBuffer.offset,
-                index: VertexBufferIndex.ShadowMatrices.rawValue
-            )
-        }
-
-        if let shadowArgumentBuffer = shadowArgumentBuffer {
-            // Always bind shadow argument buffer if we have one
-            renderEncoder.setFragmentBuffer(
-                shadowArgumentBuffer,
-                offset: 0,
-                index: FragmentBufferIndex.Shadows.rawValue
-            )
-        }
-
-        // The useResource bits are only really needed when we *actually* have shadows;
-        // they don’t matter for the binding assertion.
-        if !shadowList.isEmpty {
-            for shadow in shadowList {
-                if let shadowTexture = shadow.texture {
-                    renderEncoder.useResource(shadowTexture, usage: .read, stages: .fragment)
-                }
-            }
-
-            if let shadowDataBuffer = shadowDataBuffer {
-                renderEncoder.useResource(shadowDataBuffer.buffer, usage: .read, stages: .fragment)
-            }
-        }
-
         if let projectorMatricesBuffer = projectorMatricesBuffer {
             renderEncoder.useResource(projectorMatricesBuffer.buffer, usage: .read, stages: .fragment)
         }
@@ -1969,126 +1861,6 @@ open class Renderer {
         lightBuffer.update(data: lightList.map { $0.data })
 
         _updateLightDataBuffer = false
-    }
-
-    // MARK: - Shadows
-
-    private func updateShadows() {
-        setupShadows()
-        updateShadowMatrices()
-        updateShadowData()
-        updateShadowTextures()
-    }
-
-    private func setupShadows() {
-        guard shadowList.count != shadowMatricesBuffer?.count else { return }
-
-        shadowMatricesSubscriptions.removeAll(keepingCapacity: true)
-        shadowTextureSubscriptions.removeAll(keepingCapacity: true)
-        shadowBufferSubscriptions.removeAll(keepingCapacity: true)
-
-        if shadowList.isEmpty {
-            shadowMatricesBuffer = nil
-            shadowArgumentEncoder = nil
-            shadowArgumentBuffer = nil
-
-        } else {
-            shadowMatricesBuffer = StructBuffer<simd_float4x4>(
-                device: context.device,
-                count: shadowList.count,
-                label: "Shadow Matrices Buffer"
-            )
-
-            for light in lightList where light.castShadow && light.shadow.isLegacyPlanarCompatible {
-                light.publisher.sink { [weak self] _ in
-                    self?._updateShadowMatrices = true
-                }.store(in: &shadowMatricesSubscriptions)
-            }
-
-            _updateShadowMatrices = true
-
-            let strengthsArg = MTLArgumentDescriptor()
-            strengthsArg.index = FragmentBufferIndex.ShadowData.rawValue
-            strengthsArg.access = .readOnly
-            strengthsArg.dataType = .pointer
-
-            let texturesArg = MTLArgumentDescriptor()
-            texturesArg.index = FragmentTextureIndex.Shadow0.rawValue
-            texturesArg.access = .readOnly
-            texturesArg.arrayLength = shadowList.count
-            texturesArg.dataType = .texture
-            texturesArg.textureType = .type2D
-
-            if let shadowArgumentEncoder = context.device.makeArgumentEncoder(arguments: [strengthsArg, texturesArg]) {
-                let shadowArgumentBuffer = context.device.makeBuffer(length: shadowArgumentEncoder.encodedLength, options: .storageModeShared)
-                shadowArgumentBuffer?.label = "Shadow Argument Buffer"
-                shadowArgumentEncoder.setArgumentBuffer(shadowArgumentBuffer, offset: 0)
-
-                let shadowDataBuffer = StructBuffer<ShadowData>(
-                    device: context.device,
-                    count: shadowList.count,
-                    label: "Shadow Data Buffer"
-                )
-
-                self.shadowArgumentBuffer = shadowArgumentBuffer
-                self.shadowArgumentEncoder = shadowArgumentEncoder
-                self.shadowDataBuffer = shadowDataBuffer
-
-                shadowArgumentEncoder.setBuffer(shadowDataBuffer.buffer, offset: shadowDataBuffer.offset, index: FragmentBufferIndex.ShadowData.rawValue)
-
-                for (index, shadow) in shadowList.enumerated() {
-                    shadowArgumentEncoder.setTexture(shadow.textures.first, index: FragmentTextureIndex.Shadow0.rawValue + index)
-                }
-            }
-
-            for shadow in shadowList {
-                shadow.dataPublisher.sink { [weak self] _ in
-                    self?._updateShadowData = true
-                }.store(in: &shadowBufferSubscriptions)
-
-                shadow.texturePublisher.sink { [weak self] _ in
-                    self?._updateShadowTextures = true
-                }.store(in: &shadowTextureSubscriptions)
-            }
-
-            _updateShadowData = true
-            _updateShadowTextures = true
-        }
-    }
-
-    private func updateShadowMatrices() {
-        guard let shadowMatricesBuffer = shadowMatricesBuffer,
-              _updateShadowMatrices else { return }
-
-        shadowMatricesBuffer.update(data: shadowList.map { $0.camera.viewProjectionMatrix })
-
-        _updateShadowMatrices = false
-    }
-
-    private func updateShadowData() {
-        guard let shadowArgumentEncoder = shadowArgumentEncoder,
-              let shadowDataBuffer = shadowDataBuffer,
-              _updateShadowData else { return }
-
-        shadowDataBuffer.update(data: shadowList.map { $0.data })
-        shadowArgumentEncoder.setBuffer(
-            shadowDataBuffer.buffer,
-            offset: shadowDataBuffer.offset,
-            index: FragmentBufferIndex.ShadowData.rawValue
-        )
-
-        _updateShadowData = false
-    }
-
-    private func updateShadowTextures() {
-        guard let shadowArgumentEncoder = shadowArgumentEncoder,
-              _updateShadowTextures else { return }
-
-        for (index, shadow) in shadowList.enumerated() {
-            shadowArgumentEncoder.setTexture(shadow.textures.first, index: FragmentTextureIndex.Shadow0.rawValue + index)
-        }
-
-        _updateShadowTextures = false
     }
 
     private func updateDirectLightingState() {

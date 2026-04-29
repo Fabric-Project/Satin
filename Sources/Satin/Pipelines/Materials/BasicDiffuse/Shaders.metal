@@ -3,7 +3,6 @@
 
 typedef struct {
     float4 position [[position]];
-    // inject shadow coords
     float3 viewPosition;
     float3 normal;
     float3 worldNormal;
@@ -23,7 +22,6 @@ typedef struct {
 vertex BasicDiffuseVertexData basicDiffuseVertex(
     Vertex in [[stage_in]],
     // inject instancing args
-    // inject shadow vertex args
     ushort amp_id [[amplification_id]],
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
     const float4 position = float4(in.position, 1.0);
@@ -46,8 +44,6 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     out.normal = screenSpaceNormal.xyz;
     out.worldNormal = normal;
 
-    // inject shadow vertex calc
-
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
 #if INSTANCING
@@ -62,7 +58,6 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 
 fragment FragmentOutput basicDiffuseFragment(
     BasicDiffuseVertexData in [[stage_in]],
-    // inject shadow fragment args
     constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
     float4 outColor;
 
@@ -79,7 +74,6 @@ fragment FragmentOutput basicDiffuseFragment(
     const float hard = saturate(dot(normal, float3(0.0, 0.0, -1.0)));
 
     outColor.rgb *= pow(mix(soft, hard, uniforms.hardness), uniforms.diffusePower);
-    // inject shadow fragment calc
     outColor.rgb = dither8x8(in.position.xy, outColor.rgb);
 #endif
 
