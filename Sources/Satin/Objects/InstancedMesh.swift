@@ -336,7 +336,7 @@ public class InstancedMesh: Mesh {
     override public func computeWorldBounds() -> Bounds {
         var result = createBounds()
         for i in 0 ..< instanceCount {
-            result = transformBounds(bounds, getWorldMatrixAt(index: i))
+            result = mergeBounds(result, transformBounds(bounds, getWorldMatrixAt(index: i)))
         }
 
         for child in children {
