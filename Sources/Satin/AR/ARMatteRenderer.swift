@@ -93,7 +93,7 @@ public class ARMatteRenderer {
         // Update the texture coordinates of our image plane to aspect fill the viewport
         let displayToCameraTransform = frame.displayTransform(for: interfaceOrientation, viewportSize: viewportSize).inverted()
 
-        let geo = QuadGeometry(context: self.context)
+        guard let geo = mesh.geometry as? QuadGeometry else { return }
         let vertexCount = Int(geo.geometryData.vertexCount)
         for i in 0 ..< vertexCount {
             let vertex = geo.geometryData.vertexData[i]
@@ -102,7 +102,7 @@ public class ARMatteRenderer {
             let transformedCoord = textureCoord.applying(displayToCameraTransform)
             geo.geometryData.vertexData[i].uv = simd_make_float2(Float(transformedCoord.x), Float(transformedCoord.y))
         }
-        mesh.geometry = geo
+        geo.setFrom(geometryData: geo.geometryData)
     }
 
     private func updateTextures() {

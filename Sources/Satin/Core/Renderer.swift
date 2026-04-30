@@ -232,6 +232,10 @@ open class Renderer {
 
     private var renderContextCache: [RenderContextKey: Context] = [:]
 
+    private func colorAttachment(_ renderPassDescriptor: MTLRenderPassDescriptor, index: Int) -> MTLRenderPassColorAttachmentDescriptor? {
+        renderPassDescriptor.colorAttachments[index]
+    }
+
     private var objectList = [Object]()
     private var renderLists = [Int: RenderList]()
 
@@ -458,16 +462,18 @@ open class Renderer {
         let inStencilLoadAction = renderPassDescriptor.stencilAttachment.loadAction
         let inStencilTexture = renderPassDescriptor.stencilAttachment.texture
         let inStencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
-        let inAuxiliaryStates: [ColorAttachmentState] = (1...5).map { index in
-            let attachment = renderPassDescriptor.colorAttachments[index]!
-            return ColorAttachmentState(
-                texture: attachment.texture,
-                resolveTexture: attachment.resolveTexture,
-                loadAction: attachment.loadAction,
-                storeAction: attachment.storeAction,
-                clearColor: attachment.clearColor
-            )
-        }
+        let inAuxiliaryStates: [Int: ColorAttachmentState] = Dictionary(
+            uniqueKeysWithValues: (1...5).compactMap { index in
+                guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { return nil }
+                return (index, ColorAttachmentState(
+                    texture: attachment.texture,
+                    resolveTexture: attachment.resolveTexture,
+                    loadAction: attachment.loadAction,
+                    storeAction: attachment.storeAction,
+                    clearColor: attachment.clearColor
+                ))
+            }
+        )
 
         defer {
             renderPassDescriptor.colorAttachments[0].storeAction = inColorStoreAction
@@ -485,8 +491,8 @@ open class Renderer {
             renderPassDescriptor.stencilAttachment.texture = inStencilTexture
             renderPassDescriptor.stencilAttachment.resolveTexture = inStencilResolveTexture
 
-            for (offset, state) in inAuxiliaryStates.enumerated() {
-                let attachment = renderPassDescriptor.colorAttachments[offset + 1]!
+            for (index, state) in inAuxiliaryStates {
+                guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { continue }
                 attachment.texture = state.texture
                 attachment.resolveTexture = state.resolveTexture
                 attachment.loadAction = state.loadAction
@@ -675,7 +681,7 @@ open class Renderer {
         case .surface:
             return hasSurface
         case .unlit:
-            return hasUnlit && !hasSurface
+            return hasUnlit
         }
     }
 
@@ -822,7 +828,7 @@ open class Renderer {
         var activeAttachmentIndices = [Int]()
 
         for (index, flag, texture) in auxiliaryAttachments {
-            let attachment = renderPassDescriptor.colorAttachments[index]!
+            guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { continue }
             if enabled, requestedAuxiliaryOutputs.contains(flag), let texture {
                 attachment.texture = texture
                 attachment.resolveTexture = nil
@@ -1028,7 +1034,7 @@ open class Renderer {
         }
 
         for index in auxiliaryAttachmentIndices {
-            let attachment = renderPassDescriptor.colorAttachments[index]!
+            guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { continue }
             if attachment.texture != nil, attachment.loadAction == .clear {
                 return true
             }
@@ -1081,7 +1087,7 @@ open class Renderer {
                 renderPassDescriptor.depthAttachment.loadAction = .load
                 renderPassDescriptor.stencilAttachment.loadAction = .load
                 for attachmentIndex in auxiliaryAttachmentIndices {
-                    renderPassDescriptor.colorAttachments[attachmentIndex]!.loadAction = .load
+                    colorAttachment(renderPassDescriptor, index: attachmentIndex)?.loadAction = .load
                 }
             }
 
@@ -1708,11 +1714,26 @@ open class Renderer {
         let savedMaterial = renderable.material
         // Determine which context to use for pipeline/uniform lookups
         let renderContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
+        let savedMaterialPass = renderable.materialPass
+
+        switch phase {
+        case .forward:
+            renderable.materialPass = .all
+        case .surface:
+            renderable.materialPass = .surface
+        case .unlit:
+            renderable.materialPass = .unlit
+        }
 
         if let overrideMaterial {
             renderable.material = overrideMaterial
         }
-        defer { if overrideMaterial != nil { renderable.material = savedMaterial } }
+        defer {
+            renderable.materialPass = savedMaterialPass
+            if overrideMaterial != nil {
+                renderable.material = savedMaterial
+            }
+        }
 
         for i in 0..<context.vertexAmplificationCount {
             renderable.update(

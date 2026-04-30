@@ -10,6 +10,11 @@ import Metal
 import simd
 
 open class Renderable : Object {
+    enum MaterialPass {
+        case all
+        case surface
+        case unlit
+    }
 
     open var opaque: Bool { material!.blending == .disabled }
     
@@ -69,6 +74,7 @@ open class Renderable : Object {
     }
     
     open var vertexUniforms: [Context: VertexUniformBuffer] = [:]
+    var materialPass: MaterialPass = .all
 
     open var material: Material? = nil
     open var materials: [Material] = []

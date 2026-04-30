@@ -436,20 +436,6 @@ public class TesselatedTextGeometry: SatinGeometry {
         combineAndOffsetGeometryData(&gData, &cData, simd_make_float3(glyphOffset, 0.0))
     }
 
-    private func cubicToQuadratic(
-        _ p0: simd_float2, _ c1: simd_float2,
-        _ c2: simd_float2, _ p3: simd_float2
-    ) -> (q0: (simd_float2, simd_float2, simd_float2),
-          q1: (simd_float2, simd_float2, simd_float2)) {
-        let m01  = (p0 + c1) * 0.5
-        let m12  = (c1 + c2) * 0.5
-        let m23  = (c2 + p3) * 0.5
-        let m012 = (m01 + m12) * 0.5
-        let m123 = (m12 + m23) * 0.5
-        let mid  = (m012 + m123) * 0.5
-        return ((p0, m012, mid), (mid, m123, p3))
-    }
-
     func getPolylines(_ glyphPath: CGPath, _ angleLimit: Float, _ distanceLimit: Float) -> [Polyline2D] {
         var glyphPaths = [Polyline2D]()
         var path = Polyline2D(count: 0, capacity: 0, data: nil)
@@ -460,7 +446,10 @@ public class TesselatedTextGeometry: SatinGeometry {
 
             switch element.type {
             case .moveToPoint:
-                if path.count > 0 {
+                if path.count > 2 {
+                    glyphPaths.append(path)
+                    path = Polyline2D(count: 0, capacity: 0, data: nil)
+                } else if path.count > 0 {
                     freePolyline2D(&path)
                     path = Polyline2D(count: 0, capacity: 0, data: nil)
                 }
@@ -487,15 +476,10 @@ public class TesselatedTextGeometry: SatinGeometry {
                 let c = simd_make_float2(Float(pointsPtr.pointee.x), Float(pointsPtr.pointee.y))
                 pointsPtr += 1
                 let d = simd_make_float2(Float(pointsPtr.pointee.x), Float(pointsPtr.pointee.y))
-                let (q0, q1) = cubicToQuadratic(a, b, c, d)
-                var curve0 = getAdaptiveQuadraticBezierPath2(q0.0, q0.1, q0.2, angleLimit)
-                removeFirstPointInPolyline2D(&curve0)
-                appendPolyline2D(&path, &curve0)
-                freePolyline2D(&curve0)
-                var curve1 = getAdaptiveQuadraticBezierPath2(q1.0, q1.1, q1.2, angleLimit)
-                removeFirstPointInPolyline2D(&curve1)
-                appendPolyline2D(&path, &curve1)
-                freePolyline2D(&curve1)
+                var curve = getAdaptiveCubicBezierPath2(a, b, c, d, angleLimit)
+                removeFirstPointInPolyline2D(&curve)
+                appendPolyline2D(&path, &curve)
+                freePolyline2D(&curve)
             case .closeSubpath:
                 if isEqual2(path.data[0], path.data[Int(path.count - 1)]) {
                     removeLastPointInPolyline2D(&path)

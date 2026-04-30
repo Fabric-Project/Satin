@@ -530,6 +530,7 @@ open class Object: Codable {
 
     open func insert(_ child: Object, at: Int, setParent: Bool = true) {
         if !children.contains(where: { $0 === child }) {
+            validateChildContext(child)
             if setParent {
                 child.parent = self
             }
@@ -539,6 +540,7 @@ open class Object: Codable {
 
     open func add(_ child: Object, _ setParent: Bool = true) {
         guard children.firstIndex(of: child) == nil, child != self else { return }
+        validateChildContext(child)
 
         if setParent {
             child.removeFromParent()
@@ -565,6 +567,13 @@ open class Object: Codable {
         for obj in objects {
             add(obj, setParent)
         }
+    }
+
+    private func validateChildContext(_ child: Object) {
+        precondition(
+            child.context == context,
+            "Attempted to attach child '\(child.label)' with mismatched Context to parent '\(label)'."
+        )
     }
 
     open func remove(_ child: Object) {

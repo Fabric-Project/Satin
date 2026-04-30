@@ -14,6 +14,7 @@ open class Shader {
 
     public internal(set) var pipelines: [Context: MTLRenderPipelineState] = [:]
     public internal(set) var pipelineError: Error?
+    var pipelineErrors: [Context: Error] = [:]
     public internal(set) var pipelineReflection: MTLRenderPipelineReflection? {
         didSet {
             vertexBufferBindingIsUsed.removeAll()
@@ -72,6 +73,7 @@ open class Shader {
 
     public internal(set) var shadowPipelines: [Context: MTLRenderPipelineState] = [:]
     public internal(set) var shadowPipelineError: Error?
+    var shadowPipelineErrors: [Context: Error] = [:]
     public internal(set) var shadowPipelineReflection: MTLRenderPipelineReflection?
 
     public internal(set) var vertexBufferBindingIsUsed: [VertexBufferIndex] = []
@@ -355,9 +357,11 @@ open class Shader {
                 pipelines.removeAll()
                 pipelineReflection = nil
                 pipelineError = nil
+                pipelineErrors.removeAll()
                 shadowPipelines.removeAll()
                 shadowPipelineReflection = nil
                 shadowPipelineError = nil
+                shadowPipelineErrors.removeAll()
             }
         }
     }
@@ -527,12 +531,15 @@ open class Shader {
 
     open func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
         if shadow {
-            if shadowPipelines[renderContext] == nil, castShadow {
+            if shadowPipelines[renderContext] == nil,
+               shadowPipelineErrors[renderContext] == nil,
+               castShadow
+            {
                 setupShadowPipeline(renderContext: renderContext)
             }
             return shadowPipelines[renderContext]
         } else {
-            if pipelines[renderContext] == nil {
+            if pipelines[renderContext] == nil, pipelineErrors[renderContext] == nil {
                 setupPipeline(renderContext: renderContext)
             }
             return pipelines[renderContext]
@@ -554,7 +561,7 @@ open class Shader {
     }
 
     func setupPipeline(renderContext: Context) {
-        guard pipelines[renderContext] == nil else { return }
+        guard pipelines[renderContext] == nil, pipelineErrors[renderContext] == nil else { return }
         do {
             let result = try ShaderPipelineCache.getPipeline(configuration: getConfiguration(renderContext: renderContext))
             pipelines[renderContext] = result.pipeline
@@ -562,6 +569,7 @@ open class Shader {
                 pipelineReflection = result.reflection
             }
             pipelineError = nil
+            pipelineErrors[renderContext] = nil
         }
         catch {
             print("\(label) Shader Pipeline: \(error.localizedDescription)")
@@ -569,6 +577,7 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             pipelineError = error
+            pipelineErrors[renderContext] = error
             pipelines[renderContext] = nil
         }
         pipelineNeedsUpdate = false
@@ -589,10 +598,14 @@ open class Shader {
     }
 
     func setupShadowPipeline(renderContext: Context) {
-        guard shadowPipelines[renderContext] == nil, castShadow else { return }
+        guard shadowPipelines[renderContext] == nil,
+              shadowPipelineErrors[renderContext] == nil,
+              castShadow
+        else { return }
         do {
             shadowPipelines[renderContext] = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
             shadowPipelineError = nil
+            shadowPipelineErrors[renderContext] = nil
         }
         catch {
             print("\(label) Shadow Shader Pipeline: \(error.localizedDescription)")
@@ -600,6 +613,7 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             shadowPipelineError = error
+            shadowPipelineErrors[renderContext] = error
             shadowPipelines[renderContext] = nil
         }
 
@@ -612,10 +626,12 @@ open class Shader {
         pipelines.removeAll()
         pipelineReflection = nil
         pipelineError = nil
+        pipelineErrors.removeAll()
 
         shadowPipelines.removeAll()
         shadowPipelineReflection = nil
         shadowPipelineError = nil
+        shadowPipelineErrors.removeAll()
     }
 
     public func clone() -> Shader {

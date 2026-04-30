@@ -61,7 +61,7 @@ public final class SpotLight: Light {
             // (xyz, type)
             position: simd_make_float4(worldPosition.x, worldPosition.y, worldPosition.z, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-worldForwardDirection, 1.0 / max(radius, 1e-4)),
+            direction: simd_make_float4(-worldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: simd_make_float4(spotScale, spotOffset, cosInner, cosOuter),
             // (shadowIndex, projectorIndex, projectorMode, unused)

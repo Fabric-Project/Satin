@@ -53,9 +53,17 @@ open class Mesh: Renderable {
               vertexUniforms[renderContext] != nil
         else { return false }
 
-        if submeshes.isEmpty, let material = material, material.getPipeline(renderContext: renderContext, shadow: shadow) != nil {
+        if submeshes.isEmpty,
+           let material = material,
+           materialMatchesCurrentPass(material, shadow: shadow),
+           material.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+        {
             return true
-        } else if let submesh = submeshes.first, let material = submesh.material, material.getPipeline(renderContext: renderContext, shadow: false) != nil {
+        } else if submeshes.contains(where: {
+            $0.visible &&
+                materialMatchesCurrentPass($0.material, shadow: shadow) &&
+                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+        }) {
             return true
         } else {
             return false
@@ -258,7 +266,7 @@ open class Mesh: Renderable {
         )
 
         if !submeshes.isEmpty {
-            for submesh in submeshes where submesh.visible {
+            for submesh in submeshes where submesh.visible && materialMatchesCurrentPass(submesh.material, shadow: shadow) {
                 submesh.draw(
                     renderContext: renderContext,
                     renderEncoderState: renderEncoderState,
@@ -266,7 +274,7 @@ open class Mesh: Renderable {
                     shadow: shadow
                 )
             }
-        } else {
+        } else if materialMatchesCurrentPass(material, shadow: shadow) {
             material?.bind(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
@@ -276,6 +284,22 @@ open class Mesh: Renderable {
                 renderEncoderState: renderEncoderState,
                 instanceCount: instanceCount
             )
+        }
+    }
+
+    private func materialMatchesCurrentPass(_ material: Material?, shadow: Bool) -> Bool {
+        guard let material else { return false }
+        if shadow {
+            return true
+        }
+
+        switch materialPass {
+        case .all:
+            return true
+        case .surface:
+            return material.lightingModel == .surface
+        case .unlit:
+            return material.lightingModel == .unlit
         }
     }
 

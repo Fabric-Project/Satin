@@ -58,16 +58,18 @@ public enum FragmentTextureIndex: Int {
     case Custom20 = 20
     case Custom21 = 21
     case Custom22 = 22
-    case Shadow0 = 23
-    case Shadow1 = 24
-    case Shadow2 = 25
-    case Shadow3 = 26
-    case Shadow4 = 27
-    case Shadow5 = 28
-    case Shadow6 = 29
-    case Shadow7 = 30
-    case Projector0 = 31
-    case DirectShadow0 = 39
+    case Custom23 = 23
+    case Custom24 = 24
+    case Shadow0 = 25
+    case Shadow1 = 26
+    case Shadow2 = 27
+    case Shadow3 = 28
+    case Shadow4 = 29
+    case Shadow5 = 30
+    case Shadow6 = 31
+    case Shadow7 = 32
+    case Projector0 = 33
+    case DirectShadow0 = 41
 }
 
 public enum FragmentSamplerIndex: Int {

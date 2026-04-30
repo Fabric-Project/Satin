@@ -50,7 +50,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             "Focus Distance",
             defaultFocusDistance,
             0.001,
-            100.0,
+            1000.0,
             .slider,
             "Distance from the camera that stays sharp."
         ),
@@ -58,7 +58,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             "Focus Range",
             defaultFocusRange,
             0.001,
-            20.0,
+            500.0,
             .slider,
             "Full depth band that remains acceptably sharp."
         ),

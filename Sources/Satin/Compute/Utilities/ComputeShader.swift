@@ -404,8 +404,15 @@ open class ComputeShader {
 
     open func setupShaderCompiler() {
         guard compiler == nil, live, let pipelineURL = pipelineURL else { return }
-        _ = pipelineURL
-        compiler = MetalFileCompiler(watch: live)
+
+        let compiler = MetalFileCompiler(watch: live)
+        do {
+            _ = try compiler.parse(pipelineURL)
+        } catch {
+            print("\(label) Compute Shader Live Reload: \(error.localizedDescription)")
+            print("\(label) Compute Shader Path: \(pipelineURL.path)")
+        }
+        self.compiler = compiler
     }
 
     // MARK: - Deinit

@@ -78,7 +78,14 @@ open class SourceShader: Shader {
 
     open func setupShaderCompiler() {
         guard compiler == nil, live else { return }
-        compiler = MetalFileCompiler(watch: live)
+        let compiler = MetalFileCompiler(watch: live)
+        do {
+            _ = try compiler.parse(pipelineURL)
+        } catch {
+            print("\(label) Shader Live Reload: \(error.localizedDescription)")
+            print("\(label) Shader Path: \(pipelineURL.path)")
+        }
+        self.compiler = compiler
     }
 
     public func reloadFromSource() {
@@ -98,9 +105,11 @@ open class SourceShader: Shader {
 
         self.pipelines.removeAll()
         self.pipelineError = nil
+        self.pipelineErrors.removeAll()
 
         self.shadowPipelines.removeAll()
         self.shadowPipelineError = nil
+        self.shadowPipelineErrors.removeAll()
 
         self.configurations.removeAll()
 
