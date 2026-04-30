@@ -1439,9 +1439,11 @@ open class Renderer {
 
             if let renderable = object as? Renderable {
                 for material in renderable.materials {
+                    let usesDeferredResolve = renderingMode == .deferredGeometry && material.lightingModel == .surface
+
                     if material.lighting {
-                        material.lightCount = lightCount
-                        material.projectorCount = projectorCount
+                        material.lightCount = usesDeferredResolve ? 0 : lightCount
+                        material.projectorCount = usesDeferredResolve ? 0 : projectorCount
                     } else {
                         material.lightCount = 0
                         material.projectorCount = 0
@@ -1453,7 +1455,7 @@ open class Renderer {
                         material.shadowCount = 0
                     }
 
-                    if material.lighting, renderable.receiveShadow {
+                    if material.lighting, renderable.receiveShadow, !usesDeferredResolve {
                         material.directShadowCount = directShadowCount
                         material.directShadowTextureCount = directShadowTextureCount
                     } else {
