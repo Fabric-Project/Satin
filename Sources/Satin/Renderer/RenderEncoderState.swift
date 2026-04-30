@@ -9,17 +9,6 @@ import Foundation
 import Metal
 
 public final class RenderEncoderState {
-    private struct BufferBinding {
-        let buffer: MTLBuffer
-        let offset: Int
-    }
-
-    private static let vertexBufferSlotCount = VertexBufferIndex.Custom11.rawValue + 1
-    private static let vertexTextureSlotCount = VertexTextureIndex.Custom16.rawValue + 1
-    private static let fragmentBufferSlotCount = FragmentBufferIndex.DirectShadowMatrices.rawValue + 1
-    private static let fragmentTextureSlotCount = FragmentTextureIndex.DirectShadow0.rawValue + 1
-    private static let fragmentPBRTextureSlotCount = PBRTextureType.brdf.index + 1
-
     public let renderEncoder: MTLRenderCommandEncoder
 
     public var cullMode: MTLCullMode? {
@@ -145,67 +134,61 @@ public final class RenderEncoderState {
         }
     }
 
-    private var vertexBuffers = [BufferBinding?](repeating: nil, count: RenderEncoderState.vertexBufferSlotCount)
-    private var vertexTextures = [MTLTexture??](repeating: nil, count: RenderEncoderState.vertexTextureSlotCount)
+    private var vertexBuffers = [VertexBufferIndex: MTLBuffer]()
+    private var vertexTextures = [VertexTextureIndex: MTLTexture?]()
 
-    private var fragmentBuffers = [BufferBinding?](repeating: nil, count: RenderEncoderState.fragmentBufferSlotCount)
-    private var fragmentPBRTextures = [MTLTexture??](repeating: nil, count: RenderEncoderState.fragmentPBRTextureSlotCount)
-    private var fragmentTextures = [MTLTexture??](repeating: nil, count: RenderEncoderState.fragmentTextureSlotCount)
+    private var fragmentBuffers = [FragmentBufferIndex: MTLBuffer]()
+    private var fragmentPBRTextures = [PBRTextureType: MTLTexture?]()
+    private var fragmentTextures = [FragmentTextureIndex: MTLTexture?]()
 
     public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, index: VertexBufferIndex) {
-        let slot = index.rawValue
-        if let existingBinding = vertexBuffers[slot],
-           existingBinding.buffer === buffer,
-           existingBinding.offset == offset
-        {
+        if let existingBuffer = vertexBuffers[index], existingBuffer === buffer {
             return
         }
-
-        renderEncoder.setVertexBuffer(buffer, offset: offset, index: slot)
-        vertexBuffers[slot] = BufferBinding(buffer: buffer, offset: offset)
+        else {
+            renderEncoder.setVertexBuffer(buffer, offset: offset, index: index.rawValue)
+            vertexBuffers[index] = buffer
+        }
     }
 
     public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
-        let slot = index.rawValue
-        if let existingBinding = fragmentBuffers[slot],
-           existingBinding.buffer === buffer,
-           existingBinding.offset == offset
-        {
+        if let existingBuffer = fragmentBuffers[index], existingBuffer === buffer {
             return
         }
-
-        renderEncoder.setFragmentBuffer(buffer, offset: offset, index: slot)
-        fragmentBuffers[slot] = BufferBinding(buffer: buffer, offset: offset)
+        else {
+            renderEncoder.setFragmentBuffer(buffer, offset: offset, index: index.rawValue)
+            fragmentBuffers[index] = buffer
+        }
     }
 
     public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
-        let slot = type.index
-        if let existingTexture = fragmentPBRTextures[slot], existingTexture === texture {
+        if let existingTexture = fragmentPBRTextures[type], existingTexture === texture {
             return
         }
-
-        renderEncoder.setFragmentTexture(texture, index: slot)
-        fragmentPBRTextures[slot] = .some(texture)
+        else {
+            renderEncoder.setFragmentTexture(texture, index: type.index)
+            fragmentPBRTextures[type] = texture
+        }
     }
 
     public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
-        let slot = index.rawValue
-        if let existingTexture = vertexTextures[slot], existingTexture === texture {
+        if let existingTexture = vertexTextures[index], existingTexture === texture {
             return
         }
-
-        renderEncoder.setVertexTexture(texture, index: slot)
-        vertexTextures[slot] = .some(texture)
+        else {
+            renderEncoder.setVertexTexture(texture, index: index.rawValue)
+            vertexTextures[index] = texture
+        }
     }
 
     public func setFragmentTexture(_ texture: MTLTexture?, index: FragmentTextureIndex) {
-        let slot = index.rawValue
-        if let existingTexture = fragmentTextures[slot], existingTexture === texture {
+        if let existingTexture = fragmentTextures[index], existingTexture === texture {
             return
         }
-
-        renderEncoder.setFragmentTexture(texture, index: slot)
-        fragmentTextures[slot] = .some(texture)
+        else {
+            renderEncoder.setFragmentTexture(texture, index: index.rawValue)
+            fragmentTextures[index] = texture
+        }
     }
 
     init(renderEncoder: MTLRenderCommandEncoder) {
