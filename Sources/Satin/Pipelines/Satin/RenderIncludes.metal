@@ -10,10 +10,6 @@
 #include "../Library/Shadow.metal"
 #include "../Library/RealtimeShadows.metal"
 
-// inject shadow data
-// inject shadow buffer
-// inject shadow function
-
 // inject vertex
 #include "VertexData.metal"
 

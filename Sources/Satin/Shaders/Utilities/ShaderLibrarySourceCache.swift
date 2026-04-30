@@ -47,28 +47,10 @@ public final class ShaderLibrarySourceCache: Sendable {
             constants: configuration.constants
         )
 
-        injectShadowData(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
-
 //      injectParametersArgs(
 //            source: &source,
 //            instancing: configuration.parameters
 //        )
-
-        injectShadowBuffer(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
-
-        injectShadowFunction(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
 
         injectVertex(
             source: &source,
@@ -98,35 +80,6 @@ public final class ShaderLibrarySourceCache: Sendable {
 //            source: &source,
 //            instancing: configuration.parameters
 //        )
-
-        injectShadowCoords(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
-
-        injectShadowVertexArgs(
-            source: &source,
-            receiveShadow: configuration.receiveShadow
-        )
-
-        injectShadowVertexCalc(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
-
-        injectShadowFragmentArgs(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
-
-        injectShadowFragmentCalc(
-            source: &source,
-            receiveShadow: configuration.receiveShadow,
-            shadowCount: configuration.shadowCount
-        )
 
         injectLightingArgs(
             source: &source,

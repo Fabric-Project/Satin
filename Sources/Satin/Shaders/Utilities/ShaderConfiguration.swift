@@ -65,7 +65,6 @@ public struct ShaderConfiguration {
             lighting: rendering.lighting,
             castShadow: rendering.castShadow,
             receiveShadow: rendering.receiveShadow,
-            shadowCount: rendering.shadowCount,
             directShadowCount: rendering.directShadowCount,
             directShadowTextureCount: rendering.directShadowTextureCount,
             defines: resolvedDefines,

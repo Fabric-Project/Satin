@@ -53,10 +53,6 @@ public class Shadow {
         1
     }
 
-    public var isLegacyPlanarCompatible: Bool {
-        viewCount == 1
-    }
-    
     public func update(light: Object) {
         needsUpdate = true
     }

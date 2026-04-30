@@ -256,15 +256,6 @@ open class Shader {
         }
     }
 
-    public var shadowCount: Int {
-        get {
-            renderingConfiguration.shadowCount
-        }
-        set {
-            renderingConfiguration.shadowCount = newValue
-        }
-    }
-
     public var directShadowCount: Int {
         get {
             renderingConfiguration.directShadowCount

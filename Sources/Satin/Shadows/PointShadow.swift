@@ -44,10 +44,6 @@ public final class PointShadow: Shadow {
         6
     }
 
-    override public var isLegacyPlanarCompatible: Bool {
-        false
-    }
-
     override public var resolution: (width: Int, height: Int) {
         didSet {
             if resolution.width != oldValue.width || resolution.height != oldValue.height {

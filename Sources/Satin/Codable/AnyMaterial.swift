@@ -8,7 +8,7 @@
 import Foundation
 
 public enum MaterialType: String, Codable {
-    case base, basiccolor, basicdiffuse, basicpoint, basictexture, depth, matcap, normal, physical, shadow, skybox, standard, uvcolor
+    case base, basiccolor, basicdiffuse, basicpoint, basictexture, depth, matcap, normal, physical, skybox, standard, uvcolor
 
     var metaType: Material.Type {
         switch self {
@@ -30,8 +30,6 @@ public enum MaterialType: String, Codable {
             return NormalColorMaterial.self
         case .physical:
             return PhysicalMaterial.self
-        case .shadow:
-            return ShadowMaterial.self
         case .skybox:
             return SkyboxMaterial.self
         case .standard:
@@ -73,8 +71,6 @@ open class AnyMaterial: Codable {
             type = .standard
         } else if material is UVColorMaterial {
             type = .uvcolor
-        } else if material is ShadowMaterial {
-            type = .shadow
         } else {
             type = .base
         }
