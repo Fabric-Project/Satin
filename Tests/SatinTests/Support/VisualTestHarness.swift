@@ -94,7 +94,7 @@ enum VisualTestHarness {
         let renderer = Renderer(context: context, clearColor: defaultClearColor)
         renderer.resize((width: Float(size.x), height: Float(size.y)))
 
-        let camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30.0)
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30.0)
         camera.aspect = Float(size.x) / Float(size.y)
 
         let sceneResult = configure(renderer, camera)
