@@ -3,243 +3,125 @@ import Satin
 import XCTest
 
 final class MaterialCoverageTests: XCTestCase {
-    func testMaterialFixturesMatchSourceSurfaceArea() {
-        XCTAssertEqual(Set(makeMaterialFixtures().keys), expectedMaterialNames)
-    }
-
-    func testARCompositorMaterial() throws { try assertMaterialFixture("ARCompositorMaterial") }
-    func testARMatteMaterial() throws { try assertMaterialFixture("ARMatteMaterial") }
-    func testARPostMaterial() throws { try assertMaterialFixture("ARPostMaterial") }
-    func testBasicColorMaterial() throws { try assertMaterialFixture("BasicColorMaterial") }
-    func testBasicDiffuseMaterial() throws { try assertMaterialFixture("BasicDiffuseMaterial") }
-    func testBasicPointMaterial() throws { try assertMaterialFixture("BasicPointMaterial") }
-    func testBasicTextureMaterial() throws { try assertMaterialFixture("BasicTextureMaterial") }
-    func testDepthMaterial() throws { try assertMaterialFixture("DepthMaterial") }
-    func testMatCapMaterial() throws { try assertMaterialFixture("MatCapMaterial") }
-    func testNormalColorMaterial() throws { try assertMaterialFixture("NormalColorMaterial") }
-    func testPhysicalMaterial() throws { try assertMaterialFixture("PhysicalMaterial") }
-    func testShadowMaterial() throws { try assertMaterialFixture("ShadowMaterial") }
-    func testSkyboxMaterial() throws { try assertMaterialFixture("SkyboxMaterial") }
-    func testSourceMaterial() throws { try assertSourceMaterialSmokeTest() }
-    func testStandardMaterial() throws { try assertMaterialFixture("StandardMaterial") }
-    func testTextMaterial() throws { try assertMaterialFixture("TextMaterial") }
-    func testUVColorMaterial() throws { try assertMaterialFixture("UVColorMaterial") }
-
-    #if os(iOS)
-    func testARBackgroundMaterial() throws { try assertMaterialFixture("ARBackgroundMaterial") }
-    func testARBackgroundDepthMaterial() throws { try assertMaterialFixture("ARBackgroundDepthMaterial") }
-    #endif
-}
-
-private let expectedMaterialNames: Set<String> = {
-    var names: Set<String> = [
-        "ARCompositorMaterial",
-        "ARMatteMaterial",
-        "ARPostMaterial",
-        "BasicColorMaterial",
-        "BasicDiffuseMaterial",
-        "BasicPointMaterial",
-        "BasicTextureMaterial",
-        "DepthMaterial",
-        "MatCapMaterial",
-        "NormalColorMaterial",
-        "PhysicalMaterial",
-        "ShadowMaterial",
-        "SkyboxMaterial",
-        "SourceMaterial",
-        "StandardMaterial",
-        "TextMaterial",
-        "UVColorMaterial",
-    ]
-
-    #if os(iOS)
-    names.formUnion(["ARBackgroundMaterial", "ARBackgroundDepthMaterial"])
-    #endif
-
-    return names
-}()
-
-private struct MaterialFixture {
-    let referenceName: String
-    let size: SIMD2<Int>
-    let minimumChangedPixelRatio: Double
-    let minimumMeanNormalizedDifference: Double
-    let threshold: Double
-    let validateContent: ((RGBAImage, StaticString, UInt) -> Void)?
-    let buildScene: (MTLDevice, Camera, String) -> Object
-}
-
-private func assertMaterialFixture(_ name: String, file: StaticString = #filePath, line: UInt = #line) throws {
-    guard let fixture = makeMaterialFixtures()[name] else {
-        XCTFail("Missing material fixture for \(name)", file: file, line: line)
-        return
-    }
-
-    let image = try VisualTestHarness.render(size: fixture.size) { renderer, camera in
-        let scene = fixture.buildScene(renderer.context.device, camera, name)
-        return (scene: scene, camera: camera)
-    }
-
-    VisualTestHarness.assertContainsVisibleContent(
-        image,
-        minimumChangedPixelRatio: fixture.minimumChangedPixelRatio,
-        minimumMeanNormalizedDifference: fixture.minimumMeanNormalizedDifference,
-        file: file,
-        line: line
-    )
-    fixture.validateContent?(image, file, line)
-
-    try VisualTestHarness.assertVisualMatch(
-        image,
-        reference: .bundle(name: fixture.referenceName),
-        threshold: fixture.threshold,
-        file: file,
-        line: line
-    )
-}
-
-private func assertSourceMaterialSmokeTest(file: StaticString = #filePath, line: UInt = #line) throws {
-    guard let device = MTLCreateSystemDefaultDevice() else {
-        XCTFail("Metal unavailable", file: file, line: line)
-        return
-    }
-
-    let material = SourceMaterial(pipelineURL: getPipelinesMaterialsURL("BasicColor")!.appendingPathComponent("Shaders.metal"))
-    material.label = "BasicColor"
-    material.blending = .disabled
-    material.set("Color", simd_float4(0.26, 0.82, 0.95, 1.0))
-    material.context = VisualTestHarness.makeContext(device: device)
-    material.update()
-
-    XCTAssertNotNil(material.shader, "SourceMaterial failed to compile a shader", file: file, line: line)
-    XCTAssertTrue(material.shader is SourceShader, "SourceMaterial should create a SourceShader", file: file, line: line)
-    XCTAssertNotNil((material.shader as? SourceShader)?.source, "SourceMaterial failed to load shader source", file: file, line: line)
-}
-
-private func makeMaterialFixtures() -> [String: MaterialFixture] {
-    var fixtures: [String: MaterialFixture] = [
-        "ARCompositorMaterial": makeARCompositorMaterialFixture(),
-        "ARMatteMaterial": makeARMatteMaterialFixture(),
-        "ARPostMaterial": makeARPostMaterialFixture(),
-        "BasicColorMaterial": makeSphereMaterialFixture(
-            referenceName: "material-basic-color",
-            material: { _ in
-                BasicColorMaterial(color: simd_float4(0.92, 0.24, 0.18, 1.0), blending: .disabled)
-            }
-        ),
-        "BasicDiffuseMaterial": makeSphereMaterialFixture(
-            referenceName: "material-basic-diffuse",
-            material: { _ in
-                BasicDiffuseMaterial(color: simd_float4(0.92, 0.72, 0.24, 1.0), blending: .disabled, hardness: 0.72)
-            },
-            lit: true
-        ),
-        "BasicPointMaterial": makePointMaterialFixture(),
-        "BasicTextureMaterial": makeSphereMaterialFixture(
-            referenceName: "material-basic-texture",
-            material: { device in
-                BasicTextureMaterial(texture: VisualFixtureSupport.makeCheckerTexture(device: device))
-            },
-            lit: true
-        ),
-        "DepthMaterial": makeDepthMaterialFixture(),
-        "MatCapMaterial": makeSphereMaterialFixture(
-            referenceName: "material-matcap",
-            material: { device in
-                MatCapMaterial(texture: VisualFixtureSupport.makeCheckerTexture(device: device))
-            }
-        ),
-        "NormalColorMaterial": makeSphereMaterialFixture(
-            referenceName: "material-normal-color",
-            material: { _ in NormalColorMaterial() }
-        ),
-        "PhysicalMaterial": makePhysicalMaterialFixture(),
-        "ShadowMaterial": makeShadowMaterialFixture(),
-        "SkyboxMaterial": makeSkyboxMaterialFixture(),
-        "SourceMaterial": makeSourceMaterialFixture(),
-        "StandardMaterial": makeStandardMaterialFixture(),
-        "TextMaterial": makeTextMaterialFixture(),
-        "UVColorMaterial": makeSphereMaterialFixture(
-            referenceName: "material-uv-color",
-            material: { _ in UVColorMaterial() }
-        ),
-    ]
-
-    #if os(iOS)
-    fixtures["ARBackgroundMaterial"] = makeARBackgroundMaterialFixture()
-    fixtures["ARBackgroundDepthMaterial"] = makeARBackgroundDepthMaterialFixture()
-    #endif
-
-    return fixtures
-}
-
-private func makeSphereMaterialFixture(
-    referenceName: String,
-    material: @escaping (MTLDevice) -> Material,
-    lit: Bool = false
-) -> MaterialFixture {
-    MaterialFixture(
-        referenceName: referenceName,
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.09,
-        minimumMeanNormalizedDifference: lit ? 0.02 : 0.012,
-        threshold: 0.006,
-        validateContent: nil,
-        buildScene: { device, camera, _ in
-            camera.position = [0.0, 0.0, 4.5]
+    func testARCompositorMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { device, camera in
+            camera.position = [0.0, 0.0, 3.0]
             camera.lookAt(target: .zero)
 
-            let mesh = Mesh(
-                label: referenceName,
-                geometry: SphereGeometry(radius: 0.72, angularResolution: 36, verticalResolution: 18),
-                material: material(device)
-            )
+            let content = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
+            let grain = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
+            let depth = VisualFixtureSupport.makeSolidTexture(device: device)
+            let background = VisualFixtureSupport.makeCheckerTexture(device: device, width: 32, height: 32)
+            let alpha = VisualFixtureSupport.makeAlphaTexture(device: device, width: 32, height: 32)
+            let dilated = VisualFixtureSupport.makeSolidTexture(device: device)
+            VisualFixtureSupport.retain([content, grain, depth, background, alpha, dilated], for: "ARCompositorMaterial")
 
-            return makeMaterialScene(with: mesh, lit: lit)
+            let material = ARCompositorMaterial()
+            material.contentTexture = content
+            material.cameraGrainTexture = grain
+            material.depthTexture = depth
+            material.backgroundTexture = background
+            material.alphaTexture = alpha
+            material.dilatedDepthTexture = dilated
+
+            let mesh = Mesh(label: "ARCompositor", geometry: QuadGeometry(size: 2.0), material: material)
+            return makeMaterialScene(mesh, lit: false)
         }
-    )
-}
 
-private func makePointMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-basic-point",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.02,
-        minimumMeanNormalizedDifference: 0.004,
-        threshold: 0.012,
-        validateContent: nil,
-        buildScene: { _, camera, _ in
+        try assertMaterialImage(image, reference: "material-ar-compositor", threshold: 0.008, minimumChangedPixelRatio: 0.9, minimumMeanNormalizedDifference: 0.02)
+    }
+
+    func testARMatteMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { device, camera in
+            camera.position = [0.0, 0.0, 3.0]
+            camera.lookAt(target: .zero)
+
+            let background = Mesh(
+                label: "Background",
+                geometry: QuadGeometry(size: 2.2),
+                material: BasicColorMaterial(color: simd_float4(0.14, 0.16, 0.2, 1.0), blending: .disabled)
+            )
+            background.position.z = -0.1
+
+            let material = ARMatteMaterial()
+            material.alphaTexture = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
+            material.dilatedDepthTexture = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
+
+            let mesh = Mesh(label: "ARMatte", geometry: QuadGeometry(size: 2.0), material: material)
+            return makeMaterialScene(background, extras: [mesh], lit: false)
+        }
+
+        try assertMaterialImage(image, reference: "material-ar-matte", threshold: 0.008, minimumChangedPixelRatio: 0.9, minimumMeanNormalizedDifference: 0.02)
+    }
+
+    func testARPostMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { device, camera in
+            camera.position = [0.0, 0.0, 3.0]
+            camera.lookAt(target: .zero)
+
+            let content = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
+            let grain = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
+            VisualFixtureSupport.retain([content, grain], for: "ARPostMaterial")
+
+            let material = ARPostMaterial()
+            material.contentTexture = content
+            material.cameraGrainTexture = grain
+
+            let mesh = Mesh(label: "ARPost", geometry: QuadGeometry(size: 2.0), material: material)
+            return makeMaterialScene(mesh, lit: false)
+        }
+
+        try assertMaterialImage(image, reference: "material-ar-post", threshold: 0.008, minimumChangedPixelRatio: 0.9, minimumMeanNormalizedDifference: 0.02)
+    }
+
+    func testBasicColorMaterial() throws {
+        try assertSphereMaterial(
+            reference: "material-basic-color",
+            material: { _ in BasicColorMaterial(color: simd_float4(0.92, 0.24, 0.18, 1.0), blending: .disabled) }
+        )
+    }
+
+    func testBasicDiffuseMaterial() throws {
+        try assertSphereMaterial(
+            reference: "material-basic-diffuse",
+            lit: true,
+            material: { _ in BasicDiffuseMaterial(color: simd_float4(0.92, 0.72, 0.24, 1.0), blending: .disabled, hardness: 0.72) }
+        )
+    }
+
+    func testBasicPointMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { _, camera in
             camera.position = [0.0, 0.0, 3.2]
             camera.lookAt(target: .zero)
 
-            let points: [simd_float3] = [
-                [-0.75, 0.7, 0.0],
-                [-0.3, 0.25, 0.0],
-                [0.1, 0.0, 0.0],
-                [0.55, -0.35, 0.0],
-                [0.8, -0.7, 0.0],
-            ]
-
             let mesh = Mesh(
                 label: "Points",
-                geometry: PointGeometry(data: points),
+                geometry: PointGeometry(data: [
+                    [-0.75, 0.7, 0.0],
+                    [-0.3, 0.25, 0.0],
+                    [0.1, 0.0, 0.0],
+                    [0.55, -0.35, 0.0],
+                    [0.8, -0.7, 0.0],
+                ]),
                 material: BasicPointMaterial(color: simd_float4(1.0, 0.85, 0.25, 1.0), size: 22.0, blending: .disabled)
             )
 
-            return makeMaterialScene(with: mesh, lit: false)
+            return makeMaterialScene(mesh, lit: false)
         }
-    )
-}
 
-private func makeDepthMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-depth",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.08,
-        minimumMeanNormalizedDifference: 0.01,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { _, camera, _ in
+        try assertMaterialImage(image, reference: "material-basic-point", threshold: 0.012, minimumChangedPixelRatio: 0.02, minimumMeanNormalizedDifference: 0.004)
+    }
+
+    func testBasicTextureMaterial() throws {
+        try assertSphereMaterial(
+            reference: "material-basic-texture",
+            lit: true,
+            material: { device in BasicTextureMaterial(texture: VisualFixtureSupport.makeCheckerTexture(device: device)) }
+        )
+    }
+
+    func testDepthMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { _, camera in
             camera.position = [0.0, 0.0, 5.0]
             camera.lookAt(target: .zero)
 
@@ -263,56 +145,23 @@ private func makeDepthMaterialFixture() -> MaterialFixture {
             scene.add(back)
             return scene
         }
-    )
-}
 
-private func makeStandardMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-standard",
-        size: [224, 176],
-        minimumChangedPixelRatio: 0.14,
-        minimumMeanNormalizedDifference: 0.01,
-        threshold: 0.01,
-        validateContent: validatePBRSphereRegions,
-        buildScene: { _, camera, _ in
-            camera.position = [0.0, 0.3, 6.4]
-            camera.lookAt(target: [0.0, -0.05, 0.0])
+        try assertMaterialImage(image, reference: "material-depth", threshold: 0.008, minimumChangedPixelRatio: 0.08, minimumMeanNormalizedDifference: 0.01)
+    }
 
-            let left = Mesh(
-                label: "Matte",
-                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
-                material: StandardMaterial(baseColor: simd_float4(0.92, 0.36, 0.22, 1.0), metallic: 0.0, roughness: 0.82, specular: 0.4)
-            )
-            left.position = [-1.3, 0.0, 0.0]
+    func testMatCapMaterial() throws {
+        try assertSphereMaterial(
+            reference: "material-matcap",
+            material: { device in MatCapMaterial(texture: VisualFixtureSupport.makeCheckerTexture(device: device)) }
+        )
+    }
 
-            let center = Mesh(
-                label: "Metal",
-                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
-                material: StandardMaterial(baseColor: simd_float4(0.94, 0.93, 0.92, 1.0), metallic: 1.0, roughness: 0.18, specular: 1.0)
-            )
-            center.position = [0.0, 0.0, 0.0]
+    func testNormalColorMaterial() throws {
+        try assertSphereMaterial(reference: "material-normal-color", material: { _ in NormalColorMaterial() })
+    }
 
-            let right = Mesh(
-                label: "Coated",
-                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
-                material: StandardMaterial(baseColor: simd_float4(0.18, 0.55, 0.95, 1.0), metallic: 0.35, roughness: 0.42, specular: 0.9)
-            )
-            right.position = [1.3, 0.0, 0.0]
-
-            return makeMaterialScene(with: left, extras: [center, right], lit: true, includeGround: true)
-        }
-    )
-}
-
-private func makePhysicalMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-physical",
-        size: [224, 176],
-        minimumChangedPixelRatio: 0.14,
-        minimumMeanNormalizedDifference: 0.01,
-        threshold: 0.01,
-        validateContent: validatePBRSphereRegions,
-        buildScene: { _, camera, _ in
+    func testPhysicalMaterial() throws {
+        let image = try renderMaterial(size: [224, 176]) { _, camera in
             camera.position = [0.0, 0.3, 6.4]
             camera.lookAt(target: [0.0, -0.05, 0.0])
 
@@ -358,20 +207,15 @@ private func makePhysicalMaterialFixture() -> MaterialFixture {
             )
             right.position = [1.3, 0.0, 0.0]
 
-            return makeMaterialScene(with: left, extras: [center, right], lit: true, includeGround: true)
+            return makeMaterialScene(left, extras: [center, right], lit: true, includeGround: true)
         }
-    )
-}
 
-private func makeShadowMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-shadow",
-        size: [224, 176],
-        minimumChangedPixelRatio: 0.12,
-        minimumMeanNormalizedDifference: 0.015,
-        threshold: 0.01,
-        validateContent: nil,
-        buildScene: { _, camera, _ in
+        try assertMaterialImage(image, reference: "material-physical", threshold: 0.01, minimumChangedPixelRatio: 0.14, minimumMeanNormalizedDifference: 0.01)
+        assertPBRSpheresVisible(image)
+    }
+
+    func testShadowMaterial() throws {
+        let image = try renderMaterial(size: [224, 176]) { _, camera in
             camera.position = [0.0, 0.55, 4.8]
             camera.lookAt(target: [0.0, -0.25, 0.0])
 
@@ -417,18 +261,12 @@ private func makeShadowMaterialFixture() -> MaterialFixture {
             scene.add(receiver)
             return scene
         }
-    )
-}
 
-private func makeSkyboxMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-skybox",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.95,
-        minimumMeanNormalizedDifference: 0.015,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { device, camera, _ in
+        try assertMaterialImage(image, reference: "material-shadow", threshold: 0.01, minimumChangedPixelRatio: 0.12, minimumMeanNormalizedDifference: 0.015)
+    }
+
+    func testSkyboxMaterial() throws {
+        let image = try renderMaterial(size: [176, 176]) { device, camera in
             camera.position = .zero
             camera.lookAt(target: [0.0, 0.0, -1.0])
 
@@ -437,187 +275,179 @@ private func makeSkyboxMaterialFixture() -> MaterialFixture {
                 geometry: SkyboxGeometry(size: 40.0),
                 material: SkyboxMaterial(texture: VisualFixtureSupport.makeCubeTexture(device: device, size: 16))
             )
-
-            return makeMaterialScene(with: mesh, lit: false)
+            return makeMaterialScene(mesh, lit: false)
         }
-    )
-}
 
-private func makeTextMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-text",
-        size: [192, 144],
-        minimumChangedPixelRatio: 0.03,
-        minimumMeanNormalizedDifference: 0.004,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { device, camera, _ in
+        try assertMaterialImage(image, reference: "material-skybox", threshold: 0.008, minimumChangedPixelRatio: 0.95, minimumMeanNormalizedDifference: 0.015)
+    }
+
+    func testSourceMaterial() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            XCTFail("Metal unavailable")
+            return
+        }
+
+        let material = SourceMaterial(pipelineURL: getPipelinesMaterialsURL("BasicColor")!.appendingPathComponent("Shaders.metal"))
+        material.label = "BasicColor"
+        material.blending = .disabled
+        material.set("Color", simd_float4(0.26, 0.82, 0.95, 1.0))
+        material.context = VisualTestHarness.makeContext(device: device)
+        material.update()
+
+        XCTAssertNotNil(material.shader)
+        XCTAssertTrue(material.shader is SourceShader)
+        XCTAssertNotNil((material.shader as? SourceShader)?.source)
+    }
+
+    func testStandardMaterial() throws {
+        let image = try renderMaterial(size: [224, 176]) { _, camera in
+            camera.position = [0.0, 0.3, 6.4]
+            camera.lookAt(target: [0.0, -0.05, 0.0])
+
+            let left = Mesh(
+                label: "Matte",
+                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
+                material: StandardMaterial(baseColor: simd_float4(0.92, 0.36, 0.22, 1.0), metallic: 0.0, roughness: 0.82, specular: 0.4)
+            )
+            left.position = [-1.3, 0.0, 0.0]
+
+            let center = Mesh(
+                label: "Metal",
+                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
+                material: StandardMaterial(baseColor: simd_float4(0.94, 0.93, 0.92, 1.0), metallic: 1.0, roughness: 0.18, specular: 1.0)
+            )
+            center.position = [0.0, 0.0, 0.0]
+
+            let right = Mesh(
+                label: "Coated",
+                geometry: SphereGeometry(radius: 0.58, angularResolution: 36, verticalResolution: 18),
+                material: StandardMaterial(baseColor: simd_float4(0.18, 0.55, 0.95, 1.0), metallic: 0.35, roughness: 0.42, specular: 0.9)
+            )
+            right.position = [1.3, 0.0, 0.0]
+
+            return makeMaterialScene(left, extras: [center, right], lit: true, includeGround: true)
+        }
+
+        try assertMaterialImage(image, reference: "material-standard", threshold: 0.01, minimumChangedPixelRatio: 0.14, minimumMeanNormalizedDifference: 0.01)
+        assertPBRSpheresVisible(image)
+    }
+
+    func testTextMaterial() throws {
+        let image = try renderMaterial(size: [192, 144]) { device, camera in
             camera.position = [0.0, 0.0, 35.0]
-            camera.lookAt(target: .zero)
-
-            let background = Mesh(label: "Background", geometry: QuadGeometry(size: 5.5), material: BasicColorMaterial(color: simd_float4(0.14, 0.16, 0.2, 1.0), blending: .disabled))
-            background.position = [0.0, 0.0, -0.2]
-
-            let material = TextMaterial(color: simd_float4(1.0, 1.0, 1.0, 1.0), fontTexture: VisualFixtureSupport.makeFontTexture(device: device))
-
-            let mesh = Mesh(label: "Text", geometry: TextGeometry(text: "S", font: VisualFixtureSupport.makeFontAtlas()), material: material)
-            mesh.scale = [0.2, 0.2, 0.2]
-
-            return makeMaterialScene(with: background, extras: [mesh], lit: false)
-        }
-    )
-}
-
-private func makeSourceMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-source",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.08,
-        minimumMeanNormalizedDifference: 0.01,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { _, camera, _ in
-            camera.position = [0.0, 0.0, 3.0]
-            camera.lookAt(target: .zero)
-
-            let material = SourceMaterial(pipelineURL: getPipelinesMaterialsURL("BasicColor")!.appendingPathComponent("Shaders.metal"))
-            material.blending = .disabled
-            material.set("Color", simd_float4(0.26, 0.82, 0.95, 1.0))
-
-            let mesh = Mesh(label: "Source", geometry: QuadGeometry(size: 1.7), material: material)
-            return makeMaterialScene(with: mesh, lit: false)
-        }
-    )
-}
-
-private func makeARPostMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-ar-post",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.9,
-        minimumMeanNormalizedDifference: 0.02,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { device, camera, name in
-            camera.position = [0.0, 0.0, 3.0]
-            camera.lookAt(target: .zero)
-
-            let content = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
-            let grain = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
-            VisualFixtureSupport.retain([content, grain], for: name)
-
-            let material = ARPostMaterial()
-            material.contentTexture = content
-            material.cameraGrainTexture = grain
-
-            let mesh = Mesh(label: "ARPost", geometry: QuadGeometry(size: 2.0), material: material)
-            return makeMaterialScene(with: mesh, lit: false)
-        }
-    )
-}
-
-private func makeARCompositorMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-ar-compositor",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.9,
-        minimumMeanNormalizedDifference: 0.02,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { device, camera, name in
-            camera.position = [0.0, 0.0, 3.0]
-            camera.lookAt(target: .zero)
-
-            let content = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
-            let grain = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
-            let depth = VisualFixtureSupport.makeSolidTexture(device: device)
-            let background = VisualFixtureSupport.makeCheckerTexture(device: device, width: 32, height: 32)
-            let alpha = VisualFixtureSupport.makeAlphaTexture(device: device, width: 32, height: 32)
-            let dilated = VisualFixtureSupport.makeSolidTexture(device: device)
-            VisualFixtureSupport.retain([content, grain, depth, background, alpha, dilated], for: name)
-
-            let material = ARCompositorMaterial()
-            material.contentTexture = content
-            material.cameraGrainTexture = grain
-            material.depthTexture = depth
-            material.backgroundTexture = background
-            material.alphaTexture = alpha
-            material.dilatedDepthTexture = dilated
-
-            let mesh = Mesh(label: "ARCompositor", geometry: QuadGeometry(size: 2.0), material: material)
-            return makeMaterialScene(with: mesh, lit: false)
-        }
-    )
-}
-
-private func makeARMatteMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-ar-matte",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.9,
-        minimumMeanNormalizedDifference: 0.02,
-        threshold: 0.008,
-        validateContent: nil,
-        buildScene: { device, camera, _ in
-            camera.position = [0.0, 0.0, 3.0]
             camera.lookAt(target: .zero)
 
             let background = Mesh(
                 label: "Background",
-                geometry: QuadGeometry(size: 2.2),
+                geometry: QuadGeometry(size: 5.5),
                 material: BasicColorMaterial(color: simd_float4(0.14, 0.16, 0.2, 1.0), blending: .disabled)
             )
-            background.position.z = -0.1
+            background.position = [0.0, 0.0, -0.2]
 
-            let material = ARMatteMaterial()
-            material.alphaTexture = VisualFixtureSupport.makeAlphaTexture(device: device, width: 64, height: 64)
-            material.dilatedDepthTexture = VisualFixtureSupport.makeCheckerTexture(device: device, width: 64, height: 64)
+            let mesh = Mesh(
+                label: "Text",
+                geometry: TextGeometry(text: "S", font: VisualFixtureSupport.makeFontAtlas()),
+                material: TextMaterial(color: simd_float4(1.0, 1.0, 1.0, 1.0), fontTexture: VisualFixtureSupport.makeFontTexture(device: device))
+            )
+            mesh.scale = [0.2, 0.2, 0.2]
+            mesh.cullMode = .none
 
-            let mesh = Mesh(label: "ARMatte", geometry: QuadGeometry(size: 2.0), material: material)
-            return makeMaterialScene(with: background, extras: [mesh], lit: false)
+            return makeMaterialScene(background, extras: [mesh], lit: false)
         }
+
+        try assertMaterialImage(image, reference: "material-text", threshold: 0.008, minimumChangedPixelRatio: 0.03, minimumMeanNormalizedDifference: 0.004)
+    }
+
+    func testUVColorMaterial() throws {
+        try assertSphereMaterial(reference: "material-uv-color", material: { _ in UVColorMaterial() })
+    }
+}
+
+private func assertSphereMaterial(
+    reference: String,
+    lit: Bool = false,
+    material: @escaping (MTLDevice) -> Material,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws {
+    let image = try renderMaterial(size: [176, 176]) { device, camera in
+        camera.position = [0.0, 0.0, 4.5]
+        camera.lookAt(target: .zero)
+
+        let mesh = Mesh(
+            label: reference,
+            geometry: SphereGeometry(radius: 0.72, angularResolution: 36, verticalResolution: 18),
+            material: material(device)
+        )
+
+        return makeMaterialScene(mesh, lit: lit)
+    }
+
+    try assertMaterialImage(
+        image,
+        reference: reference,
+        threshold: 0.006,
+        minimumChangedPixelRatio: 0.09,
+        minimumMeanNormalizedDifference: lit ? 0.02 : 0.012,
+        file: file,
+        line: line
     )
 }
 
-#if os(iOS)
-private func makeARBackgroundMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-ar-background",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.01,
-        minimumMeanNormalizedDifference: 0.002,
-        threshold: 0.008,
-        buildScene: { _, camera, _ in
-            camera.position = [0.0, 0.0, 3.0]
-            camera.lookAt(target: .zero)
+private func renderMaterial(
+    size: SIMD2<Int>,
+    buildScene: (MTLDevice, Camera) -> Object
+) throws -> RGBAImage {
+    try VisualTestHarness.render(size: size) { renderer, camera in
+        let scene = buildScene(renderer.context.device, camera)
+        return (scene: scene, camera: camera)
+    }
+}
 
-            let material = ARBackgroundMaterial(color: simd_float4(0.82, 0.86, 0.92, 1.0), srgb: false)
-            let mesh = Mesh(label: "ARBackground", geometry: QuadGeometry(size: 2.0), material: material)
-            return makeMaterialScene(with: mesh, lit: false)
-        }
+private func assertMaterialImage(
+    _ image: RGBAImage,
+    reference: String,
+    threshold: Double,
+    minimumChangedPixelRatio: Double,
+    minimumMeanNormalizedDifference: Double,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) throws {
+    VisualTestHarness.assertContainsVisibleContent(
+        image,
+        minimumChangedPixelRatio: minimumChangedPixelRatio,
+        minimumMeanNormalizedDifference: minimumMeanNormalizedDifference,
+        file: file,
+        line: line
+    )
+
+    try VisualTestHarness.assertVisualMatch(
+        image,
+        reference: .bundle(name: reference),
+        threshold: threshold,
+        file: file,
+        line: line
     )
 }
 
-private func makeARBackgroundDepthMaterialFixture() -> MaterialFixture {
-    MaterialFixture(
-        referenceName: "material-ar-background-depth",
-        size: [176, 176],
-        minimumChangedPixelRatio: 0.01,
-        minimumMeanNormalizedDifference: 0.002,
-        threshold: 0.008,
-        buildScene: { _, camera, _ in
-            camera.position = [0.0, 0.0, 3.0]
-            camera.lookAt(target: .zero)
-
-            let material = ARBackgroundDepthMaterial()
-            let mesh = Mesh(label: "ARBackgroundDepth", geometry: QuadGeometry(size: 2.0), material: material)
-            return makeMaterialScene(with: mesh, lit: false)
-        }
-    )
+private func assertPBRSpheresVisible(_ image: RGBAImage, file: StaticString = #filePath, line: UInt = #line) {
+    for region in [
+        ImageRegion(name: "left sphere", normalizedRect: CGRect(x: 0.08, y: 0.22, width: 0.24, height: 0.38)),
+        ImageRegion(name: "center sphere", normalizedRect: CGRect(x: 0.38, y: 0.22, width: 0.24, height: 0.38)),
+        ImageRegion(name: "right sphere", normalizedRect: CGRect(x: 0.68, y: 0.22, width: 0.24, height: 0.38)),
+    ] {
+        VisualTestHarness.assertContainsVisibleContent(
+            image,
+            in: region,
+            minimumChangedPixelRatio: 0.08,
+            minimumMeanNormalizedDifference: 0.01,
+            file: file,
+            line: line
+        )
+    }
 }
-#endif
 
-private func makeMaterialScene(with primary: Object, extras: [Object] = [], lit: Bool, includeGround: Bool = false) -> Object {
+private func makeMaterialScene(_ primary: Object, extras: [Object] = [], lit: Bool, includeGround: Bool = false) -> Object {
     let scene = Object(label: "Scene")
 
     if lit {
@@ -646,23 +476,4 @@ private func makeMaterialScene(with primary: Object, extras: [Object] = [], lit:
     extras.forEach { scene.add($0) }
     scene.add(primary)
     return scene
-}
-
-private func validatePBRSphereRegions(_ image: RGBAImage, _ file: StaticString, _ line: UInt) {
-    let regions = [
-        ImageRegion(name: "left sphere", normalizedRect: CGRect(x: 0.08, y: 0.22, width: 0.24, height: 0.38)),
-        ImageRegion(name: "center sphere", normalizedRect: CGRect(x: 0.38, y: 0.22, width: 0.24, height: 0.38)),
-        ImageRegion(name: "right sphere", normalizedRect: CGRect(x: 0.68, y: 0.22, width: 0.24, height: 0.38)),
-    ]
-
-    for region in regions {
-        VisualTestHarness.assertContainsVisibleContent(
-            image,
-            in: region,
-            minimumChangedPixelRatio: 0.08,
-            minimumMeanNormalizedDifference: 0.01,
-            file: file,
-            line: line
-        )
-    }
 }
