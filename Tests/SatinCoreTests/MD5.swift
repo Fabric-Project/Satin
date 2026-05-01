@@ -8,7 +8,6 @@
 import CryptoKit
 import Foundation
 
-import Satin
 #if SWIFT_PACKAGE
 import SatinCore
 #endif

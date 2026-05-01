@@ -8,9 +8,9 @@
 #if SWIFT_PACKAGE
 import SatinCore
 #else
-import Satin
 #endif
 
+import Satin
 import simd
 import XCTest
 
