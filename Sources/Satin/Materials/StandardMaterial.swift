@@ -120,6 +120,9 @@ open class StandardMaterial: Material {
                 sampler.minFilter = .linear
                 sampler.magFilter = .linear
                 sampler.mipFilter = .linear
+                sampler.rAddressMode = .repeat
+                sampler.sAddressMode = .repeat
+                sampler.tAddressMode = .repeat
                 setSampler(sampler, type: type)
             }
         } else {
