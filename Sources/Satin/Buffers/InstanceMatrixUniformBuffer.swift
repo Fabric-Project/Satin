@@ -42,8 +42,8 @@ public final class InstanceMatrixUniformBuffer {
 
         // Optional but HIGHLY recommended debug check:
         precondition(offset + bytes <= buffer.length, "InstanceMatrixUniformBuffer overflow")
-
-        data.withUnsafeBytes { dataPtr in
+        
+        let _ = data.withUnsafeBytes { dataPtr in
             memcpy(buffer.contents().advanced(by: offset),
                    dataPtr.baseAddress!,
                    bytes)
