@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B1673802FA3D0C500772DA2 /* PBRMRTSponzaRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B16737F2FA3D0C500772DA2 /* PBRMRTSponzaRendererView.swift */; };
+		9F30A001310A000100000001 /* PBRMRTSponzaRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F30A002310A000100000001 /* PBRMRTSponzaRenderer.swift */; };
+		A1B2C3D42E7F000100000001 /* PBRMRTRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */; };
+		A1B2C3D52E7F000100000001 /* PBRMRTRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */; };
+		BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000002BB000002BB000002 /* MotionBlurRenderer.swift */; };
+		BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BB000004BB000004 /* MotionBlurRendererView.swift */; };
+		D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */; };
+		D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */; };
+		D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */; };
+		D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */; };
 		E102D07E2C8A129700DD255C /* ImmersiveBaseRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E102D07D2C8A129700DD255C /* ImmersiveBaseRenderer.swift */; };
 		E103E0532B5DDEDF0017588F /* VisionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E103E0522B5DDEDF0017588F /* VisionsView.swift */; };
 		E103E0DC2B5F41570017588F /* Renderer3D.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F1B32724BAA93300563923 /* Renderer3D.swift */; };
@@ -28,11 +38,9 @@
 		E103E10D2B603DBD0017588F /* ARPointCloudRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1077F4C2A096ABD00C2FB89 /* ARPointCloudRenderer.swift */; };
 		E103E10E2B603DBD0017588F /* ARPeopleOcclusionRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14C122E29E5D67A009D3C8C /* ARPeopleOcclusionRenderer.swift */; };
 		E103E1102B603DE30017588F /* SDFTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C967742B409E1E00271541 /* SDFTextRenderer.swift */; };
-		F0B200012E06000100AAA001 /* SlugTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA001 /* SlugTextRenderer.swift */; };
 		E103E1112B603DE30017588F /* TextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F1B32324BAA91F00563923 /* TextRenderer.swift */; };
 		E103E1122B603DE30017588F /* ExtrudedTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E182809B24C52061000810D1 /* ExtrudedTextRenderer.swift */; };
 		E103E1132B603DEA0017588F /* SDFTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C967772B409E7E00271541 /* SDFTextRendererView.swift */; };
-		F0B200012E06000100AAA002 /* SlugTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA002 /* SlugTextRendererView.swift */; };
 		E103E1142B603DEA0017588F /* ExtrudedTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767C328A6D41B005D75AB /* ExtrudedTextRendererView.swift */; };
 		E103E1152B603DEA0017588F /* TextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767C828A6D41B005D75AB /* TextRendererView.swift */; };
 		E103E1162B603E210017588F /* FlockingRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E7685028ADAF6F005D75AB /* FlockingRenderer.swift */; };
@@ -69,13 +77,11 @@
 		E103E1392B603FC50017588F /* PBRSubmeshRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */; };
 		E103E13A2B603FC50017588F /* PBRStandardMaterialRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */; };
 		E103E13B2B603FC50017588F /* PBRRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E168FC76248ECCA2004B8407 /* PBRRenderer.swift */; };
-		A1B2C3D42E7F000100000001 /* PBRMRTRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */; };
 		E103E13C2B603FCA0017588F /* PBRStandardMaterialRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A1EDA291EFB1D00A71453 /* PBRStandardMaterialRendererView.swift */; };
 		E103E13D2B603FCA0017588F /* PBRSubmeshRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F7529BBB01D00A934A0 /* PBRSubmeshRendererView.swift */; };
 		E103E13E2B603FCA0017588F /* PBRCustomizationRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */; };
 		E103E13F2B603FCA0017588F /* PBREnhancedRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1EB6DE929690DD90029E4FC /* PBREnhancedRendererView.swift */; };
 		E103E1402B603FCA0017588F /* PBRRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E7680228A72E50005D75AB /* PBRRendererView.swift */; };
-		A1B2C3D52E7F000100000001 /* PBRMRTRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */; };
 		E103E1412B603FF40017588F /* PostProcessingRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767F128A6F43C005D75AB /* PostProcessingRendererView.swift */; };
 		E103E1422B603FF40017588F /* FXAARendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1E767FD28A6FCBC005D75AB /* FXAARendererView.swift */; };
 		E103E1432B603FF70017588F /* DirectionalShadowRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F6E29BAB0A000A934A0 /* DirectionalShadowRendererView.swift */; };
@@ -169,12 +175,6 @@
 		E1DDD35D2C3105F100012A44 /* JumpFloodOutlineRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DDD35C2C3105F100012A44 /* JumpFloodOutlineRendererView.swift */; };
 		E1DEB76D2C8659B400D58D21 /* BloomRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */; };
 		E1DEB7702C8659D700D58D21 /* BloomRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */; };
-		BB000001BB000001BB000001 /* MotionBlurRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000002BB000002BB000002 /* MotionBlurRenderer.swift */; };
-		BB000003BB000003BB000003 /* MotionBlurRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000004BB000004BB000004 /* MotionBlurRendererView.swift */; };
-		D2B200212F9A000100AAA001 /* SSGICornellBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */; };
-		D2B200222F9A000100AAA001 /* SSGICornellBoxRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */; };
-		D2B200112F9A000100AAA001 /* SSGIProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */; };
-		D2B200122F9A000100AAA001 /* SSGIProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */; };
 		E1E767D928A6D808005D75AB /* Assets in Resources */ = {isa = PBXBuildFile; fileRef = E1E767D828A6D808005D75AB /* Assets */; };
 		E1E767E228A6E84A005D75AB /* TorusKnotGenerator.c in Sources */ = {isa = PBXBuildFile; fileRef = E192F05D24874CE700C7EE74 /* TorusKnotGenerator.c */; };
 		E1E7681328A736BB005D75AB /* AudioInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = E17D2C1126BBB7DF005A136A /* AudioInput.swift */; };
@@ -185,6 +185,8 @@
 		F0A200012E05000100AAA002 /* SpotShadowRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A200012E05000200AAA002 /* SpotShadowRendererView.swift */; };
 		F0A300012E05000100AAA001 /* ProjectorRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A300012E05000200AAA001 /* ProjectorRenderer.swift */; };
 		F0A300012E05000100AAA002 /* ProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A300012E05000200AAA002 /* ProjectorRendererView.swift */; };
+		F0B200012E06000100AAA001 /* SlugTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA001 /* SlugTextRenderer.swift */; };
+		F0B200012E06000100AAA002 /* SlugTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA002 /* SlugTextRendererView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -219,6 +221,16 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1B16737F2FA3D0C500772DA2 /* PBRMRTSponzaRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTSponzaRendererView.swift; sourceTree = "<group>"; };
+		9F30A002310A000100000001 /* PBRMRTSponzaRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTSponzaRenderer.swift; sourceTree = "<group>"; };
+		A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRenderer.swift; sourceTree = "<group>"; };
+		A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRendererView.swift; sourceTree = "<group>"; };
+		BB000002BB000002BB000002 /* MotionBlurRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRenderer.swift; sourceTree = "<group>"; };
+		BB000004BB000004BB000004 /* MotionBlurRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRendererView.swift; sourceTree = "<group>"; };
+		D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRenderer.swift; sourceTree = "<group>"; };
+		D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRendererView.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRenderer.swift; sourceTree = "<group>"; };
+		D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRendererView.swift; sourceTree = "<group>"; };
 		E102D07D2C8A129700DD255C /* ImmersiveBaseRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveBaseRenderer.swift; sourceTree = "<group>"; };
 		E103E0522B5DDEDF0017588F /* VisionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionsView.swift; sourceTree = "<group>"; };
 		E105CC36252BDE7F009EE563 /* FXAARenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FXAARenderer.swift; sourceTree = "<group>"; };
@@ -226,8 +238,6 @@
 		E1077F4E2A096B0900C2FB89 /* ARPointCloudRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARPointCloudRendererView.swift; sourceTree = "<group>"; };
 		E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRCustomizationRenderer.swift; sourceTree = "<group>"; };
 		E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRCustomizationRendererView.swift; sourceTree = "<group>"; };
-		A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRenderer.swift; sourceTree = "<group>"; };
-		A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRMRTRendererView.swift; sourceTree = "<group>"; };
 		E10E2FD529C508EC00C4EAFF /* MeshShaderRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshShaderRenderer.swift; sourceTree = "<group>"; };
 		E10E2FD729C5092700C4EAFF /* MeshShaderRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeshShaderRendererView.swift; sourceTree = "<group>"; };
 		E11325C828ADC4520049CACC /* CustomInstancingRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomInstancingRenderer.swift; sourceTree = "<group>"; };
@@ -304,8 +314,6 @@
 		E1BCF33F29DA3C210076C163 /* TessellationRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TessellationRendererView.swift; sourceTree = "<group>"; };
 		E1C967742B409E1E00271541 /* SDFTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDFTextRenderer.swift; sourceTree = "<group>"; };
 		E1C967772B409E7E00271541 /* SDFTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDFTextRendererView.swift; sourceTree = "<group>"; };
-		F0B200012E06000200AAA001 /* SlugTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRenderer.swift; sourceTree = "<group>"; };
-		F0B200012E06000200AAA002 /* SlugTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRendererView.swift; sourceTree = "<group>"; };
 		E1CC09892489751A00B92285 /* CustomGeometryRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomGeometryRenderer.swift; sourceTree = "<group>"; };
 		E1CC099D2489797300B92285 /* Example-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Example-Bridging-Header.h"; sourceTree = "<group>"; };
 		E1CC099E2489797300B92285 /* IcosahedronGenerator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = IcosahedronGenerator.h; sourceTree = "<group>"; };
@@ -353,12 +361,6 @@
 		E1DDD35C2C3105F100012A44 /* JumpFloodOutlineRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpFloodOutlineRendererView.swift; sourceTree = "<group>"; };
 		E1DEB76C2C8659B400D58D21 /* BloomRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomRenderer.swift; sourceTree = "<group>"; };
 		E1DEB76F2C8659D700D58D21 /* BloomRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloomRendererView.swift; sourceTree = "<group>"; };
-		BB000002BB000002BB000002 /* MotionBlurRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRenderer.swift; sourceTree = "<group>"; };
-		BB000004BB000004BB000004 /* MotionBlurRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurRendererView.swift; sourceTree = "<group>"; };
-		D2B200202F9A000100AAA001 /* SSGICornellBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRenderer.swift; sourceTree = "<group>"; };
-		D2B200202F9A000100AAA002 /* SSGICornellBoxRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGICornellBoxRendererView.swift; sourceTree = "<group>"; };
-		D2B200012F9A000100AAA001 /* SSGIProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRenderer.swift; sourceTree = "<group>"; };
-		D2B200022F9A000100AAA001 /* SSGIProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSGIProjectorRendererView.swift; sourceTree = "<group>"; };
 		E1E69D1624A4711E00EDA686 /* DepthMaterialRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthMaterialRenderer.swift; sourceTree = "<group>"; };
 		E1E767BE28A6D2A2005D75AB /* Renderer3DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer3DView.swift; sourceTree = "<group>"; };
 		E1E767C128A6D341005D75AB /* Renderer2DView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Renderer2DView.swift; sourceTree = "<group>"; };
@@ -403,6 +405,8 @@
 		F0A200012E05000200AAA002 /* SpotShadowRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadowRendererView.swift; sourceTree = "<group>"; };
 		F0A300012E05000200AAA001 /* ProjectorRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectorRenderer.swift; sourceTree = "<group>"; };
 		F0A300012E05000200AAA002 /* ProjectorRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectorRendererView.swift; sourceTree = "<group>"; };
+		F0B200012E06000200AAA001 /* SlugTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRenderer.swift; sourceTree = "<group>"; };
+		F0B200012E06000200AAA002 /* SlugTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRendererView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -575,6 +579,7 @@
 				E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */,
 				E1EB6DE929690DD90029E4FC /* PBREnhancedRendererView.swift */,
 				A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */,
+				1B16737F2FA3D0C500772DA2 /* PBRMRTSponzaRendererView.swift */,
 				E1E7680228A72E50005D75AB /* PBRRendererView.swift */,
 				E18A1EDA291EFB1D00A71453 /* PBRStandardMaterialRendererView.swift */,
 			);
@@ -792,6 +797,7 @@
 				E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */,
 				E1EB6DE729690C5B0029E4FC /* PBREnhancedRenderer.swift */,
 				A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */,
+				9F30A002310A000100000001 /* PBRMRTSponzaRenderer.swift */,
 				E168FC76248ECCA2004B8407 /* PBRRenderer.swift */,
 				E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */,
 			);
@@ -1051,6 +1057,7 @@
 				E103E0532B5DDEDF0017588F /* VisionsView.swift in Sources */,
 				E103E13A2B603FC50017588F /* PBRStandardMaterialRenderer.swift in Sources */,
 				A1B2C3D42E7F000100000001 /* PBRMRTRenderer.swift in Sources */,
+				9F30A001310A000100000001 /* PBRMRTSponzaRenderer.swift in Sources */,
 				E103E1282B603E7C0017588F /* CubemapRendererView.swift in Sources */,
 				E11325D028AEAEB50049CACC /* SuperShapeGenerator.c in Sources */,
 				E103E1482B6040010017588F /* BufferGeometryRendererView.swift in Sources */,
@@ -1163,6 +1170,7 @@
 				E103E1302B603ED30017588F /* ExportGeometryRenderer.swift in Sources */,
 				E103E1262B603E7C0017588F /* LiveCodeRendererView.swift in Sources */,
 				E1D2253B2D068A2C00CFEA24 /* RadianceCascadesRendererView.swift in Sources */,
+				1B1673802FA3D0C500772DA2 /* PBRMRTSponzaRendererView.swift in Sources */,
 				E1D43BC62C65855A0063E2C9 /* InspectorViewController.swift in Sources */,
 				E1903C112B6046B4004AB175 /* ARLidarMeshRendererView.swift in Sources */,
 				E1D43BC32C65855A0063E2C9 /* MultiNumberInputViewController.swift in Sources */,

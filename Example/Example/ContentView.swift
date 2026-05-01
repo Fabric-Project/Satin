@@ -37,7 +37,7 @@ private struct ExampleSection: Identifiable {
 
 struct ContentView: View {
     #if os(macOS)
-        @State private var selection: String? = "deferred-rendering"
+        @State private var selection: String? = "deferred-rendering-sponza"
     #else
         @State private var selection: String?
     #endif
@@ -218,6 +218,9 @@ struct ContentView: View {
                 items: [
                     ExampleItem(id: "deferred-rendering", title: "Deferred Rendering", systemImage: "square.stack.3d.down.forward") {
                         PBRMRTRendererView()
+                    },
+                    ExampleItem(id: "deferred-rendering-sponza", title: "Deferred Rendering Sponza", systemImage: "building.columns") {
+                        PBRMRTSponzaRendererView()
                     }
                 ]
             )

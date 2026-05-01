@@ -197,7 +197,7 @@ private final class CustomMesh: Mesh {
               let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
               !geometry.vertexBuffers.isEmpty,
-              vertexUniforms[renderContext] != nil
+              vertexUniforms[renderContext.id] != nil
         else { return false }
         return true
     }
@@ -214,7 +214,7 @@ private final class CustomMesh: Mesh {
 
     override func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         guard #available(macOS 13.0, iOS 16.0, *),
-              let vertexUniforms = vertexUniforms[renderContext],
+              let vertexUniforms = vertexUniforms[renderContext.id],
               let material,
               let vertexBuffer = geometry.vertexBuffers[VertexBufferIndex.Vertices]
         else { return }

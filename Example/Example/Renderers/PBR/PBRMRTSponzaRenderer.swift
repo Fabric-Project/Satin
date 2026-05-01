@@ -1,15 +1,15 @@
 //
-//  PBRMRTRenderer.swift
+//  PBRMRTSponzaRenderer.swift
 //  Example
 //
-//  Created by OpenAI Codex on 4/22/26.
+//  Created by OpenAI Codex on 4/30/26.
 //
 
 import Metal
 import MetalKit
 import Satin
 
-final class PBRMRTRenderer: BaseRenderer {
+final class PBRMRTSponzaRenderer: BaseRenderer {
     private enum PreviewOutput: CaseIterable {
         case color
         case depth
@@ -54,12 +54,11 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["Material", "SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur", "DOF"]
+        ["SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
         [
-            "Material": material.parameters,
             "SSAO": ssaoPostProcessor.ssaoMaterial.parameters,
             "SSAO Blur": ssaoPostProcessor.blurMaterial.parameters,
             "SSAO Composite": ssaoPostProcessor.compositeMaterial.parameters,
@@ -197,7 +196,6 @@ final class PBRMRTRenderer: BaseRenderer {
     private lazy var scene = IBLScene(context: defaultContext, label: "Scene", [lightHolder])
     private lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     private lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    private lazy var material = StandardMaterial(context: defaultContext)
 
     private var hasSceneBounds: Bool {
         sceneBounds.min.x.isFinite && sceneBounds.max.x.isFinite
@@ -205,12 +203,11 @@ final class PBRMRTRenderer: BaseRenderer {
 
     override func setup() {
 //        loadHdri()
-        setupTextures()
-        setupSuzanneScene()
+        setupSponzaScene()
         setupLights()
         setupOverlayScene()
 
-        scene.environmentIntensity = 0.375
+        scene.environmentIntensity = 0.3
 
 #if os(visionOS)
         metalView.backgroundColor = .clear
@@ -348,61 +345,31 @@ final class PBRMRTRenderer: BaseRenderer {
 
     }
 
-    private func setupSuzanneScene() {
-        let url = modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")
-        guard let model = loadAsset(url: url, context: defaultContext) else { return }
+    private func setupSponzaScene() {
+        let url = modelsURL.appendingPathComponent("Sponza_Palace.usdz")
 
-        var monkey: Mesh?
-        model.apply { object in
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("Missing Sponza scene at \(url.path)")
+            return
+        }
+
+        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader) else {
+            print("Failed to load Sponza scene at \(url.path)")
+            return
+        }
+
+        self.model = model
+        sceneBounds = model.worldBounds
+
+        model.apply(recursive: true) { object in
             if let mesh = object as? Mesh {
-                monkey = mesh
+                mesh.receiveShadow = true
+                mesh.castShadow = true
             }
         }
-
-        guard let monkey else { return }
-
-        monkey.material = material
-        self.model = monkey
-        sceneBounds = monkey.worldBounds
-        scene.add(monkey)
-    }
-
-    private func setupTextures() {
-        let cubeDescriptor = MTLTextureDescriptor.textureCubeDescriptor(pixelFormat: .r32Float, size: 1, mipmapped: false)
-        let cubeTexture = device.makeTexture(descriptor: cubeDescriptor)
-        material.setTexture(cubeTexture, type: .reflection)
-        material.setTexture(cubeTexture, type: .irradiance)
-
-        let tempDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r32Float, width: 1, height: 1, mipmapped: false)
-        let tempTexture = device.makeTexture(descriptor: tempDescriptor)
-        material.setTexture(tempTexture, type: .brdf)
-        material.setTexture(tempTexture, type: .baseColor)
-        material.setTexture(tempTexture, type: .occlusion)
-        material.setTexture(tempTexture, type: .metallic)
-        material.setTexture(tempTexture, type: .normal)
-        material.setTexture(tempTexture, type: .roughness)
-
-        let baseURL = modelsURL.appendingPathComponent("Suzanne")
-        let maps: [PBRTextureType: URL] = [
-            .baseColor: baseURL.appendingPathComponent("albedo.png"),
-            .occlusion: baseURL.appendingPathComponent("ao.png"),
-            .metallic: baseURL.appendingPathComponent("metallic.png"),
-            .normal: baseURL.appendingPathComponent("normal.png"),
-            .roughness: baseURL.appendingPathComponent("roughness.png")
-        ]
-
-        let loader = MTKTextureLoader(device: device)
-        do {
-            for (type, url) in maps {
-                let texture = try loader.newTexture(URL: url, options: [
-                    MTKTextureLoader.Option.SRGB: false,
-                    MTKTextureLoader.Option.origin: MTKTextureLoader.Origin.flippedVertically
-                ])
-                material.setTexture(texture, type: type)
-            }
-        } catch {
-            print(error.localizedDescription)
-        }
+        
+        scene.add(model)
+//        frameScene(bounds: sceneBounds)
     }
 
     private func frameScene(bounds: Bounds) {
