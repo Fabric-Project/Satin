@@ -70,6 +70,7 @@ enum VisualFixtureSupport {
         return texture
     }
 
+
     static func makeCubeTexture(device: MTLDevice, size: Int = 8) -> MTLTexture {
         let descriptor = MTLTextureDescriptor.textureCubeDescriptor(pixelFormat: .rgba8Unorm, size: size, mipmapped: false)
         descriptor.storageMode = .shared
