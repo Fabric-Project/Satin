@@ -194,7 +194,7 @@ final class PBRMRTRenderer: BaseRenderer {
     private lazy var lightHolder = Object(context: defaultContext)
     
 
-    private lazy var scene = IBLScene(context: defaultContext, label: "Scene", [lightHolder])
+    private lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox, lightHolder])
     private lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     private lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     private lazy var material = StandardMaterial(context: defaultContext)
@@ -204,7 +204,7 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override func setup() {
-//        loadHdri()
+        loadHdri()
         setupTextures()
         setupSuzanneScene()
         setupLights()
@@ -267,85 +267,30 @@ final class PBRMRTRenderer: BaseRenderer {
 
     private func setupLights() {
         
-        let url = texturesURL.appendingPathComponent("PM5544_with_non-PAL_signals.png")
-        var texture: MTLTexture? = nil
-        do {
-             texture = try textureLoader.newTexture(URL: url, options: [
-                MTKTextureLoader.Option.SRGB: true,
-                MTKTextureLoader.Option.origin: MTKTextureLoader.Origin.flippedVertically,
-            ])
-        }
-        catch {
-            print(error.localizedDescription)
-        }
-        
         let target = hasSceneBounds ? sceneBounds.center : simd_float3.zero
         let positions = [
             simd_make_float3(0.0, 300.0, -200.0),
             simd_make_float3(-50.0, 100.0, 0.0),
             simd_make_float3(50.0, 20.0, 0.0),
-            //            simd_make_float3(0.0, 20.0, 100.0)
+            simd_make_float3(0.0, 20.0, 100.0)
         ]
         
         let ups = [
             Satin.worldUpDirection,
             Satin.worldRightDirection,
             Satin.worldRightDirection,
-            //            Satin.worldUpDirection
+            Satin.worldUpDirection
         ]
         
         for (index, position) in positions.enumerated() {
-            //            let light = PointLight(context: defaultContext, color: .one, intensity: 100)
-            //            light.position = position
-            //            light.radius = 300
-            //            light.shadow.resolution = (width: 512, height: 512)
-            //            light.lookAt(target: target, up: ups[index])
-            //            light.castShadow = true
-            //            lightHolder.add(light)
-            
-            let projectorLight =  SpotLight(context: defaultContext,
-                                            color: [1.0, 1.0, 1.0],
-                                            intensity: 3000.0,
-                                            radius: 1000.0,
-                                            angleInner: 14.0,
-                                            angleOuter: 75.0)
-            projectorLight.projectionTexture = texture
-            projectorLight.label = "Projector"
-            projectorLight.position = position
-            projectorLight.castShadow = true
-            projectorLight.projectionMode = .color
-            projectorLight.shadow.resolution = (1024, 1024)
-            projectorLight.shadow.bias = 0.0005
-            //        projectorLight.shadow.normalBias = 0.055
-            projectorLight.shadow.radius = 0
-            projectorLight.shadow.strength = 2
-            projectorLight.lookAt(target:target, up: ups[index])
-            
-            lightHolder.add(projectorLight)
+            let light = PointLight(context: defaultContext, color: .one, intensity: 100)
+            light.position = position
+            light.radius = 300
+            light.shadow.resolution = (width: 512, height: 512)
+            light.lookAt(target: target, up: ups[index])
+            light.castShadow = true
+            lightHolder.add(light)
         }
-//
-//        let projectorLight =  SpotLight(context: defaultContext,
-//                                        color: [1.0, 1.0, 1.0],
-//                                        intensity: 1000.0,
-//                                        radius: 200.0,
-//                                        angleInner: 14.0,
-//                                        angleOuter: 43.0)
-//        
-//        projectorLight.label = "Projector"
-//        projectorLight.position = [0.0, 50, 0]
-//        projectorLight.castShadow = true
-//        projectorLight.projectionMode = .color
-//        projectorLight.shadow.resolution = (512, 512)
-////        projectorLight.shadow.bias = 0.0001
-//        //        projectorLight.shadow.normalBias = 0.055
-//        projectorLight.shadow.radius = 1
-//        projectorLight.shadow.strength = 2
-//        projectorLight.lookAt(target: [0.0, -0.001, -100.0], up: Satin.worldUpDirection)
-        
-       
-        
-//        lightHolder.add(projectorLight)
-
     }
 
     private func setupSuzanneScene() {
