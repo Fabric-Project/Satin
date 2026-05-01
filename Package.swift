@@ -31,10 +31,6 @@ let package = Package(
             cSettings: [.headerSearchPath("include")],
             cxxSettings: [.headerSearchPath("include")]
         ),
-        .testTarget(
-            name: "SatinCoreTests",
-            dependencies: ["SatinCore"]
-        ),
         .target(
             name: "Satin",
             dependencies: ["SatinCore"],
@@ -42,8 +38,13 @@ let package = Package(
             resources: [.copy("Pipelines")]
         ),
         .testTarget(
+            name: "SatinCoreTests",
+            dependencies: ["Satin", "SatinCore"]
+        ),
+        .testTarget(
             name: "SatinTests",
-            dependencies: ["Satin"]
+            dependencies: ["Satin"],
+            resources: [.process("Resources")]
         ),
     ],
     swiftLanguageModes: [.v5],
