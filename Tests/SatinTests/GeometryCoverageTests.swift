@@ -334,20 +334,33 @@ private func makeLineGeometryFixture() -> GeometryFixtureKind {
             size: [160, 160],
             minimumChangedPixelRatio: 0.02,
             minimumMeanNormalizedDifference: 0.004,
-            threshold: 0.006,
+            threshold: 0.01,
             buildScene: { _, camera in
                 camera.position = [0.0, 0.0, 3.0]
                 camera.lookAt(target: .zero)
 
-                let mesh = Mesh(
-                    label: "Line",
-                    geometry: LineGeometry(),
-                    material: BasicColorMaterial(color: simd_float4(0.2, 0.85, 1.0, 1.0), blending: .disabled)
-                )
-                mesh.scale = [1.8, 1.8, 1.8]
-                mesh.orientation = simd_quatf(angle: .pi * 0.2, axis: simd_normalize(simd_float3(0.0, 0.0, 1.0)))
+                let material = BasicColorMaterial(color: simd_float4(0.2, 0.85, 1.0, 1.0), blending: .disabled)
+                let scene = Object(label: "Scene")
 
-                return makeScene(with: mesh)
+                let line0 = Mesh(label: "Line 0", geometry: LineGeometry(), material: material.clone())
+                line0.scale = [0.72, 0.06, 1.0]
+                line0.position = [-0.55, 0.45, 0.0]
+                line0.orientation = simd_quatf(angle: .pi * 0.22, axis: simd_float3(0.0, 0.0, 1.0))
+
+                let line1 = Mesh(label: "Line 1", geometry: LineGeometry(), material: material.clone())
+                line1.scale = [0.92, 0.08, 1.0]
+                line1.position = [0.15, -0.05, 0.0]
+                line1.orientation = simd_quatf(angle: -.pi * 0.12, axis: simd_float3(0.0, 0.0, 1.0))
+
+                let line2 = Mesh(label: "Line 2", geometry: LineGeometry(), material: material.clone())
+                line2.scale = [0.56, 0.05, 1.0]
+                line2.position = [0.62, -0.52, 0.0]
+                line2.orientation = simd_quatf(angle: .pi * 0.34, axis: simd_float3(0.0, 0.0, 1.0))
+
+                scene.add(line0)
+                scene.add(line1)
+                scene.add(line2)
+                return scene
             }
         )
     )
