@@ -87,6 +87,22 @@ open class StandardMaterial: Material {
         }
     }
 
+    public var pointSize: Float {
+        get { get("Point Size", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Point Size", newValue) }
+    }
+
+    public var pointRenderingEnabled: Bool = false {
+        didSet {
+            guard pointRenderingEnabled != oldValue else { return }
+            if pointRenderingEnabled {
+                shader?.defines.append(ShaderDefine(key: "HAS_POINT_SIZE", value: NSString(string: "true")))
+            } else {
+                shader?.defines = (shader?.defines ?? []).filter { $0.key != "HAS_POINT_SIZE" }
+            }
+        }
+    }
+
     private var maps: [PBRTextureType: MTLTexture?] = [:] {
         didSet {
             if oldValue.keys != maps.keys, let shader = shader as? PBRShader {
@@ -214,6 +230,9 @@ open class StandardMaterial: Material {
         pbrShader.maps = maps.filter { $0.value != nil }
         pbrShader.samplers = samplers.filter { $0.value != nil }
         pbrShader.tonemapping = tonemapping
+        if pointRenderingEnabled, !shader.defines.contains(where: { $0.key == "HAS_POINT_SIZE" }) {
+            shader.defines.append(ShaderDefine(key: "HAS_POINT_SIZE", value: NSString(string: "true")))
+        }
     }
 
     override open func createShader() -> Shader {

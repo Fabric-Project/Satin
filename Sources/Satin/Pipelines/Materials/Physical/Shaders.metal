@@ -9,6 +9,9 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
+#ifdef HAS_POINT_SIZE
+    float pointSize [[point_size]];
+#endif
     float3 normal;
     float2 texcoord;
 
@@ -73,6 +76,9 @@ vertex CustomVertexData physicalVertex(
 
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
+#ifdef HAS_POINT_SIZE
+    out.pointSize = uniforms.pointSize;
+#endif
 #if defined(HAS_TRANSMISSION)
     float3 modelScale;
     modelScale.x = length(modelMatrix[0].xyz);

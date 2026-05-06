@@ -45,6 +45,11 @@ public final class DepthMaterial: Material {
         }
     }
 
+    public var pointSize: Float {
+        get { get("Point Size", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Point Size", newValue) }
+    }
+
     public init(context: Context, color: Bool = true, invert: Bool = false, camera: Camera? = nil) {
         super.init(context: context)
         set("Color", color)
@@ -56,6 +61,7 @@ public final class DepthMaterial: Material {
             set("Near", -1.0)
             set("Far", -1.0)
         }
+        set("Point Size", Float(1.0))
     }
 
     public required init(context: Context) {
@@ -64,6 +70,7 @@ public final class DepthMaterial: Material {
         set("Invert", false)
         set("Near", -1.0)
         set("Far", -1.0)
+        set("Point Size", Float(1.0))
     }
 
     public required init(from decoder: Decoder) throws {
