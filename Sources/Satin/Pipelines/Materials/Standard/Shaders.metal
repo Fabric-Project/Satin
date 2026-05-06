@@ -9,7 +9,9 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
+#ifdef HAS_POINT_SIZE
     float pointSize [[point_size]];
+#endif
     float3 normal;
     float2 texcoord;
 #if defined(HAS_COLOR)
@@ -34,8 +36,11 @@ vertex CustomVertexData standardVertex(
     Vertex in [[stage_in]],
     // inject instancing args
     ushort amp_id [[amplification_id]],
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
-    constant StandardUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]
+#ifdef HAS_POINT_SIZE
+    , constant StandardUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]
+#endif
+    ) {
 #if defined(INSTANCING)
     const float3x3 normalMatrix = instanceUniforms[instanceID].normalMatrix;
     const float4x4 modelMatrix = instanceUniforms[instanceID].modelMatrix;
@@ -70,7 +75,9 @@ vertex CustomVertexData standardVertex(
 
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
+#ifdef HAS_POINT_SIZE
     out.pointSize = uniforms.pointSize;
+#endif
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
