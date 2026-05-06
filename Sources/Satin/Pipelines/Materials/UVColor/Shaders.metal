@@ -1,13 +1,19 @@
 typedef struct {
+    float pointSize; // slider,1.0,64.0,1.0
+} UVColorUniforms;
+
+typedef struct {
     float4 position [[position]];
     float2 texcoord;
+    float pointSize [[point_size]];
 } UVColorVertexData;
 
 vertex UVColorVertexData uvcolorVertex(
     Vertex in [[stage_in]],
     ushort amp_id [[amplification_id]],
     // inject instancing args
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
+    constant UVColorUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
     UVColorVertexData out;
 
 #if INSTANCING
@@ -18,7 +24,7 @@ vertex UVColorVertexData uvcolorVertex(
 #endif
 
     out.texcoord = in.texcoord;
-
+    out.pointSize = uniforms.pointSize;
     return out;
 }
 

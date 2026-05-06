@@ -20,15 +20,22 @@ open class BasicColorMaterial: Material {
         }
     }
 
+    public var pointSize: Float {
+        get { get("Point Size", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Point Size", newValue) }
+    }
+
     public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .alpha) {
         super.init(context: context)
         set("Color", color)
+        set("Point Size", Float(1.0))
         self.blending = blending
     }
 
     public required init(context: Context) {
         super.init(context: context)
         set("Color", simd_float4.one)
+        set("Point Size", Float(1.0))
         blending = .alpha
     }
 

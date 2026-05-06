@@ -3,18 +3,21 @@
 typedef struct {
     float4 color; // color
     float4x4 textureTransform;
+    float pointSize; // slider,1.0,64.0,1.0
 } BasicTextureUniforms;
 
 typedef struct {
     float4 position [[position]];
     float2 texcoord;
+    float pointSize [[point_size]];
 } BasicTextureVertexData;
 
 vertex BasicTextureVertexData basicTextureVertex(
     Vertex in [[stage_in]],
     // inject instancing args
     ushort amp_id [[amplification_id]],
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
+    constant BasicTextureUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
     BasicTextureVertexData out;
 
 #if INSTANCING
@@ -25,7 +28,7 @@ vertex BasicTextureVertexData basicTextureVertex(
 #endif
 
     out.texcoord = in.texcoord;
-
+    out.pointSize = uniforms.pointSize;
     return out;
 }
 
