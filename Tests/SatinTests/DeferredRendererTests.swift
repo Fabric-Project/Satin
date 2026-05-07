@@ -309,7 +309,7 @@ private func visualizeColorTexture(
 
     vertex VertexOut vizVertex(uint vertexID [[vertex_id]]) {
         const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
-        const float2 uvs[3] = { float2(0.0, 0.0), float2(2.0, 0.0), float2(0.0, 2.0) };
+        const float2 uvs[3] = { float2(0.0, 1.0), float2(2.0, 1.0), float2(0.0, -1.0) };
 
         VertexOut out;
         out.position = float4(positions[vertexID], 0.0, 1.0);
@@ -344,7 +344,7 @@ private func visualizeVelocityTexture(
 
     vertex VertexOut vizVertex(uint vertexID [[vertex_id]]) {
         const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
-        const float2 uvs[3] = { float2(0.0, 0.0), float2(2.0, 0.0), float2(0.0, 2.0) };
+        const float2 uvs[3] = { float2(0.0, 1.0), float2(2.0, 1.0), float2(0.0, -1.0) };
 
         VertexOut out;
         out.position = float4(positions[vertexID], 0.0, 1.0);
@@ -445,7 +445,7 @@ private func visualizeDepthTexture(
 
     vertex VertexOut vizVertex(uint vertexID [[vertex_id]]) {
         const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
-        const float2 uvs[3] = { float2(0.0, 0.0), float2(2.0, 0.0), float2(0.0, 2.0) };
+        const float2 uvs[3] = { float2(0.0, 1.0), float2(2.0, 1.0), float2(0.0, -1.0) };
 
         VertexOut out;
         out.position = float4(positions[vertexID], 0.0, 1.0);
@@ -482,7 +482,7 @@ private func visualizeTextureChannel(
 
     vertex VertexOut vizVertex(uint vertexID [[vertex_id]]) {
         const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
-        const float2 uvs[3] = { float2(0.0, 0.0), float2(2.0, 0.0), float2(0.0, 2.0) };
+        const float2 uvs[3] = { float2(0.0, 1.0), float2(2.0, 1.0), float2(0.0, -1.0) };
 
         VertexOut out;
         out.position = float4(positions[vertexID], 0.0, 1.0);

@@ -66,6 +66,7 @@ enum VisualTestHarness {
         .appendingPathComponent("Resources/VisualReferences", isDirectory: true)
 
     static var isRecordingReferences: Bool {
+//        true
         ProcessInfo.processInfo.environment[recordModeEnvironmentKey] == "1"
     }
 
