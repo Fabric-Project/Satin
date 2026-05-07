@@ -554,7 +554,11 @@ open class Shader {
     func setupPipeline(renderContext: Context) {
         guard pipelines[renderContext.id] == nil, pipelineErrors[renderContext.id] == nil else { return }
         do {
-            let result = try ShaderPipelineCache.getPipeline(configuration: getConfiguration(renderContext: renderContext))
+            let renderContextConfiguration = getConfiguration(renderContext: renderContext)
+            let savedConfiguration = configuration
+            configuration = renderContextConfiguration
+            let result = try makePipeline()
+            configuration = savedConfiguration
             pipelines[renderContext.id] = result.pipeline
             if pipelineReflection == nil {
                 pipelineReflection = result.reflection
