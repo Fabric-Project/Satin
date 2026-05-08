@@ -1,11 +1,13 @@
+#include "Satin/PbrConstants.metal"
+
 #include "../../Library/Dither.metal"
 #include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
     float4 position [[position]];
-    float3 viewPosition;
-    float3 normal;
     float3 worldNormal;
+    float3 worldPosition;
+    float3 cameraPosition;
 
 #ifdef OUTPUT_VELOCITY
     float4 currentClipPos;
@@ -19,6 +21,52 @@ typedef struct {
     float diffusePower; // slider,0,2,0.5
 } BasicDiffuseUniforms;
 
+float getBasicDiffuseSquareFalloffAttenuation(float distanceSquare, float lightInvRadius) {
+    const float factor = distanceSquare * lightInvRadius * lightInvRadius;
+    const float smoothFactor = max(1.0 - factor * factor, 0.0);
+    return (smoothFactor * smoothFactor) / max(distanceSquare, 1e-4);
+}
+
+float getBasicDiffuseSpotAngleAttenuation(float3 fragmentToLightDirection, float3 lightDirection, float2 spotInfo) {
+    const float coneDot = dot(lightDirection, fragmentToLightDirection);
+    const float attenuation = saturate(coneDot * spotInfo.x + spotInfo.y);
+    return attenuation * attenuation;
+}
+
+float3 getBasicDiffuseLightInfo(
+    const LightData light,
+    float3 worldPosition,
+    thread float3 &lightDirection,
+    thread float &lightDistance
+) {
+    float3 lightRadiance = light.color.rgb * light.color.a;
+    const float3 lightPosition = light.position.xyz;
+    const LightType lightType = (LightType)light.position.w;
+
+    lightDirection = light.direction.xyz;
+    lightDistance = INFINITY;
+
+    if (lightType > LightTypeDirectional) {
+        const float inverseRadius = light.direction.w;
+        const float3 worldToLight = lightPosition - worldPosition;
+        const float distanceSquare = dot(worldToLight, worldToLight);
+
+        lightRadiance *= getBasicDiffuseSquareFalloffAttenuation(distanceSquare, inverseRadius);
+        lightDistance = sqrt(distanceSquare);
+        lightDirection = worldToLight / lightDistance;
+
+        if (lightType > LightTypePoint) {
+            lightRadiance *= getBasicDiffuseSpotAngleAttenuation(
+                lightDirection,
+                light.direction.xyz,
+                light.spotInfo.xy
+            );
+        }
+    }
+
+    return lightRadiance;
+}
+
 vertex BasicDiffuseVertexData basicDiffuseVertex(
     Vertex in [[stage_in]],
     // inject instancing args
@@ -28,21 +76,18 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 #if INSTANCING
     const float3x3 normalMatrix = instanceUniforms[instanceID].normalMatrix;
     const float4x4 modelMatrix = instanceUniforms[instanceID].modelMatrix;
-
-    const float4 viewPosition = vertexUniforms[amp_id].viewMatrix * modelMatrix * position;
-    const float3 normal = normalMatrix * in.normal;
 #else
-    const float4 viewPosition = vertexUniforms[amp_id].modelViewMatrix * position;
-    const float3 normal = vertexUniforms[amp_id].normalMatrix * in.normal;
+    const float3x3 normalMatrix = vertexUniforms[amp_id].normalMatrix;
+    const float4x4 modelMatrix = vertexUniforms[amp_id].modelMatrix;
 #endif
-
-    const float4 screenSpaceNormal = vertexUniforms[amp_id].viewMatrix * float4(normal, 0.0);
+    const float4 worldPosition = modelMatrix * position;
+    const float3 worldNormal = normalMatrix * in.normal;
 
     BasicDiffuseVertexData out;
-    out.viewPosition = viewPosition.xyz;
-    out.position = vertexUniforms[amp_id].projectionMatrix * viewPosition;
-    out.normal = screenSpaceNormal.xyz;
-    out.worldNormal = normal;
+    out.position = vertexUniforms[amp_id].viewProjectionMatrix * worldPosition;
+    out.worldNormal = worldNormal;
+    out.worldPosition = worldPosition.xyz;
+    out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
@@ -58,28 +103,71 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 
 fragment FragmentOutput basicDiffuseFragment(
     BasicDiffuseVertexData in [[stage_in]],
+// inject lighting args
+#if defined(PROJECTOR_COUNT)
+    constant float4x4 *projectorMatrices [[buffer(FragmentBufferProjectorMatrices)]],
+    constant float4x4 *projectorTransforms [[buffer(FragmentBufferProjectorTransforms)]],
+    array<texture2d<float>, PROJECTOR_COUNT> projectorTextures [[texture(FragmentTextureProjector0)]],
+#endif
+#if defined(DIRECT_SHADOW_COUNT) && defined(DIRECT_SHADOW_TEXTURE_COUNT)
+    constant ShadowData *directShadows [[buffer(FragmentBufferDirectShadows)]],
+    constant float4x4 *directShadowMatrices [[buffer(FragmentBufferDirectShadowMatrices)]],
+    array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
+#endif
     constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
-    float4 outColor;
+    float4 outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
+
+    const float3 N = normalize(in.worldNormal);
+    const float3 V = normalize(in.cameraPosition - in.worldPosition);
 
 #if defined(DEFERRED_GEOMETRY)
-    outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
 #else
-    outColor = uniforms.color;
+    float3 litRgb = float3(0.0);
 
-    const float3 pos = in.viewPosition;
-    const float3 dx = normalize(dfdx(pos));
-    const float3 dy = normalize(dfdy(pos));
-    const float3 normal = normalize(cross(dx, dy));
-    const float soft = dot(normalize(in.normal), float3(0.0, 0.0, 1.0));
-    const float hard = saturate(dot(normal, float3(0.0, 0.0, -1.0)));
+#if defined(LIGHTING) && defined(MAX_LIGHTS)
+    const float hardnessExponent = mix(0.75, max(uniforms.diffusePower, 1.0), saturate(uniforms.hardness));
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+        float3 lightDirection;
+        float lightDistance;
+        float3 lightRadiance = getBasicDiffuseLightInfo(
+            lights[i],
+            in.worldPosition,
+            lightDirection,
+            lightDistance
+        );
 
-    outColor.rgb *= pow(mix(soft, hard, uniforms.hardness), uniforms.diffusePower);
-    outColor.rgb = dither8x8(in.position.xy, outColor.rgb);
+#if defined(PROJECTOR_COUNT)
+        lightRadiance *= calculateProjectorContribution(
+            lights[i],
+            in.worldPosition,
+            projectorMatrices,
+            projectorTransforms,
+            projectorTextures
+        );
+#endif
+
+#if defined(HAS_SHADOWS) && defined(DIRECT_SHADOW_COUNT) && defined(DIRECT_SHADOW_TEXTURE_COUNT)
+        lightRadiance *= calculateDirectShadow(
+            lights[i],
+            directShadows,
+            directShadowMatrices,
+            directShadowTextures,
+            in.worldPosition,
+            N
+        );
+#endif
+
+        const float diffuseFactor = pow(saturate(dot(N, lightDirection)), hardnessExponent);
+        litRgb += uniforms.color.rgb * lightRadiance * diffuseFactor;
+    }
+#endif
+
+    outColor.rgb = dither8x8(in.position.xy, litRgb);
 #endif
 
     SurfaceOutput surface;
     surface.albedo    = half3(uniforms.color.rgb);
-    surface.normal    = half3(normalize(in.worldNormal));
+    surface.normal    = half3(N);
     surface.roughness = 1.0h;
     surface.metalness = 0.0h;
     surface.ao        = 1.0h;

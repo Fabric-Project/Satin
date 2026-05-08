@@ -22,11 +22,13 @@ public final class BasicDiffuseMaterial: BasicColorMaterial {
 
     public init(context: Context, color: simd_float4 = .one, blending: Blending = .alpha, hardness: Float = 0.75) {
         super.init(context: context, color: color, blending: blending)
+        lighting = true
         self.hardness = hardness
     }
 
     public required init(context: Context) {
         super.init(context: context)
+        lighting = true
         hardness = 0.75
     }
 
