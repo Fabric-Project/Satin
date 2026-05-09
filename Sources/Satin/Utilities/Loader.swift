@@ -39,7 +39,7 @@ public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoade
         loadAssetChildren(parent: stnObject, children: mdlObject.children.objects, context: context, textureLoader: textureLoader)
     }
 
-    return container
+    return Object.flatten(container)
 }
 
 func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?) -> Mesh {
@@ -47,7 +47,8 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
     let stnMesh = Mesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil)
     stnMesh.cullMode = .none
 
-    mdlMesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.0)
+    // 0.1 appears to fix USD import issues with parts of sponza model...
+    mdlMesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.1)
 
     let descriptor = mdlMesh.vertexDescriptor
 
