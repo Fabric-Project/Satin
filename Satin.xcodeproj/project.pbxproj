@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1B01F15D2FAFB8ED00C88561 /* Object+Flatten.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */; };
 		1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2852F9692FB00DE68DE /* RenderLayer.swift */; };
 		1B62F68A2F95C93C007F29E9 /* SpotShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6892F95C93C007F29E9 /* SpotShadow.swift */; };
 		1B62F68B2F95C93C007F29E9 /* DirectionalShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */; };
@@ -295,6 +296,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Object+Flatten.swift"; sourceTree = "<group>"; };
 		1B35E2852F9692FB00DE68DE /* RenderLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderLayer.swift; sourceTree = "<group>"; };
 		1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionalShadow.swift; sourceTree = "<group>"; };
 		1B62F6882F95C93C007F29E9 /* PointShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadow.swift; sourceTree = "<group>"; };
@@ -789,6 +791,7 @@
 				66D7DD922C06A24B00B5A6C8 /* Vertex+Extensions.swift */,
 				E1FEA9062C3737830002CD80 /* Float+Extensions.swift */,
 				E10A52D42C581CE300BB537A /* CodingUserInfoKey+Extensions.swift */,
+				1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -1502,6 +1505,7 @@
 				E101A8F52C070E8E0055FABA /* QuadGeometry.swift in Sources */,
 				E101A8F62C070E8E0055FABA /* RoundedBoxGeometry.swift in Sources */,
 				E101A8F72C070E8E0055FABA /* RoundedRectGeometry.swift in Sources */,
+				1B01F15D2FAFB8ED00C88561 /* Object+Flatten.swift in Sources */,
 				E101A8F82C070E8E0055FABA /* SatinGeometry.swift in Sources */,
 				1BF434822F99D59500098934 /* SsgiCompositeMaterial.swift in Sources */,
 				1BF434832F99D59500098934 /* SsgiBlurMaterial.swift in Sources */,
