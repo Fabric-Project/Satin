@@ -211,7 +211,7 @@ final class PBRMRTRenderer: BaseRenderer {
         setupOverlayScene()
 
         scene.environmentIntensity = 0.375
-
+            
 #if os(visionOS)
         metalView.backgroundColor = .clear
         skybox.visible = false
@@ -448,22 +448,11 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
-        ssaoPostProcessor.colorTexture = sceneRenderer.colorTexture
-        ssaoPostProcessor.depthTexture = sceneRenderer.depthTexture
-        ssaoPostProcessor.normalTexture = sceneRenderer.normalTexture
-        ssaoPostProcessor.sceneCamera = camera
-        ssaoPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        // Temporarily bypass SSAO to isolate the DOF path during debugging.
+        let compositeTexture = sceneRenderer.colorTexture
 
-        let compositeTexture = ssaoPostProcessor.outputTexture ?? sceneRenderer.colorTexture
-
-        motionBlurPostProcessor.colorTexture = compositeTexture
-        motionBlurPostProcessor.velocityTexture = sceneRenderer.velocityTexture
-        motionBlurPostProcessor.depthTexture = sceneRenderer.depthTexture
-        motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
-
-        let motionBlurTexture = motionBlurPostProcessor.outputTexture ?? compositeTexture
-
-        bokehDepthOfFieldPostProcessor.colorTexture = motionBlurTexture
+        // Temporarily bypass motion blur to isolate the DOF path during debugging.
+        bokehDepthOfFieldPostProcessor.colorTexture = compositeTexture
         bokehDepthOfFieldPostProcessor.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessor.sceneCamera = camera
         bokehDepthOfFieldPostProcessor.draw(
@@ -471,7 +460,7 @@ final class PBRMRTRenderer: BaseRenderer {
             commandBuffer: commandBuffer
         )
 
-        return bokehDepthOfFieldPostProcessor.outputTexture ?? motionBlurTexture
+        return bokehDepthOfFieldPostProcessor.outputTexture ?? compositeTexture
     }
 
     private func updatePreviewTextures(beautyTexture: MTLTexture?) {
