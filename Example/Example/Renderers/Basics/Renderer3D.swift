@@ -27,7 +27,8 @@ final class Renderer3D: BaseRenderer {
     )
 
     lazy var startTime = getTime()
-    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var light = DirectionalLight(context: defaultContext, color: .one)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, light])
     lazy var renderer = Renderer(context: defaultContext)
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
@@ -36,7 +37,10 @@ final class Renderer3D: BaseRenderer {
 
     override func setup() {
         mesh.add(intersectionMesh)
-
+        
+        light.position = [5, 10, 10]
+        light.lookAt(target: .zero)
+        
         camera.lookAt(target: .zero)
 
         #if os(visionOS)

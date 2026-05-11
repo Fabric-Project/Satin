@@ -11,7 +11,11 @@ import Satin
 
 final class MeshShaderRenderer: BaseRenderer {
     lazy var geometry = IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 4)
-    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: geometry, material: material)
+    }()
     fileprivate lazy var meshNormals = CustomMesh(context: defaultContext, geometry: geometry, material: CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL))
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])

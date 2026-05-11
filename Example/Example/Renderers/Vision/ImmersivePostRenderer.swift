@@ -25,7 +25,11 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
     lazy var mesh = Mesh(context: defaultContext, 
         label: "Blob",
         geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial(context: defaultContext)
+        material: {
+            let material = BasicDiffuseMaterial(context: defaultContext)
+            material.ambient = 0.15
+            return material
+        }()
     )
 
     lazy var floor = Mesh(context: defaultContext, 

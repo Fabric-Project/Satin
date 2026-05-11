@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Satin
 import simd
 
 public extension Object {

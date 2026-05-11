@@ -188,7 +188,11 @@ final class SuperShapesRenderer: BaseRenderer {
     var parametersSubscription: AnyCancellable?
 
     lazy var startTime = getTime()
-    lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: geometry, material: material)
+    }()
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = Renderer(context: defaultContext)
 

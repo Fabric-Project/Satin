@@ -9,40 +9,29 @@ import Foundation
 import Metal
 import simd
 
-public class GenericInterleavedBufferAttribute<T: Codable>: InterleavedBufferAttribute {
-    public var id: String = UUID().uuidString
-    public var parent: InterleavedBuffer
-    public var offset: Int
-
+open class GenericInterleavedBufferAttribute<T: Codable>: InterleavedBufferAttribute {
     public typealias ValueType = T
 
-    // Getable Properties
-    public var type: AttributeType { .generic }
-    public var format: MTLVertexFormat { type.format }
-    public var count: Int { parent.count }
+    open override var type: AttributeType { .generic }
+    open override var format: MTLVertexFormat { type.format }
+    open override var count: Int { parent.count }
 
-    // Computed Properties
-    public var size: Int { return MemoryLayout<ValueType>.size }
-    public var stride: Int { return MemoryLayout<ValueType>.stride }
-    public var alignment: Int { return MemoryLayout<ValueType>.alignment }
+    open override var size: Int { MemoryLayout<ValueType>.size }
+    open override var stride: Int { MemoryLayout<ValueType>.stride }
+    open override var alignment: Int { MemoryLayout<ValueType>.alignment }
+    open override var components: Int { 0 }
 
-    public var components: Int { 0 }
-
-    public let stepRate: Int
-    public let stepFunction: MTLVertexStepFunction
+    public let attributeStepRate: Int
+    public let attributeStepFunction: MTLVertexStepFunction
 
     public init(parent: InterleavedBuffer, offset: Int, stepRate: Int = 1, stepFunction: MTLVertexStepFunction = .perVertex) {
-        self.parent = parent
-        self.offset = offset
-        self.stepRate = stepRate
-        self.stepFunction = stepFunction
+        self.attributeStepRate = stepRate
+        self.attributeStepFunction = stepFunction
+        super.init(parent: parent, offset: offset)
     }
 
-    public static func == (lhs: GenericInterleavedBufferAttribute<T>, rhs: GenericInterleavedBufferAttribute<T>) -> Bool {
-        lhs === rhs
-    }
-
-    deinit {}
+    open override var stepRate: Int { attributeStepRate }
+    open override var stepFunction: MTLVertexStepFunction { attributeStepFunction }
 }
 
 public final class FloatInterleavedBufferAttribute: GenericInterleavedBufferAttribute<Float> {

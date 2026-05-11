@@ -15,7 +15,11 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     final class FloodMaterial: SourceMaterial {}
     final class PostMaterial: SourceMaterial {}
 
-    lazy var mesh = Mesh(context: defaultContext, geometry: RoundedBoxGeometry(context: defaultContext, size: 1.0, radius: 0.25, resolution: 4), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: RoundedBoxGeometry(context: defaultContext, size: 1.0, radius: 0.25, resolution: 4), material: material)
+    }()
 
     final class JumpFloodComputeSystem: TextureComputeSystem {
         var spacing: Int = 8

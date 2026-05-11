@@ -12,11 +12,15 @@ import MetalKit
 import Satin
 
 final class OcclusionRenderer: BaseRenderer {
-    lazy var mesh = Mesh(context: defaultContext, 
-        label: "Mesh",
-        geometry: IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 0),
-        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
-    )
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext,
+            label: "Mesh",
+            geometry: IcoSphereGeometry(context: defaultContext, radius: 1.0, resolution: 0),
+            material: material
+        )
+    }()
     lazy var intersectionMesh = Mesh(context: defaultContext, 
         label: "Intersection Mesh",
         geometry: IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 2),

@@ -33,7 +33,11 @@ final class FXAARenderer: BaseRenderer {
                 distance: 0.5,
                 pivot: [0, 0]
             ),
-            material: BasicDiffuseMaterial(context: defaultContext, hardness: 1.0)
+            material: {
+                let material = BasicDiffuseMaterial(context: defaultContext, hardness: 1.0)
+                material.ambient = 0.15
+                return material
+            }()
         )
         return mesh
     }()
