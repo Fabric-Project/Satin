@@ -8,19 +8,22 @@
 import Foundation
 import Metal
 
-public protocol VertexAttribute: AnyObject, Equatable {
-    associatedtype ValueType: Codable
-    var id: String { get }
+open class VertexAttribute: Equatable {
+    public let id: String = UUID().uuidString
 
-    var type: AttributeType { get }
-    var format: MTLVertexFormat { get }
-    var count: Int { get } // this represents how many elements we have in a BufferAttribute (5 positions) or how many vertices we have in an InterleavedBufferAttribute
+    open var type: AttributeType { .generic }
+    open var format: MTLVertexFormat { type.format }
+    open var count: Int { 0 } // this represents how many elements we have in a BufferAttribute (5 positions) or how many vertices we have in an InterleavedBufferAttribute
 
-    var size: Int { get }
-    var stride: Int { get }
-    var alignment: Int { get }
-    var components: Int { get }
+    open var size: Int { 0 }
+    open var stride: Int { 0 }
+    open var alignment: Int { 0 }
+    open var components: Int { 0 }
 
-    var stepRate: Int { get }
-    var stepFunction: MTLVertexStepFunction { get }
+    open var stepRate: Int { 1 }
+    open var stepFunction: MTLVertexStepFunction { .perVertex }
+
+    public static func == (lhs: VertexAttribute, rhs: VertexAttribute) -> Bool {
+        lhs === rhs
+    }
 }

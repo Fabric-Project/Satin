@@ -124,12 +124,12 @@ open class Material: Codable {
     }
 
     public private(set) var vertexUniformBuffers: [VertexBufferIndex: UniformBuffer] = [:]
-    public private(set) var vertexStructBuffers: [VertexBufferIndex: any BindableBuffer] = [:]
+    public private(set) var vertexStructBuffers: [VertexBufferIndex: BindableBuffer] = [:]
     public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
     public private(set) var vertexTextures: [VertexTextureIndex: MTLTexture] = [:]
 
     public private(set) var fragmentUniformBuffers: [FragmentBufferIndex: UniformBuffer] = [:]
-    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: any BindableBuffer] = [:]
+    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: BindableBuffer] = [:]
     public private(set) var fragmentBuffers: [FragmentBufferIndex: MTLBuffer] = [:]
     public private(set) var fragmentTextures: [FragmentTextureIndex: MTLTexture] = [:]
 

@@ -17,6 +17,7 @@ typedef struct {
 
 typedef struct {
     float4 color;       // color
+    float ambient;      // slider,0,1,0
     float hardness;     // slider
     float diffusePower; // slider,0,2,0.5
 } BasicDiffuseUniforms;
@@ -31,6 +32,26 @@ float getBasicDiffuseSpotAngleAttenuation(float3 fragmentToLightDirection, float
     const float coneDot = dot(lightDirection, fragmentToLightDirection);
     const float attenuation = saturate(coneDot * spotInfo.x + spotInfo.y);
     return attenuation * attenuation;
+}
+
+float getBasicDiffuseFallbackFactor(
+    float3 worldPosition,
+    float3 worldNormal,
+    float3 cameraPosition,
+    float hardness,
+    float diffusePower
+) {
+    const float3 viewPosition = cameraPosition - worldPosition;
+    const float3 dx = normalize(dfdx(viewPosition));
+    const float3 dy = normalize(dfdy(viewPosition));
+    const float3 geometricNormal = normalize(cross(dx, dy));
+    const float3 viewDirection = normalize(viewPosition);
+
+    const float soft = saturate(dot(normalize(worldNormal), viewDirection));
+    const float hard = saturate(dot(geometricNormal, -viewDirection));
+    const float fallbackFactor = mix(soft, hard, saturate(hardness));
+
+    return pow(max(fallbackFactor, 1e-4), max(diffusePower, 1e-4));
 }
 
 float3 getBasicDiffuseLightInfo(
@@ -118,11 +139,10 @@ fragment FragmentOutput basicDiffuseFragment(
     float4 outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
 
     const float3 N = normalize(in.worldNormal);
-    const float3 V = normalize(in.cameraPosition - in.worldPosition);
 
 #if defined(DEFERRED_GEOMETRY)
 #else
-    float3 litRgb = float3(0.0);
+    float3 litRgb = uniforms.color.rgb * max(uniforms.ambient, 0.0);
 
 #if defined(LIGHTING) && defined(MAX_LIGHTS)
     const float hardnessExponent = mix(0.75, max(uniforms.diffusePower, 1.0), saturate(uniforms.hardness));
@@ -160,6 +180,17 @@ fragment FragmentOutput basicDiffuseFragment(
         const float diffuseFactor = pow(saturate(dot(N, lightDirection)), hardnessExponent);
         litRgb += uniforms.color.rgb * lightRadiance * diffuseFactor;
     }
+#else
+    litRgb = uniforms.color.rgb * max(
+        max(uniforms.ambient, 0.0),
+        getBasicDiffuseFallbackFactor(
+            in.worldPosition,
+            N,
+            in.cameraPosition,
+            uniforms.hardness,
+            uniforms.diffusePower
+        )
+    );
 #endif
 
     outColor.rgb = dither8x8(in.position.xy, litRgb);

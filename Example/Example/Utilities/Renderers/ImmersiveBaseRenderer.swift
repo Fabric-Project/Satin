@@ -19,6 +19,7 @@ class ImmersiveBaseRenderer: MetalLayerRenderer {
     var pipelinesURL: URL { rendererAssetsURL.appendingPathComponent("Pipelines") }
     var texturesURL: URL { rendererAssetsURL.appendingPathComponent("Textures") }
     var modelsURL: URL { rendererAssetsURL.appendingPathComponent("Models") }
+
 }
 
 #endif

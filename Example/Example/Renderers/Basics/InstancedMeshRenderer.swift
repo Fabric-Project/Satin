@@ -47,7 +47,11 @@ final class InstancedMeshRenderer: BaseRenderer {
         lazy var instancedMesh = InstancedMesh(context: defaultContext, 
             label: "Spot",
             geometry: mesh.geometry,
-            material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.0),
+            material: {
+                let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.0)
+                material.ambient = 0.15
+                return material
+            }(),
             count: dim * dim * dim
         )
 

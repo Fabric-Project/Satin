@@ -13,13 +13,21 @@ import MetalKit
 import Satin
 
 final class MultipleContextRenderer: BaseRenderer {
-    lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: material)
+    }()
     lazy var noDepthContext = Context(
         device: device,
         sampleCount: 1,
         colorPixelFormat: colorPixelFormat
     )
-    lazy var meshNoDepth = Mesh(context: noDepthContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var meshNoDepth: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: noDepthContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: material)
+    }()
 
     lazy var startTime = getTime()
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])

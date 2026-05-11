@@ -9,19 +9,19 @@ import Foundation
 import Metal
 import simd
 
-public protocol BindableBuffer {
-    var buffer: MTLBuffer! { get }
-    var offset: Int { get }
+open class BindableBuffer {
+    public internal(set) var buffer: MTLBuffer!
+    public internal(set) var offset = 0
 }
 
 public final class StructBuffer<T>: BindableBuffer {
-    public private(set) var buffer: (any MTLBuffer)!
-    public private(set) var offset = 0
     public private(set) var index = -1
     public private(set) var count: Int
 
     public init(device: MTLDevice, count: Int, label: String = "Struct Buffer") {
         self.count = count
+        super.init()
+
         let length = alignedSize * Satin.maxBuffersInFlight
         guard let buffer = device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else {
             fatalError("Couldn't not create \(label)")
@@ -37,7 +37,7 @@ public final class StructBuffer<T>: BindableBuffer {
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }
     }
-    
+
     public func update(data: ContiguousArray<T>) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
@@ -51,6 +51,6 @@ public final class StructBuffer<T>: BindableBuffer {
     }
 
     private func align(size: Int) -> Int {
-        return ((size + 255) / 256) * 256
+        ((size + 255) / 256) * 256
     }
 }

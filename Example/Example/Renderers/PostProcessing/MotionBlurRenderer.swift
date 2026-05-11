@@ -170,14 +170,14 @@ final class MotionBlurRenderer: BaseRenderer {
     // MARK: - Scene Construction
 
     private func buildScene() {
-        let floor = Mesh(
-            context: defaultContext,
-            label: "Floor",
-            geometry: PlaneGeometry(context: defaultContext, size: 80, resolution: 1),
-            material: StandardMaterial(context: defaultContext, baseColor: [0.08, 0.08, 0.10, 1], metallic: 0.0, roughness: 0.85)
-        )
-        floor.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-        scene.add(floor)
+//        let floor = Mesh(
+//            context: defaultContext,
+//            label: "Floor",
+//            geometry: PlaneGeometry(context: defaultContext, size: 80, resolution: 1),
+//            material: StandardMaterial(context: defaultContext, baseColor: [0.08, 0.08, 0.10, 1], metallic: 0.0, roughness: 0.85)
+//        )
+//        floor.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+//        scene.add(floor)
 
         let geometries: [(Context) -> Geometry] = [
             { IcoSphereGeometry(context: $0, radius: 1.0, resolution: 3) },

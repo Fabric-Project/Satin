@@ -25,7 +25,11 @@ final class RayMarchingRenderer: BaseRenderer {
         }
     }
 
-    lazy var mesh = Mesh(context: defaultContext, geometry: BoxGeometry(context: defaultContext, size: 2.0), material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: BoxGeometry(context: defaultContext, size: 2.0), material: material)
+    }()
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [10.0, 10.0, 10.0], near: 0.1, far: 100.0, fov: 45)
 
     lazy var rayMarchedMaterial = RayMarchedMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
