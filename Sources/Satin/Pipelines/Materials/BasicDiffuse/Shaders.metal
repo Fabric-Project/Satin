@@ -5,6 +5,7 @@
 
 typedef struct {
     float4 position [[position]];
+    float pointSize [[point_size]];
     float3 worldNormal;
     float3 worldPosition;
     float3 cameraPosition;
@@ -17,6 +18,7 @@ typedef struct {
 
 typedef struct {
     float4 color;       // color
+    float pointSize;    // slider,1.0,64.0,1.0
     float hardness;     // slider
     float diffusePower; // slider,0,2,0.5
 } BasicDiffuseUniforms;
@@ -71,7 +73,8 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     Vertex in [[stage_in]],
     // inject instancing args
     ushort amp_id [[amplification_id]],
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
+    constant BasicDiffuseUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
     const float4 position = float4(in.position, 1.0);
 #if INSTANCING
     const float3x3 normalMatrix = instanceUniforms[instanceID].normalMatrix;
@@ -85,6 +88,7 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 
     BasicDiffuseVertexData out;
     out.position = vertexUniforms[amp_id].viewProjectionMatrix * worldPosition;
+    out.pointSize = uniforms.pointSize;
     out.worldNormal = worldNormal;
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
