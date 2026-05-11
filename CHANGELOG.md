@@ -14,16 +14,6 @@ mesh.geometry.primitiveType = .point
 mesh.material.pointSize = 8.0
 ```
 
-`StandardMaterial` and `PhysicalMaterial` additionally require `pointRenderingEnabled = true` to activate the Metal `[[point_size]]` output (this recompiles the shader with `HAS_POINT_SIZE` defined):
-
-```swift
-let mat = StandardMaterial(context: context)
-mat.pointRenderingEnabled = true
-mat.pointSize = 8.0
-let mesh = Mesh(context: context, geometry: myGeo, material: mat)
-mesh.geometry.primitiveType = .point
-```
-
 ### Supported Materials
 
 | Material | Opt-in required | Notes |
@@ -33,8 +23,8 @@ mesh.geometry.primitiveType = .point
 | `DepthMaterial` | No | Depth-encoded points |
 | `UVColorMaterial` | No | UV-as-color points |
 | `NormalColorMaterial` | No | Normal-as-color points |
-| `StandardMaterial` | `pointRenderingEnabled = true` | Full PBR — each point lit by its vertex normal |
-| `PhysicalMaterial` | `pointRenderingEnabled = true` | Full advanced PBR — inherits from Standard |
+| `StandardMaterial` | No | Full PBR — each point lit by its vertex normal |
+| `PhysicalMaterial` | No | Full advanced PBR — inherits from Standard |
 
 > For circular/masked points with per-fragment UV control, `BasicPointMaterial` remains the dedicated option.
 
