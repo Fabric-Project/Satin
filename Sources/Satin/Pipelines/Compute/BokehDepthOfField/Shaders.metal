@@ -104,13 +104,14 @@ static float bokehDepthOfFieldSignedRadius(
     float maxBlurRadius
 ) {
     const float halfRange = max(focusRange * 0.5f, 1.0e-4f);
+    const float falloffRange = max(focusRange, 1.0e-4f);
     const float delta = viewDistance - focusDistance;
 
     float signedCoC = 0.0f;
     if (delta < -halfRange) {
-        signedCoC = (delta + halfRange) / halfRange;
+        signedCoC = (delta + halfRange) / falloffRange;
     } else if (delta > halfRange) {
-        signedCoC = (delta - halfRange) / halfRange;
+        signedCoC = (delta - halfRange) / falloffRange;
     }
 
     return clamp(signedCoC, -1.0f, 1.0f) * maxBlurRadius;
