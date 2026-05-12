@@ -27,7 +27,7 @@ public class Shadow {
 
     public var strength: Float = 1.0
     public var bias: Float = 0.00001
-    public var normalBias: Float = 0.0
+    public var normalBias: Float = 0.00001
     public var radius: Float =  1.0
 
     public var texturePublisher = PassthroughSubject<Shadow, Never>()
