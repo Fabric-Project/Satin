@@ -1,3 +1,24 @@
+// BokehDepthOfFieldPostProcessor
+//
+// Reference lineage:
+// - "Circular Dof" by Kleber Garcia ("Kecho"), popularized in simplified form on Shadertoy:
+//   https://shadertoy.com/view/Xd2BWc
+// - "Circular Depth of Field" / Frostbite-style circular DOF presentations by Kleber Garcia, GDC 2018:
+//   https://media.gdcvault.com/gdc2018/presentations/Garcia_Kleber_CircularDepthOf.pdf
+// - The related ACM talk/paper cited from the original shader comments:
+//   http://dl.acm.org/citation.cfm?id=3085022
+//
+// Satin's implementation is inspired by that family of circular/bokeh DOF pipelines, but it is not a
+// line-for-line port. In particular, the prefilter step classifies near/far blur directly from reconstructed
+// view distance and the subsequent passes operate on split near/far buffers plus a near-radius dilation pass.
+//
+// Current investigation notes:
+// - Scenes with cleared depth behind geometry can show silhouette-shaped CoC plateaus around defocused objects.
+// - This is most visible where background depth resolves to the clear value and where thin geometry overlaps
+//   strongly blurred regions.
+// - If DOF artifacts are being debugged, start in the prefilter shader where cleared depth is promoted to
+//   max far blur and where near/far coverage is accumulated before the complex blur stages.
+//
 import Metal
 import simd
 
