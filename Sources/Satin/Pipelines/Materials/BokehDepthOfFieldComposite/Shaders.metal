@@ -36,6 +36,10 @@ static float bokehDepthOfFieldSignedRadius(
     return clamp(signedCoC, -1.0f, 1.0f) * maxBlurRadius;
 }
 
+static bool bokehDepthOfFieldDepthIsClearOrInvalid(float depth) {
+    return depth <= 1.0e-6f || depth >= (1.0f - 1.0e-6f);
+}
+
 fragment half4 bokehDepthOfFieldCompositeFragment(
     VertexData in [[stage_in]],
     constant BokehDepthOfFieldCompositeUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
@@ -53,7 +57,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
 
     float centerFarBlend = 1.0f;
     float centerNearBlend = 0.0f;
-    if (depth > 0.0f) {
+//    if (bokehDepthOfFieldDepthIsClearOrInvalid(depth) == false) {
         const float viewDistance = bokehDepthOfFieldViewDistance(uv, depth, uniforms.inverseProjectionMatrix);
         const float signedRadius = bokehDepthOfFieldSignedRadius(
             viewDistance,
@@ -63,7 +67,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
         );
         centerNearBlend = saturate(max(-signedRadius, 0.0f));
         centerFarBlend = saturate(max(signedRadius, 0.0f));
-    }
+//    }
 
     const float4 farSample = farBlurTex.sample(linearSampler, uv);
     const float4 nearSample = nearBlurTex.sample(linearSampler, uv);
@@ -75,10 +79,12 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     const float3 nearColor = nearWeight > 1.0e-4f ? max(nearSample.rgb / nearWeight, 0.0f) : sharpSample.rgb;
 
     const float farBlend = centerFarBlend * farWeight;
-    const float nearBlend = max(centerNearBlend, nearWeight);
+    const float nearBlend = centerNearBlend * nearWeight; //max(centerNearBlend, nearWeight);
 
     float3 result = mix(sharpSample.rgb, farColor, farBlend);
     result = mix(result, nearColor, nearBlend);
 
-    return half4(half3(result), half(sharpSample.a));
+    const float resultAlpha = saturate(max(sharpSample.a, max(farBlend, nearBlend)));
+
+    return half4(half3(result), half(resultAlpha));
 }

@@ -1,3 +1,23 @@
+// BokehDepthOfField compute pipeline
+//
+// Reference lineage:
+// - "Circular Dof" by Kleber Garcia ("Kecho"), simplified on Shadertoy:
+//   https://shadertoy.com/view/Xd2BWc
+// - Kleber Garcia, "Circular Depth of Field", GDC 2018:
+//   https://media.gdcvault.com/gdc2018/presentations/Garcia_Kleber_CircularDepthOf.pdf
+// - Related ACM reference cited by the original shader comments:
+//   http://dl.acm.org/citation.cfm?id=3085022
+//
+// Satin uses a split near/far prefilter, a near-radius max filter, then complex separable blur passes.
+// It is intentionally close in spirit to Frostbite-style circular DOF, but it is not a direct port.
+//
+// Debugging notes for current artifact investigation:
+// - Cleared depth currently falls into the "max far blur" path in the prefilter stage below.
+// - That can create silhouette-bounded CoC regions when a blurred foreground/background edge overlaps
+//   areas where the scene depth is just the clear value.
+// - Thin geometry, alpha-tested silhouettes, or partially covered pixels are the first places to inspect
+//   when blur appears clipped to object bounds instead of bleeding naturally into background.
+//
 typedef struct {
     int2 size;
     float4x4 inverseProjectionMatrix;
@@ -97,6 +117,10 @@ static float bokehDepthOfFieldSignedRadius(
     return clamp(signedCoC, -1.0f, 1.0f) * maxBlurRadius;
 }
 
+static bool bokehDepthOfFieldDepthIsClearOrInvalid(float depth) {
+    return depth <= 1.0e-6f || depth >= (1.0f - 1.0e-6f);
+}
+
 kernel void bokehDepthOfFieldPrefilterUpdate(
     uint2 gid [[thread_position_in_grid]],
     constant BokehDepthOfFieldPrefilterUniforms &uniforms [[buffer(ComputeBufferUniforms)]],
@@ -137,9 +161,14 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
         float nearRadius = 0.0f;
         float farRadius = 0.0f;
 
-        if (depth <= 0.0f) {
-            farRadius = uniforms.maxBlurRadius;
-        } else {
+//        // Cleared / invalid depth should still expand far-field support so bokeh can extend beyond the
+//        // exact source silhouette, but it should not inject clear-color samples into the blur color.
+//        // Otherwise background samples darken the blur and visually clamp the CoC to geometry bounds.
+//        if (bokehDepthOfFieldDepthIsClearOrInvalid(depth)) {
+//            farRadius = uniforms.maxBlurRadius;
+//            maxFarRadius = max(maxFarRadius, farRadius);
+//            continue;
+//        } else {
             const float viewDistance = bokehDepthOfFieldViewDistance(
                 sampleUV,
                 depth,
@@ -153,7 +182,7 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
             );
             nearRadius = max(-signedRadius, 0.0f);
             farRadius = max(signedRadius, 0.0f);
-        }
+//        }
 
         const float nearCoverage = saturate(nearRadius);
         const float farCoverage = saturate(farRadius);
