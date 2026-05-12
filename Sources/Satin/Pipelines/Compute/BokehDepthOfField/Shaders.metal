@@ -116,10 +116,6 @@ static float bokehDepthOfFieldSignedRadius(
     return clamp(signedCoC, -1.0f, 1.0f) * maxBlurRadius;
 }
 
-static bool bokehDepthOfFieldDepthIsClearOrInvalid(float depth) {
-    return depth <= 1.0e-6f || depth >= (1.0f - 1.0e-6f);
-}
-
 kernel void bokehDepthOfFieldPrefilterUpdate(
     uint2 gid [[thread_position_in_grid]],
     constant BokehDepthOfFieldPrefilterUniforms &uniforms [[buffer(ComputeBufferUniforms)]],
@@ -146,6 +142,7 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
         float2(-sampleOffset.x,  sampleOffset.y),
         float2( sampleOffset.x,  sampleOffset.y)
     };
+    const float inverseMaxBlurRadius = 1.0f / max(uniforms.maxBlurRadius, 1.0e-4f);
 
     float4 nearAccum = 0.0f;
     float4 farAccum = 0.0f;
@@ -160,31 +157,26 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
         float nearRadius = 0.0f;
         float farRadius = 0.0f;
 
-//        // Cleared / invalid depth should still expand far-field support so bokeh can extend beyond the
-//        // exact source silhouette, but it should not inject clear-color samples into the blur color.
-//        // Otherwise background samples darken the blur and visually clamp the CoC to geometry bounds.
-//        if (bokehDepthOfFieldDepthIsClearOrInvalid(depth)) {
-//            farRadius = uniforms.maxBlurRadius;
-//            maxFarRadius = max(maxFarRadius, farRadius);
-//            continue;
-//        } else {
-            const float viewDistance = bokehDepthOfFieldViewDistance(
-                sampleUV,
-                depth,
-                uniforms.inverseProjectionMatrix
-            );
-            const float signedRadius = bokehDepthOfFieldSignedRadius(
-                viewDistance,
-                uniforms.focusDistance,
-                uniforms.focusRange,
-                uniforms.maxBlurRadius
-            );
-            nearRadius = max(-signedRadius, 0.0f);
-            farRadius = max(signedRadius, 0.0f);
-//        }
+        const float viewDistance = bokehDepthOfFieldViewDistance(
+            sampleUV,
+            depth,
+            uniforms.inverseProjectionMatrix
+        );
+        const float signedRadius = bokehDepthOfFieldSignedRadius(
+            viewDistance,
+            uniforms.focusDistance,
+            uniforms.focusRange,
+            uniforms.maxBlurRadius
+        );
+        nearRadius = max(-signedRadius, 0.0f);
+        farRadius = max(signedRadius, 0.0f);
 
-        const float nearCoverage = saturate(nearRadius);
-        const float farCoverage = saturate(farRadius);
+        // Coverage should scale relative to the configured blur budget, not clamp to 1 as soon as the
+        // CoC exceeds a single pixel. The old `saturate(radius)` path made support/alpha ramp far too
+        // aggressively and caused harsh plateaus around cleared-depth silhouettes.
+//        const float sourceAlpha = saturate(colorSample.a);
+        const float nearCoverage = saturate(nearRadius * inverseMaxBlurRadius);
+        const float farCoverage = saturate(farRadius * inverseMaxBlurRadius);
 
         nearAccum.rgb += colorSample.rgb * nearCoverage;
         nearAccum.a += nearCoverage;
@@ -219,13 +211,13 @@ kernel void bokehDepthOfFieldComplexHorizontalUpdate(
 
     const float2 uv = (float2(gid) + 0.5f) / float2(size);
     const float radius = radiusTex.sample(nearestSampler, uv).r;
-    if (radius <= 1.0e-4f) {
-        accum0Tex.write(float4(0.0f), gid);
-        accum1Tex.write(float4(0.0f), gid);
-        accum2Tex.write(float4(0.0f), gid);
-        accum3Tex.write(float4(0.0f), gid);
-        return;
-    }
+//    if (radius <= 1.0e-4f) {
+//        accum0Tex.write(float4(0.0f), gid);
+//        accum1Tex.write(float4(0.0f), gid);
+//        accum2Tex.write(float4(0.0f), gid);
+//        accum3Tex.write(float4(0.0f), gid);
+//        return;
+//    }
 
     const float2 texelSize = 1.0f / float2(size);
 
@@ -318,10 +310,10 @@ kernel void bokehDepthOfFieldComplexVerticalUpdate(
 
     const float2 uv = (float2(gid) + 0.5f) / float2(size);
     const float radius = radiusTex.sample(nearestSampler, uv).r;
-    if (radius <= 1.0e-4f) {
-        outputTex.write(float4(0.0f), gid);
-        return;
-    }
+//    if (radius <= 1.0e-4f) {
+//        outputTex.write(float4(0.0f), gid);
+//        return;
+//    }
 
     const float2 texelSize = 1.0f / float2(size);
 
