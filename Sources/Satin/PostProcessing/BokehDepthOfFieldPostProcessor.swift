@@ -7,7 +7,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
     private static let maxResolutionScale: Float = 1.0
     private static let defaultFocusDistance: Float = 4.0
     private static let defaultFocusRange: Float = 1.5
-    private static let defaultMaxBlurRadius: Float = 18.0
+    private static let defaultMaxBlurRadius: Float = 6.0
 
     private final class NamedComputeProcessor: TextureComputeProcessor {
         private let shaderLabel: String
@@ -50,7 +50,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             "Focus Distance",
             defaultFocusDistance,
             0.001,
-            1000.0,
+            10.0,
             .slider,
             "Distance from the camera that stays sharp."
         ),
@@ -58,7 +58,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             "Focus Range",
             defaultFocusRange,
             0.001,
-            500.0,
+            10.0,
             .slider,
             "Full depth band that remains acceptably sharp."
         ),
@@ -175,9 +175,15 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
     }
 
     override open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
+        let force:Bool = lastSize != size
+
+        if force
+        {
+            super.resize(size: size, scaleFactor: scaleFactor)
+            resizeResourcesIfNeeded(force: force)
+        }
+
         lastSize = size
-        super.resize(size: size, scaleFactor: scaleFactor)
-        resizeResourcesIfNeeded(force: true)
     }
 
     override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
