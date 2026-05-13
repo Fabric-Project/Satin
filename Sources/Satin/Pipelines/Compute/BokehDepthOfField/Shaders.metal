@@ -29,6 +29,12 @@ typedef struct {
 
 typedef struct {
     int2 size;
+    float maxBlurRadius;
+    float splitPadding;
+} BokehDepthOfFieldSplitUniforms;
+
+typedef struct {
+    int2 size;
 } BokehDepthOfFieldComplexUniforms;
 
 typedef struct {
@@ -120,10 +126,8 @@ static float bokehDepthOfFieldSignedRadius(
 kernel void bokehDepthOfFieldPrefilterUpdate(
     uint2 gid [[thread_position_in_grid]],
     constant BokehDepthOfFieldPrefilterUniforms &uniforms [[buffer(ComputeBufferUniforms)]],
-    texture2d<float, access::write> nearColorTex [[texture(ComputeTextureCustom0)]],
-    texture2d<float, access::write> farColorTex [[texture(ComputeTextureCustom1)]],
-    texture2d<float, access::write> nearRadiusTex [[texture(ComputeTextureCustom2)]],
-    texture2d<float, access::write> farRadiusTex [[texture(ComputeTextureCustom3)]],
+    texture2d<float, access::write> sourceColorTex [[texture(ComputeTextureCustom0)]],
+    texture2d<float, access::write> cocTex [[texture(ComputeTextureCustom1)]],
     texture2d<float, access::sample> colorTex [[texture(ComputeTextureCustom4)]],
     depth2d<float, access::sample> depthTex [[texture(ComputeTextureCustom5)]]
 ) {
@@ -135,7 +139,11 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
 
     const float2 uv = (float2(gid) + 0.5f) / float2(size);
     const float2 fullTexelSize = 1.0f / float2(colorTex.get_width(), colorTex.get_height());
-    const float2 sampleOffset = fullTexelSize * 0.5f * max(float(colorTex.get_width()) / max(float(size.x), 1.0f), 1.0f);
+    const float2 downsampleScale = float2(
+        max(float(colorTex.get_width()) / max(float(size.x), 1.0f), 1.0f),
+        max(float(colorTex.get_height()) / max(float(size.y), 1.0f), 1.0f)
+    );
+    const float2 sampleOffset = fullTexelSize * (downsampleScale - 1.0f) * 0.5f;
 
     const float2 taps[4] = {
         float2(-sampleOffset.x, -sampleOffset.y),
@@ -143,20 +151,15 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
         float2(-sampleOffset.x,  sampleOffset.y),
         float2( sampleOffset.x,  sampleOffset.y)
     };
-    const float inverseMaxBlurRadius = 1.0f / max(uniforms.maxBlurRadius, 1.0e-4f);
-
-    float4 nearAccum = 0.0f;
-    float4 farAccum = 0.0f;
-    float maxNearRadius = 0.0f;
-    float maxFarRadius = 0.0f;
+    float4 colorAccum = 0.0f;
+    float cocAccum = 0.0f;
+    float cocWeight = 0.0f;
+    float maxAbsoluteRadius = 0.0f;
 
     for (uint i = 0; i < 4; ++i) {
         const float2 sampleUV = clamp(uv + taps[i], 0.0f, 1.0f);
         const float4 colorSample = colorTex.sample(linearSampler, sampleUV);
         const float depth = depthTex.sample(nearestSampler, sampleUV);
-
-        float nearRadius = 0.0f;
-        float farRadius = 0.0f;
 
         const float viewDistance = bokehDepthOfFieldViewDistance(
             sampleUV,
@@ -169,29 +172,51 @@ kernel void bokehDepthOfFieldPrefilterUpdate(
             uniforms.focusRange,
             uniforms.maxBlurRadius
         );
-        nearRadius = max(-signedRadius, 0.0f);
-        farRadius = max(signedRadius, 0.0f);
+        const float sourceCoverage = saturate(colorSample.a);
+        const float cocContribution = max(abs(signedRadius), 1.0e-4f) * sourceCoverage;
 
-        // Coverage should scale relative to the configured blur budget, not clamp to 1 as soon as the
-        // CoC exceeds a single pixel. The old `saturate(radius)` path made support/alpha ramp far too
-        // aggressively and caused harsh plateaus around cleared-depth silhouettes.
-//        const float sourceAlpha = saturate(colorSample.a);
-        const float nearCoverage = saturate(nearRadius * inverseMaxBlurRadius);
-        const float farCoverage = saturate(farRadius * inverseMaxBlurRadius);
-
-        nearAccum.rgb += colorSample.rgb * nearCoverage;
-        nearAccum.a += nearCoverage;
-        farAccum.rgb += colorSample.rgb * farCoverage;
-        farAccum.a += farCoverage;
-
-        maxNearRadius = max(maxNearRadius, nearRadius);
-        maxFarRadius = max(maxFarRadius, farRadius);
+        colorAccum += colorSample * sourceCoverage;
+        cocAccum += signedRadius * cocContribution;
+        cocWeight += cocContribution;
+        maxAbsoluteRadius = max(maxAbsoluteRadius, abs(signedRadius));
     }
 
-    nearColorTex.write(nearAccum * 0.25f, gid);
-    farColorTex.write(farAccum * 0.25f, gid);
-    nearRadiusTex.write(float4(maxNearRadius, 0.0f, 0.0f, 1.0f), gid);
-    farRadiusTex.write(float4(maxFarRadius, 0.0f, 0.0f, 1.0f), gid);
+    const float averagedCoverage = colorAccum.a * 0.25f;
+    const float3 averagedColor = colorAccum.rgb / max(colorAccum.a, 1.0e-4f);
+    const float signedRadius = cocAccum / max(cocWeight, 1.0e-4f);
+
+    sourceColorTex.write(float4(averagedColor, averagedCoverage), gid);
+    cocTex.write(float4(signedRadius, maxAbsoluteRadius, 0.0f, 1.0f), gid);
+}
+
+kernel void bokehDepthOfFieldSplitUpdate(
+    uint2 gid [[thread_position_in_grid]],
+    constant BokehDepthOfFieldSplitUniforms &uniforms [[buffer(ComputeBufferUniforms)]],
+    texture2d<float, access::write> nearColorTex [[texture(ComputeTextureCustom0)]],
+    texture2d<float, access::write> farColorTex [[texture(ComputeTextureCustom1)]],
+    texture2d<float, access::write> nearRadiusTex [[texture(ComputeTextureCustom2)]],
+    texture2d<float, access::write> farRadiusTex [[texture(ComputeTextureCustom3)]],
+    texture2d<float, access::sample> sourceColorTex [[texture(ComputeTextureCustom4)]],
+    texture2d<float, access::sample> cocTex [[texture(ComputeTextureCustom5)]]
+) {
+    const uint2 size = uint2(uniforms.size);
+    if (gid.x >= size.x || gid.y >= size.y) { return; }
+
+    const float4 sourceSample = sourceColorTex.read(gid);
+    const float2 cocSample = cocTex.read(gid).rg;
+    const float signedRadius = cocSample.x;
+    const float maximumRadius = cocSample.y;
+
+    const float inverseMaxBlurRadius = 1.0f / max(uniforms.maxBlurRadius, 1.0e-4f);
+    const float nearRadius = max(-signedRadius, 0.0f);
+    const float farRadius = max(signedRadius, 0.0f);
+    const float nearCoverage = saturate(nearRadius * inverseMaxBlurRadius) * sourceSample.a;
+    const float farCoverage = saturate(farRadius * inverseMaxBlurRadius) * sourceSample.a;
+
+    nearColorTex.write(float4(sourceSample.rgb * nearCoverage, nearCoverage), gid);
+    farColorTex.write(float4(sourceSample.rgb * farCoverage, farCoverage), gid);
+    nearRadiusTex.write(float4(max(nearRadius, maximumRadius * step(0.0f, -signedRadius)), 0.0f, 0.0f, 1.0f), gid);
+    farRadiusTex.write(float4(max(farRadius, maximumRadius * step(0.0f, signedRadius)), 0.0f, 0.0f, 1.0f), gid);
 }
 
 kernel void bokehDepthOfFieldComplexHorizontalUpdate(

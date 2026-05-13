@@ -125,11 +125,14 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
 
     private let compositeMaterial: BokehDepthOfFieldCompositeMaterial
     private let prefilterProcessor: NamedComputeProcessor
+    private let splitProcessor: NamedComputeProcessor
     private let nearMaxHorizontalProcessor: NamedComputeProcessor
     private let nearMaxVerticalProcessor: NamedComputeProcessor
     private let complexHorizontalProcessor: NamedComputeProcessor
     private let complexVerticalProcessor: NamedComputeProcessor
 
+    private var sourceColorTexture: MTLTexture?
+    private var cocTexture: MTLTexture?
     private var nearColorTexture: MTLTexture?
     private var farColorTexture: MTLTexture?
     private var nearRadiusTexture: MTLTexture?
@@ -160,6 +163,12 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             pipelineURL: pipelineURL,
             label: "Bokeh DOF Prefilter",
             updateFunctionName: "bokehDepthOfFieldPrefilterUpdate"
+        )
+        splitProcessor = NamedComputeProcessor(
+            device: context.device,
+            pipelineURL: pipelineURL,
+            label: "Bokeh DOF Split",
+            updateFunctionName: "bokehDepthOfFieldSplitUpdate"
         )
         nearMaxHorizontalProcessor = NamedComputeProcessor(
             device: context.device,
@@ -196,10 +205,9 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
     }
 
     override open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
-        let force:Bool = lastSize != size
+        let force: Bool = lastSize != size
 
-        if force
-        {
+        if force {
             super.resize(size: size, scaleFactor: scaleFactor)
             resizeResourcesIfNeeded(force: force)
         }
@@ -214,6 +222,8 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
               let depthTexture,
               let sceneCamera,
               let outputTexture,
+              let sourceColorTexture,
+              let cocTexture,
               let nearColorTexture,
               let farColorTexture,
               let nearRadiusTexture,
@@ -232,13 +242,20 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
         prefilterProcessor.set("Focus Distance", focusDistance)
         prefilterProcessor.set("Focus Range", focusRange)
         prefilterProcessor.set("Max Blur Radius", scaledBlurRadius)
-        prefilterProcessor.set(nearColorTexture, index: .Custom0)
-        prefilterProcessor.set(farColorTexture, index: .Custom1)
-        prefilterProcessor.set(nearRadiusTexture, index: .Custom2)
-        prefilterProcessor.set(farRadiusTexture, index: .Custom3)
+        prefilterProcessor.set(sourceColorTexture, index: .Custom0)
+        prefilterProcessor.set(cocTexture, index: .Custom1)
         prefilterProcessor.set(colorTexture, index: .Custom4)
         prefilterProcessor.set(depthTexture, index: .Custom5)
         prefilterProcessor.update(commandBuffer)
+
+        splitProcessor.set("Max Blur Radius", scaledBlurRadius)
+        splitProcessor.set(nearColorTexture, index: .Custom0)
+        splitProcessor.set(farColorTexture, index: .Custom1)
+        splitProcessor.set(nearRadiusTexture, index: .Custom2)
+        splitProcessor.set(farRadiusTexture, index: .Custom3)
+        splitProcessor.set(sourceColorTexture, index: .Custom4)
+        splitProcessor.set(cocTexture, index: .Custom5)
+        splitProcessor.update(commandBuffer)
 
         let nearMaxRadius = Int(min(max(Int(ceil(scaledBlurRadius)), 0), 24))
         nearMaxHorizontalProcessor.set("Max Radius", nearMaxRadius)
@@ -326,6 +343,8 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
 
         if outputWidth <= 0 || outputHeight <= 0 || processingWidth <= 0 || processingHeight <= 0 {
             outputTexture = nil
+            sourceColorTexture = nil
+            cocTexture = nil
             nearColorTexture = nil
             farColorTexture = nil
             nearRadiusTexture = nil
@@ -359,6 +378,24 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
             processingTextureSize.height != processingHeight ||
             appliedResolutionScale != clampedResolutionScale
         {
+            sourceColorTexture = makeTexture(
+                device: context.device,
+                width: processingWidth,
+                height: processingHeight,
+                pixelFormat: .rgba16Float,
+                usage: [.shaderRead, .shaderWrite],
+                storageMode: .private,
+                label: "Bokeh DOF Source Color"
+            )
+            cocTexture = makeTexture(
+                device: context.device,
+                width: processingWidth,
+                height: processingHeight,
+                pixelFormat: .rg16Float,
+                usage: [.shaderRead, .shaderWrite],
+                storageMode: .private,
+                label: "Bokeh DOF CoC"
+            )
             nearColorTexture = makeTexture(
                 device: context.device,
                 width: processingWidth,

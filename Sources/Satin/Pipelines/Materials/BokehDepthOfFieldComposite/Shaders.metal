@@ -28,9 +28,9 @@ static float bokehDepthOfFieldSignedRadius(
 
     float signedCoC = 0.0f;
     if (delta < -halfRange) {
-        signedCoC = (delta + halfRange) / falloffRange;
+        signedCoC = (delta + halfRange) / halfRange;
     } else if (delta > halfRange) {
-        signedCoC = (delta - halfRange) / falloffRange;
+        signedCoC = (delta - halfRange) / halfRange;
     }
 
     return clamp(signedCoC, -1.0f, 1.0f) * maxBlurRadius;
@@ -45,38 +45,33 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     texture2d<float, access::sample> nearBlurTex [[texture(FragmentTextureCustom3)]]
 ) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
-    constexpr sampler nearestSampler(filter::nearest, address::clamp_to_edge);
 
     const float2 uv = in.texcoord;
     const float4 sharpSample = colorTex.sample(linearSampler, uv);
-    const float depth = depthTex.sample(nearestSampler, uv);
-
-    const float viewDistance = bokehDepthOfFieldViewDistance(uv, depth, uniforms.inverseProjectionMatrix);
-    const float signedRadius = bokehDepthOfFieldSignedRadius(
-        viewDistance,
-        uniforms.focusDistance,
-        uniforms.focusRange,
-        uniforms.maxBlurRadius
-    );
-    const float inverseMaxBlurRadius = 1.0f / max(uniforms.maxBlurRadius, 1.0e-4f);
-    const float nearBlend = saturate(max(-signedRadius, 0.0f) * inverseMaxBlurRadius);
-    const float farBlend = saturate(max(signedRadius, 0.0f) * inverseMaxBlurRadius);
-    const float sharpBlend = saturate(1.0f - nearBlend - farBlend);
-
     const float4 farSample = farBlurTex.sample(linearSampler, uv);
     const float4 nearSample = nearBlurTex.sample(linearSampler, uv);
-    const float3 farColor = farSample.rgb;
-    const float3 nearColor = nearSample.rgb;
 
+    // Composite explicit near/far planes rather than reclassifying the destination pixel from full-res
+    // depth. This more closely matches the Garcia circular DOF pipeline where the split planes are the
+    // source of truth after downsample/split.
+    // Garcia explicitly recommends transitioning to the blurred near plane quickly to avoid
+    // silhouette ghosting. Bias the near layer aggressively once support is present.
+    const float nearSupport = saturate(nearSample.a);
+    const float farSupport = saturate(farSample.a);
+    const float nearOpacity = smoothstep(0.05f, 0.35f, nearSupport);
+    const float farOpacity = smoothstep(0.05f, 0.35f, farSupport);
+
+    const float nearVisibility = nearOpacity;
+    const float farVisibility = farOpacity * (1.0f - nearVisibility);
+    const float sharpVisibility = saturate(1.0f - nearVisibility - farVisibility);
+
+    const float visibilitySum = max(nearVisibility + farVisibility + sharpVisibility, 1.0e-4f);
     const float3 result =
-        sharpSample.rgb * sharpBlend +
-        nearColor * nearBlend +
-        farColor * farBlend;
+        sharpSample.rgb * (sharpVisibility / visibilitySum) +
+        farSample.rgb * (farVisibility / visibilitySum) +
+        nearSample.rgb * (nearVisibility / visibilitySum);
 
-    const float resultAlpha = 1.0;
-//        sharpSample.a * sharpBlend +
-//        nearSample.a * nearBlend +
-//        farSample.a * farBlend;
+    const float resultAlpha = 1.0;//saturate(sharpSample.a + farVisibility + nearVisibility);
 
     return half4(half3(result), half(resultAlpha));
 }
