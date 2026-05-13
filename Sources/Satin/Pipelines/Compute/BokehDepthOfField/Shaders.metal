@@ -379,26 +379,28 @@ kernel void bokehDepthOfFieldHorizontalUpdate(
     float2 nearRedAccum = 0.0f;
     float2 nearGreenAccum = 0.0f;
     float2 nearBlueAccum = 0.0f;
+    float nearWeightAccum = 0.0f;
 
-    if (nearCoC > kCoCActivationThreshold) {
-        for (int i = -kKernelRadius; i <= kKernelRadius; ++i) {
-            const uint kernelIndex = uint(i + kKernelRadius);
-            const float2 sampleUV = uv + (texelSize * float2(float(i), 0.0f) * uniforms.maxRadius);
-            const bool usesCenter = nearCoCTexture.sample(pointSampler, sampleUV).x <= kCoCActivationThreshold;
-            const float2 resolvedUV = usesCenter ? uv : sampleUV;
-            const float4 colorSample = sourceColorTexture.sample(linearSampler, resolvedUV);
+    for (int i = -kKernelRadius; i <= kKernelRadius; ++i) {
+        const uint kernelIndex = uint(i + kKernelRadius);
+        const float2 sampleUV = uv + (texelSize * float2(float(i), 0.0f) * uniforms.maxRadius);
+        const float sampledNearCoC = nearCoCTexture.sample(pointSampler, sampleUV).x;
+        const bool usesCenter = sampledNearCoC <= kCoCActivationThreshold;
+        const float2 resolvedUV = usesCenter ? uv : sampleUV;
+        const float4 colorSample = sourceColorTexture.sample(linearSampler, resolvedUV);
 
-            nearRedAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.x, 0.0f));
-            nearGreenAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.y, 0.0f));
-            nearBlueAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.z, 0.0f));
-        }
+        nearRedAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.x, 0.0f));
+        nearGreenAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.y, 0.0f));
+        nearBlueAccum += complexMul(kNearKernel[kernelIndex].xy, float2(colorSample.z, 0.0f));
+        nearWeightAccum += sampledNearCoC;
     }
+    nearWeightAccum *= 1.0f / 17.0f;
 
     farRTexture.write(farRedAccum, gid);
     farGTexture.write(farGreenAccum, gid);
     farBTexture.write(farBlueAccum, gid);
-    nearRTexture.write(float4(nearRedAccum, 0.0f, 1.0f), gid);
-    nearGTexture.write(float4(nearGreenAccum, 0.0f, 1.0f), gid);
-    nearBTexture.write(float4(nearBlueAccum, 0.0f, 1.0f), gid);
+    nearRTexture.write(float4(nearRedAccum, nearWeightAccum, 1.0f), gid);
+    nearGTexture.write(float4(nearGreenAccum, nearWeightAccum, 1.0f), gid);
+    nearBTexture.write(float4(nearBlueAccum, nearWeightAccum, 1.0f), gid);
     farWeightsTexture.write(float4(farWeightAccum, 0.0f, 0.0f, 0.0f), gid);
 }

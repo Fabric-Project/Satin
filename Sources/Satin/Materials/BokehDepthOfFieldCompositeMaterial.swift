@@ -43,6 +43,10 @@ public final class BokehDepthOfFieldCompositeMaterial: Material {
         didSet { set(farWeightsTexture, index: FragmentTextureIndex.Custom9) }
     }
 
+    public unowned var nearCoCBoxTexture: MTLTexture? {
+        didSet { set(nearCoCBoxTexture, index: FragmentTextureIndex.Custom10) }
+    }
+
     public var maxBlurRadius: Float {
         get { get("Max Radius", as: FloatParameter.self)?.value ?? 6.0 }
         set { set("Max Radius", newValue) }
@@ -81,5 +85,6 @@ public final class BokehDepthOfFieldCompositeMaterial: Material {
         set(nearBTexture, index: FragmentTextureIndex.Custom7)
         set(nearCoCTexture, index: FragmentTextureIndex.Custom8)
         set(farWeightsTexture, index: FragmentTextureIndex.Custom9)
+        set(nearCoCBoxTexture, index: FragmentTextureIndex.Custom10)
     }
 }

@@ -83,7 +83,8 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     texture2d<float, access::sample> nearGTexture [[texture(FragmentTextureCustom6)]],
     texture2d<float, access::sample> nearBTexture [[texture(FragmentTextureCustom7)]],
     texture2d<float, access::sample> nearCoCTexture [[texture(FragmentTextureCustom8)]],
-    texture2d<float, access::sample> farWeightsTexture [[texture(FragmentTextureCustom9)]]
+    texture2d<float, access::sample> farWeightsTexture [[texture(FragmentTextureCustom9)]],
+    texture2d<float, access::sample> nearCoCBoxTexture [[texture(FragmentTextureCustom10)]]
 ) {
     constexpr sampler linearSampler(filter::linear, address::clamp_to_edge);
     constexpr sampler pointSampler(filter::nearest, address::clamp_to_edge);
@@ -93,6 +94,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     const float4 cocSample = cocTexture.sample(pointSampler, uv);
     const float farCoC = cocSample.y;
     const float nearCoC = nearCoCTexture.sample(pointSampler, uv).x;
+    const float nearSoftCoC = nearCoCBoxTexture.sample(linearSampler, uv).x;
 
     const uint2 farTextureSize = uint2(farRTexture.get_width(), farRTexture.get_height());
     const float2 texelSize = 1.0f / float2(farTextureSize);
@@ -132,37 +134,39 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
         ) / normalization;
     }
 
-    float4 nearColor = 0.0f;
-    if (nearCoC > kBokehCompositeCoCActivationThreshold) {
-        float2 nearRedAccum = 0.0f;
-        float2 nearGreenAccum = 0.0f;
-        float2 nearBlueAccum = 0.0f;
+    float2 nearRedAccum = 0.0f;
+    float2 nearGreenAccum = 0.0f;
+    float2 nearBlueAccum = 0.0f;
+    float nearWeightAccum = 0.0f;
 
-        for (int i = -kBokehCompositeKernelRadius; i <= kBokehCompositeKernelRadius; ++i) {
-            const uint kernelIndex = uint(i + kBokehCompositeKernelRadius);
-            const float2 sampleUV = uv + (texelSize * float2(0.0f, float(i)) * uniforms.maxRadius);
-            const bool usesCenter = nearCoCTexture.sample(pointSampler, sampleUV).x <= kBokehCompositeCoCActivationThreshold;
-            const float2 resolvedUV = usesCenter ? uv : sampleUV;
+    for (int i = -kBokehCompositeKernelRadius; i <= kBokehCompositeKernelRadius; ++i) {
+        const uint kernelIndex = uint(i + kBokehCompositeKernelRadius);
+        const float2 sampleUV = uv + (texelSize * float2(0.0f, float(i)) * uniforms.maxRadius);
+        const float sampledNearCoC = nearCoCTexture.sample(pointSampler, sampleUV).x;
+        const bool usesCenter = sampledNearCoC <= kBokehCompositeCoCActivationThreshold;
+        const float2 resolvedUV = usesCenter ? uv : sampleUV;
 
-            const float4 nearRedSample = nearRTexture.sample(linearSampler, resolvedUV);
-            const float4 nearGreenSample = nearGTexture.sample(linearSampler, resolvedUV);
-            const float4 nearBlueSample = nearBTexture.sample(linearSampler, resolvedUV);
+        const float4 nearRedSample = nearRTexture.sample(linearSampler, resolvedUV);
+        const float4 nearGreenSample = nearGTexture.sample(linearSampler, resolvedUV);
+        const float4 nearBlueSample = nearBTexture.sample(linearSampler, resolvedUV);
 
-            nearRedAccum += complexMulFragment(float2(nearRedSample.x, nearRedSample.y), kCompositeNearKernel[kernelIndex].xy);
-            nearGreenAccum += complexMulFragment(float2(nearGreenSample.x, nearGreenSample.y), kCompositeNearKernel[kernelIndex].xy);
-            nearBlueAccum += complexMulFragment(float2(nearBlueSample.x, nearBlueSample.y), kCompositeNearKernel[kernelIndex].xy);
-        }
-
-        nearColor = float4(
-            dot(nearRedAccum, float2(0.767583f, 1.862321f)),
-            dot(nearGreenAccum, float2(0.767583f, 1.862321f)),
-            dot(nearBlueAccum, float2(0.767583f, 1.862321f)),
-            0.0f
-        );
+        nearRedAccum += complexMulFragment(float2(nearRedSample.x, nearRedSample.y), kCompositeNearKernel[kernelIndex].xy);
+        nearGreenAccum += complexMulFragment(float2(nearGreenSample.x, nearGreenSample.y), kCompositeNearKernel[kernelIndex].xy);
+        nearBlueAccum += complexMulFragment(float2(nearBlueSample.x, nearBlueSample.y), kCompositeNearKernel[kernelIndex].xy);
+        nearWeightAccum += nearRedSample.z;
     }
 
+    const float4 nearColor = float4(
+        dot(nearRedAccum, float2(0.767583f, 1.862321f)),
+        dot(nearGreenAccum, float2(0.767583f, 1.862321f)),
+        dot(nearBlueAccum, float2(0.767583f, 1.862321f)),
+        0.0f
+    );
+
     const float farBlend = clamp(farCoC * uniforms.blend, 0.0f, 1.0f);
-    const float nearBlend = clamp(nearCoC * uniforms.blend, 0.0f, 1.0f);
+    const float gatheredNearSupport = clamp(nearWeightAccum * (1.0f / 17.0f), 0.0f, 1.0f);
+    const float nearBlendField = max(nearCoC, nearSoftCoC * gatheredNearSupport);
+    const float nearBlend = clamp(nearBlendField * uniforms.blend, 0.0f, 1.0f);
     const float3 farComposite = mix(sharpSample.rgb, farColor.rgb, farBlend);
     const float3 finalColor = mix(farComposite, nearColor.rgb, nearBlend);
     const float blurCoverage = max(farBlend, nearBlend);

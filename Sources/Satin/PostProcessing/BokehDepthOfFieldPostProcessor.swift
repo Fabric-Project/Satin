@@ -19,6 +19,23 @@
 // 6. final fullscreen composite that performs the vertical pass and blends explicit near/far planes
 //
 // Accuracy of the pass graph and blend law takes priority over optimization in this implementation.
+//
+// Satin-specific divergences from the original reference path that are intentional or currently
+// under evaluation:
+// - Depth is linearized from Satin camera near/far planes with explicit reversed-Z normalization.
+// - The public control surface remains a compatibility mapping from focus distance/range unless
+//   explicit CoC bands are provided programmatically.
+// - Internal processing may run at arbitrary resolution scales rather than the reference's exact
+//   half-resolution assumption, so the CoC downsample footprint is derived from the actual
+//   processing size.
+// - The near-mask seed is taken conservatively from the full-resolution 2x2 footprint so thin
+//   silhouettes survive downsampling at reduced internal resolutions.
+// - The near CoC box/max expansion radius is allowed to grow with the active blur radius, with
+//   the reference radius retained as the minimum.
+// - Tap activation uses a small CoC threshold instead of an exact zero comparison to reduce
+//   binary sampling artifacts at focus boundaries.
+// - Final alpha is synthesized for Fabric image reuse over cleared backgrounds instead of simply
+//   returning the reference's mixed float4 on an opaque post-processing target.
 import Metal
 import simd
 
@@ -340,6 +357,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
         compositeMaterial.nearBTexture = nearHorizontalTextures[2]
         compositeMaterial.nearCoCTexture = nearCoCTexture
         compositeMaterial.farWeightsTexture = farWeightsTexture
+        compositeMaterial.nearCoCBoxTexture = nearCoCBoxTexture
         compositeMaterial.maxBlurRadius = resolvedSettings.maxRadius
         compositeMaterial.blend = resolvedSettings.blend
 
@@ -351,13 +369,12 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
     }
 
     func resolvedSettings() -> ResolvedDOFSettings {
-        let scaledMaxRadius = max(maxBlurRadius * appliedResolutionScale, 0.0)
         let cocBands = explicitCoCBands ?? deriveCompatibilityCoCBands(
             focusDistance: focusDistance,
             focusRange: focusRange
         )
         return ResolvedDOFSettings(
-            maxRadius: scaledMaxRadius,
+            maxRadius: max(maxBlurRadius, 0.0),
             blend: blend,
             nearBegin: cocBands.nearBegin,
             nearEnd: cocBands.nearEnd,
