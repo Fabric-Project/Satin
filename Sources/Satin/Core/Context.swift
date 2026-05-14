@@ -11,6 +11,7 @@ import Metal
 public struct Context {
     public let id: UUID
     public let device: MTLDevice
+    public let commandQueue:MTLCommandQueue
     public let sampleCount: Int
     public let colorPixelFormat: MTLPixelFormat
     public let depthPixelFormat: MTLPixelFormat
@@ -51,6 +52,7 @@ public struct Context {
     ) {
         self.id = id
         self.device = device
+        self.commandQueue = device.makeCommandQueue()!
         self.sampleCount = sampleCount
         self.colorPixelFormat = colorPixelFormat
         self.depthPixelFormat = depthPixelFormat
