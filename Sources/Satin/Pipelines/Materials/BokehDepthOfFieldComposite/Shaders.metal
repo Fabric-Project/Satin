@@ -93,14 +93,17 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     const float4 sharpSample = colorTexture.sample(linearSampler, uv);
     const float4 cocSample = cocTexture.sample(pointSampler, uv);
     const float farCoC = cocSample.y;
+    const float farBlendCoC = cocTexture.sample(linearSampler, uv).y;
     const float nearCoC = nearCoCTexture.sample(pointSampler, uv).x;
     const float nearSoftCoC = nearCoCBoxTexture.sample(linearSampler, uv).x;
+    const float localFarSupport = farWeightsTexture.sample(linearSampler, uv).x;
 
     const uint2 farTextureSize = uint2(farRTexture.get_width(), farRTexture.get_height());
     const float2 texelSize = 1.0f / float2(farTextureSize);
 
     float4 farColor = 0.0f;
-    if (farCoC > kBokehCompositeCoCActivationThreshold) {
+    float gatheredFarSupport = 0.0f;
+    {
         float4 farRedAccum = 0.0f;
         float4 farGreenAccum = 0.0f;
         float4 farBlueAccum = 0.0f;
@@ -109,29 +112,32 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
         for (int i = -kBokehCompositeKernelRadius; i <= kBokehCompositeKernelRadius; ++i) {
             const uint kernelIndex = uint(i + kBokehCompositeKernelRadius);
             const float2 sampleUV = uv + (texelSize * float2(0.0f, float(i)) * uniforms.maxRadius);
-            const bool usesCenter = cocTexture.sample(pointSampler, sampleUV).y <= kBokehCompositeCoCActivationThreshold;
-            const float2 resolvedUV = usesCenter ? uv : sampleUV;
+            const float sampledFarCoC = cocTexture.sample(pointSampler, sampleUV).y;
+            if (sampledFarCoC > kBokehCompositeCoCActivationThreshold) {
+                const float4 farRedSample = farRTexture.sample(linearSampler, sampleUV);
+                const float4 farGreenSample = farGTexture.sample(linearSampler, sampleUV);
+                const float4 farBlueSample = farBTexture.sample(linearSampler, sampleUV);
 
-            const float4 farRedSample = farRTexture.sample(linearSampler, resolvedUV);
-            const float4 farGreenSample = farGTexture.sample(linearSampler, resolvedUV);
-            const float4 farBlueSample = farBTexture.sample(linearSampler, resolvedUV);
-
-            farRedAccum.xy += complexMulFragment(float2(farRedSample.x, farRedSample.y), kCompositeFarKernel0[kernelIndex].xy);
-            farRedAccum.zw += complexMulFragment(float2(farRedSample.z, farRedSample.w), kCompositeFarKernel1[kernelIndex].xy);
-            farGreenAccum.xy += complexMulFragment(float2(farGreenSample.x, farGreenSample.y), kCompositeFarKernel0[kernelIndex].xy);
-            farGreenAccum.zw += complexMulFragment(float2(farGreenSample.z, farGreenSample.w), kCompositeFarKernel1[kernelIndex].xy);
-            farBlueAccum.xy += complexMulFragment(float2(farBlueSample.x, farBlueSample.y), kCompositeFarKernel0[kernelIndex].xy);
-            farBlueAccum.zw += complexMulFragment(float2(farBlueSample.z, farBlueSample.w), kCompositeFarKernel1[kernelIndex].xy);
-            farWeightAccum += farWeightsTexture.sample(linearSampler, resolvedUV).x;
+                farRedAccum.xy += complexMulFragment(float2(farRedSample.x, farRedSample.y), kCompositeFarKernel0[kernelIndex].xy);
+                farRedAccum.zw += complexMulFragment(float2(farRedSample.z, farRedSample.w), kCompositeFarKernel1[kernelIndex].xy);
+                farGreenAccum.xy += complexMulFragment(float2(farGreenSample.x, farGreenSample.y), kCompositeFarKernel0[kernelIndex].xy);
+                farGreenAccum.zw += complexMulFragment(float2(farGreenSample.z, farGreenSample.w), kCompositeFarKernel1[kernelIndex].xy);
+                farBlueAccum.xy += complexMulFragment(float2(farBlueSample.x, farBlueSample.y), kCompositeFarKernel0[kernelIndex].xy);
+                farBlueAccum.zw += complexMulFragment(float2(farBlueSample.z, farBlueSample.w), kCompositeFarKernel1[kernelIndex].xy);
+                farWeightAccum += farWeightsTexture.sample(linearSampler, sampleUV).x;
+            }
         }
 
-        const float normalization = max(farWeightAccum * (1.0f / 17.0f), 1.0e-4f);
-        farColor = float4(
-            dot(farRedAccum.xy, float2(0.411259f, -0.548794f)) + dot(farRedAccum.zw, float2(0.513282f, 4.561110f)),
-            dot(farGreenAccum.xy, float2(0.411259f, -0.548794f)) + dot(farGreenAccum.zw, float2(0.513282f, 4.561110f)),
-            dot(farBlueAccum.xy, float2(0.411259f, -0.548794f)) + dot(farBlueAccum.zw, float2(0.513282f, 4.561110f)),
-            0.0f
-        ) / normalization;
+        gatheredFarSupport = clamp(farWeightAccum * (1.0f / 17.0f), 0.0f, 1.0f);
+        if (gatheredFarSupport > 1.0e-4f) {
+            const float normalization = max(gatheredFarSupport, 1.0e-4f);
+            farColor = float4(
+                dot(farRedAccum.xy, float2(0.411259f, -0.548794f)) + dot(farRedAccum.zw, float2(0.513282f, 4.561110f)),
+                dot(farGreenAccum.xy, float2(0.411259f, -0.548794f)) + dot(farGreenAccum.zw, float2(0.513282f, 4.561110f)),
+                dot(farBlueAccum.xy, float2(0.411259f, -0.548794f)) + dot(farBlueAccum.zw, float2(0.513282f, 4.561110f)),
+                0.0f
+            ) / normalization;
+        }
     }
 
     float2 nearRedAccum = 0.0f;
@@ -163,7 +169,9 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
         0.0f
     );
 
-    const float farBlend = clamp(farCoC * uniforms.blend, 0.0f, 1.0f);
+    const float farSupportBlend = localFarSupport * gatheredFarSupport;
+    const float farBlendField = max(farBlendCoC, farSupportBlend);
+    const float farBlend = clamp(farBlendField * uniforms.blend, 0.0f, 1.0f);
     const float gatheredNearSupport = clamp(nearWeightAccum * (1.0f / 17.0f), 0.0f, 1.0f);
     const float nearBlendField = max(nearCoC, nearSoftCoC * gatheredNearSupport);
     const float nearBlend = clamp(nearBlendField * uniforms.blend, 0.0f, 1.0f);

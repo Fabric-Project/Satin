@@ -347,7 +347,6 @@ kernel void bokehDepthOfFieldHorizontalUpdate(
     const float2 texelSize = 1.0f / float2(size);
 
     const float4 cocSample = cocTexture.sample(pointSampler, uv);
-    const float farCoC = cocSample.y;
     const float nearCoC = nearCoCTexture.sample(pointSampler, uv).x;
 
     float4 farRedAccum = 0.0f;
@@ -355,14 +354,12 @@ kernel void bokehDepthOfFieldHorizontalUpdate(
     float4 farBlueAccum = 0.0f;
     float farWeightAccum = 0.0f;
 
-    if (farCoC > kCoCActivationThreshold) {
-        for (int i = -kKernelRadius; i <= kKernelRadius; ++i) {
-            const uint kernelIndex = uint(i + kKernelRadius);
-            const float2 sampleUV = uv + (texelSize * float2(float(i), 0.0f) * uniforms.maxRadius);
-            const float sampledFarCoC = cocTexture.sample(pointSampler, sampleUV).y;
-            const bool usesCenter = sampledFarCoC <= kCoCActivationThreshold;
-            const float2 resolvedUV = usesCenter ? uv : sampleUV;
-            const float4 farColor = colorMulFarTexture.sample(pointSampler, resolvedUV);
+    for (int i = -kKernelRadius; i <= kKernelRadius; ++i) {
+        const uint kernelIndex = uint(i + kKernelRadius);
+        const float2 sampleUV = uv + (texelSize * float2(float(i), 0.0f) * uniforms.maxRadius);
+        const float sampledFarCoC = cocTexture.sample(pointSampler, sampleUV).y;
+        if (sampledFarCoC > kCoCActivationThreshold) {
+            const float4 farColor = colorMulFarTexture.sample(pointSampler, sampleUV);
 
             farRedAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.x, 0.0f));
             farRedAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.x, 0.0f));
@@ -371,10 +368,10 @@ kernel void bokehDepthOfFieldHorizontalUpdate(
             farBlueAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.z, 0.0f));
             farBlueAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.z, 0.0f));
 
-            farWeightAccum += usesCenter ? farCoC : sampledFarCoC;
+            farWeightAccum += sampledFarCoC;
         }
-        farWeightAccum *= 1.0f / 17.0f;
     }
+    farWeightAccum *= 1.0f / 17.0f;
 
     float2 nearRedAccum = 0.0f;
     float2 nearGreenAccum = 0.0f;
