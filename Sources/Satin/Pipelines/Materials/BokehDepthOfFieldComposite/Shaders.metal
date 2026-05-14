@@ -113,10 +113,10 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
     for (int i = -kBokehCompositeKernelRadius; i <= kBokehCompositeKernelRadius; ++i) {
         const uint kernelIndex = uint(i + kBokehCompositeKernelRadius);
         const float2 sampleUV = uv + (texelSize * float2(0.0f, float(i)) * uniforms.maxRadius);
-//        const float sampledFarCoC = cocTexture.sample(linearSampler, sampleUV).y;
+        const float sampledFarCoC = cocTexture.sample(linearSampler, sampleUV).y;
  //       const float sampledNearCoC = nearCoCTexture.sample(linearSampler, sampleUV).x;
 
-//        if (sampledFarCoC > kBokehCompositeCoCActivationThreshold) {
+        if (sampledFarCoC > kBokehCompositeCoCActivationThreshold) {
             const float4 farRedSample = farRTexture.sample(linearSampler, sampleUV);
             const float4 farGreenSample = farGTexture.sample(linearSampler, sampleUV);
             const float4 farBlueSample = farBTexture.sample(linearSampler, sampleUV);
@@ -128,7 +128,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
             farBlueAccum.xy += complexMulFragment(float2(farBlueSample.x, farBlueSample.y), kCompositeFarKernel0[kernelIndex].xy);
             farBlueAccum.zw += complexMulFragment(float2(farBlueSample.z, farBlueSample.w), kCompositeFarKernel1[kernelIndex].xy);
             farWeightAccum += farWeightsTexture.sample(linearSampler, sampleUV).x;
-//        }
+        }
 
 //        const bool usesCenter = sampledNearCoC <= kBokehCompositeCoCActivationThreshold;
 //        const float2 resolvedNearUV = usesCenter ? uv : sampleUV;
@@ -147,7 +147,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
 
     float4 farColor = 0.0f;
     const float gatheredFarSupport = clamp(farWeightAccum * (1.0f / 17.0f), 0.0f, 1.0f);
-//    if (gatheredFarSupport > 1.0e-4f) {
+    if (gatheredFarSupport > 1.0e-4f) {
         const float normalization = max(gatheredFarSupport, 1.0e-6f);
         farColor = float4(
             dot(farRedAccum.xy, float2(0.411259f, -0.548794f)) + dot(farRedAccum.zw, float2(0.513282f, 4.561110f)),
@@ -155,7 +155,7 @@ fragment half4 bokehDepthOfFieldCompositeFragment(
             dot(farBlueAccum.xy, float2(0.411259f, -0.548794f)) + dot(farBlueAccum.zw, float2(0.513282f, 4.561110f)),
             0.0f
         ) / normalization;
-//    }
+    }
 
     const float4 nearColor = float4(
         dot(nearRedAccum, float2(0.767583f, 1.862321f)),

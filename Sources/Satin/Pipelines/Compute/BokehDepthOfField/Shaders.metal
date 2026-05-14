@@ -127,8 +127,8 @@ static float2 computeNearFarCoC(
     float farBegin,
     float farEnd
 ) {
-    const float nearDenominator = max(nearEnd - nearBegin, 1.0e-6f);
-    const float farDenominator = max(farEnd - farBegin, 1.0e-6f);
+    const float nearDenominator = max(nearEnd - nearBegin, 1.0e-4f);
+    const float farDenominator = max(farEnd - farBegin, 1.0e-4f);
 
     // Match the reference CoC generation: keep the raw near/far ramps here and clamp only
     // at the later blend/use sites that require bounded masks.
@@ -360,17 +360,20 @@ kernel void bokehDepthOfFieldHorizontalUpdate(
         const float2 sampleUV = uv + (texelSize * float2(float(i), 0.0f) * uniforms.maxRadius);
         const float sampledFarCoC = cocTexture.sample(pointSampler, sampleUV).y;
         const float sampledNearCoC = nearCoCTexture.sample(pointSampler, sampleUV).x;
-        const float4 farColor = colorMulFarTexture.sample(pointSampler, sampleUV);
         const float4 nearColor = sourceColorTexture.sample(linearSampler, sampleUV);
 
-        farRedAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.x, 0.0f));
-        farRedAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.x, 0.0f));
-        farGreenAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.y, 0.0f));
-        farGreenAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.y, 0.0f));
-        farBlueAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.z, 0.0f));
-        farBlueAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.z, 0.0f));
-        farWeightAccum += sampledFarCoC;
-
+        if (sampledFarCoC > kCoCActivationThreshold) {
+            const float4 farColor = colorMulFarTexture.sample(pointSampler, sampleUV);
+            
+            farRedAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.x, 0.0f));
+            farRedAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.x, 0.0f));
+            farGreenAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.y, 0.0f));
+            farGreenAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.y, 0.0f));
+            farBlueAccum.xy += complexMul(kFarKernel0[kernelIndex].xy, float2(farColor.z, 0.0f));
+            farBlueAccum.zw += complexMul(kFarKernel1[kernelIndex].xy, float2(farColor.z, 0.0f));
+            farWeightAccum += sampledFarCoC;
+        }
+        
         nearRedAccum += complexMul(kNearKernel[kernelIndex].xy, float2(nearColor.x, 0.0f));
         nearGreenAccum += complexMul(kNearKernel[kernelIndex].xy, float2(nearColor.y, 0.0f));
         nearBlueAccum += complexMul(kNearKernel[kernelIndex].xy, float2(nearColor.z, 0.0f));
