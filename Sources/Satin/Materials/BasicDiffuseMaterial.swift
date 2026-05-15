@@ -11,6 +11,7 @@ import simd
 public final class BasicDiffuseMaterial: BasicColorMaterial {
     override public var lightingModel: LightingModel { .surface }
     override public var supportedOutputs: RendererOutputs { [.color, .albedo, .normals, .pbr, .velocity, .emissive] }
+    override var supportsAlphaOrderIndependentTransparency: Bool { true }
 
     public var ambient: Float {
         get {

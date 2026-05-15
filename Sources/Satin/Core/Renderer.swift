@@ -205,6 +205,7 @@ open class Renderer {
     private struct RenderContextKey: Hashable {
         let renderingMode: RenderingMode
         let activeOutputs: RendererOutputs
+        let alphaOitEnabled: Bool
         let colorPixelFormat: MTLPixelFormat
         let depthPixelFormat: MTLPixelFormat
         let stencilPixelFormat: MTLPixelFormat
@@ -212,14 +213,17 @@ open class Renderer {
 
     private enum MaterialPassType {
         case forwardOpaque
-        case forwardTransparent
+        case alphaTransparent
+        case alphaTransparentFallback
+        case classicTransparent
         case surfaceOpaque
         case unlitOpaque
     }
 
     private enum RenderRoute {
         case opaque
-        case transparent
+        case alphaTransparent
+        case classicTransparent
         case surfaceOpaque
         case unlitOpaque
     }
@@ -233,6 +237,9 @@ open class Renderer {
     }
 
     private var renderContextCache: [RenderContextKey: Context] = [:]
+    private let supportsAlphaOit: Bool
+    private let alphaOitTileSize = MTLSize(width: 32, height: 16, depth: 1)
+    private lazy var alphaOitResources = AlphaOitResources(renderer: self)
 
     private func colorAttachment(_ renderPassDescriptor: MTLRenderPassDescriptor, index: Int) -> MTLRenderPassColorAttachmentDescriptor? {
         renderPassDescriptor.colorAttachments[index]
@@ -328,6 +335,7 @@ open class Renderer {
         self.stencilStoreAction = stencilStoreAction
 
         self.frameBufferOnly = frameBufferOnly
+        self.supportsAlphaOit = context.device.supportsFamily(.apple4)
     }
 
     public func setClearColor(_ color: simd_float4) {
@@ -451,6 +459,9 @@ open class Renderer {
         let inStencilLoadAction = renderPassDescriptor.stencilAttachment.loadAction
         let inStencilTexture = renderPassDescriptor.stencilAttachment.texture
         let inStencilResolveTexture = renderPassDescriptor.stencilAttachment.resolveTexture
+        let inTileWidth = renderPassDescriptor.tileWidth
+        let inTileHeight = renderPassDescriptor.tileHeight
+        let inImageblockSampleLength = renderPassDescriptor.imageblockSampleLength
         let inAuxiliaryStates: [Int: ColorAttachmentState] = Dictionary(
             uniqueKeysWithValues: (1...5).compactMap { index in
                 guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { return nil }
@@ -479,6 +490,9 @@ open class Renderer {
             renderPassDescriptor.stencilAttachment.loadAction = inStencilLoadAction
             renderPassDescriptor.stencilAttachment.texture = inStencilTexture
             renderPassDescriptor.stencilAttachment.resolveTexture = inStencilResolveTexture
+            renderPassDescriptor.tileWidth = inTileWidth
+            renderPassDescriptor.tileHeight = inTileHeight
+            renderPassDescriptor.imageblockSampleLength = inImageblockSampleLength
 
             for (index, state) in inAuxiliaryStates {
                 guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { continue }
@@ -652,6 +666,12 @@ open class Renderer {
         renderingMode != .forward && !requestedAuxiliaryOutputs.isEmpty
     }
 
+    private func usesAlphaOit(_ material: Material) -> Bool {
+        supportsAlphaOit &&
+            material.blending == .alpha &&
+            material.supportsAlphaOrderIndependentTransparency
+    }
+
     private func materials(for renderable: Renderable) -> [Material] {
         if !renderable.materials.isEmpty {
             return renderable.materials
@@ -662,7 +682,10 @@ open class Renderer {
     private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
         let materials = materials(for: renderable)
         let hasOpaque = materials.contains { $0.blending == .disabled }
-        let hasTransparent = materials.contains { $0.blending != .disabled }
+        let hasAlphaTransparent = materials.contains { usesAlphaOit($0) }
+        let hasClassicTransparent = materials.contains {
+            $0.blending != .disabled && !usesAlphaOit($0)
+        }
         let hasSurfaceOpaque = materials.contains {
             $0.lightingModel == .surface && $0.blending == .disabled
         }
@@ -673,8 +696,10 @@ open class Renderer {
         switch route {
         case .opaque:
             return hasOpaque
-        case .transparent:
-            return hasTransparent
+        case .alphaTransparent:
+            return hasAlphaTransparent
+        case .classicTransparent:
+            return hasClassicTransparent
         case .surfaceOpaque:
             return hasSurfaceOpaque
         case .unlitOpaque:
@@ -696,7 +721,7 @@ open class Renderer {
 
     private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
         switch phase {
-        case .forwardOpaque, .forwardTransparent, .unlitOpaque:
+        case .forwardOpaque, .alphaTransparent, .alphaTransparentFallback, .classicTransparent, .unlitOpaque:
             return [.color]
         case .surfaceOpaque:
             var outputs: RendererOutputs = [.color]
@@ -711,10 +736,12 @@ open class Renderer {
 
     private func renderContext(for renderable: Renderable, phase: MaterialPassType) -> Context {
         let mode: RenderingMode = phase == .surfaceOpaque ? renderingMode : .forward
+        let alphaOitEnabled = phase == .alphaTransparent
         let outputs = supportedOutputs(for: renderable, phase: phase)
         let key = RenderContextKey(
             renderingMode: mode,
             activeOutputs: outputs,
+            alphaOitEnabled: alphaOitEnabled,
             colorPixelFormat: context.colorPixelFormat,
             depthPixelFormat: context.depthPixelFormat,
             stencilPixelFormat: context.stencilPixelFormat
@@ -734,6 +761,7 @@ open class Renderer {
             maxBuffersInFlight: context.maxBuffersInFlight,
             renderingMode: mode,
             activeOutputs: outputs,
+            alphaOitEnabled: alphaOitEnabled,
             albedoPixelFormat: context.albedoPixelFormat,
             normalsPixelFormat: context.normalsPixelFormat,
             pbrPixelFormat: context.pbrPixelFormat,
@@ -1042,6 +1070,215 @@ open class Renderer {
         return false
     }
 
+    private func prepareAlphaOitPassDescriptor(
+        _ renderPassDescriptor: MTLRenderPassDescriptor,
+        imageblockSampleLength: Int,
+        colorLoadAction: MTLLoadAction,
+        depthLoadAction: MTLLoadAction,
+        stencilLoadAction: MTLLoadAction,
+        colorStoreAction: MTLStoreAction,
+        depthStoreAction: MTLStoreAction,
+        stencilStoreAction: MTLStoreAction
+    ) throws {
+        configureMainAttachments(
+            renderPassDescriptor: renderPassDescriptor,
+            colorLoadAction: colorLoadAction,
+            depthLoadAction: depthLoadAction,
+            stencilLoadAction: stencilLoadAction,
+            colorStoreAction: colorStoreAction,
+            depthStoreAction: depthStoreAction,
+            stencilStoreAction: stencilStoreAction
+        )
+        configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+        renderPassDescriptor.tileWidth = alphaOitTileSize.width
+        renderPassDescriptor.tileHeight = alphaOitTileSize.height
+        renderPassDescriptor.imageblockSampleLength = imageblockSampleLength
+    }
+
+    private func alphaOitImageblockSampleLength(for routeEntries: [(pass: Int, renderables: [Renderable])]) -> Int? {
+        for entry in routeEntries {
+            for renderable in entry.renderables {
+                let renderContext = renderContext(for: renderable, phase: .alphaTransparent)
+                for material in materials(for: renderable) where usesAlphaOit(material) {
+                    if let pipeline = material.getPipeline(renderContext: renderContext, shadow: false) {
+                        return pipeline.imageblockSampleLength
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    @discardableResult
+    private func encodeAlphaOitRoute(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer,
+        cameras: [Camera],
+        viewports: [MTLViewport],
+        simdViewports: [simd_float4],
+        viewMappings: [MTLVertexAmplificationViewMapping],
+        clearWhenEmpty: Bool,
+        colorLoadAction: MTLLoadAction,
+        depthLoadAction: MTLLoadAction,
+        stencilLoadAction: MTLLoadAction,
+        colorStoreAction: MTLStoreAction,
+        depthStoreAction: MTLStoreAction,
+        stencilStoreAction: MTLStoreAction
+    ) -> Bool {
+        let routeEntries = routePassEntries(route: .alphaTransparent)
+        let shouldEncode = !routeEntries.isEmpty || clearWhenEmpty
+        guard shouldEncode else { return false }
+
+        do {
+            let resources = try alphaOitResources.load()
+            guard let imageblockSampleLength = alphaOitImageblockSampleLength(for: routeEntries) else {
+                return false
+            }
+            try prepareAlphaOitPassDescriptor(
+                renderPassDescriptor,
+                imageblockSampleLength: imageblockSampleLength,
+                colorLoadAction: colorLoadAction,
+                depthLoadAction: depthLoadAction,
+                stencilLoadAction: stencilLoadAction,
+                colorStoreAction: colorStoreAction,
+                depthStoreAction: depthStoreAction,
+                stencilStoreAction: stencilStoreAction
+            )
+
+            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+                return false
+            }
+
+            renderEncoder.label = "\(self.label) Alpha OIT Pass"
+#if DEBUG
+            renderEncoder.pushDebugGroup("Alpha OIT Pass")
+#endif
+            renderEncoder.setViewports(viewports)
+
+            if context.vertexAmplificationCount > 1 {
+                var maps = viewMappings
+                if maps.isEmpty {
+                    maps = (0..<context.vertexAmplificationCount).map {
+                        .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0))
+                    }
+                }
+                renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
+            }
+
+#if DEBUG
+            renderEncoder.pushDebugGroup("Alpha OIT Tile Init")
+#endif
+            renderEncoder.setRenderPipelineState(resources.tilePipeline)
+            renderEncoder.dispatchThreadsPerTile(alphaOitTileSize)
+#if DEBUG
+            renderEncoder.popDebugGroup()
+#endif
+
+            for entry in routeEntries {
+#if DEBUG
+                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(entry.pass)")
+#endif
+                encode(
+                    renderEncoder: renderEncoder,
+                    pass: entry.pass,
+                    renderables: entry.renderables,
+                    cameras: cameras,
+                    viewports: simdViewports,
+                    phase: .alphaTransparent
+                )
+#if DEBUG
+                renderEncoder.popDebugGroup()
+#endif
+            }
+
+#if DEBUG
+            renderEncoder.pushDebugGroup("Alpha OIT Blend")
+#endif
+            renderEncoder.setRenderPipelineState(resources.blendPipeline)
+            renderEncoder.setDepthStencilState(resources.blendDepthStencilState)
+            renderEncoder.setCullMode(.none)
+            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+#if DEBUG
+            renderEncoder.popDebugGroup()
+            renderEncoder.popDebugGroup()
+#endif
+            renderEncoder.endEncoding()
+
+            return true
+        } catch {
+            print("\(label) Alpha OIT: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    @discardableResult
+    private func encodeEntries(
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer,
+        entries: [(pass: Int, renderables: [Renderable])],
+        phase: MaterialPassType,
+        label: String,
+        cameras: [Camera],
+        viewports: [MTLViewport],
+        simdViewports: [simd_float4],
+        viewMappings: [MTLVertexAmplificationViewMapping],
+        clearWhenEmpty: Bool
+    ) -> Bool {
+        let originalColorStoreAction = renderPassDescriptor.colorAttachments[0].storeAction
+        let originalDepthStoreAction = renderPassDescriptor.depthAttachment.storeAction
+        let originalStencilStoreAction = renderPassDescriptor.stencilAttachment.storeAction
+
+        if entries.isEmpty {
+            guard clearWhenEmpty,
+                  let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
+            else { return false }
+
+            renderEncoder.label = label + " Empty Pass"
+            renderEncoder.setViewports(viewports)
+            renderEncoder.endEncoding()
+            return true
+        }
+
+        for (index, entry) in entries.enumerated() {
+            let isFinalEntry = index == entries.count - 1
+            if index > 0 {
+                renderPassDescriptor.colorAttachments[0].loadAction = .load
+                renderPassDescriptor.depthAttachment.loadAction = .load
+                renderPassDescriptor.stencilAttachment.loadAction = .load
+            }
+
+            renderPassDescriptor.colorAttachments[0].storeAction = isFinalEntry ? originalColorStoreAction : .store
+            renderPassDescriptor.depthAttachment.storeAction = isFinalEntry ? originalDepthStoreAction : .store
+            renderPassDescriptor.stencilAttachment.storeAction = isFinalEntry ? originalStencilStoreAction : .store
+
+            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
+            renderEncoder.label = "\(self.label) \(label) Pass \(entry.pass)"
+            renderEncoder.setViewports(viewports)
+
+            if context.vertexAmplificationCount > 1 {
+                var maps = viewMappings
+                if maps.isEmpty {
+                    maps = (0..<context.vertexAmplificationCount).map {
+                        .init(viewportArrayIndexOffset: UInt32($0), renderTargetArrayIndexOffset: UInt32($0))
+                    }
+                }
+                renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
+            }
+
+            encode(
+                renderEncoder: renderEncoder,
+                pass: entry.pass,
+                renderables: entry.renderables,
+                cameras: cameras,
+                viewports: simdViewports,
+                phase: phase
+            )
+            renderEncoder.endEncoding()
+        }
+
+        return true
+    }
+
     @discardableResult
     private func encodeRoute(
         renderPassDescriptor: MTLRenderPassDescriptor,
@@ -1142,9 +1379,12 @@ open class Renderer {
         finalDepthStoreAction: MTLStoreAction,
         finalStencilStoreAction: MTLStoreAction
     ) -> Bool {
-        let hasTransparentRenderables = !routePassEntries(route: .transparent).isEmpty
+        let hasAlphaTransparentRenderables = !routePassEntries(route: .alphaTransparent).isEmpty
+        let hasClassicTransparentRenderables = !routePassEntries(route: .classicTransparent).isEmpty
+        let hasTransparentRenderables = hasAlphaTransparentRenderables || hasClassicTransparentRenderables
         let hasSurfaceOpaqueRenderables = !routePassEntries(route: .surfaceOpaque).isEmpty
         let hasUnlitOpaqueRenderables = !routePassEntries(route: .unlitOpaque).isEmpty
+        let alphaFallbackEntries = routePassEntries(route: .alphaTransparent)
 
         switch renderingMode {
         case .forward:
@@ -1163,12 +1403,66 @@ open class Renderer {
                 clearWhenEmpty: !hasTransparentRenderables
             )
 
-            if hasTransparentRenderables {
+            var didEncode = opaqueEncoded
+
+            if hasAlphaTransparentRenderables {
                 configureMainAttachments(
                     renderPassDescriptor: renderPassDescriptor,
-                    colorLoadAction: opaqueEncoded ? .load : colorLoadAction,
-                    depthLoadAction: opaqueEncoded ? .load : depthLoadAction,
-                    stencilLoadAction: opaqueEncoded ? .load : stencilLoadAction,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: didEncode ? .load : depthLoadAction,
+                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                    colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                    depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                    stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                )
+                let alphaEncoded = encodeAlphaOitRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    clearWhenEmpty: !didEncode,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: didEncode ? .load : depthLoadAction,
+                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                    colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                    depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                    stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                )
+                didEncode = didEncode || alphaEncoded
+                if !alphaEncoded, !alphaFallbackEntries.isEmpty {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    let fallbackEncoded = encodeEntries(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        entries: alphaFallbackEntries,
+                        phase: .alphaTransparentFallback,
+                        label: "Alpha Transparent Fallback",
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        clearWhenEmpty: !didEncode
+                    )
+                    didEncode = didEncode || fallbackEncoded
+                }
+            }
+
+            if hasClassicTransparentRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: didEncode ? .load : depthLoadAction,
+                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
                     colorStoreAction: finalColorStoreAction,
                     depthStoreAction: finalDepthStoreAction,
                     stencilStoreAction: finalStencilStoreAction
@@ -1176,20 +1470,20 @@ open class Renderer {
                 let transparentEncoded = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .transparent,
-                    phase: .forwardTransparent,
-                    label: "Forward Transparent",
+                    route: .classicTransparent,
+                    phase: .classicTransparent,
+                    label: "Classic Transparent Forward",
                     cameras: cameras,
                     viewports: viewports,
                     simdViewports: simdViewports,
                     viewMappings: viewMappings,
                     auxiliaryAttachmentIndices: [],
-                    clearWhenEmpty: !opaqueEncoded
+                    clearWhenEmpty: !didEncode
                 )
-                return opaqueEncoded || transparentEncoded
+                didEncode = didEncode || transparentEncoded
             }
 
-            return opaqueEncoded
+            return didEncode
 
         case .forwardPlus:
             let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (!hasUnlitOpaqueRenderables && !hasTransparentRenderables && renderLists.isEmpty)
@@ -1251,30 +1545,84 @@ open class Renderer {
             }
 
             if hasTransparentRenderables {
-                configureMainAttachments(
-                    renderPassDescriptor: renderPassDescriptor,
-                    colorLoadAction: didEncode ? .load : colorLoadAction,
-                    depthLoadAction: didEncode ? .load : depthLoadAction,
-                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
-                    colorStoreAction: finalColorStoreAction,
-                    depthStoreAction: finalDepthStoreAction,
-                    stencilStoreAction: finalStencilStoreAction
-                )
-                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
-                let transparentEncoded = encodeRoute(
-                    renderPassDescriptor: renderPassDescriptor,
-                    commandBuffer: commandBuffer,
-                    route: .transparent,
-                    phase: .forwardTransparent,
-                    label: "Transparent Forward",
-                    cameras: cameras,
-                    viewports: viewports,
-                    simdViewports: simdViewports,
-                    viewMappings: viewMappings,
-                    auxiliaryAttachmentIndices: [],
-                    clearWhenEmpty: !didEncode
-                )
-                didEncode = didEncode || transparentEncoded
+                if hasAlphaTransparentRenderables {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    let alphaEncoded = encodeAlphaOitRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        clearWhenEmpty: !didEncode,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    didEncode = didEncode || alphaEncoded
+                    if !alphaEncoded, !alphaFallbackEntries.isEmpty {
+                        configureMainAttachments(
+                            renderPassDescriptor: renderPassDescriptor,
+                            colorLoadAction: didEncode ? .load : colorLoadAction,
+                            depthLoadAction: didEncode ? .load : depthLoadAction,
+                            stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                            colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                            depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                            stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                        )
+                        let fallbackEncoded = encodeEntries(
+                            renderPassDescriptor: renderPassDescriptor,
+                            commandBuffer: commandBuffer,
+                            entries: alphaFallbackEntries,
+                            phase: .alphaTransparentFallback,
+                            label: "Alpha Transparent Fallback",
+                            cameras: cameras,
+                            viewports: viewports,
+                            simdViewports: simdViewports,
+                            viewMappings: viewMappings,
+                            clearWhenEmpty: !didEncode
+                        )
+                        didEncode = didEncode || fallbackEncoded
+                    }
+                }
+
+                if hasClassicTransparentRenderables {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: finalColorStoreAction,
+                        depthStoreAction: finalDepthStoreAction,
+                        stencilStoreAction: finalStencilStoreAction
+                    )
+                    configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                    let transparentEncoded = encodeRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        route: .classicTransparent,
+                        phase: .classicTransparent,
+                        label: "Classic Transparent Forward",
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        auxiliaryAttachmentIndices: [],
+                        clearWhenEmpty: !didEncode
+                    )
+                    didEncode = didEncode || transparentEncoded
+                }
             }
 
             if !didEncode {
@@ -1380,30 +1728,84 @@ open class Renderer {
             }
 
             if hasTransparentRenderables {
-                configureMainAttachments(
-                    renderPassDescriptor: renderPassDescriptor,
-                    colorLoadAction: didEncode ? .load : colorLoadAction,
-                    depthLoadAction: didEncode ? .load : depthLoadAction,
-                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
-                    colorStoreAction: finalColorStoreAction,
-                    depthStoreAction: finalDepthStoreAction,
-                    stencilStoreAction: finalStencilStoreAction
-                )
-                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
-                let transparentEncoded = encodeRoute(
-                    renderPassDescriptor: renderPassDescriptor,
-                    commandBuffer: commandBuffer,
-                    route: .transparent,
-                    phase: .forwardTransparent,
-                    label: "Transparent Forward",
-                    cameras: cameras,
-                    viewports: viewports,
-                    simdViewports: simdViewports,
-                    viewMappings: viewMappings,
-                    auxiliaryAttachmentIndices: [],
-                    clearWhenEmpty: !didEncode
-                )
-                didEncode = didEncode || transparentEncoded
+                if hasAlphaTransparentRenderables {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    let alphaEncoded = encodeAlphaOitRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        clearWhenEmpty: !didEncode,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    didEncode = didEncode || alphaEncoded
+                    if !alphaEncoded, !alphaFallbackEntries.isEmpty {
+                        configureMainAttachments(
+                            renderPassDescriptor: renderPassDescriptor,
+                            colorLoadAction: didEncode ? .load : colorLoadAction,
+                            depthLoadAction: didEncode ? .load : depthLoadAction,
+                            stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                            colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
+                            depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
+                            stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
+                        )
+                        let fallbackEncoded = encodeEntries(
+                            renderPassDescriptor: renderPassDescriptor,
+                            commandBuffer: commandBuffer,
+                            entries: alphaFallbackEntries,
+                            phase: .alphaTransparentFallback,
+                            label: "Alpha Transparent Fallback",
+                            cameras: cameras,
+                            viewports: viewports,
+                            simdViewports: simdViewports,
+                            viewMappings: viewMappings,
+                            clearWhenEmpty: !didEncode
+                        )
+                        didEncode = didEncode || fallbackEncoded
+                    }
+                }
+
+                if hasClassicTransparentRenderables {
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: finalColorStoreAction,
+                        depthStoreAction: finalDepthStoreAction,
+                        stencilStoreAction: finalStencilStoreAction
+                    )
+                    configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                    let transparentEncoded = encodeRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        route: .classicTransparent,
+                        phase: .classicTransparent,
+                        label: "Classic Transparent Forward",
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        auxiliaryAttachmentIndices: [],
+                        clearWhenEmpty: !didEncode
+                    )
+                    didEncode = didEncode || transparentEncoded
+                }
             }
 
             return didEncode
@@ -1710,8 +2112,12 @@ open class Renderer {
         switch phase {
         case .forwardOpaque:
             renderable.materialPass = .opaque
-        case .forwardTransparent:
-            renderable.materialPass = .transparent
+        case .alphaTransparent:
+            renderable.materialPass = .alphaTransparent
+        case .alphaTransparentFallback:
+            renderable.materialPass = .alphaTransparentFallback
+        case .classicTransparent:
+            renderable.materialPass = .classicTransparent
         case .surfaceOpaque:
             renderable.materialPass = .surfaceOpaque
         case .unlitOpaque:
@@ -2201,4 +2607,74 @@ open class Renderer {
         updateEmissiveTexture = false
     }
 
+}
+
+private final class AlphaOitResources {
+    private unowned let renderer: Renderer
+    private var cachedResources: Resources?
+
+    struct Resources {
+        let tilePipeline: MTLRenderPipelineState
+        let blendPipeline: MTLRenderPipelineState
+        let blendDepthStencilState: MTLDepthStencilState
+    }
+
+    init(renderer: Renderer) {
+        self.renderer = renderer
+    }
+
+    func load() throws -> Resources {
+        if let cachedResources {
+            return cachedResources
+        }
+
+        guard let pipelineURL = getPipelinesCommonURL("AlphaOIT.metal") else {
+            throw NSError(domain: "Satin.Renderer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT pipeline source"])
+        }
+        let source = try String(contentsOf: pipelineURL)
+        let library = try renderer.context.device.makeLibrary(source: source, options: nil)
+
+        guard let tileFunction = library.makeFunction(name: "alphaOitClearTileData"),
+              let blendVertex = library.makeFunction(name: "alphaOitBlendVertex"),
+              let blendFragment = library.makeFunction(name: "alphaOitBlendFragment")
+        else {
+            throw NSError(domain: "Satin.Renderer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT shader functions"])
+        }
+
+        let tileDescriptor = MTLTileRenderPipelineDescriptor()
+        tileDescriptor.label = "\(renderer.label) Alpha OIT Tile Init"
+        tileDescriptor.tileFunction = tileFunction
+        tileDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
+        tileDescriptor.threadgroupSizeMatchesTileSize = true
+        let tilePipeline = try renderer.context.device.makeRenderPipelineState(
+            tileDescriptor: tileDescriptor,
+            options: [],
+            reflection: nil
+        )
+
+        let blendDescriptor = MTLRenderPipelineDescriptor()
+        blendDescriptor.label = "\(renderer.label) Alpha OIT Blend"
+        blendDescriptor.vertexFunction = blendVertex
+        blendDescriptor.fragmentFunction = blendFragment
+        blendDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
+        blendDescriptor.depthAttachmentPixelFormat = renderer.context.depthPixelFormat
+        blendDescriptor.stencilAttachmentPixelFormat = renderer.context.stencilPixelFormat
+        let blendPipeline = try renderer.context.device.makeRenderPipelineState(descriptor: blendDescriptor)
+
+        let depthDescriptor = MTLDepthStencilDescriptor()
+        depthDescriptor.label = "\(renderer.label) Alpha OIT Blend Depth"
+        depthDescriptor.depthCompareFunction = .always
+        depthDescriptor.isDepthWriteEnabled = false
+        guard let blendDepthStencilState = renderer.context.device.makeDepthStencilState(descriptor: depthDescriptor) else {
+            throw NSError(domain: "Satin.Renderer", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to create AlphaOIT depth state"])
+        }
+
+        let resources = Resources(
+            tilePipeline: tilePipeline,
+            blendPipeline: blendPipeline,
+            blendDepthStencilState: blendDepthStencilState
+        )
+        cachedResources = resources
+        return resources
+    }
 }

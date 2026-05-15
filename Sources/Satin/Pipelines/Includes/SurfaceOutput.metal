@@ -1,4 +1,5 @@
 #include "RendererAttachments.metal"
+#include "AlphaOIT.metal"
 
 // What a surface material provides. Materials fill this from evaluateSurface(); the framework
 // handles lighting and output routing via buildFragmentOutput() in FragmentOutput.metal.
@@ -15,6 +16,9 @@ typedef struct {
 
 // Fragment output struct. Fields are conditionally compiled based on active OUTPUT_* defines,
 // which are injected by Context.getDefines() when the corresponding RendererOutputs flag is set.
+#ifdef ALPHA_OIT
+typedef AlphaOitFragmentStore FragmentOutput;
+#else
 typedef struct {
     half4 color [[color(ATTACHMENT_COLOR)]];
 #ifdef OUTPUT_ALBEDO
@@ -33,3 +37,4 @@ typedef struct {
     half4 emissive [[color(ATTACHMENT_EMISSIVE)]];
 #endif
 } FragmentOutput;
+#endif

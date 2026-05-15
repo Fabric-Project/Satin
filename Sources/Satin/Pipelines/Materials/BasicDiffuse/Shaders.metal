@@ -139,7 +139,8 @@ fragment FragmentOutput basicDiffuseFragment(
     constant float4x4 *directShadowMatrices [[buffer(FragmentBufferDirectShadowMatrices)]],
     array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
 #endif
-    constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
+    constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     float4 outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
 
     const float3 N = normalize(in.worldNormal);
@@ -213,5 +214,6 @@ fragment FragmentOutput basicDiffuseFragment(
 #ifdef OUTPUT_VELOCITY
         , in.currentClipPos, in.previousClipPos
 #endif
+        SATIN_ALPHA_OIT_FORWARD_ARGS
     );
 }

@@ -187,10 +187,12 @@ open class Material: Codable {
 
     public var depthClipMode: MTLDepthClipMode = .clip
     public var depthStencilState: MTLDepthStencilState?
+    private var alphaOitDepthStencilState: MTLDepthStencilState?
     public var depthCompareFunction: MTLCompareFunction = .greaterEqual {
         didSet {
             if oldValue != depthCompareFunction {
                 depthNeedsUpdate = true
+                alphaOitDepthStencilState = nil
             }
         }
     }
@@ -199,6 +201,7 @@ open class Material: Codable {
         didSet {
             if oldValue != depthWriteEnabled {
                 depthNeedsUpdate = true
+                alphaOitDepthStencilState = nil
             }
         }
     }
@@ -236,6 +239,8 @@ open class Material: Codable {
     /// Surface materials that implement `evaluateSurface()` should override this to declare
     /// all outputs their shader supports.
     open var supportedOutputs: RendererOutputs { [.color] }
+
+    var supportsAlphaOrderIndependentTransparency: Bool { false }
 
     public required init(context: Context) {
         self.context = context
@@ -373,17 +378,28 @@ open class Material: Codable {
         }.store(in: &parameterGroupSubscriptions)
     }
 
-    func setupDepthStencilState() {
-        guard context.depthPixelFormat != .invalid,
-              depthNeedsUpdate || depthStencilState == nil
-        else { return }
-
+    private func makeDepthStencilState(depthWriteEnabled: Bool, labelSuffix: String) -> MTLDepthStencilState? {
         let depthStateDesciptor = MTLDepthStencilDescriptor()
-        depthStateDesciptor.label = "\(label) Depth Stencil State"
+        depthStateDesciptor.label = "\(label) \(labelSuffix)"
         depthStateDesciptor.depthCompareFunction = depthCompareFunction
         depthStateDesciptor.isDepthWriteEnabled = depthWriteEnabled
 
-        depthStencilState = context.device.makeDepthStencilState(descriptor: depthStateDesciptor)
+        return context.device.makeDepthStencilState(descriptor: depthStateDesciptor)
+    }
+
+    func setupDepthStencilState() {
+        guard context.depthPixelFormat != .invalid,
+              depthNeedsUpdate || depthStencilState == nil || alphaOitDepthStencilState == nil
+        else { return }
+
+        depthStencilState = makeDepthStencilState(
+            depthWriteEnabled: depthWriteEnabled,
+            labelSuffix: "Depth Stencil State"
+        )
+        alphaOitDepthStencilState = makeDepthStencilState(
+            depthWriteEnabled: false,
+            labelSuffix: "Alpha OIT Depth Stencil State"
+        )
 
         depthNeedsUpdate = false
     }
@@ -497,7 +513,7 @@ open class Material: Codable {
 
     open func bindDepthStates(renderContext: Context, renderEncoderState: RenderEncoderState) {
         guard renderContext.depthPixelFormat != .invalid else { return }
-        renderEncoderState.depthStencilState = depthStencilState
+        renderEncoderState.depthStencilState = renderContext.alphaOitEnabled ? alphaOitDepthStencilState : depthStencilState
         renderEncoderState.depthBias = depthBias
         renderEncoderState.depthClipMode = depthClipMode
     }
@@ -827,9 +843,11 @@ open class Material: Codable {
 
         clone.renderingConfiguration = renderingConfiguration
 
-        clone.depthStencilState = depthStencilState
         clone.depthCompareFunction = depthCompareFunction
         clone.depthWriteEnabled = depthWriteEnabled
+        clone.depthStencilState = nil
+        clone.alphaOitDepthStencilState = nil
+        clone.depthNeedsUpdate = true
     }
 }
 

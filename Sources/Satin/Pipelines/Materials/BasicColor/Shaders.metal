@@ -1,3 +1,5 @@
+#include "../../Includes/FragmentOutput.metal"
+
 typedef struct {
     float4 color;     // color
     float pointSize;  // slider,1.0,64.0,1.0
@@ -27,8 +29,9 @@ vertex BasicColorVertexData basicColorVertex(
     return out;
 }
 
-fragment half4 basicColorFragment(
+fragment FragmentOutput basicColorFragment(
     BasicColorVertexData in [[stage_in]],
-    constant BasicColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
-    return half4(uniforms.color);
+    constant BasicColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_ALPHA_OIT_FRAGMENT_DATA) {
+    return buildColorFragmentOutput(half4(uniforms.color) SATIN_ALPHA_OIT_FORWARD_ARGS);
 }

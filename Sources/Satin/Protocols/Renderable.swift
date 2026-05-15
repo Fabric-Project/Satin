@@ -13,7 +13,9 @@ open class Renderable : Object {
     enum MaterialPass {
         case all
         case opaque
-        case transparent
+        case alphaTransparent
+        case alphaTransparentFallback
+        case classicTransparent
         case surfaceOpaque
         case unlitOpaque
     }

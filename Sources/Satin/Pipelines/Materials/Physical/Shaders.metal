@@ -105,7 +105,8 @@ fragment FragmentOutput physicalFragment(
     array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
 #endif
 #include "Chunks/PbrTextures.metal"
-    constant PhysicalUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
+    constant PhysicalUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     float4 outColor;
 
 #include "Chunks/PixelInfoInit.metal"
@@ -126,5 +127,6 @@ fragment FragmentOutput physicalFragment(
 #ifdef OUTPUT_VELOCITY
         , in.currentClipPos, in.previousClipPos
 #endif
+        SATIN_ALPHA_OIT_FORWARD_ARGS
     );
 }

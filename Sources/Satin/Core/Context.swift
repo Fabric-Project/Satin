@@ -23,6 +23,7 @@ public struct Context {
     // pipeline states to recompile on the next frame — avoid toggling per-frame.
     public let renderingMode: RenderingMode
     public let activeOutputs: RendererOutputs
+    public let alphaOitEnabled: Bool
 
     // Pixel formats for each auxiliary G-buffer attachment. These must match the formats used
     // when creating the corresponding textures on the renderer — both the pipeline descriptor
@@ -44,6 +45,7 @@ public struct Context {
         maxBuffersInFlight: Int = Satin.maxBuffersInFlight,
         renderingMode: RenderingMode = .forward,
         activeOutputs: RendererOutputs = [.color],
+        alphaOitEnabled: Bool = false,
         albedoPixelFormat: MTLPixelFormat = .bgra8Unorm,
         normalsPixelFormat: MTLPixelFormat = .rgba16Float,
         pbrPixelFormat: MTLPixelFormat = .rgba8Unorm,
@@ -61,6 +63,7 @@ public struct Context {
         self.maxBuffersInFlight = maxBuffersInFlight
         self.renderingMode = renderingMode
         self.activeOutputs = activeOutputs
+        self.alphaOitEnabled = alphaOitEnabled
         self.albedoPixelFormat = albedoPixelFormat
         self.normalsPixelFormat = normalsPixelFormat
         self.pbrPixelFormat = pbrPixelFormat
@@ -78,6 +81,9 @@ public struct Context {
         if activeOutputs.contains(.pbr)      { defines.append(ShaderDefine(key: "OUTPUT_PBR",      value: NSString(string: "1"))) }
         if activeOutputs.contains(.velocity) { defines.append(ShaderDefine(key: "OUTPUT_VELOCITY", value: NSString(string: "1"))) }
         if activeOutputs.contains(.emissive) { defines.append(ShaderDefine(key: "OUTPUT_EMISSIVE", value: NSString(string: "1"))) }
+        if alphaOitEnabled {
+            defines.append(ShaderDefine(key: "ALPHA_OIT", value: NSString(string: "1")))
+        }
         switch renderingMode {
         case .deferredGeometry: defines.append(ShaderDefine(key: "DEFERRED_GEOMETRY", value: NSString(string: "1")))
         case .forwardPlus:      defines.append(ShaderDefine(key: "FORWARD_PLUS",      value: NSString(string: "1")))
@@ -99,6 +105,7 @@ extension Context: Hashable {
         hasher.combine(maxBuffersInFlight)
         hasher.combine(renderingMode)
         hasher.combine(activeOutputs)
+        hasher.combine(alphaOitEnabled)
         hasher.combine(albedoPixelFormat)
         hasher.combine(normalsPixelFormat)
         hasher.combine(pbrPixelFormat)
@@ -119,6 +126,7 @@ extension Context: Equatable {
             lhs.maxBuffersInFlight == rhs.maxBuffersInFlight &&
             lhs.renderingMode == rhs.renderingMode &&
             lhs.activeOutputs == rhs.activeOutputs &&
+            lhs.alphaOitEnabled == rhs.alphaOitEnabled &&
             lhs.albedoPixelFormat == rhs.albedoPixelFormat &&
             lhs.normalsPixelFormat == rhs.normalsPixelFormat &&
             lhs.pbrPixelFormat == rhs.pbrPixelFormat &&

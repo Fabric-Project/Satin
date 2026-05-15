@@ -9,6 +9,10 @@
 import Foundation
 
 open class SourceMaterial: Material {
+    override var supportsAlphaOrderIndependentTransparency: Bool {
+        source?.contains("SATIN_ALPHA_OIT_ENABLED") == true
+    }
+
     public enum CodingKeys: String, CodingKey {
         case pipelineURL
     }

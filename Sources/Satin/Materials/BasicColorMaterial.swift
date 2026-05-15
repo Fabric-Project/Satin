@@ -11,6 +11,7 @@ import simd
 
 open class BasicColorMaterial: Material {
     override open var lightingModel: LightingModel { .unlit }
+    override var supportsAlphaOrderIndependentTransparency: Bool { true }
     public var color: simd_float4 {
         set {
             set("Color", newValue)

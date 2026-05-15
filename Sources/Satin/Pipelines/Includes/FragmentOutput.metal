@@ -11,7 +11,14 @@ inline FragmentOutput buildFragmentOutput(
     , float4 currentClipPos
     , float4 previousClipPos
 #endif
+#ifdef ALPHA_OIT
+    , float4 position
+    , AlphaOitFragmentValues alphaOitFragmentValues
+#endif
 ) {
+#ifdef ALPHA_OIT
+    return buildAlphaOitFragmentOutput(litColor, position, alphaOitFragmentValues);
+#else
     FragmentOutput out;
     out.color = litColor;
 
@@ -42,4 +49,21 @@ inline FragmentOutput buildFragmentOutput(
 #endif
 
     return out;
+#endif
+}
+
+inline FragmentOutput buildColorFragmentOutput(
+    half4 color
+#ifdef ALPHA_OIT
+    , float4 position
+    , AlphaOitFragmentValues alphaOitFragmentValues
+#endif
+) {
+#ifdef ALPHA_OIT
+    return buildAlphaOitFragmentOutput(color, position, alphaOitFragmentValues);
+#else
+    FragmentOutput out;
+    out.color = color;
+    return out;
+#endif
 }
