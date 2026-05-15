@@ -293,13 +293,19 @@ open class Mesh: Renderable {
             return true
         }
 
+        let isTransparent = material.blending != .disabled
+
         switch materialPass {
         case .all:
             return true
-        case .surface:
-            return material.lightingModel == .surface
-        case .unlit:
-            return material.lightingModel == .unlit
+        case .opaque:
+            return !isTransparent
+        case .transparent:
+            return isTransparent
+        case .surfaceOpaque:
+            return material.lightingModel == .surface && !isTransparent
+        case .unlitOpaque:
+            return material.lightingModel == .unlit && !isTransparent
         }
     }
 

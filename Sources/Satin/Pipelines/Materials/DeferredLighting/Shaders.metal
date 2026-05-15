@@ -52,11 +52,11 @@ fragment half4 deferredLightingFragment(
 
     const float2 uv = in.texcoord;
     const float4 albedoSample = albedoTexture.sample(gbufferSampler, uv);
-    if (albedoSample.a <= 0.0) {
+    const float depth = depthTexture.sample(gbufferSampler, uv);
+    if (depth >= 1.0) {
         discard_fragment();
     }
 
-    const float depth = depthTexture.sample(gbufferSampler, uv);
     const float3 viewPosition = deferredLightingReconstructViewPosition(
         uv,
         depth,
@@ -91,7 +91,7 @@ fragment half4 deferredLightingFragment(
     pixel.material.specular = uniforms.specular;
     pixel.material.environmentIntensity = uniforms.environmentIntensity;
     pixel.material.gammaCorrection = uniforms.gammaCorrection;
-    pixel.material.alpha = albedoSample.a;
+    pixel.material.alpha = 1.0;
     pixel.material.reflectionTexcoordTransform = uniforms.reflectionTexcoordTransform;
     pixel.material.irradianceTexcoordTransform = uniforms.irradianceTexcoordTransform;
     pixel.radiance = pixel.material.emissiveColor;

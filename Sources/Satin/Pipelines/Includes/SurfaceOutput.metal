@@ -5,6 +5,7 @@
 // Unlit materials do not use this struct — their fragment functions return FragmentOutput directly.
 typedef struct {
     half3 albedo;
+    half  alpha;
     half3 normal;    // world-space; need not be pre-normalized
     half  roughness;
     half  metalness;

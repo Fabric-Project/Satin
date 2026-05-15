@@ -12,8 +12,10 @@ import simd
 open class Renderable : Object {
     enum MaterialPass {
         case all
-        case surface
-        case unlit
+        case opaque
+        case transparent
+        case surfaceOpaque
+        case unlitOpaque
     }
 
     open var opaque: Bool { material!.blending == .disabled }

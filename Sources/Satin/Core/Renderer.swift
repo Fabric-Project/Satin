@@ -211,15 +211,17 @@ open class Renderer {
     }
 
     private enum MaterialPassType {
-        case forward
-        case surface
-        case unlit
+        case forwardOpaque
+        case forwardTransparent
+        case surfaceOpaque
+        case unlitOpaque
     }
 
     private enum RenderRoute {
-        case all
-        case surface
-        case unlit
+        case opaque
+        case transparent
+        case surfaceOpaque
+        case unlitOpaque
     }
 
     private struct ColorAttachmentState {
@@ -659,16 +661,24 @@ open class Renderer {
 
     private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
         let materials = materials(for: renderable)
-        let hasSurface = materials.contains { $0.lightingModel == .surface }
-        let hasUnlit = materials.contains { $0.lightingModel == .unlit }
+        let hasOpaque = materials.contains { $0.blending == .disabled }
+        let hasTransparent = materials.contains { $0.blending != .disabled }
+        let hasSurfaceOpaque = materials.contains {
+            $0.lightingModel == .surface && $0.blending == .disabled
+        }
+        let hasUnlitOpaque = materials.contains {
+            $0.lightingModel == .unlit && $0.blending == .disabled
+        }
 
         switch route {
-        case .all:
-            return true
-        case .surface:
-            return hasSurface
-        case .unlit:
-            return hasUnlit
+        case .opaque:
+            return hasOpaque
+        case .transparent:
+            return hasTransparent
+        case .surfaceOpaque:
+            return hasSurfaceOpaque
+        case .unlitOpaque:
+            return hasUnlitOpaque
         }
     }
 
@@ -686,11 +696,13 @@ open class Renderer {
 
     private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
         switch phase {
-        case .forward, .unlit:
+        case .forwardOpaque, .forwardTransparent, .unlitOpaque:
             return [.color]
-        case .surface:
+        case .surfaceOpaque:
             var outputs: RendererOutputs = [.color]
-            for material in materials(for: renderable) where material.lightingModel == .surface {
+            for material in materials(for: renderable)
+                where material.lightingModel == .surface && material.blending == .disabled
+            {
                 outputs.formUnion(material.supportedOutputs.intersection(requestedOutputs))
             }
             return normalizedOutputs(outputs)
@@ -698,7 +710,7 @@ open class Renderer {
     }
 
     private func renderContext(for renderable: Renderable, phase: MaterialPassType) -> Context {
-        let mode: RenderingMode = phase == .surface ? renderingMode : .forward
+        let mode: RenderingMode = phase == .surfaceOpaque ? renderingMode : .forward
         let outputs = supportedOutputs(for: renderable, phase: phase)
         let key = RenderContextKey(
             renderingMode: mode,
@@ -941,7 +953,7 @@ open class Renderer {
             renderables: [deferredLightingMesh],
             cameras: deferredCameras,
             viewports: simdViewports,
-            phase: .unlit
+            phase: .unlitOpaque
         )
 
         if let firstEntry = unlitEntries.first {
@@ -954,7 +966,7 @@ open class Renderer {
                 renderables: firstEntry.renderables,
                 cameras: unlitCameras,
                 viewports: simdViewports,
-                phase: .unlit
+                phase: .unlitOpaque
             )
 #if DEBUG
             renderEncoder.popDebugGroup()
@@ -991,7 +1003,7 @@ open class Renderer {
                 }
                 enc.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
             }
-            encode(renderEncoder: enc, pass: entry.pass, renderables: entry.renderables, cameras: unlitCameras, viewports: simdViewports, phase: .unlit)
+            encode(renderEncoder: enc, pass: entry.pass, renderables: entry.renderables, cameras: unlitCameras, viewports: simdViewports, phase: .unlitOpaque)
 #if DEBUG
             enc.popDebugGroup()
 #endif
@@ -1130,28 +1142,57 @@ open class Renderer {
         finalDepthStoreAction: MTLStoreAction,
         finalStencilStoreAction: MTLStoreAction
     ) -> Bool {
-        let hasSurfaceRenderables = !routePassEntries(route: .surface).isEmpty
-        let hasUnlitRenderables = !routePassEntries(route: .unlit).isEmpty
+        let hasTransparentRenderables = !routePassEntries(route: .transparent).isEmpty
+        let hasSurfaceOpaqueRenderables = !routePassEntries(route: .surfaceOpaque).isEmpty
+        let hasUnlitOpaqueRenderables = !routePassEntries(route: .unlitOpaque).isEmpty
 
         switch renderingMode {
         case .forward:
             configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
-            return encodeRoute(
+            let opaqueEncoded = encodeRoute(
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
-                route: .all,
-                phase: .forward,
-                label: "Forward",
+                route: .opaque,
+                phase: .forwardOpaque,
+                label: "Forward Opaque",
                 cameras: cameras,
                 viewports: viewports,
                 simdViewports: simdViewports,
                 viewMappings: viewMappings,
                 auxiliaryAttachmentIndices: [],
-                clearWhenEmpty: true
+                clearWhenEmpty: !hasTransparentRenderables
             )
 
+            if hasTransparentRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: opaqueEncoded ? .load : colorLoadAction,
+                    depthLoadAction: opaqueEncoded ? .load : depthLoadAction,
+                    stencilLoadAction: opaqueEncoded ? .load : stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                let transparentEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .transparent,
+                    phase: .forwardTransparent,
+                    label: "Forward Transparent",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: !opaqueEncoded
+                )
+                return opaqueEncoded || transparentEncoded
+            }
+
+            return opaqueEncoded
+
         case .forwardPlus:
-            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (!hasUnlitRenderables && renderLists.isEmpty)
+            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (!hasUnlitOpaqueRenderables && !hasTransparentRenderables && renderLists.isEmpty)
             var didEncode = false
 
             if needsSurfacePass {
@@ -1160,17 +1201,17 @@ open class Renderer {
                     colorLoadAction: colorLoadAction,
                     depthLoadAction: depthLoadAction,
                     stencilLoadAction: stencilLoadAction,
-                    colorStoreAction: hasUnlitRenderables ? .store : finalColorStoreAction,
-                    depthStoreAction: hasUnlitRenderables ? .store : finalDepthStoreAction,
-                    stencilStoreAction: hasUnlitRenderables ? .store : finalStencilStoreAction
+                    colorStoreAction: (hasUnlitOpaqueRenderables || hasTransparentRenderables) ? .store : finalColorStoreAction,
+                    depthStoreAction: (hasUnlitOpaqueRenderables || hasTransparentRenderables) ? .store : finalDepthStoreAction,
+                    stencilStoreAction: (hasUnlitOpaqueRenderables || hasTransparentRenderables) ? .store : finalStencilStoreAction
                 )
                 let auxiliaryAttachmentIndices = configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor)
                 didEncode = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
-                    label: renderingMode == .deferredGeometry ? "Deferred Geometry" : "Surface MRT",
+                    route: .surfaceOpaque,
+                    phase: .surfaceOpaque,
+                    label: "Surface MRT",
                     cameras: cameras,
                     viewports: viewports,
                     simdViewports: simdViewports,
@@ -1182,23 +1223,23 @@ open class Renderer {
                 configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
             }
 
-            if hasUnlitRenderables {
+            if hasUnlitOpaqueRenderables {
                 configureMainAttachments(
                     renderPassDescriptor: renderPassDescriptor,
                     colorLoadAction: needsSurfacePass ? .load : colorLoadAction,
                     depthLoadAction: needsSurfacePass ? .load : depthLoadAction,
                     stencilLoadAction: needsSurfacePass ? .load : stencilLoadAction,
-                    colorStoreAction: finalColorStoreAction,
-                    depthStoreAction: finalDepthStoreAction,
-                    stencilStoreAction: finalStencilStoreAction
+                    colorStoreAction: hasTransparentRenderables ? .store : finalColorStoreAction,
+                    depthStoreAction: hasTransparentRenderables ? .store : finalDepthStoreAction,
+                    stencilStoreAction: hasTransparentRenderables ? .store : finalStencilStoreAction
                 )
                 configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
                 let unlitEncoded = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .unlit,
-                    phase: .unlit,
-                    label: "Unlit Forward",
+                    route: .unlitOpaque,
+                    phase: .unlitOpaque,
+                    label: "Opaque Unlit Forward",
                     cameras: cameras,
                     viewports: viewports,
                     simdViewports: simdViewports,
@@ -1207,6 +1248,33 @@ open class Renderer {
                     clearWhenEmpty: !didEncode
                 )
                 didEncode = didEncode || unlitEncoded
+            }
+
+            if hasTransparentRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: didEncode ? .load : depthLoadAction,
+                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                let transparentEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .transparent,
+                    phase: .forwardTransparent,
+                    label: "Transparent Forward",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: !didEncode
+                )
+                didEncode = didEncode || transparentEncoded
             }
 
             if !didEncode {
@@ -1223,8 +1291,8 @@ open class Renderer {
                 return encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
+                    route: .surfaceOpaque,
+                    phase: .surfaceOpaque,
                     label: "Empty",
                     cameras: cameras,
                     viewports: viewports,
@@ -1238,8 +1306,8 @@ open class Renderer {
             return didEncode
 
         case .deferredGeometry:
-            let unlitEntries = routePassEntries(route: .unlit)
-            let needsSurfacePass = hasSurfaceRenderables || usesAuxiliaryAttachments || (unlitEntries.isEmpty && renderLists.isEmpty)
+            let opaqueUnlitEntries = routePassEntries(route: .unlitOpaque)
+            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (opaqueUnlitEntries.isEmpty && !hasTransparentRenderables && renderLists.isEmpty)
             var didEncode = false
 
             if needsSurfacePass {
@@ -1250,14 +1318,14 @@ open class Renderer {
                     stencilLoadAction: stencilLoadAction,
                     colorStoreAction: .dontCare,
                     depthStoreAction: .store,
-                    stencilStoreAction: unlitEntries.isEmpty ? finalStencilStoreAction : .store
+                    stencilStoreAction: (opaqueUnlitEntries.isEmpty && !hasTransparentRenderables) ? finalStencilStoreAction : .store
                 )
                 let auxiliaryAttachmentIndices = configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor)
                 let surfaceEncoded = encodeRoute(
                     renderPassDescriptor: renderPassDescriptor,
                     commandBuffer: commandBuffer,
-                    route: .surface,
-                    phase: .surface,
+                    route: .surfaceOpaque,
+                    phase: .surfaceOpaque,
                     label: "Deferred Geometry",
                     cameras: cameras,
                     viewports: viewports,
@@ -1273,33 +1341,33 @@ open class Renderer {
                     viewports: viewports,
                     simdViewports: simdViewports,
                     viewMappings: viewMappings,
-                    colorStoreAction: finalColorStoreAction,
-                    unlitEntries: unlitEntries,
+                    colorStoreAction: hasTransparentRenderables ? .store : finalColorStoreAction,
+                    unlitEntries: opaqueUnlitEntries,
                     unlitCameras: cameras,
-                    finalDepthStoreAction: finalDepthStoreAction,
-                    finalStencilStoreAction: finalStencilStoreAction
+                    finalDepthStoreAction: hasTransparentRenderables ? .store : finalDepthStoreAction,
+                    finalStencilStoreAction: hasTransparentRenderables ? .store : finalStencilStoreAction
                 )
                 didEncode = surfaceEncoded || resolveEncoded
             } else {
                 configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
 
                 // No surface/geometry pass but unlit objects still need to be rendered.
-                if !unlitEntries.isEmpty {
+                if !opaqueUnlitEntries.isEmpty {
                     configureMainAttachments(
                         renderPassDescriptor: renderPassDescriptor,
                         colorLoadAction: colorLoadAction,
                         depthLoadAction: depthLoadAction,
                         stencilLoadAction: stencilLoadAction,
-                        colorStoreAction: finalColorStoreAction,
-                        depthStoreAction: finalDepthStoreAction,
-                        stencilStoreAction: finalStencilStoreAction
+                        colorStoreAction: hasTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasTransparentRenderables ? .store : finalStencilStoreAction
                     )
                     let unlitEncoded = encodeRoute(
                         renderPassDescriptor: renderPassDescriptor,
                         commandBuffer: commandBuffer,
-                        route: .unlit,
-                        phase: .unlit,
-                        label: "Unlit Forward",
+                        route: .unlitOpaque,
+                        phase: .unlitOpaque,
+                        label: "Opaque Unlit Forward",
                         cameras: cameras,
                         viewports: viewports,
                         simdViewports: simdViewports,
@@ -1309,6 +1377,33 @@ open class Renderer {
                     )
                     didEncode = unlitEncoded
                 }
+            }
+
+            if hasTransparentRenderables {
+                configureMainAttachments(
+                    renderPassDescriptor: renderPassDescriptor,
+                    colorLoadAction: didEncode ? .load : colorLoadAction,
+                    depthLoadAction: didEncode ? .load : depthLoadAction,
+                    stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                    colorStoreAction: finalColorStoreAction,
+                    depthStoreAction: finalDepthStoreAction,
+                    stencilStoreAction: finalStencilStoreAction
+                )
+                configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                let transparentEncoded = encodeRoute(
+                    renderPassDescriptor: renderPassDescriptor,
+                    commandBuffer: commandBuffer,
+                    route: .transparent,
+                    phase: .forwardTransparent,
+                    label: "Transparent Forward",
+                    cameras: cameras,
+                    viewports: viewports,
+                    simdViewports: simdViewports,
+                    viewMappings: viewMappings,
+                    auxiliaryAttachmentIndices: [],
+                    clearWhenEmpty: !didEncode
+                )
+                didEncode = didEncode || transparentEncoded
             }
 
             return didEncode
@@ -1420,7 +1515,9 @@ open class Renderer {
 
             if let renderable = object as? Renderable {
                 for material in renderable.materials {
-                    let usesDeferredResolve = renderingMode == .deferredGeometry && material.lightingModel == .surface
+                    let usesDeferredResolve = renderingMode == .deferredGeometry
+                        && material.lightingModel == .surface
+                        && material.blending == .disabled
 
                     if material.lighting {
                         material.lightCount = usesDeferredResolve ? 0 : lightCount
@@ -1611,12 +1708,14 @@ open class Renderer {
         let savedMaterialPass = renderable.materialPass
 
         switch phase {
-        case .forward:
-            renderable.materialPass = .all
-        case .surface:
-            renderable.materialPass = .surface
-        case .unlit:
-            renderable.materialPass = .unlit
+        case .forwardOpaque:
+            renderable.materialPass = .opaque
+        case .forwardTransparent:
+            renderable.materialPass = .transparent
+        case .surfaceOpaque:
+            renderable.materialPass = .surfaceOpaque
+        case .unlitOpaque:
+            renderable.materialPass = .unlitOpaque
         }
 
         if let overrideMaterial {

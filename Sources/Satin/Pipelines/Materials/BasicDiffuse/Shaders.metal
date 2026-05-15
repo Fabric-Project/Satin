@@ -202,6 +202,7 @@ fragment FragmentOutput basicDiffuseFragment(
 
     SurfaceOutput surface;
     surface.albedo    = half3(uniforms.color.rgb);
+    surface.alpha     = half(uniforms.color.a);
     surface.normal    = half3(N);
     surface.roughness = 1.0h;
     surface.metalness = 0.0h;
