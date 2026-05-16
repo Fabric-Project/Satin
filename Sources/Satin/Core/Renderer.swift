@@ -1696,6 +1696,36 @@ open class Renderer {
                     finalStencilStoreAction: hasTransparentRenderables ? .store : finalStencilStoreAction
                 )
                 didEncode = surfaceEncoded || resolveEncoded
+
+                // G-buffer textures weren't available (encodeDeferredLightingPass returned false)
+                // but unlit geometry (e.g. skybox) still needs to render. Fall back to a plain
+                // forward unlit pass so these objects are never silently dropped.
+                if !resolveEncoded, !opaqueUnlitEntries.isEmpty {
+                    configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
+                    configureMainAttachments(
+                        renderPassDescriptor: renderPassDescriptor,
+                        colorLoadAction: didEncode ? .load : colorLoadAction,
+                        depthLoadAction: didEncode ? .load : depthLoadAction,
+                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
+                        colorStoreAction: hasTransparentRenderables ? .store : finalColorStoreAction,
+                        depthStoreAction: hasTransparentRenderables ? .store : finalDepthStoreAction,
+                        stencilStoreAction: hasTransparentRenderables ? .store : finalStencilStoreAction
+                    )
+                    let unlitFallbackEncoded = encodeRoute(
+                        renderPassDescriptor: renderPassDescriptor,
+                        commandBuffer: commandBuffer,
+                        route: .unlitOpaque,
+                        phase: .unlitOpaque,
+                        label: "Opaque Unlit Fallback",
+                        cameras: cameras,
+                        viewports: viewports,
+                        simdViewports: simdViewports,
+                        viewMappings: viewMappings,
+                        auxiliaryAttachmentIndices: [],
+                        clearWhenEmpty: !didEncode
+                    )
+                    didEncode = didEncode || unlitFallbackEncoded
+                }
             } else {
                 configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
 
