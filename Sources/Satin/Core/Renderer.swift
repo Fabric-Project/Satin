@@ -211,21 +211,67 @@ open class Renderer {
         let stencilPixelFormat: MTLPixelFormat
     }
 
+    // The encoding phase applied when drawing a collected set of renderables.
+    // Controls which render Context is built (shader defines, G-buffer outputs, OIT flag)
+    // and sets renderable.materialPass so Mesh.materialMatchesCurrentPass can gate
+    // per-material drawing within a single encoder.
     private enum MaterialPassType {
+        // All opaque geometry in a plain forward pass. No G-buffer outputs, no OIT.
+        // Used for every opaque renderable in .forward rendering mode (surface-lit and
+        // unlit alike). Sets materialPass = .opaque so all non-transparent materials draw.
         case forwardOpaque
-        case alphaTransparent
-        case alphaTransparentFallback
-        case classicTransparent
+
+        // Opaque surface-lit geometry writing to the G-buffer. Active only in .forwardPlus
+        // and .deferredGeometry modes. Enables OUTPUT_* defines so materials write albedo,
+        // normals, PBR, velocity, and emissive attachments alongside the colour buffer.
         case surfaceOpaque
+
+        // Opaque unlit geometry rendered forward, never to the G-buffer.
+        // Used in .forwardPlus and .deferredGeometry after the surface pass so unlit
+        // objects (skybox, fullscreen quads, etc.) write only to the colour attachment.
         case unlitOpaque
+
+        // Image-block OIT pass on Apple4+ devices when context.alphaOitEnabled is true.
+        // Sets alphaOitEnabled on the render context, injecting the ALPHA_OIT define so
+        // material fragment shaders write into the per-pixel tile imageblock rather than
+        // the framebuffer. A fullscreen blend quad then composites the sorted layers.
+        case alphaTransparent
+
+        // Hardware alpha blending for all transparent geometry that is not handled by
+        // image-block OIT: additive, subtract, custom blend modes, and blending == .alpha
+        // when the renderer context does not support OIT (alphaOitEnabled = false or
+        // non-Apple4 hardware). No special defines — standard src/dst blend equations apply.
+        case classicTransparent
     }
 
+    // Determines which renderables are collected into a pass before encoding begins.
+    // routePassEntries(route:) filters the scene's render lists by these predicates.
+    // Route and MaterialPassType are separate because the same route can map to different
+    // phases depending on rendering mode (e.g. .opaque → .forwardOpaque in .forward, but
+    // opaque geometry is split into .surfaceOpaque + .unlitOpaque in .forwardPlus/.deferredGeometry).
     private enum RenderRoute {
+        // All opaque geometry (blending == .disabled), regardless of lighting model.
+        // Used as a single bucket in .forward mode. In other modes, opaque geometry is
+        // collected via .surfaceOpaque and .unlitOpaque instead.
         case opaque
-        case alphaTransparent
-        case classicTransparent
+
+        // Opaque surface-lit geometry (lightingModel == .surface && blending == .disabled).
+        // Subset of .opaque; separated so G-buffer output configuration can be applied.
         case surfaceOpaque
+
+        // Opaque unlit geometry (lightingModel == .unlit && blending == .disabled).
+        // Subset of .opaque; always encoded forward-only without G-buffer writes.
         case unlitOpaque
+
+        // Alpha materials destined for image-block OIT:
+        // blending == .alpha && supportsAlphaOrderIndependentTransparency && supportsAlphaOit.
+        // Empty on non-Apple4 hardware or when context.alphaOitEnabled is false.
+        case alphaTransparent
+
+        // All remaining transparent geometry: any blending mode that is not handled by
+        // image-block OIT. Includes additive, subtract, custom, and blending == .alpha
+        // when OIT is unavailable (supportsAlphaOit == false).
+        case classicTransparent
     }
 
     private struct ColorAttachmentState {
@@ -723,7 +769,7 @@ open class Renderer {
 
     private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
         switch phase {
-        case .forwardOpaque, .alphaTransparent, .alphaTransparentFallback, .classicTransparent, .unlitOpaque:
+        case .forwardOpaque, .alphaTransparent, .classicTransparent, .unlitOpaque:
             return [.color]
         case .surfaceOpaque:
             var outputs: RendererOutputs = [.color]
@@ -1386,8 +1432,6 @@ open class Renderer {
         let hasTransparentRenderables = hasAlphaTransparentRenderables || hasClassicTransparentRenderables
         let hasSurfaceOpaqueRenderables = !routePassEntries(route: .surfaceOpaque).isEmpty
         let hasUnlitOpaqueRenderables = !routePassEntries(route: .unlitOpaque).isEmpty
-        let alphaFallbackEntries = routePassEntries(route: .alphaTransparent)
-
         switch renderingMode {
         case .forward:
             configureAuxiliaryAttachments(renderPassDescriptor: renderPassDescriptor, enabled: false)
@@ -1433,30 +1477,6 @@ open class Renderer {
                     stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
                 )
                 didEncode = didEncode || alphaEncoded
-                if !alphaEncoded, !alphaFallbackEntries.isEmpty {
-                    configureMainAttachments(
-                        renderPassDescriptor: renderPassDescriptor,
-                        colorLoadAction: didEncode ? .load : colorLoadAction,
-                        depthLoadAction: didEncode ? .load : depthLoadAction,
-                        stencilLoadAction: didEncode ? .load : stencilLoadAction,
-                        colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
-                        depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
-                        stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
-                    )
-                    let fallbackEncoded = encodeEntries(
-                        renderPassDescriptor: renderPassDescriptor,
-                        commandBuffer: commandBuffer,
-                        entries: alphaFallbackEntries,
-                        phase: .alphaTransparentFallback,
-                        label: "Alpha Transparent Fallback",
-                        cameras: cameras,
-                        viewports: viewports,
-                        simdViewports: simdViewports,
-                        viewMappings: viewMappings,
-                        clearWhenEmpty: !didEncode
-                    )
-                    didEncode = didEncode || fallbackEncoded
-                }
             }
 
             if hasClassicTransparentRenderables {
@@ -1573,30 +1593,6 @@ open class Renderer {
                         stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
                     )
                     didEncode = didEncode || alphaEncoded
-                    if !alphaEncoded, !alphaFallbackEntries.isEmpty {
-                        configureMainAttachments(
-                            renderPassDescriptor: renderPassDescriptor,
-                            colorLoadAction: didEncode ? .load : colorLoadAction,
-                            depthLoadAction: didEncode ? .load : depthLoadAction,
-                            stencilLoadAction: didEncode ? .load : stencilLoadAction,
-                            colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
-                            depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
-                            stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
-                        )
-                        let fallbackEncoded = encodeEntries(
-                            renderPassDescriptor: renderPassDescriptor,
-                            commandBuffer: commandBuffer,
-                            entries: alphaFallbackEntries,
-                            phase: .alphaTransparentFallback,
-                            label: "Alpha Transparent Fallback",
-                            cameras: cameras,
-                            viewports: viewports,
-                            simdViewports: simdViewports,
-                            viewMappings: viewMappings,
-                            clearWhenEmpty: !didEncode
-                        )
-                        didEncode = didEncode || fallbackEncoded
-                    }
                 }
 
                 if hasClassicTransparentRenderables {
@@ -1786,30 +1782,6 @@ open class Renderer {
                         stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
                     )
                     didEncode = didEncode || alphaEncoded
-                    if !alphaEncoded, !alphaFallbackEntries.isEmpty {
-                        configureMainAttachments(
-                            renderPassDescriptor: renderPassDescriptor,
-                            colorLoadAction: didEncode ? .load : colorLoadAction,
-                            depthLoadAction: didEncode ? .load : depthLoadAction,
-                            stencilLoadAction: didEncode ? .load : stencilLoadAction,
-                            colorStoreAction: hasClassicTransparentRenderables ? .store : finalColorStoreAction,
-                            depthStoreAction: hasClassicTransparentRenderables ? .store : finalDepthStoreAction,
-                            stencilStoreAction: hasClassicTransparentRenderables ? .store : finalStencilStoreAction
-                        )
-                        let fallbackEncoded = encodeEntries(
-                            renderPassDescriptor: renderPassDescriptor,
-                            commandBuffer: commandBuffer,
-                            entries: alphaFallbackEntries,
-                            phase: .alphaTransparentFallback,
-                            label: "Alpha Transparent Fallback",
-                            cameras: cameras,
-                            viewports: viewports,
-                            simdViewports: simdViewports,
-                            viewMappings: viewMappings,
-                            clearWhenEmpty: !didEncode
-                        )
-                        didEncode = didEncode || fallbackEncoded
-                    }
                 }
 
                 if hasClassicTransparentRenderables {
@@ -2146,8 +2118,6 @@ open class Renderer {
             renderable.materialPass = .opaque
         case .alphaTransparent:
             renderable.materialPass = .alphaTransparent
-        case .alphaTransparentFallback:
-            renderable.materialPass = .alphaTransparentFallback
         case .classicTransparent:
             renderable.materialPass = .classicTransparent
         case .surfaceOpaque:
