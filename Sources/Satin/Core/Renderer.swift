@@ -336,6 +336,8 @@ open class Renderer {
 
         self.frameBufferOnly = frameBufferOnly
         self.supportsAlphaOit = context.device.supportsFamily(.apple4)
+            && context.alphaOitEnabled
+            && context.vertexAmplificationCount <= 1
     }
 
     public func setClearColor(_ color: simd_float4) {
@@ -667,10 +669,7 @@ open class Renderer {
     }
 
     private func usesAlphaOit(_ material: Material) -> Bool {
-        // Metal imageblocks (tile rendering) are incompatible with renderTargetArrayLength > 1,
-        // so skip OIT when vertex amplification is active.
         supportsAlphaOit &&
-            context.vertexAmplificationCount <= 1 &&
             material.blending == .alpha &&
             material.supportsAlphaOrderIndependentTransparency
     }

@@ -38,7 +38,7 @@ inline AlphaOitFragmentStore buildAlphaOitFragmentOutput(
 ) {
     AlphaOitFragmentStore out;
     half4 layerColor = color;
-    //layerColor.rgb *= layerColor.a;
+    layerColor.rgb *= layerColor.a;
     // Invert reversed-Z NDC depth (near=1, far=0) to a standard sort key (near=0, far=1).
     half depth = 1.0h - half(position.z / position.w);
 
