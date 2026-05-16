@@ -617,7 +617,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     private func makeOverlayColorMaterial(_ color: simd_float4) -> BasicColorMaterial {
-        let material = BasicColorMaterial(context: overlayContext, color: color)
+        let material = BasicColorMaterial(context: overlayContext, color: color, blending: .disabled)
         material.depthWriteEnabled = false
         return material
     }
