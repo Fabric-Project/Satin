@@ -302,8 +302,6 @@ open class Mesh: Renderable {
             return !isTransparent
         case .alphaTransparent:
             return material.blending == .alpha
-        case .alphaTransparentFallback:
-            return material.blending == .alpha
         case .classicTransparent:
             return isTransparent
         case .surfaceOpaque:

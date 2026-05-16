@@ -14,7 +14,6 @@ open class Renderable : Object {
         case all
         case opaque
         case alphaTransparent
-        case alphaTransparentFallback
         case classicTransparent
         case surfaceOpaque
         case unlitOpaque
