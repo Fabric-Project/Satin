@@ -63,6 +63,7 @@ open class SkyboxMaterial: BasicTextureMaterial {
 
     public init(context: Context, tonemapping: Tonemapping = .aces, gammaCorrection: Float = 1.0) {
         super.init(context: context)
+        blending = .disabled
         depthWriteEnabled = false
         initalizeParameters(tonemapping: tonemapping, gammaCorrection: gammaCorrection)
     }
@@ -74,6 +75,7 @@ open class SkyboxMaterial: BasicTextureMaterial {
         }
         self.texture = texture
         if let sampler { self.sampler = sampler }
+        blending = .disabled
         depthWriteEnabled = false
         initalizeParameters(tonemapping: tonemapping, gammaCorrection: gammaCorrection)
     }
@@ -93,12 +95,14 @@ open class SkyboxMaterial: BasicTextureMaterial {
 
     public required init(context: Context) {
         super.init(context: context)
+        blending = .disabled
         depthWriteEnabled = false
         initalizeParameters()
     }
 
     public required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
+        blending = .disabled
         depthWriteEnabled = false
     }
 
@@ -109,6 +113,7 @@ open class SkyboxMaterial: BasicTextureMaterial {
         }
         self.texture = texture
         if let sampler { self.sampler = sampler }
+        blending = .disabled
         depthWriteEnabled = false
         initalizeParameters()
     }
