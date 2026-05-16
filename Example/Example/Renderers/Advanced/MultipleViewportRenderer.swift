@@ -46,7 +46,7 @@ final class MultipleViewportRenderer: BaseRenderer {
 
     lazy var grid: Object = {
         let object = Object(context: subContext)
-        lazy var material = BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 1.0, 1.0, 1.0))
+        lazy var material = BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 1.0, 1.0, 1.0), blending: .disabled)
         let intervals = 5
         let intervalsf = Float(intervals)
         lazy var geometryX = CapsuleGeometry(context: defaultContext, radius: 0.005, height: intervalsf, axis: .x)
@@ -71,9 +71,9 @@ final class MultipleViewportRenderer: BaseRenderer {
         let intervalsf = Float(intervals)
         let radius = Float(0.005)
         let height = intervalsf
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .x), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 0.0, 0.0, 1.0))))
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .y), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 1.0, 0.0, 1.0))))
-        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .z), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 0.0, 1.0, 1.0))))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .x), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(1.0, 0.0, 0.0, 1.0), blending: .disabled)))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .y), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 1.0, 0.0, 1.0), blending: .disabled)))
+        object.add(Mesh(context: subContext, geometry: CapsuleGeometry(context: defaultContext, radius: radius, height: height, axis: .z), material: BasicColorMaterial(context: defaultContext, color: simd_make_float4(0.0, 0.0, 1.0, 1.0), blending: .disabled)))
         return object
     }()
 

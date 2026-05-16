@@ -667,7 +667,10 @@ open class Renderer {
     }
 
     private func usesAlphaOit(_ material: Material) -> Bool {
+        // Metal imageblocks (tile rendering) are incompatible with renderTargetArrayLength > 1,
+        // so skip OIT when vertex amplification is active.
         supportsAlphaOit &&
+            context.vertexAmplificationCount <= 1 &&
             material.blending == .alpha &&
             material.supportsAlphaOrderIndependentTransparency
     }
