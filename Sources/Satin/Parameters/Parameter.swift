@@ -24,7 +24,7 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible, CustomDe
     var alignment: Int { get }
 
     var controlType: ControlType { get set }
-    var label: String { get }
+    var label: String { set get }
     var description: String { set get }
     var debugDescription: String { get }
 
