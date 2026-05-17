@@ -52,9 +52,13 @@ inline AlphaOitFragmentStore buildAlphaOitFragmentOutput(
     half depth = 1.0h - half(position.z);
     half4 pre = half4(color.rgb * color.a, color.a);
 
-    // Ensure we check larger not smaller.
-    if (depth >= v.frontDepth) {
-        // Incoming fragment is closer: fold the current front into WBOIT, promote incoming.
+    // Only fully-opaque fragments (alpha == 1.0 exactly) use the exact front layer. Any
+    // fragment with alpha < 1.0 always goes into WBOIT so that intersecting transparent
+    // surfaces blend continuously rather than producing a staircase, and so that gradients
+    // approaching (but not reaching) 1.0 have no hard compositing break. The transition
+    // from the last sub-1.0 half-float (~0.999) to 1.0 is one ULP — visually invisible.
+    if (color.a >= 1.0h && depth <= v.frontDepth) {
+        // Incoming near-opaque fragment is closer: fold the current front into WBOIT, promote incoming.
         if (v.frontDepth < half(INFINITY)) {
             half w = wboit_weight(v.frontDepth, v.frontColor.a);
             v.accumColor += v.frontColor * w;
@@ -64,7 +68,7 @@ inline AlphaOitFragmentStore buildAlphaOitFragmentOutput(
         v.frontColor = pre;
         v.frontDepth = depth;
     } else {
-        // Behind the front layer: accumulate into WBOIT.
+        // Any fragment with alpha < 1.0, or a fully-opaque fragment behind the front layer.
         half w = wboit_weight(depth, color.a);
         v.accumColor += pre * w;
         v.accumAlpha += w;
