@@ -26,7 +26,7 @@ open class BasicColorMaterial: Material {
         set { set("Point Size", newValue) }
     }
 
-    public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .alpha) {
+    public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .disabled) {
         super.init(context: context)
         set("Color", color)
         set("Point Size", Float(1.0))
@@ -37,7 +37,7 @@ open class BasicColorMaterial: Material {
         super.init(context: context)
         set("Color", simd_float4.one)
         set("Point Size", Float(1.0))
-        blending = .alpha
+        blending = .disabled
     }
 
     public required init(from decoder: Decoder) throws {

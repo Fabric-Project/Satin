@@ -31,7 +31,7 @@ public final class BasicDiffuseMaterial: BasicColorMaterial {
         }
     }
 
-    public init(context: Context, color: simd_float4 = .one, blending: Blending = .alpha, hardness: Float = 0.75) {
+    public init(context: Context, color: simd_float4 = .one, blending: Blending = .disabled, hardness: Float = 0.75) {
         super.init(context: context, color: color, blending: blending)
         lighting = true
         ambient = 0.0
