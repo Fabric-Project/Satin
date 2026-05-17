@@ -47,11 +47,13 @@ inline AlphaOitFragmentStore buildAlphaOitFragmentOutput(
     AlphaOitFragmentValues v
 ) {
     AlphaOitFragmentStore out;
-    // Invert reversed-Z NDC depth (near=1, far=0) to a standard sort key (near=0, far=1).
-    half depth = 1.0h - half(position.z / position.w);
+    // position.z is already window-space depth in [0,1] (reversed-Z: near=1, far=0).
+    // Invert to a sort key where near=0, far=1.
+    half depth = 1.0h - half(position.z);
     half4 pre = half4(color.rgb * color.a, color.a);
 
-    if (depth <= v.frontDepth) {
+    // Ensure we check larger not smaller.
+    if (depth >= v.frontDepth) {
         // Incoming fragment is closer: fold the current front into WBOIT, promote incoming.
         if (v.frontDepth < half(INFINITY)) {
             half w = wboit_weight(v.frontDepth, v.frontColor.a);
