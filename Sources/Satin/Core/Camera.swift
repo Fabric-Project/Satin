@@ -97,8 +97,8 @@ open class Camera: Object {
         updateRenderState()
     }
 
-    func refreshRenderState(parentMatrix: matrix_float4x4 = matrix_identity_float4x4) {
-        computeRenderTransforms(parentMatrix: parentMatrix)
+    func refreshRenderState(parentMatrix _: matrix_float4x4 = matrix_identity_float4x4) {
+        computeRenderTransformsFromHierarchy()
         updateRenderState()
     }
 

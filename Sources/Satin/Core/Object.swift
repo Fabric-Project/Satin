@@ -542,6 +542,15 @@ open class Object: Codable {
 
     open func prepareForRender() {}
 
+    func computeRenderTransformsFromHierarchy() {
+        if let parent {
+            parent.computeRenderTransformsFromHierarchy()
+            computeRenderTransforms(parentMatrix: parent.renderWorldMatrix)
+        } else {
+            computeRenderTransforms(parentMatrix: matrix_identity_float4x4)
+        }
+    }
+
     func computeRenderTransforms(parentMatrix: matrix_float4x4 = matrix_identity_float4x4) {
         renderTranslationMatrix = translationMatrix3f(position)
         renderRotationMatrix = matrix_float4x4(orientation)
