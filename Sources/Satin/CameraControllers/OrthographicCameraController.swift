@@ -705,4 +705,19 @@ public final class OrthographicCameraController: CameraController, Codable {
     }
 
     #endif
+
+    internal func queuePanForTesting(_ pan: simd_float2) {
+        state = .panning
+        pendingPan += pan
+    }
+
+    internal func queueZoomForTesting(_ zoom: Float) {
+        state = .zooming
+        pendingZoom += zoom
+    }
+
+    internal func queueRollForTesting(_ roll: Float) {
+        state = .rolling
+        pendingRoll += roll
+    }
 }

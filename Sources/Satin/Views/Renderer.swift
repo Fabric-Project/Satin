@@ -9,6 +9,11 @@ import Foundation
 import Metal
 
 open class Renderer {
+    internal enum MutationSchedulingMode {
+        case immediate
+        case queued
+    }
+
     open var id: String {
         var result = String(describing: type(of: self)).replacingOccurrences(of: "Renderer", with: "")
         if let bundleName = Bundle(for: type(of: self)).displayName, bundleName != result {
@@ -57,6 +62,8 @@ open class Renderer {
     private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
     private var inFlightSemaphoreWait = 0
     private var inFlightSemaphoreRelease = 0
+    private let scheduledMutationLock = UnfairLock()
+    private var scheduledMutations: [() -> Void] = []
 
     public init(context: Context) {
         self.context = context
@@ -84,6 +91,32 @@ open class Renderer {
 
     func waitForAvailableFrameSlot() {
         _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
+    }
+
+    internal var mutationSchedulingMode: MutationSchedulingMode { .immediate }
+
+    open func schedule(_ mutation: @escaping () -> Void) {
+        switch mutationSchedulingMode {
+        case .immediate:
+            mutation()
+
+        case .queued:
+            scheduledMutationLock.sync {
+                scheduledMutations.append(mutation)
+            }
+        }
+    }
+
+    internal func drainScheduledMutations() {
+        let queued = scheduledMutationLock.sync { () -> [() -> Void] in
+            let queued = scheduledMutations
+            scheduledMutations.removeAll(keepingCapacity: true)
+            return queued
+        }
+
+        for mutation in queued {
+            mutation()
+        }
     }
 
     func registerInFlight(_ commandBuffer: MTLCommandBuffer) {

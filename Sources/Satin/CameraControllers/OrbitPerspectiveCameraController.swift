@@ -945,4 +945,19 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         deltaTime = Float(currentTime - previousTime)
         previousTime = currentTime
     }
+
+    internal func queueRotationForTesting(_ delta: simd_float2) {
+        state = .rotating
+        pendingRotationDelta = delta
+    }
+
+    internal func queueTranslationForTesting(_ translation: simd_float3, state: CameraControllerState = .panning) {
+        self.state = state
+        pendingTranslation = translation
+    }
+
+    internal func queueZoomForTesting(_ zoom: Float) {
+        state = .zooming
+        pendingZoom = zoom
+    }
 }
