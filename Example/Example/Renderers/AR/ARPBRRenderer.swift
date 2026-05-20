@@ -460,7 +460,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
                 session.remove(anchor: existingAnchor)
             }
 
-            modelContainer.anchor = anchor
+            schedule { [weak self] in
+                self?.modelContainer.anchor = anchor
+            }
         }
     }
 

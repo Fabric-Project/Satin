@@ -162,7 +162,9 @@ final class ARContactShadowRenderer: BaseRenderer {
             guard let self else { return }
             for anchor in anchors {
                 if self.invaderContainer.anchor?.identifier == anchor.identifier {
-                    self.invaderContainer.anchor = anchor
+                    self.schedule {
+                        self.invaderContainer.anchor = anchor
+                    }
                     break
                 }
             }
@@ -228,7 +230,9 @@ final class ARContactShadowRenderer: BaseRenderer {
                 session.remove(anchor: existingAnchor)
             }
 
-            invaderContainer.anchor = anchor
+            schedule { [weak self] in
+                self?.invaderContainer.anchor = anchor
+            }
         }
     }
 
