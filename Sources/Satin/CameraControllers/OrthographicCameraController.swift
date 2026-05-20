@@ -61,6 +61,9 @@ public final class OrthographicCameraController: CameraController, Codable {
     private var defaultZoom: Float = 0.5
     private var zoomDelta: Float = 0.5
     private var panDelta: simd_float2 = .zero
+    private var pendingPan: simd_float2 = .zero
+    private var pendingZoom: Float = 0.0
+    private var pendingRoll: Float = 0.0
     private var panCurrentPoint: simd_float2 = .zero
     private var panPreviousPoint: simd_float2 = .zero
 
@@ -125,6 +128,7 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     public func update() {
         setup()
+        _ = applyPendingInput()
     }
 
     // MARK: - Enable & Disable
@@ -168,7 +172,10 @@ public final class OrthographicCameraController: CameraController, Codable {
         state = .inactive
 
         panDelta = [0.0, 0.0]
+        pendingPan = .zero
         zoomDelta = defaultZoom
+        pendingZoom = 0.0
+        pendingRoll = 0.0
 
         let hw = Float(view.drawableSize.width) * defaultZoom
         let hh = Float(view.drawableSize.height) * defaultZoom
@@ -208,6 +215,9 @@ public final class OrthographicCameraController: CameraController, Codable {
 
             zoomDelta = loaded.zoomDelta
             panDelta = loaded.panDelta
+            pendingPan = .zero
+            pendingZoom = 0.0
+            pendingRoll = 0.0
         } catch {
             print(error.localizedDescription)
         }
@@ -257,6 +267,10 @@ public final class OrthographicCameraController: CameraController, Codable {
     }
 
     private func pan(_ deltaX: Float, _ deltaY: Float) {
+        pendingPan += [deltaX, deltaY]
+    }
+
+    private func applyPan(_ deltaX: Float, _ deltaY: Float) {
         let cameraWidth = camera.right - camera.left
         let cameraHeight = camera.top - camera.bottom
 
@@ -272,6 +286,10 @@ public final class OrthographicCameraController: CameraController, Codable {
     }
 
     private func zoom(_ delta: Float) {
+        pendingZoom += delta
+    }
+
+    private func applyZoom(_ delta: Float) {
         let cameraWidth = camera.right - camera.left
         let cameraHeight = camera.top - camera.bottom
 
@@ -288,8 +306,40 @@ public final class OrthographicCameraController: CameraController, Codable {
     }
 
     private func roll(_ delta: Float) {
+        pendingRoll += delta
+    }
+
+    private func applyRoll(_ delta: Float) {
         camera.orientation *= simd_quatf(angle: delta, axis: camera.worldForwardDirection)
         onChangePublisher.send(self)
+    }
+
+    @discardableResult
+    private func applyPendingInput() -> Bool {
+        var changed = false
+
+        if pendingPan.x != 0.0 || pendingPan.y != 0.0 {
+            let delta = pendingPan
+            pendingPan = .zero
+            applyPan(delta.x, delta.y)
+            changed = true
+        }
+
+        if pendingZoom != 0.0 {
+            let delta = pendingZoom
+            pendingZoom = 0.0
+            applyZoom(delta)
+            changed = true
+        }
+
+        if pendingRoll != 0.0 {
+            let delta = pendingRoll
+            pendingRoll = 0.0
+            applyRoll(delta)
+            changed = true
+        }
+
+        return changed
     }
 
     // MARK: - Events

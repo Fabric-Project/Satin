@@ -13,6 +13,17 @@ final class ThreadingPlanTests: XCTestCase {
         )
     }
 
+    private func makeTexture(device: MTLDevice, size: Int = 4) -> MTLTexture? {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: size,
+            height: size,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead, .shaderWrite]
+        return device.makeTexture(descriptor: descriptor)
+    }
+
     private func runFrame(renderer: RenderEncoder, scene: Object, camera: Camera, size: SIMD2<Int> = .init(32, 32)) throws {
         guard let commandQueue = renderer.context.device.makeCommandQueue() else {
             XCTFail("Failed to create command queue")
@@ -101,5 +112,60 @@ final class ThreadingPlanTests: XCTestCase {
         let expectedViewProjection = camera.renderProjectionMatrix * camera.renderViewMatrix
         XCTAssertTrue(simd_equal(camera.renderWorldPosition, simd_float3(0.0, 0.0, 5.0)))
         XCTAssertTrue(simd_almost_equal_elements(camera.renderViewProjectionMatrix, expectedViewProjection, 0.0001))
+    }
+
+    func testIBLSceneAdoptsPendingTexturesDuringPrepareForRender() {
+        guard let context = makeContext(),
+              let cubemap = makeTexture(device: context.device),
+              let irradiance = makeTexture(device: context.device),
+              let reflection = makeTexture(device: context.device),
+              let brdf = makeTexture(device: context.device)
+        else { return }
+
+        let scene = IBLScene(context: context)
+        scene.stageEnvironmentTextures(
+            generation: 0,
+            cubemap: cubemap,
+            irradiance: irradiance,
+            reflection: reflection,
+            brdf: brdf
+        )
+
+        XCTAssertNil(scene.cubemapTexture)
+        scene.prepareForRender()
+
+        XCTAssertTrue(scene.cubemapTexture === cubemap)
+        XCTAssertTrue(scene.irradianceTexture === irradiance)
+        XCTAssertTrue(scene.reflectionTexture === reflection)
+        XCTAssertTrue(scene.brdfTexture === brdf)
+    }
+
+    func testIBLSceneRejectsStaleGenerationResults() {
+        guard let context = makeContext(),
+              let staleTexture = makeTexture(device: context.device),
+              let freshTexture = makeTexture(device: context.device)
+        else { return }
+
+        let scene = IBLScene(context: context)
+        let generation = scene.setPendingEnvironmentGenerationForTesting()
+        scene.stageEnvironmentTextures(
+            generation: generation - 1,
+            cubemap: staleTexture,
+            irradiance: nil,
+            reflection: nil,
+            brdf: nil
+        )
+        scene.prepareForRender()
+        XCTAssertNil(scene.cubemapTexture)
+
+        scene.stageEnvironmentTextures(
+            generation: generation,
+            cubemap: freshTexture,
+            irradiance: nil,
+            reflection: nil,
+            brdf: nil
+        )
+        scene.prepareForRender()
+        XCTAssertTrue(scene.cubemapTexture === freshTexture)
     }
 }
