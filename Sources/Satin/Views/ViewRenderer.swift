@@ -111,6 +111,7 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
         guard isSetup, let commandBuffer = preDraw() else { return }
 
+        drainScheduledMutations()
         update()
         draw(texture: drawable.texture, commandBuffer: commandBuffer)
         postDraw(drawable: drawable, commandBuffer: commandBuffer)

@@ -380,21 +380,26 @@ Give scene graph mutation a consistent execution model across synchronous and th
 
 ### Current state
 
-`RenderEncoder` now exposes a local mutation queue via `schedule(_:)`, and those pending mutations are drained at the top of the update path.
+`Renderer` now exposes the public mutation queue contract via `schedule(_:)`.
+
+- immediate-mode renderers execute scheduled mutations inline,
+- threaded renderers queue scheduled mutations and drain them at the top of the frame update,
+- `RenderEncoder` still keeps its traversal-local queue for render-graph staging.
 
 ### Status
 
 **Partially implemented.**
 
+### Implemented behavior
+
+- `Renderer.schedule(_:)` is now the renderer-owned contract.
+- `ViewRenderer` drains renderer-scheduled mutations on the synchronous frame path.
+- `SpatialRenderer` queues renderer-scheduled mutations and drains them before `update()` on the dedicated render thread.
+
 ### What remains
 
-The mutation staging point probably belongs at the renderer level rather than only on `RenderEncoder`.
-
-Recommended end state:
-
-- synchronous renderers execute immediately,
-- threaded renderers enqueue and drain,
-- examples and higher-level code use a renderer-owned scheduling contract rather than reaching into `RenderEncoder` internals.
+- Higher-level examples and app code still mostly reach directly into scene objects; the new renderer contract exists, but call sites have not yet been broadly migrated to use it for structural mutation.
+- `RenderEncoder.schedule(_:)` still exists as an internal primitive; whether it remains exposed or is reduced further can be decided once higher-level call sites are updated.
 
 ### Files likely involved
 

@@ -36,6 +36,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
     open override var depthPixelFormat: MTLPixelFormat { .depth32Float }
     open override var depthTextureUsage: MTLTextureUsage { [.renderTarget, .shaderRead] }
+    override var mutationSchedulingMode: MutationSchedulingMode { .queued }
 
     open var isFoveationEnabled: Bool { true }
 
@@ -267,6 +268,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
         frame.startUpdate()
 
+        drainScheduledMutations()
         update()
 
         frame.endUpdate()

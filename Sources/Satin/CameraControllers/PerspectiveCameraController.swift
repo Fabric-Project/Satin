@@ -945,4 +945,25 @@ public final class PerspectiveCameraController: CameraController, Codable {
         deltaTime = Float(currentTime - previousTime)
         previousTime = currentTime
     }
+
+    internal func queueRotationForTesting(axis: simd_float3, angle: Float) {
+        state = .rotating
+        pendingRotationAxis = axis
+        pendingRotationAngle = angle
+    }
+
+    internal func queueTranslationForTesting(_ translation: simd_float3, state: CameraControllerState = .panning) {
+        self.state = state
+        pendingTranslation = translation
+    }
+
+    internal func queueZoomForTesting(_ zoom: Float) {
+        state = .zooming
+        pendingZoom = zoom
+    }
+
+    internal func queueRollForTesting(_ roll: Float) {
+        state = .rolling
+        pendingRoll = roll
+    }
 }

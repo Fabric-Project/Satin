@@ -3,6 +3,16 @@ import Metal
 import XCTest
 
 final class ThreadingPlanTests: XCTestCase {
+    private final class TestRenderer: Renderer {
+        var mode: MutationSchedulingMode = .immediate
+
+        override var mutationSchedulingMode: MutationSchedulingMode { mode }
+
+        func drainScheduledMutationsForTesting() {
+            drainScheduledMutations()
+        }
+    }
+
     private func makeContext() -> Context? {
         guard let device = MTLCreateSystemDefaultDevice() else { return nil }
         return Context(
@@ -22,6 +32,10 @@ final class ThreadingPlanTests: XCTestCase {
         )
         descriptor.usage = [.shaderRead, .shaderWrite]
         return device.makeTexture(descriptor: descriptor)
+    }
+
+    private func makeMetalView(size: CGFloat = 256.0) -> MetalView {
+        MetalView(frame: CGRect(x: 0.0, y: 0.0, width: size, height: size))
     }
 
     private func runFrame(renderer: RenderEncoder, scene: Object, camera: Camera, size: SIMD2<Int> = .init(32, 32)) throws {
@@ -167,5 +181,76 @@ final class ThreadingPlanTests: XCTestCase {
         )
         scene.prepareForRender()
         XCTAssertTrue(scene.cubemapTexture === freshTexture)
+    }
+
+    func testRendererScheduleExecutesImmediatelyInImmediateMode() {
+        guard let context = makeContext() else { return }
+
+        let renderer = TestRenderer(context: context)
+        var value = 0
+
+        renderer.schedule {
+            value = 1
+        }
+
+        XCTAssertEqual(value, 1)
+    }
+
+    func testRendererScheduleDefersMutationsInQueuedModeUntilDrain() {
+        guard let context = makeContext() else { return }
+
+        let renderer = TestRenderer(context: context)
+        renderer.mode = .queued
+        var value = 0
+
+        renderer.schedule {
+            value = 1
+        }
+
+        XCTAssertEqual(value, 0)
+        renderer.drainScheduledMutationsForTesting()
+        XCTAssertEqual(value, 1)
+    }
+
+    func testPerspectiveCameraControllerOnlyAppliesQueuedInputDuringUpdate() {
+        guard let context = makeContext() else { return }
+
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 20.0, fov: 45.0)
+        let controller = PerspectiveCameraController(camera: camera, view: makeMetalView())
+
+        let originalZ = camera.position.z
+        controller.queueZoomForTesting(0.5)
+
+        XCTAssertEqual(camera.position.z, originalZ, accuracy: 0.0001)
+        controller.update()
+        XCTAssertNotEqual(camera.position.z, originalZ)
+    }
+
+    func testOrbitCameraControllerOnlyAppliesQueuedInputDuringUpdate() {
+        guard let context = makeContext() else { return }
+
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 20.0, fov: 45.0)
+        let controller = OrbitPerspectiveCameraController(camera: camera, view: makeMetalView())
+
+        let originalOrientation = controller.target.orientation
+        controller.queueRotationForTesting([12.0, -8.0])
+
+        XCTAssertTrue(simd_equal(controller.target.orientation.vector, originalOrientation.vector))
+        controller.update()
+        XCTAssertFalse(simd_equal(controller.target.orientation.vector, originalOrientation.vector))
+    }
+
+    func testOrthographicCameraControllerOnlyAppliesQueuedInputDuringUpdate() {
+        guard let context = makeContext() else { return }
+
+        let camera = OrthographicCamera(context: context, left: -1.0, right: 1.0, bottom: -1.0, top: 1.0, near: 0.1, far: 20.0)
+        let controller = OrthographicCameraController(camera: camera, view: makeMetalView(), defaultZoom: 0.5)
+
+        let originalPosition = camera.position
+        controller.queuePanForTesting([0.25, -0.25])
+
+        XCTAssertTrue(simd_equal(camera.position, originalPosition))
+        controller.update()
+        XCTAssertFalse(simd_equal(camera.position, originalPosition))
     }
 }
