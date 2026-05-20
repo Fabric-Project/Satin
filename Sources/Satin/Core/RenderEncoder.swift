@@ -466,7 +466,7 @@ open class RenderEncoder {
         )
     }
 
-    public func schedule(_ mutation: @escaping () -> Void) {
+    internal func schedule(_ mutation: @escaping () -> Void) {
         mutationLock.sync {
             pendingMutations.append(mutation)
         }

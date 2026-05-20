@@ -191,10 +191,13 @@ final class ARBloomRenderer: BaseRenderer {
 
         let result = raycast(ray: Ray(camera: camera, coordinate: coordinate), object: scene)
         if let first = result.first?.object {
-            if bloomedScene.children.contains(first) {
-                bloomedScene.remove(first)
-            } else {
-                bloomedScene.attach(first)
+            schedule { [weak self] in
+                guard let self else { return }
+                if self.bloomedScene.children.contains(first) {
+                    self.bloomedScene.remove(first)
+                } else {
+                    self.bloomedScene.attach(first)
+                }
             }
         } else if let currentFrame = session.currentFrame {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
@@ -210,9 +213,11 @@ final class ARBloomRenderer: BaseRenderer {
 
             let object = Object(context: defaultContext, label: anchor.identifier.uuidString, [mesh])
 
-            scene.attach(object)
-            object.worldMatrix = anchor.transform
             objectAnchorMap[anchor.identifier] = object
+            schedule { [weak self] in
+                self?.scene.attach(object)
+                object.worldMatrix = anchor.transform
+            }
         }
     }
 
@@ -223,7 +228,9 @@ final class ARBloomRenderer: BaseRenderer {
             guard let self = self else { return }
             for anchor in anchors {
                 if let object = objectAnchorMap[anchor.identifier] {
-                    object.worldMatrix = anchor.transform
+                    self.schedule {
+                        object.worldMatrix = anchor.transform
+                    }
                 }
             }
         }.store(in: &sessionSubscriptions)

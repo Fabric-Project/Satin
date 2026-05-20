@@ -143,7 +143,9 @@ final class ARPlanesRenderer: BaseRenderer {
                 if self.planesMap[anchor] == nil, let planeAnchor = anchor as? ARPlaneAnchor {
                     let planeContainer = ARPlaneContainer(context:defaultContext, label: "\(planeAnchor.identifier)", anchor: planeAnchor, material: self.planeMaterial)
                     self.planesMap[anchor] = planeContainer
-                    self.scene.add(planeContainer)
+                    self.schedule { [weak self] in
+                        self?.scene.add(planeContainer)
+                    }
                 }
             }
         }
@@ -152,7 +154,9 @@ final class ARPlanesRenderer: BaseRenderer {
             guard let self else { return }
             for anchor in anchors {
                 if let plane = self.planesMap[anchor], let planeAnchor = anchor as? ARPlaneAnchor {
-                    plane.anchor = planeAnchor
+                    self.schedule {
+                        plane.anchor = planeAnchor
+                    }
                 }
             }
         }

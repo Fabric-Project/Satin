@@ -61,7 +61,9 @@ final class ARLidarMeshRenderer: BaseRenderer {
                     let mesh = ARLidarMesh(context:defaultContext, meshAnchor: meshAnchor, material: material)
                     mesh.triangleFillMode = .lines
                     self.lidarMeshes[id] = mesh
-                    self.scene.add(mesh)
+                    self.schedule { [weak self] in
+                        self?.scene.add(mesh)
+                    }
                 }
             }
         }
@@ -72,7 +74,9 @@ final class ARLidarMeshRenderer: BaseRenderer {
                 if let meshAnchor = anchor as? ARMeshAnchor {
                     let id = anchor.identifier
                     if let lidarMesh = self.lidarMeshes[id] {
-                        lidarMesh.meshAnchor = meshAnchor
+                        self.schedule {
+                            lidarMesh.meshAnchor = meshAnchor
+                        }
                     }
                 }
             }

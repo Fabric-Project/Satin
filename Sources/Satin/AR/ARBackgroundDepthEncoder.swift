@@ -252,12 +252,16 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
                     material: depthMaterial
                 )
                 depthAnchorPlaneMeshMap[anchor.identifier] = planeMesh
-                depthScene.add(planeMesh)
+                depthRenderer.schedule { [weak self] in
+                    self?.depthScene.add(planeMesh)
+                }
             }
             else if useMeshDepth, let meshAnchor = anchor as? ARMeshAnchor {
                 let lidarMesh = ARLidarMesh(context: context, meshAnchor: meshAnchor, material: depthLidarMaterial)
                 depthAnchorLidarMeshMap[anchor.identifier] = lidarMesh
-                depthScene.add(lidarMesh)
+                depthRenderer.schedule { [weak self] in
+                    self?.depthScene.add(lidarMesh)
+                }
             }
         }
     }
@@ -266,12 +270,16 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         for anchor in anchors {
             if usePlaneDepth, let planeAnchor = anchor as? ARPlaneAnchor {
                 if let planeMesh = depthAnchorPlaneMeshMap[anchor.identifier] {
-                    planeMesh.anchor = planeAnchor
+                    depthRenderer.schedule {
+                        planeMesh.anchor = planeAnchor
+                    }
                 }
             }
             else if useMeshDepth, let meshAnchor = anchor as? ARMeshAnchor {
                 if let lidarMesh = depthAnchorLidarMeshMap[anchor.identifier] {
-                    lidarMesh.meshAnchor = meshAnchor
+                    depthRenderer.schedule {
+                        lidarMesh.meshAnchor = meshAnchor
+                    }
                 }
             }
         }
@@ -281,12 +289,16 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         for anchor in anchors {
             if usePlaneDepth, let planeAnchor = anchor as? ARPlaneAnchor {
                 if let mesh = depthAnchorPlaneMeshMap.removeValue(forKey: planeAnchor.identifier) {
-                    depthScene.remove(mesh)
+                    depthRenderer.schedule { [weak self] in
+                        self?.depthScene.remove(mesh)
+                    }
                 }
             }
             else if useMeshDepth, let meshAnchor = anchor as? ARMeshAnchor {
                 if let mesh = depthAnchorLidarMeshMap.removeValue(forKey: meshAnchor.identifier) {
-                    depthScene.remove(mesh)
+                    depthRenderer.schedule { [weak self] in
+                        self?.depthScene.remove(mesh)
+                    }
                 }
             }
         }
