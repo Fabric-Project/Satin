@@ -1,5 +1,5 @@
 //
-//  ARBackgroundDepthRenderer.swift
+//  ARBackgroundDepthEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 4/11/23.
@@ -19,14 +19,14 @@ import MetalPerformanceShaders
 import SatinCore
 #endif
 
-public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
+public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     private var sessionPublisher: ARSessionPublisher
     private var sessionSubscriptions = Set<AnyCancellable>()
 
     
     private lazy var background = Object(context: self.context, label: "AR Background", [depthMesh, mesh])
 
-    private var depthRenderer: Renderer
+    private var depthRenderer: RenderEncoder
     private var depthAnchorPlaneMeshMap: [UUID: ARPlaneMesh] = [:]
     private var depthAnchorLidarMeshMap: [UUID: ARLidarMesh] = [:]
 
@@ -89,7 +89,7 @@ public class ARBackgroundDepthRenderer: ARBackgroundRenderer {
         self.usePlaneDepth = usePlaneDepth
         self.useMeshDepth = useMeshDepth
 
-        depthRenderer = Renderer(
+        depthRenderer = RenderEncoder(
             label: "AR Background",
             context: context,
             colorLoadAction: .clear,

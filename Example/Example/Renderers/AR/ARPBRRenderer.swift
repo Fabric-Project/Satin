@@ -321,9 +321,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     fileprivate lazy var scene = ARScene(context:self.context, label: "Scene", [modelContainer], session: session)
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(context:self.context, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context, frameBufferOnly: false)
+    lazy var renderer = RenderEncoder(context: context, frameBufferOnly: false)
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
     var featheredDepthMaskGenerator: ARFeatheredDepthMaskGenerator!
 
     lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
@@ -335,7 +335,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         return material
     }()
 
-    lazy var postProcessor = PostProcessor(
+    lazy var postProcessor = PostProcessEncoder(
         label: "Post Processor",
         context: postContext,
         material: postMaterial
@@ -365,7 +365,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         renderer.setClearColor(.zero)
         renderer.depthStoreAction = .store
 
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: context,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),

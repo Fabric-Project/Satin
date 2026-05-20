@@ -87,7 +87,7 @@ final class PointShadowRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [8.0, 4.6, 8.0], near: 0.01, far: 500.0, fov: 34.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var startTime = getTime()
 

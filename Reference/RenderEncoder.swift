@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Satin
 //
 //  Created by Reza Ali on 7/23/19.
@@ -10,8 +10,8 @@ import Combine
 import Metal
 import simd
 
-open class Renderer {
-    public var label = "Satin Renderer"
+open class RenderEncoder {
+    public var label = "Satin RenderEncoder"
 
     public var onUpdate: (() -> Void)?
 
@@ -69,7 +69,7 @@ open class Renderer {
     public var colorLoadAction: MTLLoadAction
     public var colorStoreAction: MTLStoreAction
 
-    // MARK: - Depth Textures
+    // MARK: - Depth Texturesd
 
     public var clearDepth: Double
 
@@ -123,7 +123,7 @@ open class Renderer {
     public var stencilLoadAction: MTLLoadAction
     public var stencilStoreAction: MTLStoreAction
 
-    // MARK: - Renderer Outputs
+    // MARK: - RenderEncoder Outputs
 
     /// Controls whether the renderer runs a traditional forward pass, a forward MRT pass,
     /// or the deferred geometry stage. Switching modes compiles new pipeline variants on
@@ -285,7 +285,7 @@ open class Renderer {
     private var renderContextCache: [RenderContextKey: Context] = [:]
     private let supportsAlphaOit: Bool
     private let alphaOitTileSize = MTLSize(width: 32, height: 16, depth: 1)
-    private lazy var alphaOitResources = AlphaOitResources(renderer: self)
+    private lazy var alphaOitResources = AlphaOitResources(encoder: self)
 
     private func colorAttachment(_ renderPassDescriptor: MTLRenderPassDescriptor, index: Int) -> MTLRenderPassColorAttachmentDescriptor? {
         renderPassDescriptor.colorAttachments[index]
@@ -348,7 +348,7 @@ open class Renderer {
     // MARK: - Init
 
     public init(
-        label: String = "Satin Renderer",
+        label: String = "Satin RenderEncoder",
         context: Context,
         sortObjects: Bool = true,
         clearColor: simd_float4 = .init(0, 0, 0, 1),
@@ -388,6 +388,19 @@ open class Renderer {
 
     public func setClearColor(_ color: simd_float4) {
         clearColor = .init(color)
+    }
+
+    // MARK: - Update
+
+    /// Call from Renderer.update() before draw() is dispatched to the render queue.
+    /// Safe to call from any thread — updates cameras and fires onUpdate; scene traversal
+    /// and list population happen inside draw() on the render queue.
+    public func update(scene: Object, camera: Camera) {
+        update(scene: scene, cameras: [camera])
+    }
+
+    public func update(scene: Object, cameras: [Camera]) {
+       
     }
 
     // MARK: - Drawing
@@ -474,7 +487,7 @@ open class Renderer {
         let simd_viewports = viewports.map(\.float4)
         update(
             commandBuffer: commandBuffer,
-            scene: scene,
+            scene:scene,
             cameras: cameras,
             viewports: simd_viewports
         )
@@ -825,7 +838,7 @@ open class Renderer {
         if usesAuxiliaryAttachments {
             precondition(
                 context.sampleCount == 1,
-                "Satin Renderer auxiliary MRT outputs currently require sampleCount == 1."
+                "Satin RenderEncoder auxiliary MRT outputs currently require sampleCount == 1."
             )
         }
 
@@ -1817,7 +1830,6 @@ open class Renderer {
     }
 
     // MARK: - Internal Update
-
     private func update(commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [simd_float4]) {
         for camera in cameras {
             camera.update()
@@ -1990,6 +2002,8 @@ open class Renderer {
         phase: MaterialPassType,
         overrideMaterial: Material? = nil
     ) {
+        
+        
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
 
         if !lightReceivers.isEmpty {
@@ -2612,7 +2626,7 @@ open class Renderer {
 }
 
 private final class AlphaOitResources {
-    private unowned let renderer: Renderer
+    private unowned let encoder: RenderEncoder
     private var cachedResources: Resources?
 
     struct Resources {
@@ -2621,8 +2635,8 @@ private final class AlphaOitResources {
         let blendDepthStencilState: MTLDepthStencilState
     }
 
-    init(renderer: Renderer) {
-        self.renderer = renderer
+    init(encoder: RenderEncoder) {
+        self.encoder = encoder
     }
 
     func load() throws -> Resources {
@@ -2631,44 +2645,44 @@ private final class AlphaOitResources {
         }
 
         guard let pipelineURL = getPipelinesCommonURL("AlphaOIT.metal") else {
-            throw NSError(domain: "Satin.Renderer", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT pipeline source"])
+            throw NSError(domain: "Satin.RenderEncoder", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT pipeline source"])
         }
         let source = try String(contentsOf: pipelineURL)
-        let library = try renderer.context.device.makeLibrary(source: source, options: nil)
+        let library = try encoder.context.device.makeLibrary(source: source, options: nil)
 
         guard let tileFunction = library.makeFunction(name: "alphaOitClearTileData"),
               let blendVertex = library.makeFunction(name: "alphaOitBlendVertex"),
               let blendFragment = library.makeFunction(name: "alphaOitBlendFragment")
         else {
-            throw NSError(domain: "Satin.Renderer", code: 3, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT shader functions"])
+            throw NSError(domain: "Satin.RenderEncoder", code: 3, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT shader functions"])
         }
 
         let tileDescriptor = MTLTileRenderPipelineDescriptor()
-        tileDescriptor.label = "\(renderer.label) Alpha OIT Tile Init"
+        tileDescriptor.label = "\(encoder.label) Alpha OIT Tile Init"
         tileDescriptor.tileFunction = tileFunction
-        tileDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
+        tileDescriptor.colorAttachments[0].pixelFormat = encoder.context.colorPixelFormat
         tileDescriptor.threadgroupSizeMatchesTileSize = true
-        let tilePipeline = try renderer.context.device.makeRenderPipelineState(
+        let tilePipeline = try encoder.context.device.makeRenderPipelineState(
             tileDescriptor: tileDescriptor,
             options: [],
             reflection: nil
         )
 
         let blendDescriptor = MTLRenderPipelineDescriptor()
-        blendDescriptor.label = "\(renderer.label) Alpha OIT Blend"
+        blendDescriptor.label = "\(encoder.label) Alpha OIT Blend"
         blendDescriptor.vertexFunction = blendVertex
         blendDescriptor.fragmentFunction = blendFragment
-        blendDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
-        blendDescriptor.depthAttachmentPixelFormat = renderer.context.depthPixelFormat
-        blendDescriptor.stencilAttachmentPixelFormat = renderer.context.stencilPixelFormat
-        let blendPipeline = try renderer.context.device.makeRenderPipelineState(descriptor: blendDescriptor)
+        blendDescriptor.colorAttachments[0].pixelFormat = encoder.context.colorPixelFormat
+        blendDescriptor.depthAttachmentPixelFormat = encoder.context.depthPixelFormat
+        blendDescriptor.stencilAttachmentPixelFormat = encoder.context.stencilPixelFormat
+        let blendPipeline = try encoder.context.device.makeRenderPipelineState(descriptor: blendDescriptor)
 
         let depthDescriptor = MTLDepthStencilDescriptor()
-        depthDescriptor.label = "\(renderer.label) Alpha OIT Blend Depth"
+        depthDescriptor.label = "\(encoder.label) Alpha OIT Blend Depth"
         depthDescriptor.depthCompareFunction = .always
         depthDescriptor.isDepthWriteEnabled = false
-        guard let blendDepthStencilState = renderer.context.device.makeDepthStencilState(descriptor: depthDescriptor) else {
-            throw NSError(domain: "Satin.Renderer", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to create AlphaOIT depth state"])
+        guard let blendDepthStencilState = encoder.context.device.makeDepthStencilState(descriptor: depthDescriptor) else {
+            throw NSError(domain: "Satin.RenderEncoder", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to create AlphaOIT depth state"])
         }
 
         let resources = Resources(

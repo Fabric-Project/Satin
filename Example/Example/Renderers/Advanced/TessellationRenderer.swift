@@ -49,7 +49,7 @@ final class TessellationRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 4.0), near: 0.01, far: 50.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         camera.lookAt(target: .zero)

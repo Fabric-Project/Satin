@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 6/24/20.
@@ -94,7 +94,7 @@ final class DepthMaterialRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 13.0], near: 0.001, far: 20.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext, clearColor: [0.137254902, 0.09411764706, 0.1058823529, 1.0])
+    lazy var renderer = RenderEncoder(context: defaultContext, clearColor: [0.137254902, 0.09411764706, 0.1058823529, 1.0])
 
     override func setup() {
 //        // Setup things here

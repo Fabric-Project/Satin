@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 10/2/20.
@@ -21,7 +21,7 @@ final class FXAARenderer: BaseRenderer {
 
     lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
     lazy var fxaaMaterial = FxaaMaterial(context: postContext, pipelinesURL: pipelinesURL)
-    lazy var fxaaProcessor = PostProcessor(label: "FXAA Post Processor", context: postContext, material: fxaaMaterial)
+    lazy var fxaaProcessor = PostProcessEncoder(label: "FXAA Post Processor", context: postContext, material: fxaaMaterial)
 
     lazy var mesh: Mesh = {
         lazy var mesh = Mesh(context: defaultContext, 
@@ -46,7 +46,7 @@ final class FXAARenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func update() {
         if updateRenderTexture {

@@ -54,8 +54,8 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     lazy var camera = ARPerspectiveCamera(context:defaultContext,session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        lazy var renderer = Renderer(context: defaultContext)
-        renderer.label = "Content Renderer"
+        lazy var renderer = RenderEncoder(context: defaultContext)
+        renderer.label = "Content RenderEncoder"
         renderer.setClearColor(.zero)
         renderer.colorLoadAction = .load
         renderer.depthLoadAction = .load
@@ -67,7 +67,7 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
 
     override init() {
         super.init()
@@ -91,7 +91,7 @@ final class ARPointCloudRenderer: BaseRenderer {
             )
         }
 
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),

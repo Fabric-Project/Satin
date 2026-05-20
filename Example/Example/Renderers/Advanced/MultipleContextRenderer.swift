@@ -41,8 +41,8 @@ final class MultipleContextRenderer: BaseRenderer {
 #endif
     }
 
-    lazy var renderer = Renderer(context: defaultContext)
-    lazy var rendererNoDepth = Renderer(
+    lazy var renderer = RenderEncoder(context: defaultContext)
+    lazy var rendererNoDepth = RenderEncoder(
         context: noDepthContext
     )
 

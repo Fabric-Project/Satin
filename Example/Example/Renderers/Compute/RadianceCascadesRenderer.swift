@@ -37,7 +37,7 @@ final class RadianceCascadesRenderer: BaseRenderer {
     lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 0.00125)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
 #if os(visionOS)

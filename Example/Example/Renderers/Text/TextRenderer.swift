@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example Shared
 //
 //  Created by Reza Ali on 8/22/19.
@@ -18,7 +18,7 @@ final class TextRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext)
     lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(0.0, 0.0, 40.0), near: 0.001, far: 1000.0)
     lazy var cameraController: PerspectiveCameraController = .init(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     var geo: TesselatedTextGeometry?
     lazy var parameters = ParameterGroup("Text", [fontParam])

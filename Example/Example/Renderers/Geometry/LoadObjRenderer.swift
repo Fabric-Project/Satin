@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Obj-macOS
 //
 //  Created by Reza Ali on 5/23/20.
@@ -18,7 +18,7 @@ final class LoadObjRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene")
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 9.0], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         loadOBJ(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"))

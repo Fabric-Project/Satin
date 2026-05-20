@@ -36,7 +36,7 @@ final class RayMarchingRenderer: BaseRenderer {
     lazy var rayMarchedMesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: rayMarchedMaterial)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, rayMarchedMesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         camera.lookAt(target: .zero)

@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  VertexAttributes
 //
 //  Created by Reza Ali on 4/18/22.
@@ -26,7 +26,7 @@ final class VertexAttributesRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
     lazy var scene = Object(context: defaultContext, label: "Scene", [intersectionMesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         let url = modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")

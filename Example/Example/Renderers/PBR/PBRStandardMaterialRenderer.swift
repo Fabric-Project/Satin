@@ -43,7 +43,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
     lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var material = StandardMaterial(context: defaultContext)
 

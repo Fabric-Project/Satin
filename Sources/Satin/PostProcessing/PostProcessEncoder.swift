@@ -1,5 +1,5 @@
 //
-//  PostProcessor.swift
+//  PostProcessEncoder.swift
 //  Satin
 //
 //  Created by Reza Ali on 4/16/20.
@@ -9,10 +9,10 @@ import Foundation
 import Metal
 import simd
 
-open class PostProcessor {
+open class PostProcessEncoder {
     public var label = "Post" {
         didSet {
-            renderer.label = label + " Renderer"
+            renderer.label = label + " RenderEncoder"
             mesh.label = label + " Mesh"
             scene.label = label + " Scene"
         }
@@ -23,7 +23,7 @@ open class PostProcessor {
     public let mesh: Mesh
     public let camera: OrthographicCamera
 
-    public let renderer: Renderer
+    public let renderer: RenderEncoder
 
     public init(
         label: String = "Post Processor",
@@ -44,8 +44,8 @@ open class PostProcessor {
         self.label = label
         self.context = context
         camera = OrthographicCamera(context: context)
-        renderer = Renderer(
-            label: label + " Renderer",
+        renderer = RenderEncoder(
+            label: label + " RenderEncoder",
             context: context,
             sortObjects: sortObjects,
             clearColor: clearColor,
@@ -63,7 +63,7 @@ open class PostProcessor {
         if let material {
             precondition(
                 material.context == context,
-                "PostProcessor material context (\(material.context.id)) must match processor context (\(context.id))"
+                "PostProcessEncoder material context (\(material.context.id)) must match processor context (\(context.id))"
             )
         }
 

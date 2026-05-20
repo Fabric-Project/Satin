@@ -22,7 +22,7 @@ final class MeshShaderRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(0.0, 0.0, 8.0), near: 0.01, far: 100.0, fov: 45)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var startTime = getTime()
 
     override func setup() {

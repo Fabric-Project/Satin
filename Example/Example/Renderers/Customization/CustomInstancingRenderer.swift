@@ -31,7 +31,7 @@ final class CustomInstancingRenderer: BaseRenderer {
     lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: instanceMaterial)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 2.0)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid

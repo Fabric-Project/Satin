@@ -31,8 +31,8 @@ final class ARDrawingRenderer: BaseRenderer {
 
     lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        lazy var renderer = Renderer(context: defaultContext)
-        renderer.label = "Content Renderer"
+        lazy var renderer = RenderEncoder(context: defaultContext)
+        renderer.label = "Content RenderEncoder"
         renderer.setClearColor(.zero)
         renderer.colorLoadAction = .load
         renderer.depthLoadAction = .load
@@ -48,7 +48,7 @@ final class ARDrawingRenderer: BaseRenderer {
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
 
     // MARK: - Init
 
@@ -70,7 +70,7 @@ final class ARDrawingRenderer: BaseRenderer {
         metalView.preferredFramesPerSecond = 60
 
         mesh.drawCount = 0
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),
@@ -79,7 +79,7 @@ final class ARDrawingRenderer: BaseRenderer {
             far: camera.far
         )
 
-//        backgroundRenderer = ARBackgroundRenderer(
+//        backgroundRenderer = ARBackgroundEncoder(
 //            context: defaultContext,
 //            session: session
 //        )

@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 7/12/21.
@@ -40,8 +40,8 @@ final class PostProcessingRenderer: BaseRenderer {
 
     lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
     lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
-    lazy var postProcessor: PostProcessor = {
-        let processor = PostProcessor(
+    lazy var postProcessor: PostProcessEncoder = {
+        let processor = PostProcessEncoder(
             label: "Post Processor",
             context: postContext,
             material: postMaterial
@@ -55,7 +55,7 @@ final class PostProcessingRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 30.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func update() {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {

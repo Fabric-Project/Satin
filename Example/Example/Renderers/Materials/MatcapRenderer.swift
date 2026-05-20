@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  LiveCode-macOS
 //
 //  Created by Reza Ali on 6/1/20.
@@ -33,7 +33,7 @@ class MatcapRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 8.0], near: 0.001, far: 100.0, fov: 45)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
 #if targetEnvironment(simulator)
     override var sampleCount: Int { 1 }

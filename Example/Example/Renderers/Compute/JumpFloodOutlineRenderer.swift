@@ -48,7 +48,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }
 
     var renderTexture: MTLTexture?
-    lazy var renderer = Renderer(context: defaultContext, clearColor: .zero)
+    lazy var renderer = RenderEncoder(context: defaultContext, clearColor: .zero)
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.01, far: 100.0, fov: 30)
     lazy var cameraController = OrbitPerspectiveCameraController(camera: camera, view: metalView)

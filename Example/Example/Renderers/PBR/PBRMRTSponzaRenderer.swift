@@ -59,11 +59,11 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
 
     override var params: [String: ParameterGroup?] {
         [
-            "SSAO": ssaoPostProcessor.ssaoMaterial.parameters,
-            "SSAO Blur": ssaoPostProcessor.blurMaterial.parameters,
-            "SSAO Composite": ssaoPostProcessor.compositeMaterial.parameters,
-            "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters,
-            "DOF": bokehDepthOfFieldPostProcessor.parameters
+            "SSAO": ssaoPostProcessEncoder.ssaoMaterial.parameters,
+            "SSAO Blur": ssaoPostProcessEncoder.blurMaterial.parameters,
+            "SSAO Composite": ssaoPostProcessEncoder.compositeMaterial.parameters,
+            "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters,
+            "DOF": bokehDepthOfFieldPostProcessEncoder.parameters
         ]
     }
 
@@ -75,9 +75,9 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     private lazy var textureLoader = MTKTextureLoader(device: device)
 
     private lazy var startTime = getTime()
-    private lazy var sceneRenderer: Renderer = {
-        let renderer = Renderer(
-            label: "PBR MRT Scene Renderer",
+    private lazy var sceneRenderer: RenderEncoder = {
+        let renderer = RenderEncoder(
+            label: "PBR MRT Scene RenderEncoder",
             context: defaultContext,
             colorLoadAction: .clear,
             colorStoreAction: .store,
@@ -99,9 +99,9 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         depthPixelFormat: .invalid
     )
 
-    private lazy var overlayRenderer: Renderer = {
-        let renderer = Renderer(
-            label: "PBR MRT Overlay Renderer",
+    private lazy var overlayRenderer: RenderEncoder = {
+        let renderer = RenderEncoder(
+            label: "PBR MRT Overlay RenderEncoder",
             context: overlayContext,
             sortObjects: true,
             clearColor: [0, 0, 0, 0],
@@ -116,9 +116,9 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     private lazy var previewGeometry = QuadGeometry(context: overlayContext, size: 1.0)
     private lazy var previewStripMaterial = makeOverlayColorMaterial([0.035, 0.045, 0.06, 0.86])
     private lazy var previewTileMaterial = makeOverlayColorMaterial([0.07, 0.085, 0.11, 0.95])
-    private lazy var ssaoPostProcessor = SsaoPostProcessor(context: defaultContext)
-    private lazy var motionBlurPostProcessor = MotionBlurPostProcessor(context: defaultContext)
-    private lazy var bokehDepthOfFieldPostProcessor = BokehDepthOfFieldPostProcessor(context: defaultContext)
+    private lazy var ssaoPostProcessEncoder = SsaoPostProcessEncoder(context: defaultContext)
+    private lazy var motionBlurPostProcessEncoder = MotionBlurPostProcessEncoder(context: defaultContext)
+    private lazy var bokehDepthOfFieldPostProcessEncoder = BokehDepthOfFieldPostProcessEncoder(context: defaultContext)
 
     private lazy var overlayScene = Object(context: overlayContext, label: "MRT Overlay Scene")
     private lazy var overlayCamera = OrthographicCamera(
@@ -255,9 +255,9 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         camera.aspect = size.width / max(size.height, 1.0)
         sceneRenderer.resize(size)
-        ssaoPostProcessor.resize(size: size, scaleFactor: scaleFactor)
-        motionBlurPostProcessor.resize(size: size, scaleFactor: scaleFactor)
-        bokehDepthOfFieldPostProcessor.resize(size: size, scaleFactor: scaleFactor)
+        ssaoPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
+        motionBlurPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
+        bokehDepthOfFieldPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
         overlayRenderer.resize(size)
         layoutOverlay(size: size)
     }
@@ -485,30 +485,30 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
-        ssaoPostProcessor.colorTexture = sceneRenderer.colorTexture
-        ssaoPostProcessor.depthTexture = sceneRenderer.depthTexture
-        ssaoPostProcessor.normalTexture = sceneRenderer.normalTexture
-        ssaoPostProcessor.sceneCamera = camera
-        ssaoPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        ssaoPostProcessEncoder.colorTexture = sceneRenderer.colorTexture
+        ssaoPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
+        ssaoPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
+        ssaoPostProcessEncoder.sceneCamera = camera
+        ssaoPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        let compositeTexture = ssaoPostProcessor.outputTexture ?? sceneRenderer.colorTexture
+        let compositeTexture = ssaoPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
 
-        motionBlurPostProcessor.colorTexture = compositeTexture
-        motionBlurPostProcessor.velocityTexture = sceneRenderer.velocityTexture
-        motionBlurPostProcessor.depthTexture = sceneRenderer.depthTexture
-        motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        motionBlurPostProcessEncoder.colorTexture = compositeTexture
+        motionBlurPostProcessEncoder.velocityTexture = sceneRenderer.velocityTexture
+        motionBlurPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
+        motionBlurPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        let motionBlurTexture = motionBlurPostProcessor.outputTexture ?? compositeTexture
+        let motionBlurTexture = motionBlurPostProcessEncoder.outputTexture ?? compositeTexture
 
-        bokehDepthOfFieldPostProcessor.colorTexture = motionBlurTexture
-        bokehDepthOfFieldPostProcessor.depthTexture = sceneRenderer.depthTexture
-        bokehDepthOfFieldPostProcessor.sceneCamera = camera
-        bokehDepthOfFieldPostProcessor.draw(
+        bokehDepthOfFieldPostProcessEncoder.colorTexture = motionBlurTexture
+        bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
+        bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
+        bokehDepthOfFieldPostProcessEncoder.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )
 
-        return bokehDepthOfFieldPostProcessor.outputTexture ?? motionBlurTexture
+        return bokehDepthOfFieldPostProcessEncoder.outputTexture ?? motionBlurTexture
     }
 
     private func updatePreviewTextures(beautyTexture: MTLTexture?) {

@@ -20,7 +20,7 @@ final class MotionBlurRenderer: BaseRenderer {
     override var params: [String: ParameterGroup?] {
         [
             "App": appParams,
-            "Motion Blur": motionBlurPostProcessor.motionBlurMaterial.parameters
+            "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters
         ]
     }
 
@@ -47,10 +47,10 @@ final class MotionBlurRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 14, 30], near: 0.1, far: 300.0, fov: 45.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
-    // MARK: - Renderer
+    // MARK: - RenderEncoder
 
-    lazy var renderer: Renderer = {
-        let r = Renderer(
+    lazy var renderer: RenderEncoder = {
+        let r = RenderEncoder(
             context: defaultContext,
             colorLoadAction: .clear,
             colorStoreAction: .store,
@@ -64,10 +64,10 @@ final class MotionBlurRenderer: BaseRenderer {
         return r
     }()
 
-    lazy var motionBlurPostProcessor: MotionBlurPostProcessor = MotionBlurPostProcessor(context: defaultContext)
+    lazy var motionBlurPostProcessEncoder: MotionBlurPostProcessEncoder = MotionBlurPostProcessEncoder(context: defaultContext)
 
     lazy var compositorMaterial = BasicTextureMaterial(context: defaultContext)
-    lazy var compositor = PostProcessor(
+    lazy var compositor = PostProcessEncoder(
         label: "Compositor",
         context: defaultContext,
         material: compositorMaterial,
@@ -134,12 +134,12 @@ final class MotionBlurRenderer: BaseRenderer {
             camera: camera
         )
 
-        motionBlurPostProcessor.colorTexture = renderer.colorTexture
-        motionBlurPostProcessor.velocityTexture = renderer.velocityTexture
-        motionBlurPostProcessor.depthTexture = renderer.depthTexture
-        motionBlurPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        motionBlurPostProcessEncoder.colorTexture = renderer.colorTexture
+        motionBlurPostProcessEncoder.velocityTexture = renderer.velocityTexture
+        motionBlurPostProcessEncoder.depthTexture = renderer.depthTexture
+        motionBlurPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        if let blurredTexture = motionBlurPostProcessor.outputTexture {
+        if let blurredTexture = motionBlurPostProcessEncoder.outputTexture {
             compositorMaterial.texture = blurredTexture
         } else if let colorTexture = renderer.colorTexture {
             compositorMaterial.texture = colorTexture
@@ -150,7 +150,7 @@ final class MotionBlurRenderer: BaseRenderer {
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         camera.aspect = size.width / size.height
         renderer.resize(size)
-        motionBlurPostProcessor.resize(size: size, scaleFactor: scaleFactor)
+        motionBlurPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
         compositor.resize(size: size, scaleFactor: scaleFactor)
     }
 

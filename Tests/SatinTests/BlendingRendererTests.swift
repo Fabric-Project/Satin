@@ -206,7 +206,7 @@ private func renderBlendingScene(
         activeOutputs: activeOutputs
     )
 
-    let renderer = Renderer(
+    let renderer = RenderEncoder(
         context: context,
         clearColor: VisualTestHarness.defaultClearColor,
         frameBufferOnly: false
@@ -307,7 +307,7 @@ private func assertRGBImagesMatch(
 }
 
 private func drawFrame(
-    renderer: Renderer,
+    renderer: RenderEncoder,
     commandQueue: MTLCommandQueue,
     scene: Object,
     camera: Camera,
@@ -382,7 +382,7 @@ private func renderOverlappingAlphaStack(
         activeOutputs: activeOutputs
     )
 
-    let renderer = Renderer(
+    let renderer = RenderEncoder(
         context: context,
         clearColor: VisualTestHarness.defaultClearColor,
         frameBufferOnly: false
@@ -463,7 +463,7 @@ private func renderBlendModeSwitchSequence() throws -> [RGBAImage] {
         activeOutputs: [.color]
     )
 
-    let renderer = Renderer(
+    let renderer = RenderEncoder(
         context: context,
         clearColor: VisualTestHarness.defaultClearColor,
         frameBufferOnly: false
@@ -539,7 +539,7 @@ private func renderTransparentOnlyAlphaScene(mode: RenderingMode) throws -> RGBA
         activeOutputs: activeOutputs
     )
 
-    let renderer = Renderer(
+    let renderer = RenderEncoder(
         context: context,
         clearColor: simd_float4(0.0, 0.0, 0.0, 1.0),
         frameBufferOnly: false
