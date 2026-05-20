@@ -345,9 +345,10 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Events
 
     private func enableEvents() {
-        guard let view = view else { return }
+        cameraControllerPerformUIWork {
+            guard let view = view else { return }
 
-        #if os(macOS)
+#if os(macOS)
 
         leftMouseDownHandler = NSEvent.addLocalMonitorForEvents(
             matching: .leftMouseDown,
@@ -450,13 +451,15 @@ public final class OrthographicCameraController: CameraController, Codable {
         pinchGestureRecognizer.allowedTouchTypes = allowedTouchTypes
         view.addGestureRecognizer(pinchGestureRecognizer)
 
-        #endif
+#endif
+        }
     }
 
     private func disableEvents() {
-        let view = view
+        cameraControllerPerformUIWork {
+            let view = view
 
-        #if os(macOS)
+#if os(macOS)
 
         if let leftMouseDownHandler {
             NSEvent.removeMonitor(leftMouseDownHandler)
@@ -527,7 +530,8 @@ public final class OrthographicCameraController: CameraController, Codable {
             self.pinchGestureRecognizer = nil
         }
 
-        #endif
+#endif
+        }
     }
 
     #if os(macOS)

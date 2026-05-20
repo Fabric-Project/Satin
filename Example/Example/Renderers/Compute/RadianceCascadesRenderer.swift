@@ -78,7 +78,6 @@ final class RadianceCascadesRenderer: BaseRenderer {
         let size = CGSize(width: 1024, height: 1024)
         let width = Float(size.width)
         let height = Float(size.height)
-        guard width > 0, height > 0 else { return nil }
 
         let resolution = simd_make_float2(width, height)
         let diagonal = simd_length(resolution)

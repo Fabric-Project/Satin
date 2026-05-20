@@ -129,7 +129,7 @@ public final class SsgiBlurMaterial: Material {
     }
 
     public func update(camera: Camera) {
-        inverseProjectionMatrix = camera.projectionMatrix.inverse
-        viewMatrix = camera.viewMatrix
+        inverseProjectionMatrix = camera.renderProjectionMatrix.inverse
+        viewMatrix = camera.renderViewMatrix
     }
 }

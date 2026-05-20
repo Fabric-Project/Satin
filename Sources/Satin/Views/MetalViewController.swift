@@ -81,9 +81,8 @@ public final class MetalViewController: NSViewController {
         self.metalView.metalLayer.device = self.renderer.context.device
         self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.setup()
-        self.renderer.isSetup = true
-        self.renderer.appearance = self.getAppearance()
+        self.renderer.performSetupIfNeeded()
+        self.renderer.performAppearanceUpdate(self.getAppearance())
         self.metalView.delegate = self.renderer
     }
 
@@ -92,8 +91,7 @@ public final class MetalViewController: NSViewController {
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        self.renderer.cleanup()
-        self.renderer.isSetup = false
+        self.renderer.performCleanupIfNeeded()
     }
 
     // MARK: - Appearance
@@ -185,7 +183,7 @@ public final class MetalViewController: NSViewController {
 
     @objc func updateAppearance() {
         guard self.renderer.isSetup else { return }
-        self.renderer.appearance = self.getAppearance()
+        self.renderer.performAppearanceUpdate(self.getAppearance())
     }
 
     private func removeEvents() {
@@ -387,9 +385,8 @@ public final class MetalViewController: UIViewController {
         self.metalView.metalLayer.device = self.renderer.context.device
         self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.setup()
-        self.renderer.isSetup = true
-        self.renderer.appearance = self.getAppearance()
+        self.renderer.performSetupIfNeeded()
+        self.renderer.performAppearanceUpdate(self.getAppearance())
         self.metalView.delegate = self.renderer
     }
 
@@ -413,15 +410,14 @@ public final class MetalViewController: UIViewController {
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        self.renderer.cleanup()
-        self.renderer.isSetup = false
+        self.renderer.performCleanupIfNeeded()
     }
 
     func setupAppearance() {
         registerForTraitChanges([UITraitUserInterfaceStyle.self], handler: { (self: Self, previousTraitCollection: UITraitCollection) in
             guard self.renderer.isSetup,
                   previousTraitCollection.userInterfaceStyle != self.traitCollection.userInterfaceStyle else { return }
-            self.renderer.appearance = self.getAppearance()
+            self.renderer.performAppearanceUpdate(self.getAppearance())
         })
     }
 

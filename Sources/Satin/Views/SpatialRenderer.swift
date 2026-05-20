@@ -36,7 +36,14 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
     open override var depthPixelFormat: MTLPixelFormat { .depth32Float }
     open override var depthTextureUsage: MTLTextureUsage { [.renderTarget, .shaderRead] }
-    override var mutationSchedulingMode: MutationSchedulingMode { .queued }
+
+    public init(context: Context, mode: Renderer.Mode = .async, execution: Renderer.Execution? = nil) {
+        super.init(context: context, mode: mode, execution: execution)
+    }
+
+    public convenience init(context: Context) {
+        self.init(context: context, mode: .async)
+    }
 
     open var isFoveationEnabled: Bool { true }
 

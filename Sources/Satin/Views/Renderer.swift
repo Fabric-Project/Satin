@@ -9,6 +9,16 @@ import Foundation
 import Metal
 
 open class Renderer {
+    public enum Mode: Sendable {
+        case sync
+        case async
+    }
+
+    public enum Execution {
+        case ownedQueue(label: String? = nil, qos: DispatchQoS = .userInteractive)
+        case suppliedQueue(DispatchQueue)
+    }
+
     internal enum MutationSchedulingMode {
         case immediate
         case queued
@@ -24,6 +34,7 @@ open class Renderer {
     }
 
     public let context: Context
+    public let mode: Mode
 
     public internal(set) var isSetup = false
     public var frameIndex: Int = -1
@@ -64,9 +75,38 @@ open class Renderer {
     private var inFlightSemaphoreRelease = 0
     private let scheduledMutationLock = UnfairLock()
     private var scheduledMutations: [() -> Void] = []
+    private let renderQueue: DispatchQueue?
+    private let renderQueueIdentity = DispatchSpecificKey<UUID>()
+    private let renderQueueToken = UUID()
 
-    public init(context: Context) {
+    public convenience init(context: Context) {
+        self.init(context: context, mode: .sync)
+    }
+
+    public init(context: Context, mode: Mode, execution: Execution? = nil) {
         self.context = context
+        self.mode = mode
+
+        switch mode {
+        case .sync:
+            renderQueue = nil
+
+        case .async:
+            let configuredExecution = execution ?? .ownedQueue()
+            switch configuredExecution {
+            case let .ownedQueue(label, qos):
+                let queue = DispatchQueue(
+                    label: label ?? "Satin.Renderer.\(String(describing: type(of: self)))",
+                    qos: qos
+                )
+                queue.setSpecific(key: renderQueueIdentity, value: renderQueueToken)
+                renderQueue = queue
+
+            case let .suppliedQueue(queue):
+                queue.setSpecific(key: renderQueueIdentity, value: renderQueueToken)
+                renderQueue = queue
+            }
+        }
     }
 
     deinit {
@@ -93,7 +133,58 @@ open class Renderer {
         _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
     }
 
-    internal var mutationSchedulingMode: MutationSchedulingMode { .immediate }
+    public var isAsync: Bool { mode == .async }
+
+    internal var mutationSchedulingMode: MutationSchedulingMode {
+        mode == .sync ? .immediate : .queued
+    }
+
+    internal var isOnRenderOwner: Bool {
+        switch mode {
+        case .sync:
+            return true
+        case .async:
+            return DispatchQueue.getSpecific(key: renderQueueIdentity) == renderQueueToken
+        }
+    }
+
+    internal func performOnRenderOwner(_ work: @escaping () -> Void) {
+        switch mode {
+        case .sync:
+            work()
+
+        case .async:
+            guard let renderQueue else {
+                work()
+                return
+            }
+
+            if isOnRenderOwner {
+                work()
+            } else {
+                renderQueue.async(execute: work)
+            }
+        }
+    }
+
+    internal func performAndWaitOnRenderOwner(_ work: @escaping () -> Void) {
+        switch mode {
+        case .sync:
+            work()
+
+        case .async:
+            guard let renderQueue else {
+                work()
+                return
+            }
+
+            if isOnRenderOwner {
+                work()
+            } else {
+                renderQueue.sync(execute: work)
+            }
+        }
+    }
 
     open func schedule(_ mutation: @escaping () -> Void) {
         switch mutationSchedulingMode {
@@ -104,6 +195,16 @@ open class Renderer {
             scheduledMutationLock.sync {
                 scheduledMutations.append(mutation)
             }
+        }
+    }
+
+    open func scheduleAndWait(_ mutation: @escaping () -> Void) {
+        switch mode {
+        case .sync:
+            mutation()
+
+        case .async:
+            performAndWaitOnRenderOwner(mutation)
         }
     }
 

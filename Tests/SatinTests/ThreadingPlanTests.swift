@@ -4,12 +4,16 @@ import XCTest
 
 final class ThreadingPlanTests: XCTestCase {
     private final class TestRenderer: Renderer {
-        var mode: MutationSchedulingMode = .immediate
-
-        override var mutationSchedulingMode: MutationSchedulingMode { mode }
+        init(context: Context, mode: Renderer.Mode) {
+            super.init(context: context, mode: mode)
+        }
 
         func drainScheduledMutationsForTesting() {
             drainScheduledMutations()
+        }
+
+        func performOnRenderOwnerForTesting(_ work: @escaping () -> Void) {
+            performOnRenderOwner(work)
         }
     }
 
@@ -198,10 +202,10 @@ final class ThreadingPlanTests: XCTestCase {
         XCTAssertTrue(scene.cubemapTexture === freshTexture)
     }
 
-    func testRendererScheduleExecutesImmediatelyInImmediateMode() {
+    func testRendererScheduleExecutesImmediatelyInSyncMode() {
         guard let context = makeContext() else { return }
 
-        let renderer = TestRenderer(context: context)
+        let renderer = TestRenderer(context: context, mode: .sync)
         var value = 0
 
         renderer.schedule {
@@ -211,11 +215,10 @@ final class ThreadingPlanTests: XCTestCase {
         XCTAssertEqual(value, 1)
     }
 
-    func testRendererScheduleDefersMutationsInQueuedModeUntilDrain() {
+    func testRendererScheduleDefersMutationsInAsyncModeUntilDrain() {
         guard let context = makeContext() else { return }
 
-        let renderer = TestRenderer(context: context)
-        renderer.mode = .queued
+        let renderer = TestRenderer(context: context, mode: .async)
         var value = 0
 
         renderer.schedule {
@@ -224,6 +227,37 @@ final class ThreadingPlanTests: XCTestCase {
 
         XCTAssertEqual(value, 0)
         renderer.drainScheduledMutationsForTesting()
+        XCTAssertEqual(value, 1)
+    }
+
+    func testRendererScheduleAndWaitExecutesOnAsyncRenderOwnerBeforeReturn() {
+        guard let context = makeContext() else { return }
+
+        let renderer = TestRenderer(context: context, mode: .async)
+        var value = 0
+
+        renderer.scheduleAndWait {
+            value = 1
+        }
+
+        XCTAssertEqual(value, 1)
+    }
+
+    func testAsyncRendererRunsWorkImmediatelyWhenAlreadyOnRenderOwner() {
+        guard let context = makeContext() else { return }
+
+        let renderer = TestRenderer(context: context, mode: .async)
+        let expectation = expectation(description: "nested render owner work ran inline")
+        var value = 0
+
+        renderer.performOnRenderOwnerForTesting {
+            renderer.scheduleAndWait {
+                value = 1
+            }
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 2.0)
         XCTAssertEqual(value, 1)
     }
 
