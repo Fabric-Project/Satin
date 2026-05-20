@@ -16,12 +16,25 @@ import AppKit
 #endif
 
 class BaseRenderer: ViewRenderer {
-    override init(context: Context) {
-        super.init(context: context)
+    static var defaultMode: Renderer.Mode = .async
+
+    override init(context: Context, mode: Renderer.Mode, execution: Renderer.Execution? = nil) {
+        super.init(context: context, mode: mode, execution: execution)
+    }
+
+    convenience init(context: Context) {
+        self.init(context: context, mode: Self.defaultMode)
     }
 
     convenience init() {
-        self.init(context: .makePlatformDefault())
+        self.init(context: .makePlatformDefault(), mode: Self.defaultMode)
+    }
+
+    convenience init(async: Bool) {
+        self.init(
+            context: .makePlatformDefault(),
+            mode: async ? .async : .sync
+        )
     }
 
     // MARK: - Paths

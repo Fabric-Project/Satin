@@ -39,6 +39,14 @@ public protocol CameraController {
     func load(url: URL)
 }
 
+func cameraControllerPerformUIWork(_ work: () -> Void) {
+    if Thread.isMainThread {
+        work()
+    } else {
+        DispatchQueue.main.sync(execute: work)
+    }
+}
+
 #if os(macOS)
 func cameraControllerEventTargetsView(_ event: NSEvent, view: MetalView) -> Bool {
     guard let window = event.window, window == view.window else { return false }

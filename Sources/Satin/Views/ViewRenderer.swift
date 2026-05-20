@@ -29,6 +29,31 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
         }
     }
 
+    internal func performSetupIfNeeded() {
+        guard !isSetup else { return }
+        setup()
+        isSetup = true
+    }
+
+    internal func performCleanupIfNeeded() {
+        guard isSetup else { return }
+        cleanup()
+        isSetup = false
+    }
+
+    internal func performAppearanceUpdate(_ appearance: Appearance) {
+        guard isSetup else { return }
+        self.appearance = appearance
+    }
+
+    internal func performResize(size: CGSize, scaleFactor: CGFloat) {
+        performOnRenderOwner { [weak self] in
+            guard let self, self.isSetup else { return }
+
+            self.resize(size: (Float(size.width), Float(size.height)), scaleFactor: Float(scaleFactor))
+        }
+    }
+
     open func updateAppearance() {}
 
     open override func cleanup() {
@@ -109,18 +134,20 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     // MARK: - ViewRendererDelegate
 
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
-        guard isSetup, let commandBuffer = preDraw() else { return }
+        performOnRenderOwner { [weak self] in
+            guard let self, self.isSetup, let commandBuffer = self.preDraw() else { return }
 
-        drainScheduledMutations()
-        update()
-        draw(texture: drawable.texture, commandBuffer: commandBuffer)
-        postDraw(drawable: drawable, commandBuffer: commandBuffer)
+            self.drainScheduledMutations()
+            self.update()
+            self.draw(texture: drawable.texture, commandBuffer: commandBuffer)
+            self.postDraw(drawable: drawable, commandBuffer: commandBuffer)
+        }
     }
 
     func drawableResized(size: CGSize, scaleFactor: CGFloat) {
 #if DEBUG_VIEWS
         print("renderer resize: \(size), scaleFactor: \(scaleFactor) - ViewRenderer: \(id)")
 #endif
-        resize(size: (Float(size.width), Float(size.height)), scaleFactor: Float(scaleFactor))
+        performResize(size: size, scaleFactor: scaleFactor)
     }
 }

@@ -526,7 +526,8 @@ public final class PerspectiveCameraController: CameraController, Codable {
     // MARK: - Events
 
     private func enableEvents() {
-        guard let view = view else { return }
+        cameraControllerPerformUIWork {
+            guard let view = view else { return }
 
 #if os(macOS)
 
@@ -638,10 +639,12 @@ public final class PerspectiveCameraController: CameraController, Codable {
         view.addGestureRecognizer(pinchGestureRecognizer)
 
 #endif
+        }
     }
 
     private func disableEvents() {
-        let view = view
+        cameraControllerPerformUIWork {
+            let view = view
 
 #if os(macOS)
 
@@ -719,6 +722,7 @@ public final class PerspectiveCameraController: CameraController, Codable {
         }
 
 #endif
+        }
     }
 
     // MARK: - Mouse
