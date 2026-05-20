@@ -33,6 +33,8 @@ public class Light: Object {
     public var shadow: Shadow
     internal var shadowStateDirty = true
     internal var lightStateDirty = true
+    private var previousRenderWorldPosition: simd_float3?
+    private var previousRenderWorldForwardDirection: simd_float3?
 
     public let publisher = PassthroughSubject<Light, Never>()
     
@@ -64,11 +66,29 @@ public class Light: Object {
 
     override open func prepareForRender() {
         super.prepareForRender()
+
+        if let previousRenderWorldPosition,
+           !simd_equal(previousRenderWorldPosition, renderWorldPosition)
+        {
+            shadowStateDirty = true
+            lightStateDirty = true
+        }
+
+        if let previousRenderWorldForwardDirection,
+           !simd_equal(previousRenderWorldForwardDirection, renderWorldForwardDirection)
+        {
+            shadowStateDirty = true
+            lightStateDirty = true
+        }
+
         if shadowStateDirty {
             updateShadowForRender()
             shadowStateDirty = false
         }
         lightStateDirty = false
+
+        previousRenderWorldPosition = renderWorldPosition
+        previousRenderWorldForwardDirection = renderWorldForwardDirection
     }
 
     open func updateShadowForRender() {}

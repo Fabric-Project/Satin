@@ -302,4 +302,42 @@ final class ThreadingPlanTests: XCTestCase {
         controller.update()
         XCTAssertFalse(simd_equal(camera.position, originalPosition))
     }
+
+    func testLightPrepareForRenderRefreshesShadowStateWhenTransformChanges() {
+        guard let context = makeContext() else { return }
+
+        final class TestLight: Light {
+            override var type: LightType { .directional }
+            override var data: LightData {
+                LightData(
+                    color: simd_float4(1, 1, 1, 1),
+                    position: simd_float4(renderWorldPosition, 0),
+                    direction: simd_float4(renderWorldForwardDirection, 0),
+                    spotInfo: .zero,
+                    shadowInfo: .zero
+                )
+            }
+
+            var shadowUpdateCount = 0
+
+            override func updateShadowForRender() {
+                shadowUpdateCount += 1
+            }
+        }
+
+        let light = TestLight(context: context, label: "Test Light")
+        light.computeRenderTransforms(parentMatrix: matrix_identity_float4x4)
+        light.prepareForRender()
+        XCTAssertEqual(light.shadowUpdateCount, 1)
+
+        light.position = [1.0, 2.0, 3.0]
+        light.computeRenderTransforms(parentMatrix: matrix_identity_float4x4)
+        light.prepareForRender()
+        XCTAssertEqual(light.shadowUpdateCount, 2)
+
+        light.lookAt(target: .zero, up: Satin.worldUpDirection)
+        light.computeRenderTransforms(parentMatrix: matrix_identity_float4x4)
+        light.prepareForRender()
+        XCTAssertEqual(light.shadowUpdateCount, 3)
+    }
 }
