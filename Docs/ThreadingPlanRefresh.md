@@ -395,11 +395,13 @@ Give scene graph mutation a consistent execution model across synchronous and th
 - `Renderer.schedule(_:)` is now the renderer-owned contract.
 - `ViewRenderer` drains renderer-scheduled mutations on the synchronous frame path.
 - `SpatialRenderer` queues renderer-scheduled mutations and drains them before `update()` on the dedicated render thread.
+- Async AR and vision example callbacks that mutate scene structure or render-owned object state have started migrating onto the renderer-owned scheduling path.
+- `RenderEncoder.schedule(_:)` is now back to an internal primitive for render-graph-local staging.
 
 ### What remains
 
-- Higher-level examples and app code still mostly reach directly into scene objects; the new renderer contract exists, but call sites have not yet been broadly migrated to use it for structural mutation.
-- `RenderEncoder.schedule(_:)` still exists as an internal primitive; whether it remains exposed or is reduced further can be decided once higher-level call sites are updated.
+- Higher-level examples and app code still contain direct off-frame object mutation sites; migration has started but is not complete.
+- The renderer-level contract still is not enforced by type system or diagnostics; correctness depends on call-site discipline.
 
 ### Files likely involved
 

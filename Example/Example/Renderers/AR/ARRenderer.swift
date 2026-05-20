@@ -55,7 +55,9 @@ final class ARRenderer: BaseRenderer {
             guard let self else { return }
             for anchor in anchors {
                 if let mesh = self.meshAnchorMap[anchor.identifier] {
-                    mesh.worldMatrix = anchor.transform
+                    self.schedule {
+                        mesh.worldMatrix = anchor.transform
+                    }
                 }
             }
         }
@@ -89,9 +91,11 @@ final class ARRenderer: BaseRenderer {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
             let mesh = Mesh(context: defaultContext, geometry: boxGeometry, material: boxMaterial)
-            mesh.worldMatrix = anchor.transform
             meshAnchorMap[anchor.identifier] = mesh
-            scene.add(mesh)
+            schedule { [weak self] in
+                mesh.worldMatrix = anchor.transform
+                self?.scene.add(mesh)
+            }
         }
     }
 }

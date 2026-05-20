@@ -90,8 +90,10 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
         Task {
             for await update in planeDetectionProvider.anchorUpdates {
                 if update.anchor.classification == .floor {
-                    floor.visible = true
-                    floor.worldMatrix = update.anchor.originFromAnchorTransform
+                    self.schedule { [weak self] in
+                        self?.floor.visible = true
+                        self?.floor.worldMatrix = update.anchor.originFromAnchorTransform
+                    }
                 }
             }
         }
