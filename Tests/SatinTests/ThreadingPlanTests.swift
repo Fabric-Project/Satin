@@ -128,6 +128,21 @@ final class ThreadingPlanTests: XCTestCase {
         XCTAssertTrue(simd_almost_equal_elements(camera.renderViewProjectionMatrix, expectedViewProjection, 0.0001))
     }
 
+    func testCameraRefreshRenderStateIncludesUnattachedParentHierarchy() {
+        guard let context = makeContext() else { return }
+
+        let target = Object(context: context, label: "Target")
+        target.position = [3.0, 0.0, 0.0]
+
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 20.0, fov: 45.0)
+        target.add(camera)
+
+        camera.refreshRenderState()
+
+        XCTAssertEqual(camera.renderWorldPosition.x, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(camera.renderWorldPosition.z, 5.0, accuracy: 0.0001)
+    }
+
     func testIBLSceneAdoptsPendingTexturesDuringPrepareForRender() {
         guard let context = makeContext(),
               let cubemap = makeTexture(device: context.device),
