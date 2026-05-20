@@ -18,9 +18,9 @@ public final class PointLight: Light {
             // (rgb, intensity)
             color: simd_make_float4(color, intensity),
             // (xyz, type)
-            position: simd_make_float4(worldPosition, Float(type.rawValue)),
+            position: simd_make_float4(renderWorldPosition, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-worldForwardDirection, 1.0 / radius),
+            direction: simd_make_float4(-renderWorldForwardDirection, 1.0 / radius),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: .zero,
             // (shadowIndex, projectorIndex, projectorMode, unused)
@@ -30,18 +30,18 @@ public final class PointLight: Light {
     
     override public var castShadow: Bool {
         didSet {
-            setupShadow()
+            shadowStateDirty = true
+            lightStateDirty = true
         }
     }
     
     public var radius: Float {
         didSet {
-            shadow.update(light: self)
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case radius
@@ -71,15 +71,10 @@ public final class PointLight: Light {
 
     override public func setup() {
         super.setup()
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.publisher.send(self)
-        }
-        setupShadow()
+        shadowStateDirty = true
     }
 
-    private func setupShadow() {
+    override public func updateShadowForRender() {
         guard castShadow, let pointShadow = shadow as? PointShadow else { return }
         pointShadow.device = context.device
         pointShadow.update(light: self)

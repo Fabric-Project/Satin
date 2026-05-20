@@ -91,31 +91,19 @@ public class InstancedMesh: Mesh {
     }
     
     public func setInstanceMatrices(_ matrices: [simd_float4x4]) {
-        
         self.instanceCount = matrices.count
         self.instanceMatrices = matrices
-        
-        self.updateInstanceMatricesUniforms()
-        updateLocalBounds = true
-        
-        _updateInstanceMatrixBuffer = true
 
+        _updateInstanceMatricesUniforms = true
+        updateLocalBounds = true
     }
     
 
     public func setMatrixAt(index: Int, matrix: matrix_float4x4) {
         guard index < instanceCount else { return }
         instanceMatrices[index] = matrix
-        instanceMatricesUniforms[index].modelMatrix = simd_mul(worldMatrix, matrix)
-        let n = instanceMatricesUniforms[index].modelMatrix.inverse.transpose
-        instanceMatricesUniforms[index].normalMatrix = simd_float3x3(
-            simd_make_float3(n.columns.0),
-            simd_make_float3(n.columns.1),
-            simd_make_float3(n.columns.2)
-        )
-
+        _updateInstanceMatricesUniforms = true
         updateLocalBounds = true
-        _updateInstanceMatrixBuffer = true
     }
 
     // MARK: - Instancing
@@ -136,10 +124,14 @@ public class InstancedMesh: Mesh {
     }
 
     override public func update() {
+        super.update()
+    }
+
+    override open func prepareForRender() {
+        super.prepareForRender()
         if _updateInstanceMatricesUniforms { updateInstanceMatricesUniforms() }
         if _setupInstanceMatrixBuffer { setupInstanceBuffer() }
         if _updateInstanceMatrixBuffer { updateInstanceBuffer() }
-        super.update()
     }
 
     override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
@@ -187,7 +179,7 @@ public class InstancedMesh: Mesh {
         let cores = ProcessInfo.processInfo.processorCount
         let iterations = min(count, max(1, cores))        // docs guidance + cap to work
         let chunkSize = (count + iterations - 1) / iterations  // ceil-div
-        let w = self.worldMatrix
+        let w = renderWorldMatrix
         
         self.instanceMatrices.withUnsafeBufferPointer { src in
             self.instanceMatricesUniforms.withUnsafeMutableBufferPointer { dst in

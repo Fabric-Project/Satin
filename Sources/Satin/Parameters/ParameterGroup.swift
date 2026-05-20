@@ -12,6 +12,7 @@ import Metal
 import simd
 
 public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebugStringConvertible {
+    private let stateLock = UnfairLock()
     public let id: String = UUID().uuidString
 
     public var debugDescription: String {
@@ -78,15 +79,21 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     }
 
     public func append(_ param: some Parameter) {
-        params.append(param)
-        paramsMap[param.label] = param
-        paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
+        let subscription = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
             guard let self = self
 //                  let param 
             else { return }
-            self._updateData = true
+            self.stateLock.sync {
+                self._updateData = true
+            }
 //            self.objectWillChange.send()
 //            self.parameterUpdatedPublisher.send(param)
+        }
+
+        stateLock.sync {
+            params.append(param)
+            paramsMap[param.label] = param
+            paramSubscriptions[param.label] = subscription
         }
 
         parameterAddedPublisher.send(param)
@@ -94,13 +101,15 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
 
     public func remove(_ param: any Parameter) {
         let key = param.label
-        paramsMap.removeValue(forKey: key)
-        paramSubscriptions.removeValue(forKey: key)
+        stateLock.sync {
+            paramsMap.removeValue(forKey: key)
+            paramSubscriptions.removeValue(forKey: key)
 
-        for (i, p) in params.enumerated() {
-            if p.label == key {
-                params.remove(at: i)
-                break
+            for (i, p) in params.enumerated() {
+                if p.label == key {
+                    params.remove(at: i)
+                    break
+                }
             }
         }
 
@@ -108,9 +117,11 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     }
 
     public func clear() {
-        params = []
-        paramsMap = [:]
-        paramSubscriptions = [:]
+        stateLock.sync {
+            params = []
+            paramsMap = [:]
+            paramSubscriptions = [:]
+        }
         clearedPublisher.send(self)
     }
 
@@ -500,15 +511,17 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     }
 
     public var data: UnsafeRawPointer {
-        if _reallocateData {
-            _data = allocateData()
-            _reallocateData = false
+        stateLock.sync {
+            if _reallocateData {
+                _data = allocateData()
+                _reallocateData = false
+            }
+            if _updateData {
+                updateData()
+                _updateData = false
+            }
+            return UnsafeRawPointer(_data)
         }
-        if _updateData {
-            updateData()
-            _updateData = false
-        }
-        return UnsafeRawPointer(_data)
     }
 
     private func updateData() {

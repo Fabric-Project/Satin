@@ -12,6 +12,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     public var id: UUID
 
     public typealias ValueType = T
+    private let valueLock = UnfairLock()
 
     // Delegate
     public let valuePublisher = PassthroughSubject<ValueType, Never>()
@@ -37,15 +38,24 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 
     // Maybe a bit too verbose?
     public var valueDidChange:Bool = true
-        
-    public var value: ValueType
-    {
-        didSet
-        {
-            if oldValue != self.value
-            {
+    private var _value: ValueType
+
+    public var value: ValueType {
+        get {
+            valueLock.sync {
+                _value
+            }
+        }
+        set {
+            let oldValue = valueLock.sync { () -> ValueType in
+                let oldValue = _value
+                _value = newValue
+                return oldValue
+            }
+
+            if oldValue != newValue {
                 self.valueDidChange = true
-                valuePublisher.send(self.value)
+                valuePublisher.send(newValue)
             }
         }
     }
@@ -73,7 +83,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 
         let value = try container.decode(ValueType.self, forKey: .value)
 
-        self.value = value
+        self._value = value
 
         if let defaultValue = try container.decodeIfPresent(ValueType.self, forKey: .defaultValue) {
             self.defaultValue = defaultValue
@@ -113,7 +123,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     public init(_ label: String, _ value: ValueType, _ controlType: ControlType = .none, _ description:String = "") {
         self.id = UUID()
         self.label = label
-        self.value = value
+        self._value = value
         self.defaultValue = value
         self.controlType = controlType
         self.description = description

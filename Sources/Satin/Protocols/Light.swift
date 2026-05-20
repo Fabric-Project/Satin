@@ -31,7 +31,9 @@ public class Light: Object {
     
     public var castShadow: Bool = false // { fatalError("Subclasses must overload") }
     public var shadow: Shadow
-    
+    internal var shadowStateDirty = true
+    internal var lightStateDirty = true
+
     public let publisher = PassthroughSubject<Light, Never>()
     
     override public init(context: Context, label: String = "Light", visible: Bool = true, _ children: [Object] = []) {
@@ -59,4 +61,15 @@ public class Light: Object {
         shadow = Shadow(context: ctx, label: "Empty Shadow")
         try super.init(from: decoder)
     }
+
+    override open func prepareForRender() {
+        super.prepareForRender()
+        if shadowStateDirty {
+            updateShadowForRender()
+            shadowStateDirty = false
+        }
+        lightStateDirty = false
+    }
+
+    open func updateShadowForRender() {}
 }
