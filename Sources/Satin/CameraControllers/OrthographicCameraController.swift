@@ -55,17 +55,38 @@ public final class OrthographicCameraController: CameraController, Codable {
     public let onChangePublisher = PassthroughSubject<OrthographicCameraController, Never>()
     public let onEndPublisher = PassthroughSubject<OrthographicCameraController, Never>()
 
+    private struct InputState {
+        var interactionState: CameraControllerState = .inactive
+        var requestReset = false
+        var pendingPan: simd_float2 = .zero
+        var pendingZoom: Float = 0.0
+        var pendingRoll: Float = 0.0
+
+#if os(macOS)
+        var magnification: Float = 1.0
+#else
+        var panCurrentPoint: simd_float2 = .zero
+        var panPreviousPoint: simd_float2 = .zero
+        var pinchScale: Float = 1.0
+#endif
+    }
+
+    private struct DrainedInput {
+        var interactionState: CameraControllerState
+        var requestReset: Bool
+        var pendingPan: simd_float2
+        var pendingZoom: Float
+        var pendingRoll: Float
+    }
+
+    private let inputState = ControllerInputMailbox(InputState())
+
     private var defaultPosition = simd_make_float3(0.0, 0.0, 1.0)
     private var defaultOrientation = simd_quaternion(matrix_identity_float4x4)
 
     private var defaultZoom: Float = 0.5
     private var zoomDelta: Float = 0.5
     private var panDelta: simd_float2 = .zero
-    private var pendingPan: simd_float2 = .zero
-    private var pendingZoom: Float = 0.0
-    private var pendingRoll: Float = 0.0
-    private var panCurrentPoint: simd_float2 = .zero
-    private var panPreviousPoint: simd_float2 = .zero
 
     #if os(macOS)
 
@@ -83,20 +104,17 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     private var scrollWheelHandler: Any?
 
-    private var magnification: Float = 1.0
     private var magnifyGestureRecognizer: NSMagnificationGestureRecognizer!
     private var rollGestureRecognizer: NSRotationGestureRecognizer!
 
     #else
 
-    private var rollRotation: Float = 0.0
     private var rollGestureRecognizer: UIRotationGestureRecognizer!
 
     private var panGestureRecognizer: UIPanGestureRecognizer!
 
     private var rotateGestureRecognizer: UIPanGestureRecognizer!
 
-    private var pinchScale: Float = 1.0
     private var pinchGestureRecognizer: UIPinchGestureRecognizer!
 
     private var tapGestureRecognizer: UITapGestureRecognizer!
@@ -128,7 +146,18 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     public func update() {
         setup()
-        _ = applyPendingInput()
+        let drainedInput = drainInputState()
+
+        if drainedInput.requestReset {
+            performReset()
+            return
+        }
+
+        if state != drainedInput.interactionState {
+            state = drainedInput.interactionState
+        }
+
+        _ = applyPendingInput(drainedInput)
     }
 
     // MARK: - Enable & Disable
@@ -167,15 +196,18 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Reset
 
     public func reset() {
+        guard isEnabled else { return }
+        performReset()
+    }
+
+    private func performReset() {
         guard let view = view else { return }
 
         state = .inactive
+        clearInputState()
 
         panDelta = [0.0, 0.0]
-        pendingPan = .zero
         zoomDelta = defaultZoom
-        pendingZoom = 0.0
-        pendingRoll = 0.0
 
         let hw = Float(view.drawableSize.width) * defaultZoom
         let hh = Float(view.drawableSize.height) * defaultZoom
@@ -215,9 +247,7 @@ public final class OrthographicCameraController: CameraController, Codable {
 
             zoomDelta = loaded.zoomDelta
             panDelta = loaded.panDelta
-            pendingPan = .zero
-            pendingZoom = 0.0
-            pendingRoll = 0.0
+            clearInputState()
         } catch {
             print(error.localizedDescription)
         }
@@ -266,10 +296,6 @@ public final class OrthographicCameraController: CameraController, Codable {
         isSetup = true
     }
 
-    private func pan(_ deltaX: Float, _ deltaY: Float) {
-        pendingPan += [deltaX, deltaY]
-    }
-
     private func applyPan(_ deltaX: Float, _ deltaY: Float) {
         let cameraWidth = camera.right - camera.left
         let cameraHeight = camera.top - camera.bottom
@@ -283,10 +309,6 @@ public final class OrthographicCameraController: CameraController, Codable {
         camera.position += camera.worldUpDirection * deltaY
 
         onChangePublisher.send(self)
-    }
-
-    private func zoom(_ delta: Float) {
-        pendingZoom += delta
     }
 
     private func applyZoom(_ delta: Float) {
@@ -305,41 +327,60 @@ public final class OrthographicCameraController: CameraController, Codable {
         onChangePublisher.send(self)
     }
 
-    private func roll(_ delta: Float) {
-        pendingRoll += delta
-    }
-
     private func applyRoll(_ delta: Float) {
         camera.orientation *= simd_quatf(angle: delta, axis: camera.worldForwardDirection)
         onChangePublisher.send(self)
     }
 
     @discardableResult
-    private func applyPendingInput() -> Bool {
+    private func applyPendingInput(_ input: DrainedInput) -> Bool {
         var changed = false
 
-        if pendingPan.x != 0.0 || pendingPan.y != 0.0 {
-            let delta = pendingPan
-            pendingPan = .zero
-            applyPan(delta.x, delta.y)
+        if input.pendingPan.x != 0.0 || input.pendingPan.y != 0.0 {
+            applyPan(input.pendingPan.x, input.pendingPan.y)
             changed = true
         }
 
-        if pendingZoom != 0.0 {
-            let delta = pendingZoom
-            pendingZoom = 0.0
-            applyZoom(delta)
+        if input.pendingZoom != 0.0 {
+            applyZoom(input.pendingZoom)
             changed = true
         }
 
-        if pendingRoll != 0.0 {
-            let delta = pendingRoll
-            pendingRoll = 0.0
-            applyRoll(delta)
+        if input.pendingRoll != 0.0 {
+            applyRoll(input.pendingRoll)
             changed = true
         }
 
         return changed
+    }
+
+    private func setInteractionState(_ interactionState: CameraControllerState) {
+        inputState.withState { state in
+            state.interactionState = interactionState
+        }
+    }
+
+    private func clearInputState() {
+        inputState.withState { state in
+            state = InputState()
+        }
+    }
+
+    private func drainInputState() -> DrainedInput {
+        inputState.withState { state in
+            let drained = DrainedInput(
+                interactionState: state.interactionState,
+                requestReset: state.requestReset,
+                pendingPan: state.pendingPan,
+                pendingZoom: state.pendingZoom,
+                pendingRoll: state.pendingRoll
+            )
+            state.requestReset = false
+            state.pendingPan = .zero
+            state.pendingZoom = 0.0
+            state.pendingRoll = 0.0
+            return drained
+        }
     }
 
     // MARK: - Events
@@ -540,27 +581,34 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.state = .inactive
+            self?.setInteractionState(.inactive)
         }) else { return event }
 
         if event.clickCount == 2 {
-            reset()
+            inputState.withState { state in
+                state.requestReset = true
+                state.interactionState = .inactive
+            }
         } else {
-            state = .panning
+            setInteractionState(.panning)
         }
 
         return event
     }
 
     private func mouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .panning else { return event }
-        pan(Float(event.deltaX / view.frame.size.width), Float(event.deltaY / view.frame.size.height))
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .panning }) else { return event }
+        inputState.withState { state in
+            state.pendingPan += [Float(event.deltaX / view.frame.size.width), Float(event.deltaY / view.frame.size.height)]
+        }
         return event
     }
 
     private func mouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .panning else { return event }
-        state = .inactive
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .panning }) else { return event }
+        setInteractionState(.inactive)
         return event
     }
 
@@ -568,21 +616,25 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.state = .inactive
+            self?.setInteractionState(.inactive)
         }) else { return event }
-        state = .zooming
+        setInteractionState(.zooming)
         return event
     }
 
     private func rightMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .zooming else { return event }
-        zoom(Float(-event.deltaY / view.frame.size.height))
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .zooming }) else { return event }
+        inputState.withState { state in
+            state.pendingZoom += Float(-event.deltaY / view.frame.size.height)
+        }
         return event
     }
 
     private func rightMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .zooming else { return event }
-        state = .inactive
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .zooming }) else { return event }
+        setInteractionState(.inactive)
         return event
     }
 
@@ -592,15 +644,17 @@ public final class OrthographicCameraController: CameraController, Codable {
         guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
         if event.phase == .began {
-            state = .panning
+            setInteractionState(.panning)
         }
 
-        guard state == .panning else { return event }
+        guard inputState.withState({ $0.interactionState == .panning }) else { return event }
 
         if event.phase == .changed {
-            pan(Float(event.scrollingDeltaX / view.frame.size.width), Float(event.scrollingDeltaY / view.frame.size.height))
+            inputState.withState { state in
+                state.pendingPan += [Float(event.scrollingDeltaX / view.frame.size.width), Float(event.scrollingDeltaY / view.frame.size.height)]
+            }
         } else if event.phase == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
 
         return event
@@ -609,31 +663,37 @@ public final class OrthographicCameraController: CameraController, Codable {
     @objc private func magnifyGesture(_ gestureRecognizer: NSMagnificationGestureRecognizer) {
         let newMagnification = Float(gestureRecognizer.magnification)
         if gestureRecognizer.state == .began {
-            state = .zooming
-            magnification = newMagnification
+            inputState.withState { state in
+                state.interactionState = .zooming
+                state.magnification = newMagnification
+            }
         }
 
-        guard state == .zooming else { return }
+        guard inputState.withState({ $0.interactionState == .zooming }) else { return }
 
         if gestureRecognizer.state == .changed {
-            let delta = magnification - newMagnification
-            zoom(delta)
-            magnification = newMagnification
+            inputState.withState { state in
+                let delta = state.magnification - newMagnification
+                state.pendingZoom += delta
+                state.magnification = newMagnification
+            }
         } else if gestureRecognizer.state == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
     }
 
     @objc private func rollGesture(_ gestureRecognizer: NSRotationGestureRecognizer) {
-        if gestureRecognizer.state == .began { state = .rolling }
+        if gestureRecognizer.state == .began { setInteractionState(.rolling) }
 
-        guard state == .rolling else { return }
+        guard inputState.withState({ $0.interactionState == .rolling }) else { return }
 
         if gestureRecognizer.state == .changed {
-            roll(-Float(gestureRecognizer.rotation))
+            inputState.withState { state in
+                state.pendingRoll += -Float(gestureRecognizer.rotation)
+            }
             gestureRecognizer.rotation = 0.0
         } else if gestureRecognizer.state == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
     }
 
@@ -643,22 +703,27 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
         if gestureRecognizer.state == .ended {
-            reset()
+            inputState.withState { state in
+                state.requestReset = true
+                state.interactionState = .inactive
+            }
         }
     }
 
     @objc private func rollGesture(_ gestureRecognizer: UIRotationGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            state = .rolling
+            setInteractionState(.rolling)
         }
 
-        guard state == .rolling else { return }
+        guard inputState.withState({ $0.interactionState == .rolling }) else { return }
 
         if gestureRecognizer.state == .changed {
-            roll(Float(gestureRecognizer.rotation))
+            inputState.withState { state in
+                state.pendingRoll += Float(gestureRecognizer.rotation)
+            }
             gestureRecognizer.rotation = 0.0
         } else if gestureRecognizer.state == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
     }
 
@@ -666,62 +731,73 @@ public final class OrthographicCameraController: CameraController, Codable {
         guard let view = view else { return }
 
         if gestureRecognizer.state == .began {
-            state = .panning
             let translation = gestureRecognizer.translation(in: view)
-            panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+            inputState.withState { state in
+                state.interactionState = .panning
+                state.panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+            }
         }
 
-        guard state == .panning else { return }
+        guard inputState.withState({ $0.interactionState == .panning }) else { return }
 
         if gestureRecognizer.state == .changed {
             let translation = gestureRecognizer.translation(in: view)
-            panCurrentPoint = simd_make_float2(Float(translation.x), Float(translation.y))
-
-            let deltaX = panCurrentPoint.x - panPreviousPoint.x
-            let deltaY = panCurrentPoint.y - panPreviousPoint.y
-
-            let dx = deltaX / Float(view.frame.size.width)
-            let dy = deltaY / Float(view.frame.size.height)
-
-            pan(dx, dy)
-            panPreviousPoint = panCurrentPoint
+            inputState.withState { state in
+                state.panCurrentPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+                let deltaX = state.panCurrentPoint.x - state.panPreviousPoint.x
+                let deltaY = state.panCurrentPoint.y - state.panPreviousPoint.y
+                let dx = deltaX / Float(view.frame.size.width)
+                let dy = deltaY / Float(view.frame.size.height)
+                state.pendingPan += [dx, dy]
+                state.panPreviousPoint = state.panCurrentPoint
+            }
         } else if gestureRecognizer.state == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
     }
 
     @objc private func pinchGesture(_ gestureRecognizer: UIPinchGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            state = .zooming
-            pinchScale = Float(gestureRecognizer.scale)
+            inputState.withState { state in
+                state.interactionState = .zooming
+                state.pinchScale = Float(gestureRecognizer.scale)
+            }
         }
 
-        guard state == .zooming else { return }
+        guard inputState.withState({ $0.interactionState == .zooming }) else { return }
 
         if gestureRecognizer.state == .changed {
             let newScale = Float(gestureRecognizer.scale)
-            let delta = pinchScale - newScale
-            zoom(delta)
-            pinchScale = newScale
+            inputState.withState { state in
+                let delta = state.pinchScale - newScale
+                state.pendingZoom += delta
+                state.pinchScale = newScale
+            }
         } else if gestureRecognizer.state == .ended {
-            state = .inactive
+            setInteractionState(.inactive)
         }
     }
 
     #endif
 
     internal func queuePanForTesting(_ pan: simd_float2) {
-        state = .panning
-        pendingPan += pan
+        inputState.withState { state in
+            state.interactionState = .panning
+            state.pendingPan += pan
+        }
     }
 
     internal func queueZoomForTesting(_ zoom: Float) {
-        state = .zooming
-        pendingZoom += zoom
+        inputState.withState { state in
+            state.interactionState = .zooming
+            state.pendingZoom += zoom
+        }
     }
 
     internal func queueRollForTesting(_ roll: Float) {
-        state = .rolling
-        pendingRoll += roll
+        inputState.withState { state in
+            state.interactionState = .rolling
+            state.pendingRoll += roll
+        }
     }
 }
