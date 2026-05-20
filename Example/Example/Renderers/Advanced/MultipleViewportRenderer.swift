@@ -21,7 +21,7 @@ final class MultipleViewportRenderer: BaseRenderer {
     lazy var material = ViewportMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
     lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext, size: 2.0), material: material)
     lazy var startTime = getTime()
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var camera = OrthographicCamera(context: defaultContext)
 
@@ -33,7 +33,7 @@ final class MultipleViewportRenderer: BaseRenderer {
     }()
 //    lazy var subMesh = Mesh(geometry: IcosahedronGeometry(size: 0.5), material: AmplificationMaterial(pipelinesURL: pipelinesURL))
     lazy var subScene = Object(context: subContext, label: "Subscene", [grid, axisMesh, subMesh])
-    lazy var subRenderer = Renderer(context: subContext)
+    lazy var subRenderer = RenderEncoder(context: subContext)
 
     var _updateTextures = true
     var subColorTexture: MTLTexture?

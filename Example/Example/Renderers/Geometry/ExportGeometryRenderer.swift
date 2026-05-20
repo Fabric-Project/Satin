@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 10/2/20.
@@ -43,7 +43,7 @@ final class ExportGeometryRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         #if os(visionOS)

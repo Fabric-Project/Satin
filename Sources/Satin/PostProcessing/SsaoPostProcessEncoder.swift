@@ -1,5 +1,5 @@
 //
-//  SsaoPostProcessor.swift
+//  SsaoPostProcessEncoder.swift
 //  Satin
 //
 
@@ -7,8 +7,8 @@ import Metal
 import simd
 
 /// Full SSAO pipeline: raw ambient-occlusion, separable bilateral blur, and color composite.
-/// Requires `Renderer.activeOutputs` to include `.normals`.
-open class SsaoPostProcessor: PostProcessor {
+/// Requires `RenderEncoder.activeOutputs` to include `.normals`.
+open class SsaoPostProcessEncoder: PostProcessEncoder {
     private static let defaultResolutionScale: Float = 0.5
     private static let minResolutionScale: Float = 0.25
     private static let maxResolutionScale: Float = 1.0
@@ -55,14 +55,14 @@ open class SsaoPostProcessor: PostProcessor {
 
     // MARK: - Internals
 
-    private let blurProcessor: SeparablePostProcessor
-    private let compositeProcessor: PostProcessor
+    private let blurProcessor: SeparablePostProcessEncoder
+    private let compositeProcessor: PostProcessEncoder
     private var rawTexture: MTLTexture?
     private var rawTextureSize: (width: Int, height: Int) = (0, 0)
     private var outputTextureSize: (width: Int, height: Int) = (0, 0)
     private var lastSize: (width: Float, height: Float) = (0, 0)
     private var whiteAOTexture: MTLTexture?
-    private var _resolutionScale = SsaoPostProcessor.defaultResolutionScale
+    private var _resolutionScale = SsaoPostProcessEncoder.defaultResolutionScale
 
     // MARK: - Init
 
@@ -84,13 +84,13 @@ open class SsaoPostProcessor: PostProcessor {
         ssaoMaterial = SsaoMaterial(context: ssaoContext)
         blurMaterial = SsaoBlurMaterial(context: ssaoContext)
         compositeMaterial = SsaoCompositeMaterial(context: compositeContext)
-        blurProcessor = SeparablePostProcessor(
+        blurProcessor = SeparablePostProcessEncoder(
             label: "SSAO Blur",
             context: ssaoContext,
             horizontalMaterial: blurMaterial,
             verticalMaterial: blurMaterial
         )
-        compositeProcessor = PostProcessor(
+        compositeProcessor = PostProcessEncoder(
             label: "SSAO Composite",
             context: compositeContext,
             material: compositeMaterial,

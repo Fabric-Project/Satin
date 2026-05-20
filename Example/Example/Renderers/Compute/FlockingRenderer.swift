@@ -34,7 +34,7 @@ final class FlockingRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [sprite])
     lazy var camera = OrthographicCamera(context: defaultContext)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var particleSystem = FlockingComputeSystem(device: device, pipelinesURL: pipelinesURL, count: particleCountParam.value, feedback: true, live: true)
 
     lazy var spriteMaterial: SpriteMaterial = {

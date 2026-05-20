@@ -12,7 +12,7 @@ import Metal
 import MetalPerformanceShaders
 import Satin
 
-final class ShadowPostProcessor: PostProcessor {
+final class ShadowPostProcessEncoder: PostProcessEncoder {
     class ShadowPostMaterial: SourceMaterial {
         public unowned var colorTexture: MTLTexture? {
             didSet {
@@ -91,8 +91,8 @@ final class ObjectShadowRenderer {
     var color: simd_float4
 
     private var camera: OrthographicCamera
-    private var renderer: Renderer
-    private var processor: ShadowPostProcessor
+    private var renderer: RenderEncoder
+    private var processor: ShadowPostProcessEncoder
 
     public private(set) var texture: MTLTexture?
     public private(set) var renderTexture: MTLTexture?
@@ -129,10 +129,10 @@ final class ObjectShadowRenderer {
         self.far = far
         self.color = color
 
-        renderer = Renderer(context: context, clearColor: .zero, depthStoreAction: .store, frameBufferOnly: false)
-        renderer.label = "Object Shadow Renderer"
+        renderer = RenderEncoder(context: context, clearColor: .zero, depthStoreAction: .store, frameBufferOnly: false)
+        renderer.label = "Object Shadow RenderEncoder"
 
-        processor = ShadowPostProcessor(context: Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float))
+        processor = ShadowPostProcessEncoder(context: Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float))
         camera = OrthographicCamera(context: context)
 
         let size = (Float(resolution), Float(resolution))

@@ -69,7 +69,7 @@ final class OrbitCameraControllerRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [grid, axisMesh])
     lazy var cameraController = OrbitPerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         camera.lookAt(target: .zero)

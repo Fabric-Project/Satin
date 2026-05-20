@@ -37,7 +37,7 @@ final class BufferGeometryRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, intersectionMesh])
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, -5], near: 0.01, far: 100.0, fov: 30)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     let interleaved = true

@@ -23,7 +23,7 @@ final class InstancedMeshRenderer: BaseRenderer {
 
     private lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     private var instancedMesh: InstancedMesh?
-    private lazy var renderer = Renderer(context: defaultContext)
+    private lazy var renderer = RenderEncoder(context: defaultContext)
 
     // MARK: - Properties
 

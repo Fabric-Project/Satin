@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Cubemap
 //
 //  Created by Reza Ali on 6/7/20.
@@ -20,7 +20,7 @@ final class CubemapRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [skybox, mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var mesh: Mesh = {
         let twoPi = Float.pi * 2.0

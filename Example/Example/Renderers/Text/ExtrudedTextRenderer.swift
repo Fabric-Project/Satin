@@ -17,7 +17,7 @@ final class ExtrudedTextRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [15.0, 20.0, 40.0], near: 10.0, far: 60.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var parameters = ParameterGroup("Text", [fontParam])
     lazy var fontParam = StringParameter("Font", "Helvetica", availableFontFamilyNames, .dropdown)
 

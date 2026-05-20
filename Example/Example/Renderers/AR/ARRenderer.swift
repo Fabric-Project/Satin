@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  AR
 //
 //  Created by Reza Ali on 9/26/20.
@@ -27,9 +27,9 @@ final class ARRenderer: BaseRenderer {
 
 //    private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     private lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    private lazy var renderer = Renderer(context: defaultContext)
+    private lazy var renderer = RenderEncoder(context: defaultContext)
 
-    private var backgroundRenderer: ARBackgroundRenderer!
+    private var backgroundRenderer: ARBackgroundEncoder!
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
@@ -46,7 +46,7 @@ final class ARRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )

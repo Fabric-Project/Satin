@@ -21,7 +21,7 @@ final class PBRCustomizationRenderer: BaseRenderer {
     lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox, mesh])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 10.0), near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
     lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: skyboxMaterial)

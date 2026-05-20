@@ -1,5 +1,5 @@
 //
-//  MotionBlurPostProcessor.swift
+//  MotionBlurPostProcessEncoder.swift
 //  Satin
 //
 
@@ -7,8 +7,8 @@ import Metal
 import MetalKit
 
 /// Fullscreen post-process that consumes the renderer's color and velocity outputs.
-/// Requires `Renderer.activeOutputs` to include `.velocity`.
-open class MotionBlurPostProcessor: PostProcessor {
+/// Requires `RenderEncoder.activeOutputs` to include `.velocity`.
+open class MotionBlurPostProcessEncoder: PostProcessEncoder {
     // MARK: - Inputs
 
     public var colorTexture: MTLTexture? {

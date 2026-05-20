@@ -1,8 +1,6 @@
 //
-//  ForgeMetalViewRendererDelegate.swift
-//  Forging
-//
-//  Created by Reza Ali on 1/22/24.
+//  ViewRendererDelegate.swift
+//  Satin
 //
 
 import Foundation
@@ -12,7 +10,7 @@ import QuartzCore
 import AppKit
 #endif
 
-protocol MetalViewRendererDelegate: AnyObject {
+protocol ViewRendererDelegate: AnyObject {
     var id: String { get }
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable)
     func drawableResized(size: CGSize, scaleFactor: CGFloat)

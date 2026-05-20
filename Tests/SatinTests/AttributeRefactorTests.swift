@@ -109,7 +109,7 @@ final class AttributeRefactorTests: XCTestCase {
         }
 
         let context = VisualTestHarness.makeContext(device: device)
-        let renderer = Renderer(context: context, clearColor: VisualTestHarness.defaultClearColor)
+        let renderer = RenderEncoder(context: context, clearColor: VisualTestHarness.defaultClearColor)
         renderer.resize((width: 64, height: 64))
 
         let camera = PerspectiveCamera(context: context, position: [0, 0, 8], near: 0.1, far: 100.0, fov: 30.0)

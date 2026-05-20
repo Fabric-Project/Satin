@@ -73,18 +73,18 @@ final class ARBloomRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
     lazy var camera = ARPerspectiveCamera(context: defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(
-        label: "Renderer",
+    lazy var renderer = RenderEncoder(
+        label: "RenderEncoder",
         context: defaultContext,
         colorLoadAction: .load,
         depthLoadAction: .load
     )
 
     // handles depth (lidar depth map, lidar mesh & horizontal & vertical planes)
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
 
-    lazy var bloomRenderer = Renderer(
-        label: "Bloom Renderer",
+    lazy var bloomRenderer = RenderEncoder(
+        label: "Bloom RenderEncoder",
         context: defaultContext,
         clearColor: .zero,
         depthLoadAction: .load,
@@ -105,7 +105,7 @@ final class ARBloomRenderer: BaseRenderer {
         return material
     }()
 
-    lazy var postProcessor = PostProcessor(
+    lazy var postProcessor = PostProcessEncoder(
         label: "Bloom Post Processor",
         context: postContext,
         material: postMaterial
@@ -114,7 +114,7 @@ final class ARBloomRenderer: BaseRenderer {
     override init() {
         super.init()
         let configuration = ARWorldTrackingConfiguration()
-        // ARBackgroundDepthRenderer supports:
+        // ARBackgroundDepthEncoder supports:
         configuration.frameSemantics = .smoothedSceneDepth
         // and/or configuration.planeDetection = [.horizontal, .vertical]
         // and/or configuration.sceneReconstruction = .mesh
@@ -124,7 +124,7 @@ final class ARBloomRenderer: BaseRenderer {
     override func setup() {
         setupSessionObservers()
 
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
             session: session,
             sessionPublisher: sessionPublisher,

@@ -149,7 +149,7 @@ final class ScreenCaptureRenderer: BaseRenderer {
     lazy var camera = OrthographicCamera(context: defaultContext, left: -2, right: 2, bottom: -2, top: 2, near: 0.0, far: 1)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView, defaultZoom: 1.0)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     let captureManager = ScreenCaptureManager()
 

@@ -42,7 +42,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
         floor
     ])
 
-    lazy var renderer = Renderer(context: defaultContext, clearColor: .zero)
+    lazy var renderer = RenderEncoder(context: defaultContext, clearColor: .zero)
 
 #if targetEnvironment(simulator)
     override var layerLayout: LayerRenderer.Layout { .dedicated }

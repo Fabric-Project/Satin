@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 6/27/20.
@@ -29,7 +29,7 @@ final class Renderer3D: BaseRenderer {
     lazy var startTime = getTime()
     lazy var light = DirectionalLight(context: defaultContext, color: .one)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, light])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 

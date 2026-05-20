@@ -14,7 +14,7 @@ import Satin
 final class DiskRenderer: BaseRenderer {
     final class DiskMaterial: SourceMaterial {}
 
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 60)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 

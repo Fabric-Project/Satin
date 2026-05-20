@@ -67,7 +67,7 @@ final class CameraControllerRenderer: BaseRenderer {
     }()
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         scene.attach(cameraController.target)

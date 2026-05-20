@@ -81,7 +81,7 @@ enum VisualTestHarness {
 
     static func render(
         size: SIMD2<Int>,
-        configure: (Renderer, Camera) -> (scene: Object, camera: Camera)
+        configure: (RenderEncoder, Camera) -> (scene: Object, camera: Camera)
     ) throws -> RGBAImage {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw NSError(domain: "VisualTestHarness", code: 1, userInfo: [NSLocalizedDescriptionKey: "Metal is unavailable"])
@@ -92,7 +92,7 @@ enum VisualTestHarness {
         }
 
         let context = makeContext(device: device)
-        let renderer = Renderer(context: context, clearColor: defaultClearColor)
+        let renderer = RenderEncoder(context: context, clearColor: defaultClearColor)
         renderer.resize((width: Float(size.x), height: Float(size.y)))
 
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30.0)

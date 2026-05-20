@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  2D-macOS
 //
 //  Created by Reza Ali on 4/22/20.
@@ -16,7 +16,7 @@ final class Renderer2D: BaseRenderer {
     lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, intersectionMesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var intersectionMesh: Mesh = {
         lazy var mesh = Mesh(context: defaultContext, geometry: CircleGeometry(context: defaultContext, radius: 10), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))

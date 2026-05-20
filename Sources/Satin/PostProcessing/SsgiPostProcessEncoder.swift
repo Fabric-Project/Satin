@@ -2,7 +2,7 @@ import Metal
 import MetalKit
 import simd
 
-open class SsgiPostProcessor: PostProcessor {
+open class SsgiPostProcessEncoder: PostProcessEncoder {
     private static let defaultResolutionScale: Float = 0.5
     private static let minResolutionScale: Float = 0.25
     private static let maxResolutionScale: Float = 1.0
@@ -55,8 +55,8 @@ open class SsgiPostProcessor: PostProcessor {
     public let blurMaterial: SsgiBlurMaterial
     public let compositeMaterial: SsgiCompositeMaterial
 
-    private let blurProcessor: PostProcessor
-    private let compositeProcessor: PostProcessor
+    private let blurProcessor: PostProcessEncoder
+    private let compositeProcessor: PostProcessEncoder
     private var rawTexture: MTLTexture?
     private var denoisedTexture: MTLTexture?
     private var rawTextureSize: (width: Int, height: Int) = (0, 0)
@@ -65,7 +65,7 @@ open class SsgiPostProcessor: PostProcessor {
     private var lastSize: (width: Float, height: Float) = (0, 0)
     private var neutralTexture: MTLTexture?
     private var blueNoiseTexture: MTLTexture?
-    private var _resolutionScale = SsgiPostProcessor.defaultResolutionScale
+    private var _resolutionScale = SsgiPostProcessEncoder.defaultResolutionScale
     private var frameIndex: UInt32 = 0
 
     private static func clampResolutionScale(_ value: Float) -> Float {
@@ -88,7 +88,7 @@ open class SsgiPostProcessor: PostProcessor {
         blurMaterial = SsgiBlurMaterial(context: ssgiContext)
         compositeMaterial = SsgiCompositeMaterial(context: compositeContext)
 
-        blurProcessor = PostProcessor(
+        blurProcessor = PostProcessEncoder(
             label: "SSGI Denoise",
             context: ssgiContext,
             material: blurMaterial,
@@ -96,7 +96,7 @@ open class SsgiPostProcessor: PostProcessor {
             depthStoreAction: .dontCare
         )
 
-        compositeProcessor = PostProcessor(
+        compositeProcessor = PostProcessEncoder(
             label: "SSGI Composite",
             context: compositeContext,
             material: compositeMaterial,

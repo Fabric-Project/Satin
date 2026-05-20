@@ -194,7 +194,7 @@ final class SuperShapesRenderer: BaseRenderer {
         return Mesh(context: defaultContext, geometry: geometry, material: material)
     }()
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(2.0, 1.0, 4.0), near: 0.001, far: 200.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)

@@ -125,7 +125,7 @@ final class ContactShadowRenderer: BaseRenderer {
     }()
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var shadowRenderer = ObjectShadowRenderer(
         context: defaultContext,

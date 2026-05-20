@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  LiveCode-macOS
 //
 //  Created by Reza Ali on 6/1/20.
@@ -35,7 +35,7 @@ final class LiveCodeRenderer: BaseRenderer {
 
     lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL))
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }
     override var depthPixelFormat: MTLPixelFormat { .invalid }
