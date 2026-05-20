@@ -101,12 +101,13 @@ public final class PointShadow: Shadow {
         }
 
         for (index, camera) in cameras.enumerated() {
-            camera.position = light.worldPosition
-            camera.lookAt(target: light.worldPosition + faceDirections[index].direction, up: faceDirections[index].up)
+            camera.position = light.renderWorldPosition
+            camera.lookAt(target: light.renderWorldPosition + faceDirections[index].direction, up: faceDirections[index].up)
             camera.aspect = 1.0
             camera.fov = 90.0
             camera.near = 0.01
             camera.far = max(light.radius, camera.near + 0.01)
+            camera.refreshRenderState()
         }
 
         needsUpdate = true

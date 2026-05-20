@@ -296,9 +296,7 @@ open class RenderEncoder {
 
     private var lightList = [Light]()
     private var lightReceivers = [Renderable]()
-    private var _updateLightDataBuffer = false
     private var lightDataBuffer: StructBuffer<LightData>?
-    private var lightDataSubscriptions = Set<AnyCancellable>()
 
     private var shadowCasters = [Renderable]()
     private var shadowReceivers = [Renderable]()
@@ -319,6 +317,8 @@ open class RenderEncoder {
     private var activeBrdfTexture: MTLTexture?
     private var activeReflectionTexcoordTransform = matrix_identity_float3x3
     private var activeIrradianceTexcoordTransform = matrix_identity_float3x3
+    private let mutationLock = UnfairLock()
+    private var pendingMutations: [() -> Void] = []
 
     private lazy var deferredLightingMaterial = DeferredLightingMaterial(context: context)
     private lazy var deferredLightingMesh: Mesh = {
@@ -464,6 +464,12 @@ open class RenderEncoder {
             cameras: [camera],
             viewports: [viewport ?? self.viewport]
         )
+    }
+
+    public func schedule(_ mutation: @escaping () -> Void) {
+        mutationLock.sync {
+            pendingMutations.append(mutation)
+        }
     }
 
     /// Draws the scene using the current render graph.
@@ -1821,9 +1827,11 @@ open class RenderEncoder {
     private func update(commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [simd_float4]) {
         for camera in cameras {
             camera.update()
+            camera.refreshRenderState()
         }
 
         onUpdate?()
+        drainPendingMutations()
 
         objectList.removeAll(keepingCapacity: true)
         renderLists.removeAll(keepingCapacity: true)
@@ -1834,9 +1842,10 @@ open class RenderEncoder {
         shadowCasters.removeAll(keepingCapacity: true)
         shadowReceivers.removeAll(keepingCapacity: true)
 
-        updateLists(
+        updateObjectGraph(
             object: scene,
-            visible: true
+            visible: true,
+            parentMatrix: matrix_identity_float4x4
         )
 
         updateScene(
@@ -1848,8 +1857,22 @@ open class RenderEncoder {
         updateLights()
     }
 
-    private func updateLists(object: Object, visible: Bool) {
+    private func drainPendingMutations() {
+        let mutations = mutationLock.sync { () -> [() -> Void] in
+            let queued = pendingMutations
+            pendingMutations.removeAll(keepingCapacity: true)
+            return queued
+        }
+
+        for mutation in mutations {
+            mutation()
+        }
+    }
+
+    private func updateObjectGraph(object: Object, visible: Bool, parentMatrix: matrix_float4x4) {
         object.update()
+        object.computeRenderTransforms(parentMatrix: parentMatrix)
+        object.prepareForRender()
 
         if object.visible, visible {
             objectList.append(object)
@@ -1881,9 +1904,10 @@ open class RenderEncoder {
             }
             
             for child in object.children {
-                updateLists(
+                updateObjectGraph(
                     object: child,
-                    visible: object.visible && visible
+                    visible: object.visible && visible,
+                    parentMatrix: object.renderWorldMatrix
                 )
             }
         }
@@ -2364,32 +2388,22 @@ open class RenderEncoder {
 
     private func setupLightDataBuffer() {
         guard lightList.count != lightDataBuffer?.count else { return }
-        lightDataSubscriptions.removeAll(keepingCapacity: true)
 
         if lightList.isEmpty {
             lightDataBuffer = nil
         } else {
-            for light in lightList {
-                light.publisher.sink { [weak self] _ in
-                    self?._updateLightDataBuffer = true
-                }.store(in: &lightDataSubscriptions)
-            }
             lightDataBuffer = StructBuffer<LightData>(
                 device: context.device,
                 count: lightList.count,
                 label: "Light Data Buffer"
             )
-
-            _updateLightDataBuffer = true
         }
     }
 
     private func updateLightDataBuffer() {
-        guard let lightBuffer = lightDataBuffer, _updateLightDataBuffer else { return }
+        guard let lightBuffer = lightDataBuffer else { return }
 
         lightBuffer.update(data: lightList.map { $0.data })
-
-        _updateLightDataBuffer = false
     }
 
     private func updateDirectLightingState() {
@@ -2508,8 +2522,6 @@ open class RenderEncoder {
             projectorMatricesBuffer?.update(data: projectorMatrices)
             projectorTransformsBuffer?.update(data: projectorTransforms)
         }
-
-        _updateLightDataBuffer = true
     }
 
     private func updateDirectShadowTextures() {

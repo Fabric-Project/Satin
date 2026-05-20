@@ -45,21 +45,21 @@ public final class VertexUniformBuffer {
 
         uniforms = UnsafeMutableRawPointer(buffer.contents() + offset).bindMemory(to: VertexUniforms.self, capacity: context.vertexAmplificationCount)
 
-        let currentModelMatrix = object.worldMatrix
-        let currentViewProjectionMatrix = camera.viewProjectionMatrix
+        let currentModelMatrix = object.renderWorldMatrix
+        let currentViewProjectionMatrix = camera.renderViewProjectionMatrix
 
         uniforms[index].modelMatrix = currentModelMatrix
-        uniforms[index].viewMatrix = camera.viewMatrix
-        uniforms[index].modelViewMatrix = camera.viewMatrix * currentModelMatrix
-        uniforms[index].projectionMatrix = camera.projectionMatrix
+        uniforms[index].viewMatrix = camera.renderViewMatrix
+        uniforms[index].modelViewMatrix = camera.renderViewMatrix * currentModelMatrix
+        uniforms[index].projectionMatrix = camera.renderProjectionMatrix
         uniforms[index].viewProjectionMatrix = currentViewProjectionMatrix
         uniforms[index].modelViewProjectionMatrix = currentViewProjectionMatrix * currentModelMatrix
         uniforms[index].inverseModelViewProjectionMatrix = uniforms[index].modelViewProjectionMatrix.inverse
-        uniforms[index].inverseViewMatrix = camera.worldMatrix
-        uniforms[index].normalMatrix = object.normalMatrix
+        uniforms[index].inverseViewMatrix = camera.renderWorldMatrix
+        uniforms[index].normalMatrix = object.renderNormalMatrix
         uniforms[index].viewport = viewport
-        uniforms[index].worldCameraPosition = camera.worldPosition
-        uniforms[index].worldCameraViewDirection = camera.viewDirection
+        uniforms[index].worldCameraPosition = camera.renderWorldPosition
+        uniforms[index].worldCameraViewDirection = camera.renderViewDirection
         let previousModelMatrix = previousModelMatrices[index]
         let previousViewProjectionMatrix = previousViewProjectionMatrices[index]
         uniforms[index].previousModelMatrix = previousModelMatrix

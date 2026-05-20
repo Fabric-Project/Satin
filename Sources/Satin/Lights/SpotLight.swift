@@ -19,32 +19,36 @@ public final class SpotLight: Light {
 
     public var projectionTexture: MTLTexture? {
         didSet {
-            updateProjectorCamera()
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var projectionMode: SpotLightProjectionMode = .mask {
         didSet {
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var projectionAspect: Float? {
         didSet {
-            updateProjectorCamera()
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var projectionTransform = matrix_identity_float3x3 {
         didSet {
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var projectorMatrix: simd_float4x4 {
-        projectorCamera.viewProjectionMatrix
+        projectorCamera.renderViewProjectionMatrix
     }
 
     private let projectorCamera: PerspectiveCamera
@@ -59,9 +63,9 @@ public final class SpotLight: Light {
             // (rgb, intensity)
             color: simd_make_float4(color.x, color.y, color.z, intensity),
             // (xyz, type)
-            position: simd_make_float4(worldPosition.x, worldPosition.y, worldPosition.z, Float(type.rawValue)),
+            position: simd_make_float4(renderWorldPosition.x, renderWorldPosition.y, renderWorldPosition.z, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-worldForwardDirection, 0.0),
+            direction: simd_make_float4(-renderWorldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: simd_make_float4(spotScale, spotOffset, cosInner, cosOuter),
             // (shadowIndex, projectorIndex, projectorMode, unused)
@@ -71,34 +75,34 @@ public final class SpotLight: Light {
 
     override public var castShadow: Bool {
         didSet {
-            setupShadow()
+            shadowStateDirty = true
+            lightStateDirty = true
         }
     }
 
     public var radius: Float {
         didSet {
-            updateProjectorCamera()
-            shadow.update(light: self)
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var angleInner: Float {
         didSet {
-            updateProjectorCamera()
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
 
     public var angleOuter: Float {
         didSet {
-            updateProjectorCamera()
-            shadow.update(light: self)
+            shadowStateDirty = true
+            lightStateDirty = true
             publisher.send(self)
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case radius
@@ -140,28 +144,24 @@ public final class SpotLight: Light {
 
     override public func setup() {
         super.setup()
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.updateProjectorCamera()
-            self.publisher.send(self)
-        }
-        setupShadow()
+        shadowStateDirty = true
     }
 
-    private func setupShadow() {
+    override public func updateShadowForRender() {
+        updateProjectorCamera()
         guard castShadow, let spotShadow = shadow as? SpotShadow else { return }
         spotShadow.device = context.device
         spotShadow.update(light: self)
     }
 
     private func updateProjectorCamera() {
-        projectorCamera.position = worldPosition
-        projectorCamera.lookAt(target: worldPosition + worldForwardDirection, up: Satin.worldUpDirection)
+        projectorCamera.position = renderWorldPosition
+        projectorCamera.lookAt(target: renderWorldPosition + renderWorldForwardDirection, up: Satin.worldUpDirection)
         projectorCamera.fov = angleOuter * 2.0
         projectorCamera.aspect = resolvedProjectionAspect
         projectorCamera.near = 0.01
         projectorCamera.far = max(radius, projectorCamera.near + 0.01)
+        projectorCamera.refreshRenderState()
     }
 
     private var resolvedProjectionAspect: Float {

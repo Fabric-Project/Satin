@@ -46,7 +46,7 @@ public class Shadow {
     }
 
     public var matrices: [simd_float4x4] {
-        [camera.viewProjectionMatrix]
+        [camera.renderViewProjectionMatrix]
     }
 
     public var viewCount: Int {

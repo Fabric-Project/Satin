@@ -88,12 +88,13 @@ public final class SpotShadow: Shadow {
             return
         }
 
-        camera.position = light.worldPosition
-        camera.lookAt(target: light.worldPosition + light.worldForwardDirection, up: Satin.worldUpDirection)
+        camera.position = light.renderWorldPosition
+        camera.lookAt(target: light.renderWorldPosition + light.renderWorldForwardDirection, up: Satin.worldUpDirection)
         camera.aspect = 1.0
         camera.fov = light.angleOuter * 2.0
         camera.near = 0.01
         camera.far = max(light.radius, camera.near + 0.01)
+        camera.refreshRenderState()
 
         needsUpdate = true
     }

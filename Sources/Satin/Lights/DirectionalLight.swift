@@ -18,9 +18,9 @@ public final class DirectionalLight: Light {
             // (rgb, intensity)
             color: simd_make_float4(color, intensity),
             // (xyz, type)
-            position: simd_make_float4(worldPosition, Float(type.rawValue)),
+            position: simd_make_float4(renderWorldPosition, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-worldForwardDirection, 0.0),
+            direction: simd_make_float4(-renderWorldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: .zero,
             // (shadowIndex, projectorIndex, projectorMode, unused)
@@ -30,11 +30,10 @@ public final class DirectionalLight: Light {
 
     override public var castShadow:Bool  {
         didSet {
-            setupShadow()
+            shadowStateDirty = true
+            lightStateDirty = true
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case color
@@ -66,19 +65,10 @@ public final class DirectionalLight: Light {
 
     override public func setup() {
         super.setup()
-        setupTransformSubscriber()
-        setupShadow()
+        shadowStateDirty = true
     }
 
-    func setupTransformSubscriber() {
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.publisher.send(self)
-        }
-    }
-
-    func setupShadow() {
+    override public func updateShadowForRender() {
         guard castShadow, let directionalShadow = shadow as? DirectionalShadow else { return }
         directionalShadow.device = context.device
         directionalShadow.update(light: self)

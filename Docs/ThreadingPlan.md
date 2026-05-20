@@ -1,5 +1,7 @@
 # Satin Threading Plan
 
+> Historical note: this document reflects an earlier branch model. The current source of truth is `Docs/ThreadingPlanRefresh.md`.
+
 ## Starting Point
 
 **Do not implement from the current `feature/2.0-Multithreading` branch.** That branch contains a series of partial, conflicting experiments. The code in it is not authoritative. Start from `main` and apply the changes below incrementally on a fresh branch.

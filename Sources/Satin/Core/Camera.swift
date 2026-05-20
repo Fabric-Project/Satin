@@ -10,6 +10,11 @@ import Combine
 import simd
 
 open class Camera: Object {
+    internal var renderViewMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderViewProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderViewDirection: simd_float3 = Satin.worldForwardDirection
+
     private var _viewDirection = ValueCache<simd_float3>()
     public var viewDirection: simd_float3 {
         _viewDirection.get {
@@ -86,6 +91,24 @@ open class Camera: Object {
         didSet {
             updateViewMatrix = true
         }
+    }
+
+    override open func prepareForRender() {
+        updateRenderState()
+    }
+
+    func refreshRenderState(parentMatrix: matrix_float4x4 = matrix_identity_float4x4) {
+        computeRenderTransforms(parentMatrix: parentMatrix)
+        updateRenderState()
+    }
+
+    func updateRenderState() {
+        renderViewMatrix = renderWorldMatrixInverse
+        renderProjectionMatrix = projectionMatrix
+        renderViewProjectionMatrix = simd_mul(renderProjectionMatrix, renderViewMatrix)
+        renderViewDirection = simd_normalize(
+            simd_make_float3(renderWorldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0))
+        )
     }
 
     var _viewMatrix: matrix_float4x4 = matrix_identity_float4x4
