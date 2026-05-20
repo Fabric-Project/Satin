@@ -52,9 +52,13 @@ public struct Context {
         velocityPixelFormat: MTLPixelFormat = .rg16Float,
         emissivePixelFormat: MTLPixelFormat = .rgba16Float
     ) {
+        guard let commandQueue = device.makeCommandQueue() else {
+              fatalError("Satin: failed to create MTLCommandQueue for device \(device.name)")
+          }
+        
         self.id = id
         self.device = device
-        self.commandQueue = device.makeCommandQueue()!
+        self.commandQueue = commandQueue
         self.sampleCount = sampleCount
         self.colorPixelFormat = colorPixelFormat
         self.depthPixelFormat = depthPixelFormat
