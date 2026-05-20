@@ -1,5 +1,26 @@
 # Satin 2.0 Changelog
 
+## Sync / Async Renderer Execution
+
+Satin now separates render-loop ownership from scene encoding:
+
+- `Renderer` owns sync vs async execution and render-owner scheduling.
+- `RenderEncoder` remains the scene traversal / command encoding core.
+- `ViewRenderer` and `SpatialRenderer` now run on top of that execution model.
+
+### API
+
+- `Renderer` now supports `.sync` and `.async` modes.
+- Async renderers expose `schedule(_:)` and `scheduleAndWait(_:)` for render-owned mutation.
+- Example `BaseRenderer` can switch default execution mode with a single mode flag.
+
+### Threading / Render State
+
+- Render-time camera, object, light, and shadow updates now use render snapshot state instead of live transform caches in the critical paths.
+- Camera controller event hookup / teardown is main-thread confined, while controller motion is still applied during frame updates.
+- Async resize no longer uses a blocking render-queue handoff.
+- Light movement now correctly refreshes shadow and projector state during render preparation.
+
 ## Alpha Order-Independent Transparency
 
 `blending = .alpha` now uses Apple image-block order-independent transparency on `MTLGPUFamilyApple4` GPUs (A11 Bionic / M1 and later) for Satin's built-in alpha-capable materials. This keeps the Fabric-side API unchanged while making alpha-blended content render correctly in `forward`, `forwardPlus`, and `deferredGeometry` without requiring CPU depth sorting.
