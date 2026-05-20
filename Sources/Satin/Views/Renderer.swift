@@ -71,8 +71,6 @@ open class Renderer {
     }
 
     private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
-    private var inFlightSemaphoreWait = 0
-    private var inFlightSemaphoreRelease = 0
     private let scheduledMutationLock = UnfairLock()
     private var scheduledMutations: [() -> Void] = []
     private let renderQueue: DispatchQueue?
@@ -110,13 +108,15 @@ open class Renderer {
     }
 
     deinit {
+        
+        while inFlightSemaphore.signal() > 0
+        {
+            continue
+        }
+        
 #if DEBUG_VIEW
         print("\ndeinit - Renderer: \(id)\n")
 #endif
-        let delta = inFlightSemaphoreWait + inFlightSemaphoreRelease
-        for _ in 0 ..< delta {
-            inFlightSemaphore.signal()
-        }
     }
 
     open func makeDefaultContext() -> Context {
@@ -221,10 +221,8 @@ open class Renderer {
     }
 
     func registerInFlight(_ commandBuffer: MTLCommandBuffer) {
-        inFlightSemaphoreWait += 1
         commandBuffer.addCompletedHandler { [weak self] _ in
             self?.inFlightSemaphore.signal()
-            self?.inFlightSemaphoreRelease -= 1
         }
     }
 
