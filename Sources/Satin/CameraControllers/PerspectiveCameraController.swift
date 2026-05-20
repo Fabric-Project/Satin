@@ -96,10 +96,15 @@ public final class PerspectiveCameraController: CameraController, Codable {
 
     private var rotationAxis: simd_float3 = .zero
     private var rotationAngle: Float = 0.0
+    private var pendingRotationAxis: simd_float3 = .zero
+    private var pendingRotationAngle: Float = 0.0
 
     private var translation: simd_float3 = .zero
+    private var pendingTranslation: simd_float3 = .zero
     private var zoom: Float = 0.0
+    private var pendingZoom: Float = 0.0
     private var roll: Float = 0.0
+    private var pendingRoll: Float = 0.0
 
     private var previousPosition: simd_float2 = .zero
 
@@ -166,7 +171,10 @@ public final class PerspectiveCameraController: CameraController, Codable {
     public func update() {
         updateTime()
 
-        guard state == .tweening else { return }
+        if state != .tweening {
+            _ = applyPendingInput()
+            return
+        }
 
         var changed = false
 
@@ -225,6 +233,12 @@ public final class PerspectiveCameraController: CameraController, Codable {
     }
 
     private func resetCameraAndTarget() {
+        pendingRotationAxis = .zero
+        pendingRotationAngle = 0.0
+        pendingTranslation = .zero
+        pendingZoom = 0.0
+        pendingRoll = 0.0
+
         let defaultForward = simd_make_float3(0, 0, defaultDistance)
 
         camera.position = defaultForward
@@ -259,6 +273,11 @@ public final class PerspectiveCameraController: CameraController, Codable {
             let loaded = try JSONDecoder().decode(PerspectiveCameraController.self, from: data)
             target.setFrom(object: loaded.target)
             camera.setFrom(object: loaded.camera)
+            pendingRotationAxis = .zero
+            pendingRotationAngle = 0.0
+            pendingTranslation = .zero
+            pendingZoom = 0.0
+            pendingRoll = 0.0
         } catch {
             print(error.localizedDescription)
         }
@@ -384,9 +403,8 @@ public final class PerspectiveCameraController: CameraController, Codable {
         let imagePlaneHeight = (180.0 / camera.fov) * (pow(simd_length(camera.worldPosition), 0.25) + 1.0)
         let imagePlaneWidth = aspect * imagePlaneHeight
 
-        translation.x = pan.x * imagePlaneWidth
-        translation.y = pan.y * imagePlaneHeight
-        updateTranslation()
+        pendingTranslation.x = pan.x * imagePlaneWidth
+        pendingTranslation.y = pan.y * imagePlaneHeight
     }
 
     // MARK: - Helpers
@@ -394,9 +412,52 @@ public final class PerspectiveCameraController: CameraController, Codable {
     private func halt() {
         state = .inactive
         rotationAngle = 0.0
+        pendingRotationAxis = .zero
+        pendingRotationAngle = 0.0
         translation = .zero
+        pendingTranslation = .zero
         zoom = 0.0
+        pendingZoom = 0.0
         roll = 0.0
+        pendingRoll = 0.0
+    }
+
+    @discardableResult
+    private func applyPendingInput() -> Bool {
+        switch state {
+        case .rotating:
+            guard abs(pendingRotationAngle) > 0.0 else { return false }
+            rotationAxis = pendingRotationAxis
+            rotationAngle = pendingRotationAngle
+            pendingRotationAxis = .zero
+            pendingRotationAngle = 0.0
+            updateRotation()
+            return true
+
+        case .panning, .dollying:
+            guard simd_length(pendingTranslation) > 0.0 else { return false }
+            translation = pendingTranslation
+            pendingTranslation = .zero
+            updateTranslation()
+            return true
+
+        case .zooming:
+            guard abs(pendingZoom) > 0.0 else { return false }
+            zoom = pendingZoom
+            pendingZoom = 0.0
+            updateZoom()
+            return true
+
+        case .rolling:
+            guard abs(pendingRoll) > 0.0 else { return false }
+            roll = pendingRoll
+            pendingRoll = 0.0
+            updateRoll()
+            return true
+
+        default:
+            return false
+        }
     }
 
     private func normalizePoint(_ point: simd_float2, _ size: simd_float2) -> simd_float2 {
@@ -665,9 +726,8 @@ public final class PerspectiveCameraController: CameraController, Codable {
             currentPosition: currentPosition,
             size: view.frame.size.float2
         ) {
-            rotationAxis = angleAxis.axis
-            rotationAngle = angleAxis.angle
-            updateRotation()
+            pendingRotationAxis = angleAxis.axis
+            pendingRotationAngle = angleAxis.angle
         }
 
         return event
@@ -697,11 +757,9 @@ public final class PerspectiveCameraController: CameraController, Codable {
         guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
         let dy = Float(event.deltaY) / mouseDeltaSensitivity
         if state == .dollying {
-            translation.z = dy * translationScalar
-            updateTranslation()
+            pendingTranslation = [0.0, 0.0, dy * translationScalar]
         } else if state == .zooming {
-            zoom = -dy
-            updateZoom()
+            pendingZoom = -dy
         }
         return event
     }
@@ -766,9 +824,8 @@ public final class PerspectiveCameraController: CameraController, Codable {
 
         if gestureRecognizer.state == .changed {
             let velocity = newMagnification - magnification
-            zoom = -velocity
+            pendingZoom = -velocity
             magnification = newMagnification
-            updateZoom()
         } else if gestureRecognizer.state == .ended {
             state = .tweening
         }
@@ -780,8 +837,7 @@ public final class PerspectiveCameraController: CameraController, Codable {
         guard state == .rolling else { return }
 
         if gestureRecognizer.state == .changed {
-            roll = -Float(gestureRecognizer.rotation)
-            updateRoll()
+            pendingRoll = -Float(gestureRecognizer.rotation)
         } else if gestureRecognizer.state == .ended {
             state = .tweening
         }
@@ -804,8 +860,7 @@ public final class PerspectiveCameraController: CameraController, Codable {
 
         if gestureRecognizer.state == .changed {
             let newRotation = Float(gestureRecognizer.rotation)
-            roll = newRotation - rollRotation
-            updateRoll()
+            pendingRoll = newRotation - rollRotation
             rollRotation = newRotation
         } else if gestureRecognizer.state == .ended {
             state = .tweening
@@ -831,9 +886,8 @@ public final class PerspectiveCameraController: CameraController, Codable {
                 currentPosition: currentPosition,
                 size: view.frame.size.float2
             ) {
-                rotationAxis = angleAxis.axis
-                rotationAngle = angleAxis.angle
-                updateRotation()
+                pendingRotationAxis = angleAxis.axis
+                pendingRotationAngle = angleAxis.angle
             }
         } else if gestureRecognizer.state == .ended {
             state = .tweening
@@ -872,8 +926,7 @@ public final class PerspectiveCameraController: CameraController, Codable {
             let newScale = Float(gestureRecognizer.scale)
             let delta = pinchScale - newScale
             if abs(delta) > 0.0 {
-                zoom = delta
-                updateZoom()
+                pendingZoom = delta
                 pinchScale = newScale
             }
         } else if gestureRecognizer.state == .ended {

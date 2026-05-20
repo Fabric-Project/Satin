@@ -91,11 +91,14 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private var azimuthRotationFlip: Float = 1.0
     private var rotationDelta: simd_float2 = .zero
+    private var pendingRotationDelta: simd_float2 = .zero
     private var azimuthRotationTotal: Float = .zero
     private var elevationRotationTotal: Float = .zero
 
     private var translation: simd_float3 = .zero
+    private var pendingTranslation: simd_float3 = .zero
     private var zoom: Float = 0.0
+    private var pendingZoom: Float = 0.0
 
     private var previousPosition: simd_float2 = .zero
 
@@ -157,7 +160,10 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     public func update() {
         updateTime()
 
-        guard state == .tweening else { return }
+        if state != .tweening {
+            _ = applyPendingInput()
+            return
+        }
 
         var changed = false
 
@@ -214,6 +220,9 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func _reset() {
         halt()
+        pendingRotationDelta = .zero
+        pendingTranslation = .zero
+        pendingZoom = 0.0
 
         target.position = .zero
         target.orientation = defaultOrientation
@@ -252,6 +261,9 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
             let loaded = try JSONDecoder().decode(OrbitPerspectiveCameraController.self, from: data)
             target.setFrom(object: loaded.target)
             camera.setFrom(object: loaded.camera)
+            pendingRotationDelta = .zero
+            pendingTranslation = .zero
+            pendingZoom = 0.0
 
             let (azimuth, elevation) = calculateAzimuthElevationAngles()
             azimuthRotationTotal = azimuth
@@ -464,9 +476,8 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         let up = pan.y * imagePlaneHeight
         let right = pan.x * imagePlaneWidth
 
-        translation.x = right
-        translation.y = up
-        updateTranslation()
+        pendingTranslation.x = right
+        pendingTranslation.y = up
     }
 
     // MARK: - Helpers
@@ -474,8 +485,40 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     private func halt() {
         state = .inactive
         rotationDelta = .zero
+        pendingRotationDelta = .zero
         translation = .zero
+        pendingTranslation = .zero
         zoom = 0.0
+        pendingZoom = 0.0
+    }
+
+    @discardableResult
+    private func applyPendingInput() -> Bool {
+        switch state {
+        case .rotating:
+            guard simd_length(pendingRotationDelta) > 0.0 else { return false }
+            rotationDelta = pendingRotationDelta
+            pendingRotationDelta = .zero
+            updateRotation(delta: rotationDelta)
+            return true
+
+        case .panning, .dollying:
+            guard simd_length(pendingTranslation) > 0.0 else { return false }
+            translation = pendingTranslation
+            pendingTranslation = .zero
+            updateTranslation()
+            return true
+
+        case .zooming:
+            guard abs(pendingZoom) > 0.0 else { return false }
+            zoom = pendingZoom
+            pendingZoom = 0.0
+            updateZoom()
+            return true
+
+        default:
+            return false
+        }
     }
 
     private func normalizePoint(_ point: simd_float2, _ size: simd_float2) -> simd_float2 {
@@ -714,8 +757,7 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         let currentPosition = view.convert(event.locationInWindow, from: nil).float2
         defer { previousPosition = currentPosition }
 
-        rotationDelta = previousPosition - currentPosition
-        updateRotation(delta: rotationDelta)
+        pendingRotationDelta = previousPosition - currentPosition
 
         return event
     }
@@ -744,11 +786,9 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
         let dy = Float(event.deltaY) / mouseDeltaSensitivity
         if state == .dollying {
-            translation.z = dy * translationScalar
-            updateTranslation()
+            pendingTranslation = [0.0, 0.0, dy * translationScalar]
         } else if state == .zooming {
-            zoom = -dy
-            updateZoom()
+            pendingZoom = -dy
         }
         return event
     }
@@ -814,9 +854,8 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
         if gestureRecognizer.state == .changed {
             let velocity = newMagnification - magnification
-            zoom = -velocity
+            pendingZoom = -velocity
             magnification = newMagnification
-            updateZoom()
         } else if gestureRecognizer.state == .ended {
             state = .tweening
         }
@@ -849,7 +888,7 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
             rotationDelta.y = currentPosition.y - previousPosition.y
             rotationDelta.x = previousPosition.x - currentPosition.x
 
-            updateRotation(delta: rotationDelta)
+            pendingRotationDelta = rotationDelta
 
         } else if gestureRecognizer.state == .ended {
             state = .tweening
@@ -887,8 +926,7 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
             let newScale = Float(gestureRecognizer.scale)
             let delta = pinchScale - newScale
             if abs(delta) > 0.0 {
-                zoom = delta
-                updateZoom()
+                pendingZoom = delta
                 pinchScale = newScale
             }
         } else if gestureRecognizer.state == .ended {
