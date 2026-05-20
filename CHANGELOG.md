@@ -1,5 +1,6 @@
 # Satin 2.0 Changelog
 
+<<<<<<< HEAD
 ## Context Init
 
 In Satin 1.0, an object’s `Context` could change out from under it (was a var) causing some subtle issues, and `Context` was assigned lazily. In Satin 2.0, all objects have a let `Context`, thus requiring new initializers. This change fixes a class of bugs, and for most use cases, a Satin `Context` does not change, so we decided this would be an acceptable change. 
@@ -188,3 +189,24 @@ Model loading now collapses object hierarchies which do not have meshes, reducin
 * Fix bug with anisotropic rendering
 * Fix a bug with some UV’s in geometry generators
 * Add texture matrix support for all materials which consume textures.
+
+## Experimental Async Renderer Execution
+
+Satin now separates render-loop ownership from scene encoding:
+
+- `Renderer` owns sync vs async execution and render-owner scheduling.
+- `RenderEncoder` remains the scene traversal / command encoding core.
+- `ViewRenderer` and `SpatialRenderer` now run on top of that execution model.
+
+### API
+
+- `Renderer` now supports `.sync` and `.async` modes.
+- Async renderers expose `schedule(_:)` and `scheduleAndWait(_:)` for render-owned mutation.
+- Example `BaseRenderer` can switch default execution mode with a single mode flag.
+
+### Threading / Render State
+
+- Render-time camera, object, light, and shadow updates now use render snapshot state instead of live transform caches in the critical paths.
+- Camera controller event hookup / teardown is main-thread confined, while controller motion is still applied during frame updates.
+- Async resize no longer uses a blocking render-queue handoff.
+- Light movement now correctly refreshes shadow and projector state during render preparation.
