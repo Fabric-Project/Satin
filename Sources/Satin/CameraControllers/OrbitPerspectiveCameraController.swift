@@ -89,19 +89,46 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     // MARK: - Internal State & Event Handling
 
+    private struct InputState {
+        var interactionState: CameraControllerState = .inactive
+        var transitionToTweeningAfterPendingInput = false
+        var requestReset = false
+        var requestHalt = false
+        var pendingRotationDelta: simd_float2 = .zero
+        var pendingPanDelta: simd_float2 = .zero
+        var pendingDollyDelta: Float = 0.0
+        var pendingZoom: Float = 0.0
+        var previousPosition: simd_float2 = .zero
+
+#if os(macOS)
+        var magnification: Float = 1.0
+#else
+        var panCurrentPoint: simd_float2 = .zero
+        var panPreviousPoint: simd_float2 = .zero
+        var pinchScale: Float = 1.0
+#endif
+    }
+
+    private struct DrainedInput {
+        var interactionState: CameraControllerState
+        var transitionToTweeningAfterPendingInput: Bool
+        var requestReset: Bool
+        var requestHalt: Bool
+        var pendingRotationDelta: simd_float2
+        var pendingPanDelta: simd_float2
+        var pendingDollyDelta: Float
+        var pendingZoom: Float
+    }
+
+    private let inputState = ControllerInputMailbox(InputState())
+
     private var azimuthRotationFlip: Float = 1.0
     private var rotationDelta: simd_float2 = .zero
-    private var pendingRotationDelta: simd_float2 = .zero
     private var azimuthRotationTotal: Float = .zero
     private var elevationRotationTotal: Float = .zero
 
     private var translation: simd_float3 = .zero
-    private var pendingTranslation: simd_float3 = .zero
     private var zoom: Float = 0.0
-    private var pendingZoom: Float = 0.0
-    private var transitionToTweeningAfterPendingInput = false
-
-    private var previousPosition: simd_float2 = .zero
 
     private var deltaTime: Float = .zero
     private lazy var previousTime: TimeInterval = getTime()
@@ -122,18 +149,12 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private var scrollWheelHandler: Any?
 
-    private var magnification: Float = 1.0
     private var magnifyGestureRecognizer: NSMagnificationGestureRecognizer?
 
 #else
-
-    private var panCurrentPoint: simd_float2 = .zero
-    private var panPreviousPoint: simd_float2 = .zero
     private var panGestureRecognizer: UIPanGestureRecognizer?
 
     private var rotateGestureRecognizer: UIPanGestureRecognizer?
-
-    private var pinchScale: Float = 1.0
     private var pinchGestureRecognizer: UIPinchGestureRecognizer?
 
     private var tapGestureRecognizer: UITapGestureRecognizer?
@@ -161,11 +182,27 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     public func update() {
         updateTime()
 
-        _ = applyPendingInput()
+        let drainedInput = drainInputState()
 
-        if transitionToTweeningAfterPendingInput {
-            transitionToTweeningAfterPendingInput = false
+        if drainedInput.requestHalt {
+            halt()
+            return
+        }
+
+        if drainedInput.requestReset {
+            performReset()
+            return
+        }
+
+        if state != drainedInput.interactionState {
+            state = drainedInput.interactionState
+        }
+
+        _ = applyPendingInput(drainedInput)
+
+        if drainedInput.transitionToTweeningAfterPendingInput {
             state = .tweening
+            setInteractionState(.tweening)
             return
         }
 
@@ -179,7 +216,10 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         changed = changed || tweenZoom()
         changed = changed || tweenRotation()
 
-        if !changed { state = .inactive }
+        if !changed {
+            state = .inactive
+            setInteractionState(.inactive)
+        }
     }
 
     // MARK: - Enable
@@ -219,19 +259,11 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     public func reset() {
         guard isEnabled else { return }
 
-        _reset()
-
-        onStartPublisher.send(self)
-        onChangePublisher.send(self)
-        onEndPublisher.send(self)
+        performReset()
     }
 
     private func _reset() {
         halt()
-        pendingRotationDelta = .zero
-        pendingTranslation = .zero
-        pendingZoom = 0.0
-        transitionToTweeningAfterPendingInput = false
 
         target.position = .zero
         target.orientation = defaultOrientation
@@ -270,10 +302,7 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
             let loaded = try JSONDecoder().decode(OrbitPerspectiveCameraController.self, from: data)
             target.setFrom(object: loaded.target)
             camera.setFrom(object: loaded.camera)
-            pendingRotationDelta = .zero
-            pendingTranslation = .zero
-            pendingZoom = 0.0
-            transitionToTweeningAfterPendingInput = false
+            clearInputState()
 
             let (azimuth, elevation) = calculateAzimuthElevationAngles()
             azimuthRotationTotal = azimuth
@@ -468,8 +497,8 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         return true
     }
 
-    private func pan(_ delta: simd_float2) {
-        guard let view = view else { return }
+    private func resolvePan(_ delta: simd_float2) -> simd_float3 {
+        guard let view = view else { return .zero }
 
         var pan = delta
 
@@ -486,44 +515,44 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         let up = pan.y * imagePlaneHeight
         let right = pan.x * imagePlaneWidth
 
-        pendingTranslation.x = right
-        pendingTranslation.y = up
+        return simd_float3(right, up, 0.0)
     }
 
     // MARK: - Helpers
 
     private func halt() {
         state = .inactive
+        setInteractionState(.inactive)
         rotationDelta = .zero
-        pendingRotationDelta = .zero
         translation = .zero
-        pendingTranslation = .zero
         zoom = 0.0
-        pendingZoom = 0.0
-        transitionToTweeningAfterPendingInput = false
+        clearInputState()
     }
 
     @discardableResult
-    private func applyPendingInput() -> Bool {
+    private func applyPendingInput(_ input: DrainedInput) -> Bool {
         switch state {
         case .rotating:
-            guard simd_length(pendingRotationDelta) > 0.0 else { return false }
-            rotationDelta = pendingRotationDelta
-            pendingRotationDelta = .zero
+            guard simd_length(input.pendingRotationDelta) > 0.0 else { return false }
+            rotationDelta = input.pendingRotationDelta
             updateRotation(delta: rotationDelta)
             return true
 
-        case .panning, .dollying:
-            guard simd_length(pendingTranslation) > 0.0 else { return false }
-            translation = pendingTranslation
-            pendingTranslation = .zero
+        case .panning:
+            guard input.pendingPanDelta != .zero else { return false }
+            translation = resolvePan(input.pendingPanDelta)
+            updateTranslation()
+            return true
+
+        case .dollying:
+            guard abs(input.pendingDollyDelta) > 0.0 else { return false }
+            translation = simd_float3(0.0, 0.0, input.pendingDollyDelta * translationScalar)
             updateTranslation()
             return true
 
         case .zooming:
-            guard abs(pendingZoom) > 0.0 else { return false }
-            zoom = pendingZoom
-            pendingZoom = 0.0
+            guard abs(input.pendingZoom) > 0.0 else { return false }
+            zoom = input.pendingZoom
             updateZoom()
             return true
 
@@ -533,11 +562,71 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     }
 
     private func beginTweeningIfNeeded() {
-        if simd_length(pendingRotationDelta) > 0.0 || simd_length(pendingTranslation) > 0.0 || abs(pendingZoom) > 0.0 {
-            transitionToTweeningAfterPendingInput = true
-        } else {
-            state = .tweening
+        inputState.withState { state in
+            if simd_length(state.pendingRotationDelta) > 0.0 ||
+                state.pendingPanDelta != .zero ||
+                abs(state.pendingDollyDelta) > 0.0 ||
+                abs(state.pendingZoom) > 0.0
+            {
+                state.transitionToTweeningAfterPendingInput = true
+            } else {
+                state.interactionState = .tweening
+            }
         }
+    }
+
+    private func requestHalt() {
+        inputState.withState { state in
+            state.requestHalt = true
+            state.interactionState = .inactive
+            state.transitionToTweeningAfterPendingInput = false
+            state.pendingRotationDelta = .zero
+            state.pendingPanDelta = .zero
+            state.pendingDollyDelta = 0.0
+            state.pendingZoom = 0.0
+        }
+    }
+
+    private func setInteractionState(_ interactionState: CameraControllerState) {
+        inputState.withState { state in
+            state.interactionState = interactionState
+        }
+    }
+
+    private func clearInputState() {
+        inputState.withState { state in
+            state = InputState()
+        }
+    }
+
+    private func drainInputState() -> DrainedInput {
+        inputState.withState { state in
+            let drained = DrainedInput(
+                interactionState: state.interactionState,
+                transitionToTweeningAfterPendingInput: state.transitionToTweeningAfterPendingInput,
+                requestReset: state.requestReset,
+                requestHalt: state.requestHalt,
+                pendingRotationDelta: state.pendingRotationDelta,
+                pendingPanDelta: state.pendingPanDelta,
+                pendingDollyDelta: state.pendingDollyDelta,
+                pendingZoom: state.pendingZoom
+            )
+            state.transitionToTweeningAfterPendingInput = false
+            state.requestReset = false
+            state.requestHalt = false
+            state.pendingRotationDelta = .zero
+            state.pendingPanDelta = .zero
+            state.pendingDollyDelta = 0.0
+            state.pendingZoom = 0.0
+            return drained
+        }
+    }
+
+    private func performReset() {
+        _reset()
+        onStartPublisher.send(self)
+        onChangePublisher.send(self)
+        onEndPublisher.send(self)
     }
 
     private func normalizePoint(_ point: simd_float2, _ size: simd_float2) -> simd_float2 {
@@ -755,38 +844,42 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.halt()
+            self?.requestHalt()
         }) else { return event }
 
         if event.clickCount == 2 {
-            reset()
+            inputState.withState { state in
+                state.requestReset = true
+                state.interactionState = .inactive
+            }
         } else {
-            halt()
+            inputState.withState { state in
+                state.previousPosition = view.convert(event.locationInWindow, from: nil).float2
+                state.interactionState = .rotating
+            }
 
-            let currentPosition = view.convert(event.locationInWindow, from: nil).float2
-            defer { previousPosition = currentPosition }
-
-            state = .rotating
-
-            updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
+            updateAzimuthRotationFlip(ndc: normalizePoint(view.convert(event.locationInWindow, from: nil).float2, view.frame.size.float2))
         }
 
         return event
     }
 
     private func mouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .rotating else { return event }
+        guard let view = view, event.window == view.window else { return event }
 
         let currentPosition = view.convert(event.locationInWindow, from: nil).float2
-        defer { previousPosition = currentPosition }
-
-        pendingRotationDelta += previousPosition - currentPosition
+        inputState.withState { state in
+            guard state.interactionState == .rotating else { return }
+            defer { state.previousPosition = currentPosition }
+            state.pendingRotationDelta += state.previousPosition - currentPosition
+        }
 
         return event
     }
 
     private func mouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .rotating else { return event }
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .rotating }) else { return event }
         beginTweeningIfNeeded()
         return event
     }
@@ -795,29 +888,30 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.halt()
+            self?.requestHalt()
         }) else { return event }
-        if event.modifierFlags.contains(NSEvent.ModifierFlags.option) {
-            state = .dollying
-        } else {
-            state = .zooming
+        inputState.withState { state in
+            state.interactionState = event.modifierFlags.contains(NSEvent.ModifierFlags.option) ? .dollying : .zooming
         }
         return event
     }
 
     private func rightMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
+        guard let view = view, event.window == view.window else { return event }
         let dy = Float(event.deltaY) / mouseDeltaSensitivity
-        if state == .dollying {
-            pendingTranslation += [0.0, 0.0, dy * translationScalar]
-        } else if state == .zooming {
-            pendingZoom += -dy
+        inputState.withState { state in
+            if state.interactionState == .dollying {
+                state.pendingDollyDelta += dy
+            } else if state.interactionState == .zooming {
+                state.pendingZoom += -dy
+            }
         }
         return event
     }
 
     private func rightMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .zooming || $0.interactionState == .dollying }) else { return event }
         beginTweeningIfNeeded()
         return event
     }
@@ -826,20 +920,24 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func otherMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.halt()
+            self?.requestHalt()
         }) else { return event }
-        state = .panning
+        setInteractionState(.panning)
         return event
     }
 
     private func otherMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .panning else { return event }
-        pan(simd_make_float2(Float(event.deltaX), Float(event.deltaY)))
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .panning }) else { return event }
+        inputState.withState { state in
+            state.pendingPanDelta += simd_make_float2(Float(event.deltaX), Float(event.deltaY))
+        }
         return event
     }
 
     private func otherMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, state == .panning else { return event }
+        guard let view = view, event.window == view.window,
+              inputState.withState({ $0.interactionState == .panning }) else { return event }
         beginTweeningIfNeeded()
         return event
     }
@@ -849,12 +947,14 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     private func scrollWheel(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
-        if event.phase == .began { state = .panning }
+        if event.phase == .began { setInteractionState(.panning) }
 
-        guard state == .panning else { return event }
+        guard inputState.withState({ $0.interactionState == .panning }) else { return event }
 
         if event.phase == .changed {
-            pan(simd_make_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY)))
+            inputState.withState { state in
+                state.pendingPanDelta += simd_make_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY))
+            }
         } else if event.phase == .ended {
             beginTweeningIfNeeded()
         }
@@ -869,16 +969,20 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         let newMagnification = Float(gestureRecognizer.magnification)
 
         if gestureRecognizer.state == .began {
-            state = .zooming
-            magnification = newMagnification
+            inputState.withState { state in
+                state.interactionState = .zooming
+                state.magnification = newMagnification
+            }
         }
 
-        guard state == .zooming else { return }
+        guard inputState.withState({ $0.interactionState == .zooming }) else { return }
 
         if gestureRecognizer.state == .changed {
-            let velocity = newMagnification - magnification
-            pendingZoom += -velocity
-            magnification = newMagnification
+            inputState.withState { state in
+                let velocity = newMagnification - state.magnification
+                state.pendingZoom += -velocity
+                state.magnification = newMagnification
+            }
         } else if gestureRecognizer.state == .ended {
             beginTweeningIfNeeded()
         }
@@ -887,31 +991,37 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 #else
 
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
-        if gestureRecognizer.state == .ended { reset() }
+        if gestureRecognizer.state == .ended {
+            inputState.withState { state in
+                state.requestReset = true
+                state.interactionState = .inactive
+            }
+        }
     }
 
     @objc private func rotateGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
         guard let view = view else { return }
 
         if gestureRecognizer.state == .began {
-            halt()
-            state = .rotating
-            previousPosition = gestureRecognizer.location(in: view).float2
-            updateAzimuthRotationFlip(ndc: normalizePoint(previousPosition, view.frame.size.float2))
+            let currentPosition = gestureRecognizer.location(in: view).float2
+            inputState.withState { state in
+                state.interactionState = .rotating
+                state.previousPosition = currentPosition
+            }
+            updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
         }
 
-        guard state == .rotating else { return }
+        guard inputState.withState({ $0.interactionState == .rotating }) else { return }
 
         if gestureRecognizer.state == .changed {
             let currentPosition = gestureRecognizer.location(in: view).float2
-            updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
-
-            defer { previousPosition = currentPosition }
-
-            rotationDelta.y = currentPosition.y - previousPosition.y
-            rotationDelta.x = previousPosition.x - currentPosition.x
-
-            pendingRotationDelta += rotationDelta
+            inputState.withState { state in
+                updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
+                let previousPosition = state.previousPosition
+                defer { state.previousPosition = currentPosition }
+                let rotationDelta = simd_make_float2(previousPosition.x - currentPosition.x, currentPosition.y - previousPosition.y)
+                state.pendingRotationDelta += rotationDelta
+            }
 
         } else if gestureRecognizer.state == .ended {
             beginTweeningIfNeeded()
@@ -920,37 +1030,46 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     @objc private func panGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            state = .panning
             let translation = gestureRecognizer.translation(in: view)
-            panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+            inputState.withState { state in
+                state.interactionState = .panning
+                state.panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+            }
         }
 
-        guard state == .panning else { return }
+        guard inputState.withState({ $0.interactionState == .panning }) else { return }
         if gestureRecognizer.state == .changed {
             let translation = gestureRecognizer.translation(in: view)
-            panCurrentPoint = simd_make_float2(Float(translation.x), Float(translation.y))
-            pan(panCurrentPoint - panPreviousPoint)
-            panPreviousPoint = panCurrentPoint
+            inputState.withState { state in
+                state.panCurrentPoint = simd_make_float2(Float(translation.x), Float(translation.y))
+                let delta = state.panCurrentPoint - state.panPreviousPoint
+                state.pendingPanDelta += delta
+                state.panPreviousPoint = state.panCurrentPoint
+            }
 
         } else if gestureRecognizer.state == .ended {
-            state = .tweening
+            setInteractionState(.tweening)
         }
     }
 
     @objc private func pinchGesture(_ gestureRecognizer: UIPinchGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            state = .zooming
-            pinchScale = Float(gestureRecognizer.scale)
+            inputState.withState { state in
+                state.interactionState = .zooming
+                state.pinchScale = Float(gestureRecognizer.scale)
+            }
         }
 
-        guard state == .zooming else { return }
+        guard inputState.withState({ $0.interactionState == .zooming }) else { return }
 
         if gestureRecognizer.state == .changed {
             let newScale = Float(gestureRecognizer.scale)
-            let delta = pinchScale - newScale
-            if abs(delta) > 0.0 {
-                pendingZoom += delta
-                pinchScale = newScale
+            inputState.withState { state in
+                let delta = state.pinchScale - newScale
+                if abs(delta) > 0.0 {
+                    state.pendingZoom += delta
+                    state.pinchScale = newScale
+                }
             }
         } else if gestureRecognizer.state == .ended {
             beginTweeningIfNeeded()
@@ -970,17 +1089,27 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     }
 
     internal func queueRotationForTesting(_ delta: simd_float2) {
-        state = .rotating
-        pendingRotationDelta = delta
+        inputState.withState { state in
+            state.interactionState = .rotating
+            state.pendingRotationDelta = delta
+        }
     }
 
     internal func queueTranslationForTesting(_ translation: simd_float3, state: CameraControllerState = .panning) {
-        self.state = state
-        pendingTranslation = translation
+        inputState.withState { input in
+            input.interactionState = state
+            if state == .dollying {
+                input.pendingDollyDelta = translation.z / max(translationScalar, .leastNonzeroMagnitude)
+            } else {
+                input.pendingPanDelta += simd_make_float2(translation.x, translation.y)
+            }
+        }
     }
 
     internal func queueZoomForTesting(_ zoom: Float) {
-        state = .zooming
-        pendingZoom = zoom
+        inputState.withState { state in
+            state.interactionState = .zooming
+            state.pendingZoom = zoom
+        }
     }
 }

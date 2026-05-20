@@ -47,6 +47,21 @@ func cameraControllerPerformUIWork(_ work: () -> Void) {
     }
 }
 
+final class ControllerInputMailbox<State> {
+    private let lock = UnfairLock()
+    private var state: State
+
+    init(_ state: State) {
+        self.state = state
+    }
+
+    func withState<R>(_ work: (inout State) -> R) -> R {
+        lock.sync {
+            work(&state)
+        }
+    }
+}
+
 #if os(macOS)
 func cameraControllerEventTargetsView(_ event: NSEvent, view: MetalView) -> Bool {
     guard let window = event.window, window == view.window else { return false }
