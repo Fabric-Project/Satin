@@ -38,7 +38,10 @@ public final class UniformBuffer {
     public func update() {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
-        (buffer.contents() + offset).copyMemory(from: parameters.data, byteCount: parameters.size)
+        let dest = buffer.contents() + offset
+        parameters.withData { ptr, byteCount in
+            dest.copyMemory(from: ptr, byteCount: byteCount)
+        }
     }
 
     public func reset() {
