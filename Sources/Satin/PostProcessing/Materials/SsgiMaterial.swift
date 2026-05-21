@@ -156,9 +156,9 @@ public final class SsgiMaterial: Material {
     }
 
     public func update(camera: Camera, viewportHeight: Float) {
-        projectionMatrix = camera.renderProjectionMatrix
-        inverseProjectionMatrix = camera.renderProjectionMatrix.inverse
-        viewMatrix = camera.renderViewMatrix
+        projectionMatrix = camera.renderSnapshotProjectionMatrix
+        inverseProjectionMatrix = camera.renderSnapshotProjectionMatrix.inverse
+        viewMatrix = camera.renderSnapshotViewMatrix
 
         if let perspectiveCamera = camera as? PerspectiveCamera {
             let fovRadians = perspectiveCamera.fov * (.pi / 180.0)

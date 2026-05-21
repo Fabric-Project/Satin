@@ -16,23 +16,26 @@ import SatinCore
 #endif
 
 open class Object: Codable {
-    internal var renderTranslationMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderRotationMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderScaleMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderLocalMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderLocalMatrixInverse: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderWorldMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderWorldMatrixInverse: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderNormalMatrix: matrix_float3x3 = matrix_identity_float3x3
-    internal var renderWorldPosition: simd_float3 = .zero
-    internal var renderWorldOrientation: simd_quatf = simd_quatf(matrix_identity_float4x4)
-    internal var renderWorldScale: simd_float3 = .one
-    internal var renderForwardDirection: simd_float3 = Satin.worldForwardDirection
-    internal var renderUpDirection: simd_float3 = Satin.worldUpDirection
-    internal var renderRightDirection: simd_float3 = Satin.worldRightDirection
-    internal var renderWorldForwardDirection: simd_float3 = Satin.worldForwardDirection
-    internal var renderWorldUpDirection: simd_float3 = Satin.worldUpDirection
-    internal var renderWorldRightDirection: simd_float3 = Satin.worldRightDirection
+    /// Per-frame render snapshot fields, written by `computeRenderTransforms(parentMatrix:)` after `object.update()` completes.
+    /// Owned by the render owner thread — never mutated from authoring or UI code.
+    /// Read by `VertexUniformBuffer`, shadow preparation, instancing, and any render-path code that needs consistent world-space values for the current frame.
+    internal var renderSnapshotTranslationMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotRotationMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotScaleMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotLocalMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotLocalMatrixInverse: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotWorldMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotWorldMatrixInverse: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotNormalMatrix: matrix_float3x3 = matrix_identity_float3x3
+    internal var renderSnapshotWorldPosition: simd_float3 = .zero
+    internal var renderSnapshotWorldOrientation: simd_quatf = simd_quatf(matrix_identity_float4x4)
+    internal var renderSnapshotWorldScale: simd_float3 = .one
+    internal var renderSnapshotForwardDirection: simd_float3 = Satin.worldForwardDirection
+    internal var renderSnapshotUpDirection: simd_float3 = Satin.worldUpDirection
+    internal var renderSnapshotRightDirection: simd_float3 = Satin.worldRightDirection
+    internal var renderSnapshotWorldForwardDirection: simd_float3 = Satin.worldForwardDirection
+    internal var renderSnapshotWorldUpDirection: simd_float3 = Satin.worldUpDirection
+    internal var renderSnapshotWorldRightDirection: simd_float3 = Satin.worldRightDirection
 
     public let idPublisher = PassthroughSubject<String, Never>()
     var id: String = UUID().uuidString {
@@ -547,49 +550,49 @@ open class Object: Codable {
     func computeRenderTransformsFromHierarchy() {
         if let parent {
             parent.computeRenderTransformsFromHierarchy()
-            computeRenderTransforms(parentMatrix: parent.renderWorldMatrix)
+            computeRenderTransforms(parentMatrix: parent.renderSnapshotWorldMatrix)
         } else {
             computeRenderTransforms(parentMatrix: matrix_identity_float4x4)
         }
     }
 
     func computeRenderTransforms(parentMatrix: matrix_float4x4 = matrix_identity_float4x4) {
-        renderTranslationMatrix = translationMatrix3f(position)
-        renderRotationMatrix = matrix_float4x4(orientation)
-        renderScaleMatrix = scaleMatrix3f(scale)
-        renderLocalMatrix = simd_mul(simd_mul(renderTranslationMatrix, renderRotationMatrix), renderScaleMatrix)
-        renderLocalMatrixInverse = renderLocalMatrix.inverse
-        renderWorldMatrix = simd_mul(parentMatrix, renderLocalMatrix)
-        renderWorldMatrixInverse = renderWorldMatrix.inverse
+        renderSnapshotTranslationMatrix = translationMatrix3f(position)
+        renderSnapshotRotationMatrix = matrix_float4x4(orientation)
+        renderSnapshotScaleMatrix = scaleMatrix3f(scale)
+        renderSnapshotLocalMatrix = simd_mul(simd_mul(renderSnapshotTranslationMatrix, renderSnapshotRotationMatrix), renderSnapshotScaleMatrix)
+        renderSnapshotLocalMatrixInverse = renderSnapshotLocalMatrix.inverse
+        renderSnapshotWorldMatrix = simd_mul(parentMatrix, renderSnapshotLocalMatrix)
+        renderSnapshotWorldMatrixInverse = renderSnapshotWorldMatrix.inverse
 
-        let normalTransform = renderWorldMatrixInverse.transpose
-        renderNormalMatrix = simd_matrix(
+        let normalTransform = renderSnapshotWorldMatrixInverse.transpose
+        renderSnapshotNormalMatrix = simd_matrix(
             simd_make_float3(normalTransform.columns.0),
             simd_make_float3(normalTransform.columns.1),
             simd_make_float3(normalTransform.columns.2)
         )
 
-        renderWorldPosition = simd_make_float3(renderWorldMatrix.columns.3)
+        renderSnapshotWorldPosition = simd_make_float3(renderSnapshotWorldMatrix.columns.3)
 
-        let c0 = renderWorldMatrix.columns.0
-        let c1 = renderWorldMatrix.columns.1
-        let c2 = renderWorldMatrix.columns.2
+        let c0 = renderSnapshotWorldMatrix.columns.0
+        let c1 = renderSnapshotWorldMatrix.columns.1
+        let c2 = renderSnapshotWorldMatrix.columns.2
         let sx = max(length(simd_make_float3(c0)), .leastNonzeroMagnitude)
         let sy = max(length(simd_make_float3(c1)), .leastNonzeroMagnitude)
         let sz = max(length(simd_make_float3(c2)), .leastNonzeroMagnitude)
-        renderWorldScale = simd_make_float3(sx, sy, sz)
-        renderWorldOrientation = simd_quatf(simd_float3x3(
+        renderSnapshotWorldScale = simd_make_float3(sx, sy, sz)
+        renderSnapshotWorldOrientation = simd_quatf(simd_float3x3(
             simd_make_float3(c0.x, c0.y, c0.z) / sx,
             simd_make_float3(c1.x, c1.y, c1.z) / sy,
             simd_make_float3(c2.x, c2.y, c2.z) / sz
         ))
 
-        renderRightDirection = simd_normalize(orientation.act(Satin.worldRightDirection))
-        renderUpDirection = simd_normalize(orientation.act(Satin.worldUpDirection))
-        renderForwardDirection = simd_normalize(orientation.act(Satin.worldForwardDirection))
-        renderWorldRightDirection = simd_normalize(renderWorldOrientation.act(Satin.worldRightDirection))
-        renderWorldUpDirection = simd_normalize(renderWorldOrientation.act(Satin.worldUpDirection))
-        renderWorldForwardDirection = simd_normalize(renderWorldOrientation.act(Satin.worldForwardDirection))
+        renderSnapshotRightDirection = simd_normalize(orientation.act(Satin.worldRightDirection))
+        renderSnapshotUpDirection = simd_normalize(orientation.act(Satin.worldUpDirection))
+        renderSnapshotForwardDirection = simd_normalize(orientation.act(Satin.worldForwardDirection))
+        renderSnapshotWorldRightDirection = simd_normalize(renderSnapshotWorldOrientation.act(Satin.worldRightDirection))
+        renderSnapshotWorldUpDirection = simd_normalize(renderSnapshotWorldOrientation.act(Satin.worldUpDirection))
+        renderSnapshotWorldForwardDirection = simd_normalize(renderSnapshotWorldOrientation.act(Satin.worldForwardDirection))
     }
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}

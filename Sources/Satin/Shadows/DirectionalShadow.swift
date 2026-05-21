@@ -92,8 +92,8 @@ public final class DirectionalShadow: Shadow {
     }
 
     override public func update(light: Object) {
-        camera.position = light.renderWorldPosition
-        camera.lookAt(target: light.renderWorldPosition + light.renderWorldForwardDirection, up: Satin.worldUpDirection)
+        camera.position = light.renderSnapshotWorldPosition
+        camera.lookAt(target: light.renderSnapshotWorldPosition + light.renderSnapshotWorldForwardDirection, up: Satin.worldUpDirection)
         camera.refreshRenderState()
         needsUpdate = true
     }

@@ -36,6 +36,10 @@ public class Light: Object {
     private var previousRenderWorldPosition: simd_float3?
     private var previousRenderWorldForwardDirection: simd_float3?
 
+    /// Per-frame render snapshot fields for light scalars, written by `prepareForRender()` on the render owner. Never mutated from authoring code during encoding. Read by `data` to produce `LightData` for the current frame.
+    internal var renderSnapshotColor: simd_float3 = .zero
+    internal var renderSnapshotIntensity: Float = 1.0
+
     public let publisher = PassthroughSubject<Light, Never>()
     
     override public init(context: Context, label: String = "Light", visible: Bool = true, _ children: [Object] = []) {
@@ -67,15 +71,19 @@ public class Light: Object {
     override open func prepareForRender() {
         super.prepareForRender()
 
+        renderSnapshotColor = color
+        renderSnapshotIntensity = intensity
+        shadow.prepareForRender()
+
         if let previousRenderWorldPosition,
-           !simd_equal(previousRenderWorldPosition, renderWorldPosition)
+           !simd_equal(previousRenderWorldPosition, renderSnapshotWorldPosition)
         {
             shadowStateDirty = true
             lightStateDirty = true
         }
 
         if let previousRenderWorldForwardDirection,
-           !simd_equal(previousRenderWorldForwardDirection, renderWorldForwardDirection)
+           !simd_equal(previousRenderWorldForwardDirection, renderSnapshotWorldForwardDirection)
         {
             shadowStateDirty = true
             lightStateDirty = true
@@ -87,8 +95,8 @@ public class Light: Object {
         }
         lightStateDirty = false
 
-        previousRenderWorldPosition = renderWorldPosition
-        previousRenderWorldForwardDirection = renderWorldForwardDirection
+        previousRenderWorldPosition = renderSnapshotWorldPosition
+        previousRenderWorldForwardDirection = renderSnapshotWorldForwardDirection
     }
 
     open func updateShadowForRender() {}

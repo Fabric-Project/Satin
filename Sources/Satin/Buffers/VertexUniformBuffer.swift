@@ -45,21 +45,21 @@ public final class VertexUniformBuffer {
 
         uniforms = UnsafeMutableRawPointer(buffer.contents() + offset).bindMemory(to: VertexUniforms.self, capacity: context.vertexAmplificationCount)
 
-        let currentModelMatrix = object.renderWorldMatrix
-        let currentViewProjectionMatrix = camera.renderViewProjectionMatrix
+        let currentModelMatrix = object.renderSnapshotWorldMatrix
+        let currentViewProjectionMatrix = camera.renderSnapshotViewProjectionMatrix
 
         uniforms[index].modelMatrix = currentModelMatrix
-        uniforms[index].viewMatrix = camera.renderViewMatrix
-        uniforms[index].modelViewMatrix = camera.renderViewMatrix * currentModelMatrix
-        uniforms[index].projectionMatrix = camera.renderProjectionMatrix
+        uniforms[index].viewMatrix = camera.renderSnapshotViewMatrix
+        uniforms[index].modelViewMatrix = camera.renderSnapshotViewMatrix * currentModelMatrix
+        uniforms[index].projectionMatrix = camera.renderSnapshotProjectionMatrix
         uniforms[index].viewProjectionMatrix = currentViewProjectionMatrix
         uniforms[index].modelViewProjectionMatrix = currentViewProjectionMatrix * currentModelMatrix
         uniforms[index].inverseModelViewProjectionMatrix = uniforms[index].modelViewProjectionMatrix.inverse
-        uniforms[index].inverseViewMatrix = camera.renderWorldMatrix
-        uniforms[index].normalMatrix = object.renderNormalMatrix
+        uniforms[index].inverseViewMatrix = camera.renderSnapshotWorldMatrix
+        uniforms[index].normalMatrix = object.renderSnapshotNormalMatrix
         uniforms[index].viewport = viewport
-        uniforms[index].worldCameraPosition = camera.renderWorldPosition
-        uniforms[index].worldCameraViewDirection = camera.renderViewDirection
+        uniforms[index].worldCameraPosition = camera.renderSnapshotWorldPosition
+        uniforms[index].worldCameraViewDirection = camera.renderSnapshotViewDirection
         let previousModelMatrix = previousModelMatrices[index]
         let previousViewProjectionMatrix = previousViewProjectionMatrices[index]
         uniforms[index].previousModelMatrix = previousModelMatrix

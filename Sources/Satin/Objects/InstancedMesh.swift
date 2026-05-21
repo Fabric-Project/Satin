@@ -179,7 +179,7 @@ public class InstancedMesh: Mesh {
         let cores = ProcessInfo.processInfo.processorCount
         let iterations = min(count, max(1, cores))        // docs guidance + cap to work
         let chunkSize = (count + iterations - 1) / iterations  // ceil-div
-        let w = renderWorldMatrix
+        let w = renderSnapshotWorldMatrix
         
         self.instanceMatrices.withUnsafeBufferPointer { src in
             self.instanceMatricesUniforms.withUnsafeMutableBufferPointer { dst in

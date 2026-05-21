@@ -29,6 +29,7 @@ public protocol CameraController {
 
     var state: CameraControllerState { get }
 
+    /// The sole mutation point for camera and target state. Must be called from the frame loop before scene traversal begins. Event handlers only accumulate input deltas; this method applies them.
     func update()
     func enable()
     func disable()

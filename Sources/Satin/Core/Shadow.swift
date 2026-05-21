@@ -14,8 +14,21 @@ public class Shadow {
     public var label: String
     public var texture: MTLTexture? = nil
     
+    /// Per-frame render snapshot fields for shadow scalars, written by `prepareForRender()` on the render owner. Never mutated from authoring code during encoding. Read by `data` to produce `ShadowData` for the current frame.
+    internal var renderSnapshotStrength: Float = 1.0
+    internal var renderSnapshotBias: Float = 0.00001
+    internal var renderSnapshotNormalBias: Float = 0.00001
+    internal var renderSnapshotRadius: Float = 1.0
+
     public var data: ShadowData {
-        ShadowData(strength: strength, bias: bias, normalBias: normalBias, radius: radius)
+        ShadowData(strength: renderSnapshotStrength, bias: renderSnapshotBias, normalBias: renderSnapshotNormalBias, radius: renderSnapshotRadius)
+    }
+
+    func prepareForRender() {
+        renderSnapshotStrength = strength
+        renderSnapshotBias = bias
+        renderSnapshotNormalBias = normalBias
+        renderSnapshotRadius = radius
     }
 
     public var camera: Camera
@@ -46,7 +59,7 @@ public class Shadow {
     }
 
     public var matrices: [simd_float4x4] {
-        [camera.renderViewProjectionMatrix]
+        [camera.renderSnapshotViewProjectionMatrix]
     }
 
     public var viewCount: Int {

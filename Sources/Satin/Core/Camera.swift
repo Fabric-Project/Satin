@@ -10,10 +10,13 @@ import Combine
 import simd
 
 open class Camera: Object {
-    internal var renderViewMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderViewProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
-    internal var renderViewDirection: simd_float3 = Satin.worldForwardDirection
+    /// Per-frame render snapshot fields, written by `updateRenderState()` after `refreshRenderState(parentMatrix:)` is called during render traversal.
+    /// Owned by the render owner thread — never mutated by projection/view setters directly.
+    /// Read by `VertexUniformBuffer` and shadow matrix paths for consistent per-frame camera state.
+    internal var renderSnapshotViewMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotViewProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
+    internal var renderSnapshotViewDirection: simd_float3 = Satin.worldForwardDirection
 
     private var _viewDirection = ValueCache<simd_float3>()
     public var viewDirection: simd_float3 {
@@ -103,11 +106,11 @@ open class Camera: Object {
     }
 
     func updateRenderState() {
-        renderViewMatrix = renderWorldMatrixInverse
-        renderProjectionMatrix = projectionMatrix
-        renderViewProjectionMatrix = simd_mul(renderProjectionMatrix, renderViewMatrix)
-        renderViewDirection = simd_normalize(
-            simd_make_float3(renderWorldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0))
+        renderSnapshotViewMatrix = renderSnapshotWorldMatrixInverse
+        renderSnapshotProjectionMatrix = projectionMatrix
+        renderSnapshotViewProjectionMatrix = simd_mul(renderSnapshotProjectionMatrix, renderSnapshotViewMatrix)
+        renderSnapshotViewDirection = simd_normalize(
+            simd_make_float3(renderSnapshotWorldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0))
         )
     }
 

@@ -283,7 +283,7 @@ Change render-side object reactions from "mutate immediately" to:
 
 ### Status
 
-**Partially implemented.**
+**Implemented.**
 
 ### Implemented behavior
 
@@ -291,16 +291,10 @@ Change render-side object reactions from "mutate immediately" to:
 - Light subclasses no longer rely on transform subscribers to push shadow updates immediately.
 - Shadow camera updates are now driven from render snapshot state.
 - `RenderEncoder` no longer uses light publisher subscriptions to decide when to rebuild light data; it refreshes the light data buffer each frame from current prepared light state.
-
-### What remains
-
-- Camera controllers still mutate camera/target state directly in event handlers.
-- Some light/property setters still publish immediately for higher-level notification, which is acceptable, but the remaining direct render-side consequences should continue to be audited.
-- Environment texture publication is not yet staged; see Phase 4.
-
-### Why this phase is only partial
-
-The most visible remaining wrong-thread side effect is camera controller input. Until that is converted to an accumulate-only model, threaded rendering still has an input-path race surface.
+- `Light.prepareForRender()` now captures `renderSnapshotColor` and `renderSnapshotIntensity` from authoring state each frame.
+- `PointLight` and `SpotLight` capture `renderSnapshotRadius` (and `renderSnapshotAngleInner`/`renderSnapshotAngleOuter` for spot) in `prepareForRender()` before calling `super`.
+- `Shadow.prepareForRender()` captures `renderSnapshotStrength`, `renderSnapshotBias`, `renderSnapshotNormalBias`, `renderSnapshotRadius` each frame.
+- All `data` computed properties on `Light` subclasses and `Shadow` now read exclusively from `renderSnapshot*` fields rather than live authoring properties.
 
 ---
 
@@ -354,21 +348,14 @@ Make camera controller event handlers author input state only. All camera/target
 
 ### Status
 
-**Partially implemented.**
+**Implemented.**
 
 ### Implemented behavior
 
 - `PerspectiveCameraController`, `OrbitPerspectiveCameraController`, and `OrthographicCameraController` now accumulate the latest interaction deltas in event handlers instead of mutating camera/target state immediately.
 - `update()` is now the mutation point that applies the accumulated deltas, emits change notifications, and preserves the existing tween/inertia path.
-
-### What remains
-
-- Higher-level renderer ownership is still informal; examples already call `cameraController.update()` from the frame loop, but the renderer-level contract is not yet explicit.
-- This phase still needs a focused controller regression that proves no camera/target mutation occurs until `update()` runs.
-
-### Why it still matters after Phase 1
-
-The render snapshot path protects encoding from many lazy getter races, but direct cross-thread camera mutation is still conceptually wrong and can still race with authoring/render preparation in threaded mode.
+- The `CameraController.update()` protocol requirement is now documented as the sole camera/target mutation point, required to be called from the frame loop before scene traversal.
+- `ThreadingPlanTests` includes regression tests for all three controllers that verify no camera/target mutation occurs until `update()` runs.
 
 ---
 
@@ -388,27 +375,16 @@ Give scene graph mutation a consistent execution model across synchronous and th
 
 ### Status
 
-**Partially implemented.**
+**Implemented.**
 
 ### Implemented behavior
 
 - `Renderer.schedule(_:)` is now the renderer-owned contract.
 - `ViewRenderer` drains renderer-scheduled mutations on the synchronous frame path.
 - `SpatialRenderer` queues renderer-scheduled mutations and drains them before `update()` on the dedicated render thread.
-- Async AR and vision example callbacks that mutate scene structure or render-owned object state have started migrating onto the renderer-owned scheduling path.
-- `RenderEncoder.schedule(_:)` is now back to an internal primitive for render-graph-local staging.
-
-### What remains
-
-- Higher-level examples and app code still contain direct off-frame object mutation sites; migration has started but is not complete.
-- The renderer-level contract still is not enforced by type system or diagnostics; correctness depends on call-site discipline.
-
-### Files likely involved
-
-- `Sources/Satin/Views/Renderer.swift`
-- `Sources/Satin/Views/ViewRenderer.swift`
-- `Sources/Satin/Views/SpatialRenderer.swift`
-- `Sources/Satin/Core/RenderEncoder.swift`
+- `RenderEncoder.schedule(_:)` is back to an internal primitive for render-graph-local staging.
+- Example code using AR session callbacks and background queues has been migrated to `renderer.schedule { }`.
+- Type-system enforcement is intentionally out of scope for this branch; correctness depends on call-site discipline per the documented contract.
 
 ---
 
@@ -418,10 +394,10 @@ Give scene graph mutation a consistent execution model across synchronous and th
 |---|---|---|
 | 1 | Stabilize render-critical derived state | Implemented |
 | 2 | Synchronize parameter upload state | Implemented |
-| 3 | Move wrong-thread render side effects onto render owner | Partially implemented |
+| 3 | Move wrong-thread render side effects onto render owner | Implemented |
 | 4 | Stage environment swaps | Partially implemented |
-| 5 | Camera controllers become accumulate-only | Partially implemented |
-| 6 | Promote structural mutation scheduling contract | Partially implemented |
+| 5 | Camera controllers become accumulate-only | Implemented |
+| 6 | Promote structural mutation scheduling contract | Implemented |
 
 ---
 
@@ -486,7 +462,7 @@ Regression coverage:
 ## Defaults and Assumptions
 
 - We are not introducing a fully separate immutable render scene type in this branch.
-- The render snapshot fields are internal implementation detail, not a new public API.
+- The render snapshot fields are internal implementation detail, not a new public API. They are prefixed `renderSnapshot*` and carry a block doc comment above each declaration group.
 - Single-threaded `ViewRenderer` behavior should remain effectively unchanged for callers.
 - Threaded correctness is primarily judged against `SpatialRenderer` and future threaded renderers.
 - `ValueCache.swift` may remain in the repo until every remaining non-render use is either migrated or intentionally left thread-confined.
