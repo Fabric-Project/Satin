@@ -421,10 +421,12 @@ open class Object: Codable {
         }
     }
 
-    public var children: [Object] = [] {
-        didSet {
-            updateLocalBounds = true
-        }
+    private let childrenLock = UnfairLock()
+    private var _children: [Object] = [] {
+        didSet { updateLocalBounds = true }
+    }
+    public var children: [Object] {
+        childrenLock.sync { _children }
     }
 
     // MARK: - OnUpdate Hook
@@ -494,8 +496,8 @@ open class Object: Codable {
 
     open func decodeChildren(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        children = try values.decode([Object].self, forKey: .children)
-        for child in children {
+        _children = try values.decode([Object].self, forKey: .children)
+        for child in _children {
             child.parent = self
         }
     }
@@ -597,23 +599,22 @@ open class Object: Codable {
     // MARK: - Inserting, Adding, Attaching & Removing
 
     open func insert(_ child: Object, at: Int, setParent: Bool = true) {
-        if !children.contains(where: { $0 === child }) {
-            if setParent {
-                child.parent = self
-            }
-            children.insert(child, at: at)
-        }
+        guard childrenLock.sync(execute: { !_children.contains(where: { $0 === child }) })
+        else { return }
+        if setParent { child.parent = self }
+        childrenLock.sync { _children.insert(child, at: at) }
     }
 
     open func add(_ child: Object, _ setParent: Bool = true) {
-        guard children.firstIndex(of: child) == nil, child != self else { return }
+        guard childrenLock.sync(execute: { _children.firstIndex(of: child) == nil }),
+              child != self else { return }
 
         if setParent {
             child.removeFromParent()
             child.parent = self
         }
 
-        children.append(child)
+        childrenLock.sync { _children.append(child) }
         childAddedPublisher.send(child)
 
         childAddedSubscriptions[child] = child.childAddedPublisher.sink { [weak self] subchild in
@@ -635,21 +636,19 @@ open class Object: Codable {
         }
     }
 
-   
-
     open func remove(_ child: Object) {
-        guard let childIndex = children.firstIndex(of: child) else { return }
+        guard let childIndex = childrenLock.sync(execute: { _children.firstIndex(of: child) })
+        else { return }
 
         childRemovedPublisher.send(child)
+        if child.parent === self { child.parent = nil }
 
-        if child.parent === self {
-            child.parent = nil
+        childrenLock.sync {
+            guard childIndex < _children.count, _children[childIndex] === child else { return }
+            _children.remove(at: childIndex)
         }
 
-        children.remove(at: childIndex)
-
         _ = childAddedSubscriptions.removeValue(forKey: child)
-
         _ = childRemovedSubscriptions.removeValue(forKey: child)
     }
 
@@ -658,9 +657,8 @@ open class Object: Codable {
     }
 
     open func removeAll() {
-        for child in children {
-            remove(child)
-        }
+        let snapshot = children
+        for child in snapshot { remove(child) }
     }
 
     // MARK: - Recursive Scene Graph Functions
