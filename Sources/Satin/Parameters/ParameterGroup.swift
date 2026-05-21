@@ -510,7 +510,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
         return UnsafeMutableRawPointer.allocate(byteCount: size, alignment: alignment)
     }
 
-    public var data: UnsafeRawPointer {
+    internal var data: UnsafeRawPointer {
         stateLock.sync {
             if _reallocateData {
                 _data = allocateData()
@@ -521,6 +521,20 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
                 _updateData = false
             }
             return UnsafeRawPointer(_data)
+        }
+    }
+
+    public func withData(_ body: (UnsafeRawPointer, Int) -> Void) {
+        stateLock.sync {
+            if _reallocateData {
+                _data = allocateData()
+                _reallocateData = false
+            }
+            if _updateData {
+                updateData()
+                _updateData = false
+            }
+            body(UnsafeRawPointer(_data), _size)
         }
     }
 
