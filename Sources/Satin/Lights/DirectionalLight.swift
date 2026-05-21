@@ -16,11 +16,11 @@ public final class DirectionalLight: Light {
     override public var data: LightData {
         LightData(
             // (rgb, intensity)
-            color: simd_make_float4(color, intensity),
+            color: simd_make_float4(renderSnapshotColor, renderSnapshotIntensity),
             // (xyz, type)
-            position: simd_make_float4(renderWorldPosition, Float(type.rawValue)),
+            position: simd_make_float4(renderSnapshotWorldPosition, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-renderWorldForwardDirection, 0.0),
+            direction: simd_make_float4(-renderSnapshotWorldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: .zero,
             // (shadowIndex, projectorIndex, projectorMode, unused)

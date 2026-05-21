@@ -48,24 +48,29 @@ public final class SpotLight: Light {
     }
 
     public var projectorMatrix: simd_float4x4 {
-        projectorCamera.renderViewProjectionMatrix
+        projectorCamera.renderSnapshotViewProjectionMatrix
     }
 
     private let projectorCamera: PerspectiveCamera
 
+    /// Per-frame render snapshot fields for spot light scalars, written by `prepareForRender()` on the render owner. Read by shadow preparation and `data` to compute spot cone parameters for the current frame.
+    internal var renderSnapshotRadius: Float = 0.0
+    internal var renderSnapshotAngleInner: Float = 0.0
+    internal var renderSnapshotAngleOuter: Float = 0.0
+
     override public var data: LightData {
-        let cosOuter = cos(degToRad(angleOuter))
-        let cosInner = cos(degToRad(angleInner))
+        let cosOuter = cos(degToRad(renderSnapshotAngleOuter))
+        let cosInner = cos(degToRad(renderSnapshotAngleInner))
         let spotScale = 1.0 / max(cosInner - cosOuter, 1e-4)
         let spotOffset = -cosOuter * spotScale
 
         return LightData(
             // (rgb, intensity)
-            color: simd_make_float4(color.x, color.y, color.z, intensity),
+            color: simd_make_float4(renderSnapshotColor, renderSnapshotIntensity),
             // (xyz, type)
-            position: simd_make_float4(renderWorldPosition.x, renderWorldPosition.y, renderWorldPosition.z, Float(type.rawValue)),
+            position: simd_make_float4(renderSnapshotWorldPosition, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-renderWorldForwardDirection, 0.0),
+            direction: simd_make_float4(-renderSnapshotWorldForwardDirection, 0.0),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: simd_make_float4(spotScale, spotOffset, cosInner, cosOuter),
             // (shadowIndex, projectorIndex, projectorMode, unused)
@@ -114,6 +119,9 @@ public final class SpotLight: Light {
         self.radius = radius
         self.angleInner = angleInner
         self.angleOuter = angleOuter
+        renderSnapshotRadius = radius
+        renderSnapshotAngleInner = angleInner
+        renderSnapshotAngleOuter = angleOuter
         projectorCamera = PerspectiveCamera(context: context, label: "\(label) Projector", position: .zero, near: 0.01, far: radius, fov: angleOuter * 2.0)
         super.init(context: context, label: label)
         self.color = color
@@ -128,6 +136,9 @@ public final class SpotLight: Light {
         radius = try values.decode(Float.self, forKey: .radius)
         angleInner = try values.decode(Float.self, forKey: .angleInner)
         angleOuter = try values.decode(Float.self, forKey: .angleOuter)
+        renderSnapshotRadius = radius
+        renderSnapshotAngleInner = angleInner
+        renderSnapshotAngleOuter = angleOuter
         projectorCamera = PerspectiveCamera(context: context, label: "Spot Projector", position: .zero, near: 0.01, far: radius, fov: angleOuter * 2.0)
         try super.init(from: decoder)
         shadow = SpotShadow(context: context, label: label)
@@ -140,6 +151,13 @@ public final class SpotLight: Light {
         try container.encode(angleInner, forKey: .angleInner)
         try container.encode(angleOuter, forKey: .angleOuter)
         try container.encode(radius, forKey: .radius)
+    }
+
+    override public func prepareForRender() {
+        renderSnapshotRadius = radius
+        renderSnapshotAngleInner = angleInner
+        renderSnapshotAngleOuter = angleOuter
+        super.prepareForRender()
     }
 
     override public func setup() {
@@ -155,12 +173,12 @@ public final class SpotLight: Light {
     }
 
     private func updateProjectorCamera() {
-        projectorCamera.position = renderWorldPosition
-        projectorCamera.lookAt(target: renderWorldPosition + renderWorldForwardDirection, up: Satin.worldUpDirection)
-        projectorCamera.fov = angleOuter * 2.0
+        projectorCamera.position = renderSnapshotWorldPosition
+        projectorCamera.lookAt(target: renderSnapshotWorldPosition + renderSnapshotWorldForwardDirection, up: Satin.worldUpDirection)
+        projectorCamera.fov = renderSnapshotAngleOuter * 2.0
         projectorCamera.aspect = resolvedProjectionAspect
         projectorCamera.near = 0.01
-        projectorCamera.far = max(radius, projectorCamera.near + 0.01)
+        projectorCamera.far = max(renderSnapshotRadius, projectorCamera.near + 0.01)
         projectorCamera.refreshRenderState()
     }
 

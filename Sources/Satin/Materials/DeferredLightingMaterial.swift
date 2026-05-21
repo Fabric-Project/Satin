@@ -145,9 +145,9 @@ public final class DeferredLightingMaterial: Material {
     }
 
     public func update(camera: Camera) {
-        inverseProjectionMatrix = camera.renderProjectionMatrix.inverse
-        inverseViewMatrix = camera.renderViewMatrix.inverse
-        worldCameraPosition = simd_float4(camera.renderWorldPosition, 1.0)
+        inverseProjectionMatrix = camera.renderSnapshotProjectionMatrix.inverse
+        inverseViewMatrix = camera.renderSnapshotViewMatrix.inverse
+        worldCameraPosition = simd_float4(camera.renderSnapshotWorldPosition, 1.0)
     }
 
     override public func createShader() -> Shader {

@@ -95,9 +95,9 @@ final class ThreadingPlanTests: XCTestCase {
 
         try runFrame(renderer: renderer, scene: scene, camera: camera)
 
-        XCTAssertEqual(scene.renderWorldPosition.x, 1.0, accuracy: 0.0001)
-        XCTAssertEqual(scene.renderWorldPosition.y, 2.0, accuracy: 0.0001)
-        XCTAssertEqual(scene.renderWorldPosition.z, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(scene.renderSnapshotWorldPosition.x, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(scene.renderSnapshotWorldPosition.y, 2.0, accuracy: 0.0001)
+        XCTAssertEqual(scene.renderSnapshotWorldPosition.z, 3.0, accuracy: 0.0001)
     }
 
     func testScheduledMutationsDrainBeforeTraversal() throws {
@@ -117,7 +117,7 @@ final class ThreadingPlanTests: XCTestCase {
 
         XCTAssertEqual(scene.children.count, 1)
         XCTAssertTrue(scene.children.first === child)
-        XCTAssertEqual(child.renderWorldPosition.x, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(child.renderSnapshotWorldPosition.x, 0.5, accuracy: 0.0001)
     }
 
     func testCameraRefreshRenderStateProducesStableMatrices() {
@@ -127,9 +127,9 @@ final class ThreadingPlanTests: XCTestCase {
         camera.lookAt(target: .zero)
         camera.refreshRenderState()
 
-        let expectedViewProjection = camera.renderProjectionMatrix * camera.renderViewMatrix
-        XCTAssertTrue(simd_equal(camera.renderWorldPosition, simd_float3(0.0, 0.0, 5.0)))
-        XCTAssertTrue(simd_almost_equal_elements(camera.renderViewProjectionMatrix, expectedViewProjection, 0.0001))
+        let expectedViewProjection = camera.renderSnapshotProjectionMatrix * camera.renderSnapshotViewMatrix
+        XCTAssertTrue(simd_equal(camera.renderSnapshotWorldPosition, simd_float3(0.0, 0.0, 5.0)))
+        XCTAssertTrue(simd_almost_equal_elements(camera.renderSnapshotViewProjectionMatrix, expectedViewProjection, 0.0001))
     }
 
     func testCameraRefreshRenderStateIncludesUnattachedParentHierarchy() {
@@ -143,8 +143,8 @@ final class ThreadingPlanTests: XCTestCase {
 
         camera.refreshRenderState()
 
-        XCTAssertEqual(camera.renderWorldPosition.x, 3.0, accuracy: 0.0001)
-        XCTAssertEqual(camera.renderWorldPosition.z, 5.0, accuracy: 0.0001)
+        XCTAssertEqual(camera.renderSnapshotWorldPosition.x, 3.0, accuracy: 0.0001)
+        XCTAssertEqual(camera.renderSnapshotWorldPosition.z, 5.0, accuracy: 0.0001)
     }
 
     func testIBLSceneAdoptsPendingTexturesDuringPrepareForRender() {
@@ -311,8 +311,8 @@ final class ThreadingPlanTests: XCTestCase {
             override var data: LightData {
                 LightData(
                     color: simd_float4(1, 1, 1, 1),
-                    position: simd_float4(renderWorldPosition, 0),
-                    direction: simd_float4(renderWorldForwardDirection, 0),
+                    position: simd_float4(renderSnapshotWorldPosition, 0),
+                    direction: simd_float4(renderSnapshotWorldForwardDirection, 0),
                     spotInfo: .zero,
                     shadowInfo: .zero
                 )

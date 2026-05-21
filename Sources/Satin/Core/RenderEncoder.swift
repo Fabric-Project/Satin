@@ -1907,7 +1907,7 @@ open class RenderEncoder {
                 updateObjectGraph(
                     object: child,
                     visible: object.visible && visible,
-                    parentMatrix: object.renderWorldMatrix
+                    parentMatrix: object.renderSnapshotWorldMatrix
                 )
             }
         }

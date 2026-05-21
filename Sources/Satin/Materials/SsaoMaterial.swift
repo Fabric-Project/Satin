@@ -65,8 +65,8 @@ public final class SsaoMaterial: Material {
     }
 
     public func update(camera: Camera) {
-        set("Projection Matrix", camera.renderProjectionMatrix)
-        set("Inverse Projection Matrix", camera.renderProjectionMatrix.inverse)
-        set("View Matrix", camera.renderViewMatrix)
+        set("Projection Matrix", camera.renderSnapshotProjectionMatrix)
+        set("Inverse Projection Matrix", camera.renderSnapshotProjectionMatrix.inverse)
+        set("View Matrix", camera.renderSnapshotViewMatrix)
     }
 }

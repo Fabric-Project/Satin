@@ -13,14 +13,17 @@ import simd
 public final class PointLight: Light {
     override public var type: LightType { .point }
 
+    /// Per-frame render snapshot for `radius`, written by `prepareForRender()` on the render owner. Read by shadow preparation for the current frame.
+    internal var renderSnapshotRadius: Float = 0.0
+
     override public var data: LightData {
         LightData(
             // (rgb, intensity)
-            color: simd_make_float4(color, intensity),
+            color: simd_make_float4(renderSnapshotColor, renderSnapshotIntensity),
             // (xyz, type)
-            position: simd_make_float4(renderWorldPosition, Float(type.rawValue)),
+            position: simd_make_float4(renderSnapshotWorldPosition, Float(type.rawValue)),
             // (xyz, inverse radius)
-            direction: simd_make_float4(-renderWorldForwardDirection, 1.0 / radius),
+            direction: simd_make_float4(-renderSnapshotWorldForwardDirection, 1.0 / renderSnapshotRadius),
             // (spotScale, spotOffset, cosInner, cosOuter)
             spotInfo: .zero,
             // (shadowIndex, projectorIndex, projectorMode, unused)
@@ -67,6 +70,11 @@ public final class PointLight: Light {
         try super.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(radius, forKey: .radius)
+    }
+
+    override public func prepareForRender() {
+        renderSnapshotRadius = radius
+        super.prepareForRender()
     }
 
     override public func setup() {
