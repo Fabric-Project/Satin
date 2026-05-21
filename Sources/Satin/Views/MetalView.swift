@@ -146,6 +146,7 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     // MARK: - Layer Rendering
 
     private func render() {
+        guard _displayLink == nil else { return }  // CAMetalDisplayLink owns drawables when active
         guard let delegate, let drawable = metalLayer.nextDrawable() else { return }
         delegate.draw(metalLayer: metalLayer, drawable: drawable)
     }
