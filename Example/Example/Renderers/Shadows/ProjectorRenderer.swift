@@ -91,7 +91,7 @@ final class ProjectorRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [7.4, 4.6, 8.6], near: 0.01, far: 500.0, fov: 32.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var textureLoader = MTKTextureLoader(device: device)
 
     lazy var startTime = getTime()

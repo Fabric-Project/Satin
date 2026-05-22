@@ -1,4 +1,4 @@
-// BokehDepthOfFieldPostProcessor
+// BokehDepthOfFieldPostProcessEncoder
 //
 // Reference lineage and porting goals:
 // - Kleber Garcia, "Circular Depth of Field", GDC 2018:
@@ -39,7 +39,7 @@
 import Metal
 import simd
 
-open class BokehDepthOfFieldPostProcessor: PostProcessor {
+open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
     private static let defaultResolutionScale: Float = 0.5
     private static let minResolutionScale: Float = 0.25
     private static let maxResolutionScale: Float = 1.0
@@ -199,7 +199,7 @@ open class BokehDepthOfFieldPostProcessor: PostProcessor {
     private var lastSize: (width: Float, height: Float) = (0, 0)
     private var outputTextureSize: (width: Int, height: Int) = (0, 0)
     private var processingTextureSize: (width: Int, height: Int) = (0, 0)
-    private var appliedResolutionScale = BokehDepthOfFieldPostProcessor.defaultResolutionScale
+    private var appliedResolutionScale = BokehDepthOfFieldPostProcessEncoder.defaultResolutionScale
 
     private static func clampResolutionScale(_ value: Float) -> Float {
         min(max(value, Self.minResolutionScale), Self.maxResolutionScale)

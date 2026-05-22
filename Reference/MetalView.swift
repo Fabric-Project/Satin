@@ -28,7 +28,7 @@ public protocol TouchDelegate: AnyObject {
     func touchesCancelled(with event: NSEvent)
 }
 
-public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegate {
+public final class MetalView: NSView, CALayerDelegate {
     public weak var dragDelegate: DragDelegate?
     public weak var touchDelegate: TouchDelegate?
 
@@ -60,8 +60,14 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     override public var acceptsFirstResponder: Bool { return true }
 
     private var _displayLinkPaused = false
-    private var _displayLink: CAMetalDisplayLink?
-    private var _previousTargetPresentationTimestamp: CFTimeInterval = 0
+    private var _displayLink: CVDisplayLink?
+    private var _displaySource: DispatchSourceUserDataAdd?
+    private let _dispatchRenderLoop: CVDisplayLinkOutputCallback = {
+        _, _, _, _, _, displayLinkContext in
+        let source = Unmanaged<DispatchSourceUserDataAdd>.fromOpaque(displayLinkContext!).takeUnretainedValue()
+        source.add(data: 1)
+        return kCVReturnSuccess
+    }
 
     // MARK: - Init
 
@@ -146,7 +152,6 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     // MARK: - Layer Rendering
 
     private func render() {
-        guard _displayLink == nil else { return }  // CAMetalDisplayLink owns drawables when active
         guard let delegate, let drawable = metalLayer.nextDrawable() else { return }
         delegate.draw(metalLayer: metalLayer, drawable: drawable)
     }
@@ -187,14 +192,33 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 #if DEBUG_VIEW
         print("setupRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        let link = CAMetalDisplayLink(metalLayer: metalLayer)
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 120, preferred: 120)
-        link.preferredFrameLatency = Float(maxBuffersInFlight)
-        link.delegate = self
-        link.isPaused = _displayLinkPaused
-        _previousTargetPresentationTimestamp = CACurrentMediaTime()
-        link.add(to: .main, forMode: .common)
-        _displayLink = link
+        _displaySource = DispatchSource.makeUserDataAddSource(queue: DispatchQueue.main)
+        _displaySource!.setEventHandler { [weak self] in
+            self?.render()
+        }
+        _displaySource!.resume()
+
+        var cvReturn = CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink)
+
+        assert(cvReturn == kCVReturnSuccess)
+
+        cvReturn = CVDisplayLinkSetOutputCallback(
+            _displayLink!,
+            _dispatchRenderLoop,
+            Unmanaged.passUnretained(_displaySource!).toOpaque()
+        )
+
+        assert(cvReturn == kCVReturnSuccess)
+
+        let displayID = screen?.deviceDescription[NSDeviceDescriptionKey(rawValue: "NSScreenNumber")] as? CGDirectDisplayID
+
+        cvReturn = CVDisplayLinkSetCurrentCGDisplay(_displayLink!, displayID ?? CGMainDisplayID())
+
+        assert(cvReturn == kCVReturnSuccess)
+
+        if !_displayLinkPaused {
+            CVDisplayLinkStart(_displayLink!)
+        }
 
         NotificationCenter.default.addObserver(
             self,
@@ -204,27 +228,25 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         )
     }
 
-    public func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
-        let deltaTime = update.targetPresentationTimestamp - _previousTargetPresentationTimestamp
-        _previousTargetPresentationTimestamp = update.targetPresentationTimestamp
-        _ = deltaTime  // available for delegate protocol extension in future
-        guard let delegate else { return }
-        delegate.draw(metalLayer: metalLayer, drawable: update.drawable)
-    }
-
     func pauseRenderLoop() {
+        if let displayLink = _displayLink, !_displayLinkPaused {
 #if DEBUG_VIEW
-        print("pauseRenderLoop - MetalView: \(delegate?.id)")
+            print("pauseRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
+            CVDisplayLinkStop(displayLink)
+        }
+
         _displayLinkPaused = true
     }
 
     func resumeRenderLoop() {
+        if let displayLink = _displayLink, _displayLinkPaused {
 #if DEBUG_VIEW
-        print("resumeRenderLoop - MetalView: \(delegate?.id)")
+            print("resumeRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = false
+            CVDisplayLinkStart(displayLink)
+        }
+
         _displayLinkPaused = false
     }
 
@@ -233,10 +255,11 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 #if DEBUG_VIEW
         print("stopRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.delegate = nil
-        _displayLink?.invalidate()
+        pauseRenderLoop()
+
         _displayLink = nil
-        NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
+        _displaySource?.cancel()
+        _displaySource = nil
     }
 
     @objc func windowWillClose(_ notification: Notification) {

@@ -1,5 +1,5 @@
 //
-//  ARPostProcessor.swift
+//  ARPostProcessEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 3/16/23.
@@ -12,7 +12,7 @@ import ARKit
 import Foundation
 import Metal
 
-public class ARPostProcessor: PostProcessor {
+public class ARPostProcessEncoder: PostProcessEncoder {
     public var contentTexture: MTLTexture? {
         didSet {
             if let material = mesh.material as? ARPostMaterial {

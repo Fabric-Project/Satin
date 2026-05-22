@@ -15,7 +15,15 @@ import Satin
 import AppKit
 #endif
 
-class BaseRenderer: MetalViewRenderer {
+class BaseRenderer: ViewRenderer {
+    override init(context: Context) {
+        super.init(context: context)
+    }
+
+    convenience init() {
+        self.init(context: .makePlatformDefault())
+    }
+
     // MARK: - Paths
 
     var assetsURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Assets") }

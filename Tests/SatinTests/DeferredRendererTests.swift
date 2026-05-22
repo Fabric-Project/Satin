@@ -24,7 +24,7 @@ final class DeferredRendererTests: XCTestCase {
             activeOutputs: [.color, .albedo, .normals, .pbr, .velocity, .emissive]
         )
 
-        let renderer = Renderer(
+        let renderer = RenderEncoder(
             context: context,
             clearColor: VisualTestHarness.defaultClearColor,
             frameBufferOnly: false
@@ -238,7 +238,7 @@ private struct ImageCoverage {
 }
 
 private func drawFrame(
-    renderer: Renderer,
+    renderer: RenderEncoder,
     commandQueue: MTLCommandQueue,
     scene: Object,
     camera: Camera,

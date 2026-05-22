@@ -117,9 +117,9 @@ final class ARContactShadowRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene", [invaderContainer])
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context)
+    lazy var renderer = RenderEncoder(context: context)
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     lazy var startTime = getTime()
 
@@ -153,7 +153,7 @@ final class ARContactShadowRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )

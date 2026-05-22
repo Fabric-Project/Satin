@@ -21,7 +21,7 @@ final class SlugTextRenderer: BaseRenderer {
         fov: 60
     )
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var parameters = ParameterGroup("Text", [fontParam])
     lazy var fontParam = StringParameter("Font", "Helvetica", availableFontFamilyNames, .dropdown)
 

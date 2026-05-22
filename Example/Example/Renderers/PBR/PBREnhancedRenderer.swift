@@ -77,7 +77,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     lazy var scene = IBLScene(context: defaultContext, label: "Scene", [floorMesh, backdropMesh, mesh, skybox])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 6.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var startTime = getTime()
 
     var animatedLights: [AnimatedPointLight] = []

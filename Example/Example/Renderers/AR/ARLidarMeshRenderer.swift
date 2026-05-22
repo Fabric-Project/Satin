@@ -28,9 +28,9 @@ final class ARLidarMeshRenderer: BaseRenderer {
 
     lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context)
+    lazy var renderer = RenderEncoder(context: context)
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
@@ -49,7 +49,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )

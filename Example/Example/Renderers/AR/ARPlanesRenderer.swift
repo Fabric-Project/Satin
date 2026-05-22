@@ -111,14 +111,14 @@ final class ARPlanesRenderer: BaseRenderer {
 
     lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        let renderer = Renderer(label: "Content Renderer", context: defaultContext)
+        let renderer = RenderEncoder(label: "Content RenderEncoder", context: defaultContext)
         renderer.colorLoadAction = .load
         return renderer
     }()
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     // MARK: - Init
 
@@ -135,7 +135,7 @@ final class ARPlanesRenderer: BaseRenderer {
     override func setup() {
         metalView.preferredFramesPerSecond = 60
 
-        backgroundRenderer = ARBackgroundRenderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat), session: session)
+        backgroundRenderer = ARBackgroundEncoder(context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat), session: session)
 
         anchorsAddedSubscription = sessionPublisher.updatedAnchorsPublisher.sink { [weak self] anchors in
             guard let self else { return }

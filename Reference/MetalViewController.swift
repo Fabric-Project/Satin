@@ -66,6 +66,7 @@ public final class MetalViewController: NSViewController {
     // MARK: - Setup View
 
     private func setupView() {
+        // Device and pixel format are derived from the renderer's context; see setupRenderer().
 #if DEBUG_VIEWS
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
@@ -79,7 +80,7 @@ public final class MetalViewController: NSViewController {
         print("setupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
         self.metalView.metalLayer.device = self.renderer.context.device
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
+        self.metalView.metalLayer.pixelFormat = self.renderer.context.colorPixelFormat
         self.renderer.metalView = self.metalView
         self.renderer.setup()
         self.renderer.isSetup = true
@@ -372,6 +373,7 @@ public final class MetalViewController: UIViewController {
     // MARK: - Setup View
 
     private func setupView() {
+        // Device and pixel format are derived from the renderer's context; see setupRenderer().
 #if DEBUG_VIEWS
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
@@ -385,7 +387,7 @@ public final class MetalViewController: UIViewController {
         print("setupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
         self.metalView.metalLayer.device = self.renderer.context.device
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
+        self.metalView.metalLayer.pixelFormat = self.renderer.context.colorPixelFormat
         self.renderer.metalView = self.metalView
         self.renderer.setup()
         self.renderer.isSetup = true

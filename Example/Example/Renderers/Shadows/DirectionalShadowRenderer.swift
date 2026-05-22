@@ -51,7 +51,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
     lazy var scene = IBLScene(context: defaultContext, label: "Scene", [light0, light1, floorMesh, baseMesh, sphereMesh, torusMesh])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(repeating: 5.0), near: 0.01, far: 500.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"

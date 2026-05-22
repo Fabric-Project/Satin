@@ -9,9 +9,9 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     override var params: [String: ParameterGroup?] {
         [
             "App": appParams,
-            "SSGI": ssgiPostProcessor.ssgiMaterial.parameters,
-            "SSGI Blur": ssgiPostProcessor.blurMaterial.parameters,
-            "SSGI Composite": ssgiPostProcessor.compositeMaterial.parameters
+            "SSGI": ssgiPostProcessEncoder.ssgiMaterial.parameters,
+            "SSGI Blur": ssgiPostProcessEncoder.blurMaterial.parameters,
+            "SSGI Composite": ssgiPostProcessEncoder.compositeMaterial.parameters
         ]
     }
 
@@ -126,9 +126,9 @@ final class SSGICornellBoxRenderer: BaseRenderer {
 
     private lazy var cameraController = OrbitPerspectiveCameraController(camera: camera, view: metalView)
 
-    private lazy var sceneRenderer: Renderer = {
-        let renderer = Renderer(
-            label: "SSGI Cornell Box Scene Renderer",
+    private lazy var sceneRenderer: RenderEncoder = {
+        let renderer = RenderEncoder(
+            label: "SSGI Cornell Box Scene RenderEncoder",
             context: defaultContext,
             colorLoadAction: .clear,
             colorStoreAction: .store,
@@ -144,9 +144,9 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         return renderer
     }()
 
-    private lazy var ssgiPostProcessor = SsgiPostProcessor(context: defaultContext)
+    private lazy var ssgiPostProcessEncoder = SsgiPostProcessEncoder(context: defaultContext)
     private lazy var compositorMaterial = BasicTextureMaterial(context: defaultContext)
-    private lazy var compositor = PostProcessor(
+    private lazy var compositor = PostProcessEncoder(
         label: "SSGI Cornell Box Compositor",
         context: defaultContext,
         material: compositorMaterial,
@@ -157,20 +157,20 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     override func setup() {
         setupScene()
 
-        ssgiPostProcessor.resolutionScale = 1.0
-        ssgiPostProcessor.ssgiMaterial.radius = 24.0
-        ssgiPostProcessor.ssgiMaterial.thickness = 1.0
-        ssgiPostProcessor.ssgiMaterial.expFactor = 2.0
-        ssgiPostProcessor.ssgiMaterial.jitterStrength = 1.0
-        ssgiPostProcessor.ssgiMaterial.sliceCount = 5
-        ssgiPostProcessor.ssgiMaterial.stepCount = 8
-        ssgiPostProcessor.blurMaterial.radius = 4.0
-        ssgiPostProcessor.blurMaterial.lumaPhi = 5.0
-        ssgiPostProcessor.blurMaterial.depthPhi = 5.0
-        ssgiPostProcessor.blurMaterial.normalPhi = 5.0
-        ssgiPostProcessor.compositeMaterial.giIntensity = 10.0
-        ssgiPostProcessor.compositeMaterial.aoIntensity = 1.0
-        ssgiPostProcessor.compositeMaterial.aoLift = 0.0
+        ssgiPostProcessEncoder.resolutionScale = 1.0
+        ssgiPostProcessEncoder.ssgiMaterial.radius = 24.0
+        ssgiPostProcessEncoder.ssgiMaterial.thickness = 1.0
+        ssgiPostProcessEncoder.ssgiMaterial.expFactor = 2.0
+        ssgiPostProcessEncoder.ssgiMaterial.jitterStrength = 1.0
+        ssgiPostProcessEncoder.ssgiMaterial.sliceCount = 5
+        ssgiPostProcessEncoder.ssgiMaterial.stepCount = 8
+        ssgiPostProcessEncoder.blurMaterial.radius = 4.0
+        ssgiPostProcessEncoder.blurMaterial.lumaPhi = 5.0
+        ssgiPostProcessEncoder.blurMaterial.depthPhi = 5.0
+        ssgiPostProcessEncoder.blurMaterial.normalPhi = 5.0
+        ssgiPostProcessEncoder.compositeMaterial.giIntensity = 10.0
+        ssgiPostProcessEncoder.compositeMaterial.aoIntensity = 1.0
+        ssgiPostProcessEncoder.compositeMaterial.aoLift = 0.0
 
         camera.lookAt(target: [0.0, 7.0, 0.0])
         cameraController.target.position = [0.0, 7.0, 0.0]
@@ -183,7 +183,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     override func update() {
         cameraController.update()
 
-        ssgiPostProcessor.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 1.0
+        ssgiPostProcessEncoder.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 1.0
 
         let lightHeight = appParams.get("Light Height", as: FloatParameter.self)?.value ?? 13.0
         pointLight.intensity = appParams.get("Light Intensity", as: FloatParameter.self)?.value ?? 100.0
@@ -201,22 +201,22 @@ final class SSGICornellBoxRenderer: BaseRenderer {
             camera: camera
         )
 
-        ssgiPostProcessor.colorTexture = sceneRenderer.colorTexture
-        ssgiPostProcessor.depthTexture = sceneRenderer.depthTexture
-        ssgiPostProcessor.normalTexture = sceneRenderer.normalTexture
-        ssgiPostProcessor.albedoTexture = sceneRenderer.albedoTexture
-        ssgiPostProcessor.pbrTexture = sceneRenderer.pbrTexture
-        ssgiPostProcessor.sceneCamera = camera
-        ssgiPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        ssgiPostProcessEncoder.colorTexture = sceneRenderer.colorTexture
+        ssgiPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
+        ssgiPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
+        ssgiPostProcessEncoder.albedoTexture = sceneRenderer.albedoTexture
+        ssgiPostProcessEncoder.pbrTexture = sceneRenderer.pbrTexture
+        ssgiPostProcessEncoder.sceneCamera = camera
+        ssgiPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        compositorMaterial.texture = ssgiPostProcessor.outputTexture ?? sceneRenderer.colorTexture
+        compositorMaterial.texture = ssgiPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
         compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         camera.aspect = size.width / max(size.height, 1.0)
         sceneRenderer.resize(size)
-        ssgiPostProcessor.resize(size: size, scaleFactor: scaleFactor)
+        ssgiPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
         compositor.resize(size: size, scaleFactor: scaleFactor)
     }
 

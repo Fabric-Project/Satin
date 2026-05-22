@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  AudioInput-macOS
 //
 //  Created by Reza Ali on 8/4/21.
@@ -33,7 +33,7 @@ final class AudioInputRenderer: BaseRenderer {
     lazy var mesh: Mesh = .init(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 700), material: audioMaterial)
     lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid

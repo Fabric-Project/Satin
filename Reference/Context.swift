@@ -136,33 +136,27 @@ extension Context: Equatable {
 }
 
 public extension Context {
+    /// Creates a Context with platform-appropriate defaults, using the system default Metal device.
+    ///
+    /// - macOS / iOS / tvOS: `bgra8Unorm` color, `depth32Float` depth, sampleCount 1
+    /// - visionOS device:    `bgra8Unorm_srgb` color, `depth32Float` depth, sampleCount 1, vertexAmplificationCount 2
+    /// - visionOS simulator: same as device but vertexAmplificationCount 1 (dedicated layout)
+    ///
+    /// Pass an explicit `device` to override device selection; all other parameters use
+    /// the platform defaults above. For full control — custom pixel formats, MSAA, deferred
+    /// rendering, alpha OIT — construct a `Context` directly.
     static func makePlatformDefault(device: MTLDevice? = nil) -> Context {
-        let device = device ?? MTLCreateSystemDefaultDevice()!
+        let d = device ?? MTLCreateSystemDefaultDevice()!
 #if os(visionOS)
 #if targetEnvironment(simulator)
-        return Context(
-            device: device,
-            sampleCount: 1,
-            colorPixelFormat: .bgra8Unorm_srgb,
-            depthPixelFormat: .depth32Float,
-            vertexAmplificationCount: 1
-        )
+        return Context(device: d, sampleCount: 1, colorPixelFormat: .bgra8Unorm_srgb,
+                       depthPixelFormat: .depth32Float, vertexAmplificationCount: 1)
 #else
-        return Context(
-            device: device,
-            sampleCount: 1,
-            colorPixelFormat: .bgra8Unorm_srgb,
-            depthPixelFormat: .depth32Float,
-            vertexAmplificationCount: 2
-        )
+        return Context(device: d, sampleCount: 1, colorPixelFormat: .bgra8Unorm_srgb,
+                       depthPixelFormat: .depth32Float, vertexAmplificationCount: 2)
 #endif
 #else
-        return Context(
-            device: device,
-            sampleCount: 1,
-            colorPixelFormat: .bgra8Unorm,
-            depthPixelFormat: .depth32Float
-        )
+        return Context(device: d, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float)
 #endif
     }
 }

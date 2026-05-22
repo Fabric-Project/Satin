@@ -28,7 +28,7 @@ float3 getMaterialSpecularColor(Material material) {
 }
 
 #if defined(HAS_TRANSMISSION)
-// https://github.com/KhronosGroup/glTF-Sample-Viewer/blob/315d20e3b91da83659a63719ed26aefeb3579c38/source/Renderer/shaders/functions.glsl
+// https://github.com/KhronosGroup/glTF-Sample-Viewer/blob/315d20e3b91da83659a63719ed26aefeb3579c38/source/RenderEncoder/shaders/functions.glsl
 float applyIorToRoughness(float roughness, float ior) {
     // Scale roughness with IOR so that an IOR of 1.0 results in no microfacet refraction and
     // an IOR of 1.5 results in the default amount of microfacet refraction.

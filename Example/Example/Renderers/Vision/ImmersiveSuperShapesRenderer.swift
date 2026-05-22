@@ -86,7 +86,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     lazy var mesh = Mesh(geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
     lazy var scene = Object(context: defaultContext, label: "Scene", [background, mesh])
 
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
 #if targetEnvironment(simulator)
     override var layerLayout: LayerRenderer.Layout { .dedicated }

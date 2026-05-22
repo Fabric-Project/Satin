@@ -1,6 +1,6 @@
 import Metal
 
-final class SeparablePostProcessor {
+final class SeparablePostProcessEncoder {
     enum Pass {
         case horizontal
         case vertical
@@ -9,8 +9,8 @@ final class SeparablePostProcessor {
     private let label: String
     private let device: MTLDevice
     private let pixelFormat: MTLPixelFormat
-    private let horizontalProcessor: PostProcessor
-    private let verticalProcessor: PostProcessor
+    private let horizontalProcessor: PostProcessEncoder
+    private let verticalProcessor: PostProcessEncoder
 
     private(set) var outputTexture: MTLTexture?
     private var intermediateTexture: MTLTexture?
@@ -25,14 +25,14 @@ final class SeparablePostProcessor {
         self.label = label
         device = context.device
         pixelFormat = context.colorPixelFormat
-        horizontalProcessor = PostProcessor(
+        horizontalProcessor = PostProcessEncoder(
             label: label + " Horizontal",
             context: context,
             material: horizontalMaterial,
             depthLoadAction: .dontCare,
             depthStoreAction: .dontCare
         )
-        verticalProcessor = PostProcessor(
+        verticalProcessor = PostProcessEncoder(
             label: label + " Vertical",
             context: context,
             material: verticalMaterial ?? horizontalMaterial,

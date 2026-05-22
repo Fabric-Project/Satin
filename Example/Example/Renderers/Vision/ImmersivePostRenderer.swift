@@ -54,12 +54,12 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
 
     var renderTexture: MTLTexture?
 
-    lazy var renderer = Renderer(
+    lazy var renderer = RenderEncoder(
         context: defaultContext,
         depthStoreAction: sampleCount > 1 ? .multisampleResolve : .store
     )
 
-    lazy var postProcessor = PostProcessor(
+    lazy var postProcessor = PostProcessEncoder(
         context: postContext,
         material: postMaterial
     )

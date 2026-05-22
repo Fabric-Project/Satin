@@ -92,7 +92,7 @@ final class BloomRenderer: BaseRenderer {
 
     lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
     lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL, live: true)
-    lazy var postProcessor = PostProcessor(
+    lazy var postProcessor = PostProcessEncoder(
         label: "Bloom Post Processor",
         context: postContext,
         material: postMaterial
@@ -100,7 +100,7 @@ final class BloomRenderer: BaseRenderer {
 
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 10.0], near: 0.001, far: 100.0, fov: 45.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var bloomGenerator = BloomGenerator(device: device, levels: 5)
 

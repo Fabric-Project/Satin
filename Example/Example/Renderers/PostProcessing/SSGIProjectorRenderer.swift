@@ -11,9 +11,9 @@ final class SSGIProjectorRenderer: BaseRenderer {
     override var params: [String: ParameterGroup?] {
         [
             "App": appParams,
-            "SSGI": ssgiPostProcessor.ssgiMaterial.parameters,
-            "SSGI Blur": ssgiPostProcessor.blurMaterial.parameters,
-            "SSGI Composite": ssgiPostProcessor.compositeMaterial.parameters
+            "SSGI": ssgiPostProcessEncoder.ssgiMaterial.parameters,
+            "SSGI Blur": ssgiPostProcessEncoder.blurMaterial.parameters,
+            "SSGI Composite": ssgiPostProcessEncoder.compositeMaterial.parameters
         ]
     }
 
@@ -104,9 +104,9 @@ final class SSGIProjectorRenderer: BaseRenderer {
 
     private lazy var camera = PerspectiveCamera(context: defaultContext, position: [7.4, 4.6, 8.6], near: 0.01, far: 500.0, fov: 32.0)
     private lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    private lazy var sceneRenderer: Renderer = {
-        let renderer = Renderer(
-            label: "SSGI Projector Scene Renderer",
+    private lazy var sceneRenderer: RenderEncoder = {
+        let renderer = RenderEncoder(
+            label: "SSGI Projector Scene RenderEncoder",
             context: defaultContext,
             colorLoadAction: .clear,
             colorStoreAction: .store,
@@ -121,9 +121,9 @@ final class SSGIProjectorRenderer: BaseRenderer {
         return renderer
     }()
 
-    private lazy var ssgiPostProcessor = SsgiPostProcessor(context: defaultContext)
+    private lazy var ssgiPostProcessEncoder = SsgiPostProcessEncoder(context: defaultContext)
     private lazy var compositorMaterial = BasicTextureMaterial(context: defaultContext)
-    private lazy var compositor = PostProcessor(
+    private lazy var compositor = PostProcessEncoder(
         label: "SSGI Projector Compositor",
         context: defaultContext,
         material: compositorMaterial,
@@ -166,7 +166,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
 
         projectorLight.intensity = appParams.get("Projector Intensity", as: FloatParameter.self)?.value ?? 180.0
         scene.environmentIntensity = appParams.get("Environment Intensity", as: FloatParameter.self)?.value ?? 0.025
-        ssgiPostProcessor.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 0.5
+        ssgiPostProcessEncoder.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 0.5
 
         projectorLight.position = simd_make_float3(
             sin(projectorTheta) * 1.85,
@@ -190,22 +190,22 @@ final class SSGIProjectorRenderer: BaseRenderer {
             camera: camera
         )
 
-        ssgiPostProcessor.colorTexture = sceneRenderer.colorTexture
-        ssgiPostProcessor.depthTexture = sceneRenderer.depthTexture
-        ssgiPostProcessor.normalTexture = sceneRenderer.normalTexture
-        ssgiPostProcessor.albedoTexture = sceneRenderer.albedoTexture
-        ssgiPostProcessor.pbrTexture = sceneRenderer.pbrTexture
-        ssgiPostProcessor.sceneCamera = camera
-        ssgiPostProcessor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        ssgiPostProcessEncoder.colorTexture = sceneRenderer.colorTexture
+        ssgiPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
+        ssgiPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
+        ssgiPostProcessEncoder.albedoTexture = sceneRenderer.albedoTexture
+        ssgiPostProcessEncoder.pbrTexture = sceneRenderer.pbrTexture
+        ssgiPostProcessEncoder.sceneCamera = camera
+        ssgiPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
-        compositorMaterial.texture = ssgiPostProcessor.outputTexture ?? sceneRenderer.colorTexture
+        compositorMaterial.texture = ssgiPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
         compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         camera.aspect = size.width / max(size.height, 1.0)
         sceneRenderer.resize(size)
-        ssgiPostProcessor.resize(size: size, scaleFactor: scaleFactor)
+        ssgiPostProcessEncoder.resize(size: size, scaleFactor: scaleFactor)
         compositor.resize(size: size, scaleFactor: scaleFactor)
     }
 

@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 6/25/20.
@@ -39,7 +39,7 @@ final class BufferComputeRenderer: BaseRenderer {
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     var startTime: CFAbsoluteTime = 0.0
 
@@ -51,7 +51,7 @@ final class BufferComputeRenderer: BaseRenderer {
     lazy var postContext = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat)
     lazy var chromaMaterial = ChromaMaterial(context: postContext, pipelinesURL: pipelinesURL)
 
-    lazy var chromaticProcessor = PostProcessor(label: "Chroma Processor", context: postContext, material: chromaMaterial)
+    lazy var chromaticProcessor = PostProcessEncoder(label: "Chroma Processor", context: postContext, material: chromaMaterial)
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid

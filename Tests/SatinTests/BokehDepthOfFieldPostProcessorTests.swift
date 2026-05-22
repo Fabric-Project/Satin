@@ -2,7 +2,7 @@ import Metal
 @testable import Satin
 import XCTest
 
-final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
+final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
     private func makeDevice() -> MTLDevice? {
         MTLCreateSystemDefaultDevice()
     }
@@ -18,7 +18,7 @@ final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
 
     func testExplicitCoCBandsOverrideCompatibilityMapping() {
         guard let device = makeDevice() else { return }
-        let processor = BokehDepthOfFieldPostProcessor(context: makeContext(device: device))
+        let processor = BokehDepthOfFieldPostProcessEncoder(context: makeContext(device: device))
         processor.focusDistance = 120.0
         processor.focusRange = 20.0
         processor.blend = 1.75
@@ -35,7 +35,7 @@ final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
 
     func testCompatibilityMappingSupportsSceneScaleBeyondLegacyCap() {
         guard let device = makeDevice() else { return }
-        let processor = BokehDepthOfFieldPostProcessor(context: makeContext(device: device))
+        let processor = BokehDepthOfFieldPostProcessEncoder(context: makeContext(device: device))
         processor.focusDistance = 120.0
         processor.focusRange = 20.0
 
@@ -49,7 +49,7 @@ final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
 
     func testResizeAllocatesReferenceTextureFormats() {
         guard let device = makeDevice() else { return }
-        let processor = BokehDepthOfFieldPostProcessor(context: makeContext(device: device))
+        let processor = BokehDepthOfFieldPostProcessEncoder(context: makeContext(device: device))
         processor.resize(size: (64, 32), scaleFactor: 1.0)
 
         XCTAssertEqual(processor.fullResolutionCoCTexture?.pixelFormat, .rg16Float)
@@ -64,7 +64,7 @@ final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
     func testCompositePreservesSourceAlphaInSharpRegion() throws {
         guard let device = makeDevice() else { return }
         let context = makeContext(device: device)
-        let processor = BokehDepthOfFieldPostProcessor(context: context)
+        let processor = BokehDepthOfFieldPostProcessEncoder(context: context)
         let camera = PerspectiveCamera(context: context, position: [0.0, 0.0, 2.0], near: 0.1, far: 100.0, fov: 45.0)
         camera.aspect = 1.0
 
@@ -94,7 +94,7 @@ final class BokehDepthOfFieldPostProcessorTests: XCTestCase {
     func testCompositeAllowsBlurCoverageOverClearedBackground() throws {
         guard let device = makeDevice() else { return }
         let context = makeContext(device: device)
-        let processor = BokehDepthOfFieldPostProcessor(context: context)
+        let processor = BokehDepthOfFieldPostProcessEncoder(context: context)
         let camera = PerspectiveCamera(context: context, position: [0.0, 0.0, 2.0], near: 0.1, far: 100.0, fov: 45.0)
         camera.aspect = 1.0
 

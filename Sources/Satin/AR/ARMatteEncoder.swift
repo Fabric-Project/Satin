@@ -1,5 +1,5 @@
 //
-//  ARMatteRenderer.swift
+//  ARMatteEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 4/11/23.
@@ -12,13 +12,13 @@ import ARKit
 import Foundation
 import Metal
 
-public class ARMatteRenderer {
+public class ARMatteEncoder {
     private var device: MTLDevice
     private var matteGenerator: ARMatteGenerator
     private var viewportSize = CGSize(width: 0, height: 0)
     private var _updateGeometry = true
     private var _updateTextures = true
-    private var renderer: Renderer
+    private var renderer: RenderEncoder
     private let context: Context
 
     var material: ARMatteMaterial
@@ -39,16 +39,16 @@ public class ARMatteRenderer {
         let material = ARMatteMaterial(context: context)
         self.material = material
         self.mesh = Mesh(context: context, geometry: QuadGeometry(context: context), material: nil)
-        self.renderer = Renderer(context: context)
+        self.renderer = RenderEncoder(context: context)
         renderer.setClearColor(.zero)
-        renderer.label = "AR Matte Renderer"
+        renderer.label = "AR Matte RenderEncoder"
 
         self.camera = OrthographicCamera(context: context)
         
         mesh.material = material
         material.set("Near Far Delta", [near, far, far - near])
 
-        NotificationCenter.default.addObserver(self, selector: #selector(ARMatteRenderer.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(ARMatteEncoder.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
     deinit {

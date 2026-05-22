@@ -27,10 +27,10 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
     lazy var camera = ARPerspectiveCamera(context: defaultContext, session: session, metalView: metalView, near: 0.001, far: 100.0)
-    lazy var renderer = Renderer(context: defaultContext, clearColor: .zero, frameBufferOnly: false)
+    lazy var renderer = RenderEncoder(context: defaultContext, clearColor: .zero, frameBufferOnly: false)
 
-    var backgroundRenderer: ARBackgroundRenderer!
-    var matteRenderer: ARMatteRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
+    var matteRenderer: ARMatteEncoder!
 
     var backgroundTexture: MTLTexture?
     var _updateTextures = true
@@ -52,12 +52,12 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     override func setup() {
         metalView.preferredFramesPerSecond = 60
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )
 
-        matteRenderer = ARMatteRenderer(
+        matteRenderer = ARMatteEncoder(
             device: device,
             session: session,
             matteResolution: .full,

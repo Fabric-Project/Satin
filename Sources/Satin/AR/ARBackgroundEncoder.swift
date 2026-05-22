@@ -1,5 +1,5 @@
 //
-//  ARBackgroundRenderer.swift
+//  ARBackgroundEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 3/15/23.
@@ -12,7 +12,7 @@ import ARKit
 import Foundation
 import Metal
 
-public class ARBackgroundRenderer: PostProcessor {
+public class ARBackgroundEncoder: PostProcessEncoder {
     // Captured image texture cache
     private var capturedImageTextureCache: CVMetalTextureCache!
     var viewportSize = CGSize(width: 0, height: 0)
@@ -43,13 +43,13 @@ public class ARBackgroundRenderer: PostProcessor {
 
         backgroundMaterial = ARBackgroundMaterial(context:context, srgb: false)
 
-        super.init(label: "AR Background Renderer", context: context, material: backgroundMaterial)
+        super.init(label: "AR Background RenderEncoder", context: context, material: backgroundMaterial)
 
         renderer.setClearColor(.zero)
         renderer.frameBufferOnly = false
         setupTextureCache()
 
-        NotificationCenter.default.addObserver(self, selector: #selector(ARBackgroundRenderer.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(ARBackgroundEncoder.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
 
         mesh.label = "AR Background Color Mesh"
         mesh.visible = false

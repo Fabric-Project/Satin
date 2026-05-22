@@ -1,5 +1,5 @@
 //
-//  MetalLayerRenderer.swift
+//  SpatialRenderer.swift
 //
 //
 //  Created by Reza Ali on 1/23/24.
@@ -20,24 +20,10 @@ extension LayerRenderer.Clock.Instant.Duration {
     }
 }
 
-open class MetalLayerRenderer: CompositorLayerConfiguration {
-    open var id: String {
-        var result = String(describing: type(of: self)).replacingOccurrences(of: "Renderer", with: "")
-        if let bundleName = Bundle(for: type(of: self)).displayName, bundleName != result {
-            result = result.replacingOccurrences(of: bundleName, with: "")
-        }
-        result = result.replacingOccurrences(of: ".", with: "")
-        return result
-    }
-
+open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
     public internal(set) var layerRenderer: LayerRenderer!
     public internal(set) var arSession = ARKitSession()
     public internal(set) var worldTracking = WorldTrackingProvider()
-
-    public internal(set) var isSetup: Bool = false
-
-    public internal(set) var device: MTLDevice!
-    public internal(set) var commandQueue: MTLCommandQueue!
 
     open var arSessionDataProviders: [any DataProvider] {
         [
@@ -45,11 +31,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         ]
     }
 
-    open var sampleCount: Int { 1 }
-    open var colorPixelFormat: MTLPixelFormat { .bgra8Unorm_srgb }
     open var colorTextureUsage: MTLTextureUsage { [.renderTarget, .shaderRead] }
-
-    open var depthPixelFormat: MTLPixelFormat { .depth32Float }
     open var depthTextureUsage: MTLTextureUsage { [.renderTarget, .shaderRead] }
 
     open var isFoveationEnabled: Bool { true }
@@ -60,29 +42,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
     open var layerLayout: LayerRenderer.Layout { .layered }
 #endif
 
-    public var frameIndex: Int = -1
-
-    private lazy var cachedDefaultContext = makeDefaultContext()
-
-    public var defaultContext: Context {
-        cachedDefaultContext
-    }
-
-    private let inFlightSemaphore = DispatchSemaphore(value: maxBuffersInFlight)
-
     var onDisappearAction: (() -> Void)?
-
-    public init() {}
-
-    open func makeDefaultContext() -> Context {
-        Context(
-            device: device,
-            sampleCount: sampleCount,
-            colorPixelFormat: colorPixelFormat,
-            depthPixelFormat: depthPixelFormat,
-            vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
-        )
-    }
 
     public func onDisappear(perform action: @escaping () -> Void) -> Self {
         onDisappearAction = action
@@ -127,10 +87,10 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
     }
 
     open func makeConfiguration(capabilities: LayerRenderer.Capabilities, configuration: inout LayerRenderer.Configuration) {
-        configuration.colorFormat = colorPixelFormat
+        configuration.colorFormat = context.colorPixelFormat
         configuration.colorUsage = colorTextureUsage
 
-        configuration.depthFormat = depthPixelFormat
+        configuration.depthFormat = context.depthPixelFormat
         configuration.depthUsage = depthTextureUsage
 
         let foveationEnabled = isFoveationEnabled && capabilities.supportsFoveation
@@ -140,12 +100,6 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         let supportedLayouts = capabilities.supportedLayouts(options: options)
         configuration.layout = supportedLayouts.contains(layerLayout) ? layerLayout : .dedicated
     }
-
-    open func setup() {}
-
-    open func update() {}
-
-    open func cleanup() {}
 
     open func drawView(
         view: Int,
@@ -166,15 +120,12 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
     ) {}
 
     open func preDraw(frame: LayerRenderer.Frame) -> (drawable: LayerRenderer.Drawable, commandBuffer: MTLCommandBuffer, cameras: [PerspectiveCamera])? {
-        guard let commandBuffer = commandQueue.makeCommandBuffer() else {
-            fatalError("Failed to create command buffer")
-        }
-
+        // Query drawable before blocking on the semaphore — fails cheaply if the compositor isn't ready.
         guard let drawable = frame.queryDrawable() else { return nil }
 
-        _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
-
-        frameIndex += 1
+        // preDraw() waits for a free buffer slot, increments frameIndex, creates the command buffer,
+        // and registers the GPU completion handler.
+        guard let commandBuffer = preDraw() else { return nil }
 
         frame.startSubmission()
 
@@ -183,11 +134,6 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         let deviceAnchor = worldTracking.queryDeviceAnchor(atTimestamp: time)
 
         drawable.deviceAnchor = deviceAnchor
-
-        let semaphore = inFlightSemaphore
-        commandBuffer.addCompletedHandler { _ in
-            semaphore.signal()
-        }
 
         return (
             drawable: drawable,
@@ -209,7 +155,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
             let indexOffset = (frameIndex % maxBuffersInFlight) * 2 // 0 1 2
             for i in 0 ..< drawable.views.count {
                 let renderPassDescriptor = MTLRenderPassDescriptor()
-                if sampleCount > 1 {
+                if context.sampleCount > 1 {
                     renderPassDescriptor.colorAttachments[0].texture = getMultisampleColorTexture(
                         ref: drawable.colorTextures[i],
                         index: i + indexOffset
@@ -246,7 +192,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         } else {
             let renderPassDescriptor = MTLRenderPassDescriptor()
 
-            if sampleCount > 1 {
+            if context.sampleCount > 1 {
                 let indexOffset = frameIndex % maxBuffersInFlight
                 renderPassDescriptor.colorAttachments[0].texture = getMultisampleColorTexture(
                     ref: drawable.colorTextures[0],
@@ -319,9 +265,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         postDraw(frame: frame, drawable: drawable, commandBuffer: commandBuffer)
     }
 
-    var colorMultisampleTextures: [MTLTexture?] = []
-
-    func getMultisampleColorTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
+    open override func getMultisampleColorTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
         var replace = false
 
         if colorMultisampleTextures.count > index,
@@ -336,10 +280,10 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
 
         let dedicated = layerRenderer.configuration.layout == .dedicated
         let descriptor = MTLTextureDescriptor()
-        descriptor.pixelFormat = colorPixelFormat
+        descriptor.pixelFormat = context.colorPixelFormat
         descriptor.width = ref.width
         descriptor.height = ref.height
-        descriptor.sampleCount = sampleCount
+        descriptor.sampleCount = context.sampleCount
         descriptor.textureType = dedicated ? .type2DMultisample : .type2DMultisampleArray
         descriptor.arrayLength = dedicated ? 1 : 2
         descriptor.usage = [.renderTarget, .shaderRead]
@@ -347,7 +291,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         descriptor.allowGPUOptimizedContents = true
         descriptor.resourceOptions = .storageModePrivate
 
-        let texture = device.makeTexture(descriptor: descriptor)
+        let texture = context.device.makeTexture(descriptor: descriptor)
 
         if layerLayout == .dedicated {
             texture?.label = "\(id) Multisample Color Texture \(index % 2 == 1 ? "Right" : "Left") \(index / 2)/\(maxBuffersInFlight)"
@@ -364,9 +308,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         return texture
     }
 
-    var depthMultisampleTextures: [MTLTexture?] = []
-
-    func getMultisampleDepthTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
+    open override func getMultisampleDepthTexture(ref: MTLTexture, index: Int) -> MTLTexture? {
         var replace = false
 
         if depthMultisampleTextures.count > index,
@@ -381,10 +323,10 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
 
         let dedicated = layerRenderer.configuration.layout == .dedicated
         let descriptor = MTLTextureDescriptor()
-        descriptor.pixelFormat = depthPixelFormat
+        descriptor.pixelFormat = context.depthPixelFormat
         descriptor.width = ref.width
         descriptor.height = ref.height
-        descriptor.sampleCount = sampleCount
+        descriptor.sampleCount = context.sampleCount
         descriptor.textureType = dedicated ? .type2DMultisample : .type2DMultisampleArray
         descriptor.arrayLength = dedicated ? 1 : 2
         descriptor.usage = [.renderTarget, .shaderRead]
@@ -392,7 +334,7 @@ open class MetalLayerRenderer: CompositorLayerConfiguration {
         descriptor.allowGPUOptimizedContents = true
         descriptor.resourceOptions = .storageModePrivate
 
-        let texture = device.makeTexture(descriptor: descriptor)
+        let texture = context.device.makeTexture(descriptor: descriptor)
 
         if layerLayout == .dedicated {
             texture?.label = "\(id) Multisample Depth Texture \(index % 2 == 1 ? "Right" : "Left") \(index / 2)/\(maxBuffersInFlight)"
@@ -450,5 +392,10 @@ fileprivate func getCameraInfo(drawable: LayerRenderer.Drawable, deviceAnchor: s
         ))
     )
 }
+
+// MARK: - Backwards compatibility
+
+@available(*, deprecated, renamed: "SpatialRenderer")
+public typealias MetalLayerRenderer = SpatialRenderer
 
 #endif
