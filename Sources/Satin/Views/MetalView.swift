@@ -188,7 +188,7 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         print("setupRenderLoop - MetalView: \(delegate?.id)")
 #endif
         let link = CAMetalDisplayLink(metalLayer: metalLayer)
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 120, preferred: 60)
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: 120, preferred: 120)
         link.preferredFrameLatency = Float(maxBuffersInFlight)
         link.delegate = self
         link.isPaused = _displayLinkPaused
