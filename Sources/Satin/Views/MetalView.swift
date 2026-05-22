@@ -63,6 +63,11 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     private var _displayLink: CAMetalDisplayLink?
     private var _previousTargetPresentationTimestamp: CFTimeInterval = 0
 
+    var renderMode: Renderer.Mode = .sync
+    private var _renderThread: Thread?
+    private var _continueRunLoop: Bool = false
+    private let _resizeLock = NSLock()
+
     // MARK: - Init
 
     override init(frame frameRect: NSRect) {
@@ -124,8 +129,8 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         else {
 #if DEBUG_VIEW
             print("viewDidMoveToWindow - MetalView: \(delegate?.id) - NO WINDOW")
-            stopRenderLoop()
 #endif
+            stopRenderLoop()
         }
     }
 
@@ -193,7 +198,6 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         link.delegate = self
         link.isPaused = _displayLinkPaused
         _previousTargetPresentationTimestamp = CACurrentMediaTime()
-        link.add(to: .main, forMode: .common)
         _displayLink = link
 
         NotificationCenter.default.addObserver(
@@ -202,6 +206,27 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
             name: NSWindow.willCloseNotification,
             object: window
         )
+
+        switch renderMode {
+        case .sync:
+            link.add(to: .main, forMode: .common)
+        case .async:
+            _continueRunLoop = true
+            let thread = Thread(target: self, selector: #selector(_runRenderThread), object: nil)
+            thread.name = "Satin.MetalView.RenderThread"
+            thread.qualityOfService = .userInteractive
+            _renderThread = thread
+            thread.start()
+        }
+    }
+
+    @objc private func _runRenderThread() {
+        _displayLink?.add(to: .current, forMode: .default)
+        while _continueRunLoop {
+            autoreleasepool {
+                _ = RunLoop.current.run(mode: .default, before: .distantFuture)
+            }
+        }
     }
 
     public func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
@@ -209,7 +234,14 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         _previousTargetPresentationTimestamp = update.targetPresentationTimestamp
         _ = deltaTime  // available for delegate protocol extension in future
         guard let delegate else { return }
-        delegate.draw(metalLayer: metalLayer, drawable: update.drawable)
+        switch renderMode {
+        case .sync:
+            delegate.draw(metalLayer: metalLayer, drawable: update.drawable)
+        case .async:
+            _resizeLock.lock()
+            delegate.draw(metalLayer: metalLayer, drawable: update.drawable)
+            _resizeLock.unlock()
+        }
     }
 
     func pauseRenderLoop() {
@@ -233,9 +265,11 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 #if DEBUG_VIEW
         print("stopRenderLoop - MetalView: \(delegate?.id)")
 #endif
+        _continueRunLoop = false
         _displayLink?.delegate = nil
         _displayLink?.invalidate()
         _displayLink = nil
+        _renderThread = nil
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
     }
 
@@ -278,9 +312,16 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 #if DEBUG_VIEW
         print("resizeDrawable - MetalView: \(delegate?.id)")
 #endif
-        metalLayer.drawableSize = newSize
-
-        delegate?.drawableResized(size: newSize, scaleFactor: newScaleFactor)
+        switch renderMode {
+        case .sync:
+            metalLayer.drawableSize = newSize
+            delegate?.drawableResized(size: newSize, scaleFactor: newScaleFactor)
+        case .async:
+            _resizeLock.lock()
+            metalLayer.drawableSize = newSize
+            delegate?.drawableResized(size: newSize, scaleFactor: newScaleFactor)
+            _resizeLock.unlock()
+        }
     }
 
     // MARK: - Drag & Drop

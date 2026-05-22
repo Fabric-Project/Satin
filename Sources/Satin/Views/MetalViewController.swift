@@ -80,6 +80,7 @@ public final class MetalViewController: NSViewController {
 #endif
         self.metalView.metalLayer.device = self.renderer.context.device
         self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
+        self.metalView.renderMode = self.renderer.mode
         self.renderer.metalView = self.metalView
         self.renderer.performSetupIfNeeded()
         self.renderer.performAppearanceUpdate(self.getAppearance())
@@ -177,7 +178,7 @@ public final class MetalViewController: NSViewController {
         self.cleanupRenderer()
         self.removeEvents()
         self.removeTracking()
-        self.removeEvents()
+        self.metalView.stopRenderLoop()
         self.metalView.delegate = nil
     }
 
