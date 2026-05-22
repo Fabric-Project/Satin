@@ -20,6 +20,64 @@ Satin now separates render-loop ownership from scene encoding:
 - Camera controller event hookup / teardown is main-thread confined, while controller motion is still applied during frame updates.
 - Async resize no longer uses a blocking render-queue handoff.
 - Light movement now correctly refreshes shadow and projector state during render preparation.
+=======
+## Architecture Refactor — Encoder / Orchestrator Split (Breaking)
+
+The old `Renderer` class was conflating two unrelated responsibilities: encoding a scene graph into a `MTLCommandBuffer`, and owning the render loop (display link, command queue, semaphore, frame index). These are now separated into two distinct tiers.
+
+### Tier 1 — Encoders
+
+Classes that encode work into a `MTLCommandBuffer`. They have no display link, no command queue, and no frame index.
+
+| Old name | New name |
+|---|---|
+| `Renderer` | `RenderEncoder` |
+| `PostProcessor` | `PostProcessEncoder` |
+| `SsaoPostProcessor` | `SsaoPostProcessEncoder` |
+| `SsgiPostProcessor` | `SsgiPostProcessEncoder` |
+| `MotionBlurPostProcessor` | `MotionBlurPostProcessEncoder` |
+| `BokehDepthOfFieldPostProcessor` | `BokehDepthOfFieldPostProcessEncoder` |
+| `ARBackgroundRenderer` | `ARBackgroundEncoder` |
+| `ARBackgroundDepthRenderer` | `ARBackgroundDepthEncoder` |
+| `ARMatteRenderer` | `ARMatteEncoder` |
+| `ARPostProcessor` | `ARPostProcessEncoder` |
+
+`RenderEncoder` has no backward-compatibility typealias — the name `Renderer` is taken by the new orchestrator base. All call sites must migrate from `Renderer(context:)` to `RenderEncoder(context:)`.
+
+### Tier 2 — Render Drivers
+
+Classes that own the render loop: display link, command queue, GPU sync semaphore, and frame index.
+
+**New `Renderer` abstract base** (`Sources/Satin/Views/Renderer.swift`) consolidates the shared infrastructure that was previously duplicated between `MetalViewRenderer` and `MetalLayerRenderer`:
+
+- `context: Context` — set at init
+- `frameIndex: Int` — starts at -1, incremented each frame
+- `inFlightSemaphore` — GPU/CPU synchronisation, value = `maxBuffersInFlight`
+- Per-slot texture caches: `colorMultisampleTextures`, `depthTextures`, `depthMultisampleTextures`, `stencilTextures`, `stencilMultisampleTextures`
+- Storage mode / usage overrides for color, depth, and stencil textures
+- Frame encoding: `preDraw() -> MTLCommandBuffer?`, `draw(texture:commandBuffer:)`, `draw(renderPassDescriptor:commandBuffer:)`, `postDraw(commandBuffer:)`
+- Texture helpers: `getDepthTexture`, `getMultisampleDepthTexture`, `getStencilTexture`, `getMultisampleStencilTexture`, `getMultisampleColorTexture`
+- Lifecycle stubs: `setup()`, `update()`, `cleanup()`, `resize(size:scaleFactor:)`
+- `defaultContext` — convenience accessor for a single-sample context derived from the renderer's context
+
+| Old name | New name | Notes |
+|---|---|---|
+| *(new)* | `Renderer` | Abstract base; owns render loop infrastructure |
+| `MetalViewRenderer` | `ViewRenderer` | Subclasses `Renderer`; owns `MetalView` and input event stubs |
+| `MetalLayerRenderer` | `SpatialRenderer` | Subclasses `Renderer`; owns `LayerRenderer` and visionOS AR session |
+
+`MetalViewController` now accepts a `ViewRenderer` (previously `MetalViewRenderer`).
+
+### Migration
+
+- Replace `Renderer(context:)` with `RenderEncoder(context:)` at all call sites.
+- Replace `MetalViewRenderer` with `ViewRenderer`.
+- Replace `MetalLayerRenderer` with `SpatialRenderer`.
+- Replace `PostProcessor` with `PostProcessEncoder` and its subclasses accordingly.
+- Replace all `AR*Renderer` / `ARPostProcessor` references with the `*Encoder` equivalents.
+- Example utility base classes: `BaseRenderer: MetalViewRenderer` → `BaseRenderer: ViewRenderer`; `ImmersiveBaseRenderer: MetalLayerRenderer` → `ImmersiveBaseRenderer: SpatialRenderer`.
+
+---
 
 ## Alpha Order-Independent Transparency
 
