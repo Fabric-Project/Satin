@@ -103,7 +103,7 @@ final class ObjectShadowRenderer {
 
     var materialCache: [Object: Material] = [:]
 
-    lazy var material = BasicColorMaterial(context: context, color: .one, blending: .disabled)
+    lazy var material = BasicColorMaterial(context: context, color: .one, blending: .alpha)
 
     init(context: Context,
          object: Object,

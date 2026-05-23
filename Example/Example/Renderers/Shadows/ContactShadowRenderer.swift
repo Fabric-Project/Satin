@@ -140,6 +140,7 @@ final class ContactShadowRenderer: BaseRenderer {
         spheres.position.y = 1.5
         cameraController.target.position.y += 1
         renderer.setClearColor(.one)
+        floorMesh.material?.blending = .alpha
     }
 
     lazy var startTime = getTime()

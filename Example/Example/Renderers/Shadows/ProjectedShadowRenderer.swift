@@ -38,6 +38,7 @@ final class ProjectedShadowRenderer: BaseRenderer {
     override func setup() {
         renderer.setClearColor(.one)
         cameraController.target.position.y += 1
+        shadowMaterial.blending = .alpha
     }
 
     override func update() {
