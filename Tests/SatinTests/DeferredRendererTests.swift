@@ -3,6 +3,59 @@ import Satin
 import XCTest
 
 final class DeferredRendererTests: XCTestCase {
+    func testRendererAllocatesDepthTextureWhenDepthActionsAreDontCare() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            XCTFail("Metal unavailable")
+            return
+        }
+
+        guard let commandQueue = device.makeCommandQueue() else {
+            XCTFail("Failed to create command queue")
+            return
+        }
+
+        let size = SIMD2<Int>(96, 96)
+        let context = Context(
+            device: device,
+            sampleCount: 1,
+            colorPixelFormat: .bgra8Unorm,
+            depthPixelFormat: .depth32Float
+        )
+
+        let renderer = RenderEncoder(
+            context: context,
+            clearColor: VisualTestHarness.defaultClearColor,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare,
+            frameBufferOnly: false
+        )
+        renderer.resize((width: Float(size.x), height: Float(size.y)))
+        renderer.depthTextureStorageMode = readableTextureStorageMode
+
+        let camera = PerspectiveCamera(context: context, position: [0.0, 0.0, 4.0], near: 0.1, far: 100.0, fov: 30.0)
+        camera.aspect = Float(size.x) / Float(size.y)
+        camera.lookAt(target: .zero)
+
+        let scene = Object(context: context, label: "Depth DontCare Scene")
+        let mesh = Mesh(
+            context: context,
+            label: "Depth DontCare Mesh",
+            geometry: PlaneGeometry(context: context, width: 1.8, height: 1.8, orientation: .xy),
+            material: BasicColorMaterial(
+                context: context,
+                color: simd_float4(0.9, 0.4, 0.2, 1.0),
+                blending: .disabled
+            )
+        )
+        scene.add(mesh)
+
+        let outputTexture = try makeReadableColorTexture(device: device, size: size)
+        try drawFrame(renderer: renderer, commandQueue: commandQueue, scene: scene, camera: camera, renderTarget: outputTexture)
+
+        XCTAssertNotNil(renderer.depthTexture)
+        XCTAssertEqual(renderer.depthTexture?.pixelFormat, context.depthPixelFormat)
+    }
+
     func testDeferredRendererPopulatesExpectedOutputs() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             XCTFail("Metal unavailable")
