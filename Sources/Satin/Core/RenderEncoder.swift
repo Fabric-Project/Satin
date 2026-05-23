@@ -2253,7 +2253,6 @@ open class RenderEncoder {
     private func setupDepthTexture(arrayLength: Int) {
         guard updateDepthTexture,
               context.depthPixelFormat != .invalid,
-              (depthLoadAction != .dontCare && depthStoreAction != .dontCare),
               size.width > 0,
               size.height > 0
         else { return }
@@ -2281,8 +2280,6 @@ open class RenderEncoder {
     private func setupDepthMultisampleTexture(arrayLength: Int) {
         guard updateDepthMultisampleTexture,
               context.depthPixelFormat != .invalid,
-              (depthLoadAction != .dontCare && depthStoreAction != .dontCare),
-
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0
@@ -2313,7 +2310,6 @@ open class RenderEncoder {
     private func setupStencilTexture(arrayLength: Int) {
         guard updateStencilTexture,
               context.stencilPixelFormat != .invalid,
-              (stencilLoadAction != .dontCare && stencilStoreAction != .dontCare),
               size.width > 1,
               size.height > 1
         else { return }
@@ -2338,7 +2334,6 @@ open class RenderEncoder {
     private func setupStencilMultisampleTexture(arrayLength: Int) {
         guard updateStencilMultisampleTexture,
               context.stencilPixelFormat != .invalid,
-              (stencilLoadAction != .dontCare && stencilStoreAction != .dontCare),
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0 else { return }
