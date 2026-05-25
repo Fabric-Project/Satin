@@ -379,7 +379,8 @@ private func renderOverlappingAlphaStack(
         colorPixelFormat: .bgra8Unorm,
         depthPixelFormat: .depth32Float,
         renderingMode: mode,
-        activeOutputs: activeOutputs
+        activeOutputs: activeOutputs,
+        alphaOitEnabled: true,
     )
 
     let renderer = RenderEncoder(

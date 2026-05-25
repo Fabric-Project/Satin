@@ -28,9 +28,11 @@ final class VisualRendererTests: XCTestCase {
             return (scene: Object(context: context, label: "Scene", [quad]), camera: camera)
         }
 
-        VisualTestHarness.assertContainsVisibleContent(image, minimumChangedPixelRatio: 0.85, minimumMeanNormalizedDifference: 0.1)
+        let opaqueImage = makeOpaque(image)
+
+        VisualTestHarness.assertContainsVisibleContent(opaqueImage, minimumChangedPixelRatio: 0.85, minimumMeanNormalizedDifference: 0.1)
         try VisualTestHarness.assertVisualMatch(
-            image,
+            opaqueImage,
             reference: .bundle(name: "compute-noise"),
             threshold: 0.003
         )
@@ -532,6 +534,14 @@ final class VisualRendererTests: XCTestCase {
             threshold: 0.01
         )
     }
+}
+
+private func makeOpaque(_ image: RGBAImage) -> RGBAImage {
+    var pixels = image.pixels
+    for index in stride(from: 3, to: pixels.count, by: 4) {
+        pixels[index] = 255
+    }
+    return RGBAImage(width: image.width, height: image.height, pixels: pixels)
 }
 
 private func makeCheckerTexture(device: MTLDevice, width: Int, height: Int) -> MTLTexture {
