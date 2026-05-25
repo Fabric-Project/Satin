@@ -177,10 +177,10 @@ public final class ParametricGeometry: Geometry {
 
                 let pt = posT - pos
                 let pr = posR - pos
-                let n0 = normalize(cross(pr, pt))
+                let n0 = normalize(cross(pt, pr))
                 let pb = posB - pos
                 let pl = posL - pos
-                let n1 = normalize(cross(pl, pb))
+                let n1 = normalize(cross(pb, pl))
 
                 var normal = simd_make_float3(0.0, 0.0, 0.0)
                 var sum: Float = 0
