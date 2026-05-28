@@ -1,4 +1,5 @@
 #include "SurfaceOutput.metal"
+#include "../Library/SafeNormalize.metal"
 
 // Builds a FragmentOutput from a SurfaceOutput and the already-computed lit color.
 // Velocity is geometry-derived and computed here — materials never need to handle it.
@@ -28,7 +29,9 @@ inline FragmentOutput buildFragmentOutput(
 
 #ifdef OUTPUT_NORMALS
     // Encode world-space normal to [0,1] range for storage in rgba16Float.
-    out.normal   = half4(half3(normalize(surface.normal) * 0.5h + 0.5h), 1.0h);
+    // This is the last boundary before an invalid normal reaches the G-buffer.
+    const float3 safeSurfaceNormal = safeNormalize(float3(surface.normal), float3(0.0f, 0.0f, 1.0f));
+    out.normal   = half4(half3(safeSurfaceNormal * 0.5h + 0.5h), 1.0h);
 #endif
 
 #ifdef OUTPUT_PBR

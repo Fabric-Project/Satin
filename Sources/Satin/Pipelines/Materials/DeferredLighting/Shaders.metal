@@ -1,6 +1,7 @@
 #include "Satin/PbrConstants.metal"
 
 #include "Library/Pbr/Pbr.metal"
+#include "Library/SafeNormalize.metal"
 
 typedef struct {
     float4x4 inverseProjectionMatrix;
@@ -65,10 +66,13 @@ fragment half4 deferredLightingFragment(
     const float3 worldPosition = (uniforms.inverseViewMatrix * float4(viewPosition, 1.0)).xyz;
 
     float3 worldNormal = normalTexture.sample(gbufferSampler, uv).xyz * 2.0 - 1.0;
-    if (dot(worldNormal, worldNormal) <= 1.0e-4) {
-        worldNormal = normalize(cross(dfdx(worldPosition), dfdy(worldPosition)));
+    // If the stored normal is invalid, fall back to a finite geometric reconstruction.
+    const float3 geometricNormal = safeNormalize(cross(dfdx(worldPosition), dfdy(worldPosition)), float3(0.0f, 0.0f, 1.0f));
+    const float worldNormalLength2 = dot(worldNormal, worldNormal);
+    if (!isfinite(worldNormalLength2) || worldNormalLength2 <= 1.0e-4) {
+        worldNormal = geometricNormal;
     } else {
-        worldNormal = normalize(worldNormal);
+        worldNormal = safeNormalize(worldNormal, geometricNormal);
     }
 
     PixelInfo pixel;
