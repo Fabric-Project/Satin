@@ -157,12 +157,12 @@ struct ContentView: View {
             ExampleSection(
                 title: "Shadows",
                 items: [
-                    ExampleItem(id: "contact-shadow", title: "Contact Shadow (Utility)", systemImage: "square.2.layers.3d.bottom.filled") { ContactShadowRendererView() },
-                    ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "shadow") { DirectionalShadowRendererView() },
-                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "lightbulb.2") { PointShadowRendererView() },
-                    ExampleItem(id: "spot-shadow", title: "Spot Shadows", systemImage: "flashlight.on.fill") { SpotShadowRendererView() },
-                    ExampleItem(id: "projector", title: "Projector", systemImage: "film.stack") { ProjectorRendererView() },
-                    ExampleItem(id: "projected-shadow", title: "Projected Shadow (Utility)", systemImage: "shadow") { ProjectedShadowRendererView() }
+                    ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "light.overhead.left") { DirectionalShadowRendererView() },
+                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "pointer.arrow.rays") { PointShadowRendererView() },
+                    ExampleItem(id: "spot-shadow", title: "Spot Shadows", systemImage: "lamp.desk") { SpotShadowRendererView() },
+                    ExampleItem(id: "projector", title: "Projector", systemImage: "videoprojector") { ProjectorRendererView() },
+                    ExampleItem(id: "contact-shadow", title: "Custom Contact Shadow", systemImage: "app.shadow") { ContactShadowRendererView() },
+                    ExampleItem(id: "projected-shadow", title: "Custom Projected Shadow", systemImage: "app.shadow") { ProjectedShadowRendererView() }
                 ]
             )
         )
