@@ -40,10 +40,10 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
-
-    override init() {
-        super.init()
-
+    
+    override init(context: Context) {
+        super.init(context: context)
+       
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.personSegmentationWithDepth]
         session.run(config)

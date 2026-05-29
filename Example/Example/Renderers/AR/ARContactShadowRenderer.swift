@@ -115,9 +115,8 @@ final class ARContactShadowRenderer: BaseRenderer {
     )
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [invaderContainer])
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
     lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = RenderEncoder(context: context)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     var backgroundRenderer: ARBackgroundEncoder!
 
@@ -126,9 +125,10 @@ final class ARContactShadowRenderer: BaseRenderer {
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
-
-    override init() {
-        super.init()
+    
+    override init(context: Context)
+    {
+        super.init(context: context)
 
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]

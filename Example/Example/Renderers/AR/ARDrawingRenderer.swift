@@ -54,11 +54,17 @@ final class ARDrawingRenderer: BaseRenderer {
 
     var clear: Binding<Bool>
 
-    init(clear: Binding<Bool>) {
+    convenience init(clear: Binding<Bool>) {
+
+        self.init(context: .makePlatformDefault())
         self.clear = clear
+    }
 
-        super.init()
-
+    override init(context: Context)
+    {
+        self.clear = .constant(false)
+        super.init(context: context)
+       
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.smoothedSceneDepth]
         session.run(config)

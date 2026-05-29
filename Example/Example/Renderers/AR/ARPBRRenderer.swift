@@ -318,10 +318,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         color: [0.0, 0.0, 0.0, 0.9]
     )
 
-    fileprivate lazy var scene = ARScene(context:self.context, label: "Scene", [modelContainer], session: session)
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(context:self.context, session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = RenderEncoder(context: context, frameBufferOnly: false)
+    fileprivate lazy var scene = ARScene(context:defaultContext, label: "Scene", [modelContainer], session: session)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var renderer = RenderEncoder(context: defaultContext, frameBufferOnly: false)
 
     var backgroundRenderer: ARBackgroundDepthEncoder!
     var featheredDepthMaskGenerator: ARFeatheredDepthMaskGenerator!
@@ -345,8 +344,8 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let config = ARWorldTrackingConfiguration()
         config.environmentTexturing = .manual

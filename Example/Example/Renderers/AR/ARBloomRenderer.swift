@@ -111,8 +111,8 @@ final class ARBloomRenderer: BaseRenderer {
         material: postMaterial
     )
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
         let configuration = ARWorldTrackingConfiguration()
         // ARBackgroundDepthEncoder supports:
         configuration.frameSemantics = .smoothedSceneDepth

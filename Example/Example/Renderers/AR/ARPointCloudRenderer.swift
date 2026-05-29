@@ -69,8 +69,8 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     var backgroundRenderer: ARBackgroundDepthEncoder!
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.sceneDepth, .smoothedSceneDepth]

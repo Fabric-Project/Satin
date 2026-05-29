@@ -122,8 +122,8 @@ final class ARPlanesRenderer: BaseRenderer {
 
     // MARK: - Init
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]

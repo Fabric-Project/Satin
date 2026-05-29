@@ -35,8 +35,8 @@ final class ARRenderer: BaseRenderer {
         .invalid
     }
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context:context)
 
         session.run(ARWorldTrackingConfiguration())
     }
