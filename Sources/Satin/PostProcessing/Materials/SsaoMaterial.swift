@@ -36,6 +36,16 @@ public final class SsaoMaterial: Material {
         set { set("Contrast", newValue) }
     }
 
+    public var noiseMode: Int32 {
+        get { get("Noise Mode", as: IntParameter.self).map { Int32($0.value) } ?? 0 }
+        set { set("Noise Mode", Int(newValue)) }
+    }
+
+    public var rejectOffscreenSamples: Bool {
+        get { get("Reject Offscreen Samples", as: IntParameter.self).map { $0.value != 0 } ?? true }
+        set { set("Reject Offscreen Samples", newValue ? 1 : 0) }
+    }
+
     public init(context: Context, depthTexture: MTLTexture? = nil, normalTexture: MTLTexture? = nil) {
         self.depthTexture = depthTexture
         self.normalTexture = normalTexture
@@ -55,13 +65,17 @@ public final class SsaoMaterial: Material {
 
     private func configure() {
         blending = .disabled
+        depthWriteEnabled = false
         if get("Radius") == nil { set("Radius", Float(0.5)) }
         if get("Bias") == nil { set("Bias", Float(0.025)) }
         if get("Power") == nil { set("Power", Float(1.5)) }
         if get("Contrast") == nil { set("Contrast", Float(1.0)) }
         if get("Kernel Size") == nil { set("Kernel Size", 16) }
+        if get("Noise Mode") == nil { set("Noise Mode", 0) }
+        if get("Reject Offscreen Samples") == nil { set("Reject Offscreen Samples", 1) }
         set(depthTexture, index: FragmentTextureIndex.Custom0)
         set(normalTexture, index: FragmentTextureIndex.Custom1)
+        self.depthCompareFunction = .always
     }
 
     public func update(camera: Camera) {

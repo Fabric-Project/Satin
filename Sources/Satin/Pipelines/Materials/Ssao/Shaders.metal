@@ -7,6 +7,8 @@ typedef struct {
     float power;        // slider,0.5,8.0,1.5, Power
     float contrast;     // slider,0.0,4.0,1.0, Contrast
     int kernelSize;     // slider,1,16,16, Kernel Size
+    int noiseMode;      // slider,0,1,0, Noise Mode
+    int rejectOffscreenSamples; // slider,0,1,1, Reject Offscreen Samples
 } SsaoUniforms;
 
 // Hemisphere kernel with quadratic distance distribution — biases samples
@@ -51,6 +53,10 @@ static float3 ssaoReconstructViewPos(float2 uv, float depth, float4x4 invProj) {
     return viewPos.xyz / viewPos.w;
 }
 
+static bool ssaoUvInside(float2 uv) {
+    return uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0;
+}
+
 fragment half ssaoFragment(
     VertexData in [[stage_in]],
     constant SsaoUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
@@ -72,10 +78,13 @@ fragment half ssaoFragment(
     if (dot(worldNormal, worldNormal) < 1e-6) return 1.0h;
     const float3 normal = normalize((uniforms.viewMatrix * float4(worldNormal, 0.0)).xyz);
 
-    // 4x4 tiling noise for kernel rotation — same approach as lettier's reference.
-    const int noiseX = int(in.position.x) % 4;
-    const int noiseY = int(in.position.y) % 4;
-    const float3 randomVec = ssaoNoise[noiseX + noiseY * 4];
+    // `[[position]]` is in render-target pixel space in the fragment stage, which keeps the
+    // kernel rotation anchored to the AO target instead of any interpolated clip coordinate.
+    const uint2 pixelCoord = uint2(floor(in.position.xy));
+    const uint noiseIndex = (pixelCoord.x & 3u) + ((pixelCoord.y & 3u) << 2u);
+    const float3 randomVec = uniforms.noiseMode == 0
+        ? ssaoNoise[noiseIndex]
+        : float3(0.70710678, 0.70710678, 0.0);
 
     const float3 tangent   = normalize(randomVec - normal * dot(randomVec, normal));
     const float3 bitangent = cross(normal, tangent);
@@ -93,11 +102,20 @@ fragment half ssaoFragment(
         offset.xyz /= offset.w;
         // NDC y=+1 is top; Satin UV y=0 is top, so flip Y when converting to sample UV.
         const float2 sampleUV = float2(offset.x * 0.5 + 0.5, 0.5 - offset.y * 0.5);
+        if (uniforms.rejectOffscreenSamples != 0 && !ssaoUvInside(sampleUV)) {
+            continue;
+        }
 
         const float sampleDepth = depthTex.sample(s, sampleUV);
+        if (sampleDepth <= 0.0) {
+            continue;
+        }
         const float3 sampleViewPos = ssaoReconstructViewPos(sampleUV, sampleDepth, uniforms.inverseProjectionMatrix);
 
         const float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragViewPos.z - sampleViewPos.z + 1e-5));
+        // Reversed-Z reconstruction yields more negative view-space z values as geometry moves
+        // farther from the camera, so a fetched depth occludes only when it lies in front of
+        // the candidate sample point after applying the bias.
         occlusion += (sampleViewPos.z >= samplePos.z + bias ? 1.0 : 0.0) * rangeCheck;
     }
 

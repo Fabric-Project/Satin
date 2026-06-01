@@ -23,7 +23,10 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
     }
 
     public var normalTexture: MTLTexture? {
-        didSet { ssaoMaterial.normalTexture = normalTexture }
+        didSet {
+            ssaoMaterial.normalTexture = normalTexture
+            blurMaterial.normalTexture = normalTexture
+        }
     }
 
     public var colorTexture: MTLTexture? {
@@ -94,14 +97,14 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
             label: "SSAO Composite",
             context: compositeContext,
             material: compositeMaterial,
-            depthLoadAction: .dontCare,
+            depthLoadAction: .clear,
             depthStoreAction: .dontCare
         )
         super.init(
             label: "SSAO",
             context: ssaoContext,
             material: ssaoMaterial,
-            depthLoadAction: .dontCare,
+            depthLoadAction: .clear,
             depthStoreAction: .dontCare
         )
     }
@@ -174,6 +177,7 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         if hasAOInputs, let rawTexture {
             if let cam = sceneCamera {
                 ssaoMaterial.update(camera: cam)
+                blurMaterial.update(camera: cam)
             }
 
             super.draw(

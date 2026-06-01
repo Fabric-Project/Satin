@@ -23,9 +23,18 @@ public final class SsaoBlurMaterial: Material {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
     }
 
-    public var sharpness: Float {
-        get { get("Sharpness", as: FloatParameter.self)?.value ?? 500.0 }
-        set { set("Sharpness", newValue) }
+    public unowned var normalTexture: MTLTexture? {
+        didSet { set(normalTexture, index: FragmentTextureIndex.Custom2) }
+    }
+
+    public var depthPhi: Float {
+        get { get("Depth Phi", as: FloatParameter.self)?.value ?? 0.1 }
+        set { set("Depth Phi", newValue) }
+    }
+
+    public var normalPhi: Float {
+        get { get("Normal Phi", as: FloatParameter.self)?.value ?? 8.0 }
+        set { set("Normal Phi", newValue) }
     }
 
     public var blurRadius: Int32 {
@@ -50,11 +59,21 @@ public final class SsaoBlurMaterial: Material {
     private func configure() {
         blending = .disabled
         depthWriteEnabled = false
-        if get("Sharpness") == nil { set("Sharpness", Float(500.0)) }
+        depthCompareFunction = .always
+        if get("Inverse Projection Matrix") == nil { set("Inverse Projection Matrix", matrix_identity_float4x4) }
+        if get("View Matrix") == nil { set("View Matrix", matrix_identity_float4x4) }
+        if get("Depth Phi") == nil { set("Depth Phi", Float(0.1)) }
+        if get("Normal Phi") == nil { set("Normal Phi", Float(8.0)) }
         if get("Blur Radius") == nil { set("Blur Radius", 4) }
         set(passUniformsBuffer, index: FragmentBufferIndex.Custom0)
         set(ssaoTexture, index: FragmentTextureIndex.Custom0)
         set(depthTexture, index: FragmentTextureIndex.Custom1)
+        set(normalTexture, index: FragmentTextureIndex.Custom2)
+    }
+
+    public func update(camera: Camera) {
+        set("Inverse Projection Matrix", camera.projectionMatrix.inverse)
+        set("View Matrix", camera.viewMatrix)
     }
 
     override public func update() {

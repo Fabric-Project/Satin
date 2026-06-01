@@ -207,6 +207,10 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         setupLights()
         setupOverlayScene()
 
+        ssaoPostProcessEncoder.resolutionScale = 0.5
+        ssaoPostProcessEncoder.ssaoMaterial.rejectOffscreenSamples = true
+        ssaoPostProcessEncoder.ssaoMaterial.noiseMode = 0
+
         scene.environmentIntensity = 0.000025
 
 #if os(visionOS)
