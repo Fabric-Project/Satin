@@ -54,15 +54,13 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["Material", "SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur", "DOF"]
+        ["Material", "SSAO", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
         [
             "Material": material.parameters,
-            "SSAO": ssaoPostProcessEncoder.ssaoMaterial.parameters,
-            "SSAO Blur": ssaoPostProcessEncoder.blurMaterial.parameters,
-            "SSAO Composite": ssaoPostProcessEncoder.compositeMaterial.parameters,
+            "SSAO": ssaoPostProcessEncoder.parameters,
             "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters,
             "DOF": bokehDepthOfFieldPostProcessEncoder.parameters
         ]

@@ -3,6 +3,28 @@ import simd
 
 public final class SsaoMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
+
+    private struct Uniforms {
+        var projectionMatrix: simd_float4x4
+        var inverseProjectionMatrix: simd_float4x4
+        var viewMatrix: simd_float4x4
+        var radius: Float
+        var bias: Float
+        var sampleCount: Int32
+        var _padding: Int32
+    }
+
+    private lazy var uniformsBuffer = StructBuffer<Uniforms>(
+        device: context.device,
+        count: 1,
+        label: "SSAO Uniforms"
+    )
+
+    private var projectionMatrix = matrix_identity_float4x4
+    private var inverseProjectionMatrix = matrix_identity_float4x4
+    private var viewMatrix = matrix_identity_float4x4
+    private var uniformsNeedUpdate = true
+
     public unowned var depthTexture: MTLTexture? {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom0) }
     }
@@ -11,39 +33,24 @@ public final class SsaoMaterial: Material {
         didSet { set(normalTexture, index: FragmentTextureIndex.Custom1) }
     }
 
+    public unowned var blueNoiseTexture: MTLTexture? {
+        didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom2) }
+    }
+
     public var radius: Float {
-        get { get("Radius", as: FloatParameter.self)?.value ?? 0.5 }
-        set { set("Radius", newValue) }
+        get { get("Radius", as: FloatParameter.self)?.value ?? 0.75 }
+        set {
+            set("Radius", newValue)
+            uniformsNeedUpdate = true
+        }
     }
 
-    public var bias: Float {
-        get { get("Bias", as: FloatParameter.self)?.value ?? 0.025 }
-        set { set("Bias", newValue) }
-    }
-
-    public var kernelSize: Int32 {
-        get { get("Kernel Size", as: IntParameter.self).map { Int32($0.value) } ?? 16 }
-        set { set("Kernel Size", Int(newValue)) }
-    }
-
-    public var power: Float {
-        get { get("Power", as: FloatParameter.self)?.value ?? 1.5 }
-        set { set("Power", newValue) }
-    }
-
-    public var contrast: Float {
-        get { get("Contrast", as: FloatParameter.self)?.value ?? 1.0 }
-        set { set("Contrast", newValue) }
-    }
-
-    public var noiseMode: Int32 {
-        get { get("Noise Mode", as: IntParameter.self).map { Int32($0.value) } ?? 0 }
-        set { set("Noise Mode", Int(newValue)) }
-    }
-
-    public var rejectOffscreenSamples: Bool {
-        get { get("Reject Offscreen Samples", as: IntParameter.self).map { $0.value != 0 } ?? true }
-        set { set("Reject Offscreen Samples", newValue ? 1 : 0) }
+    public var quality: Int32 {
+        get { get("Quality", as: IntParameter.self).map { Int32($0.value) } ?? 2 }
+        set {
+            set("Quality", Int(newValue))
+            uniformsNeedUpdate = true
+        }
     }
 
     public init(context: Context, depthTexture: MTLTexture? = nil, normalTexture: MTLTexture? = nil) {
@@ -66,21 +73,68 @@ public final class SsaoMaterial: Material {
     private func configure() {
         blending = .disabled
         depthWriteEnabled = false
-        if get("Radius") == nil { set("Radius", Float(0.5)) }
-        if get("Bias") == nil { set("Bias", Float(0.025)) }
-        if get("Power") == nil { set("Power", Float(1.5)) }
-        if get("Contrast") == nil { set("Contrast", Float(1.0)) }
-        if get("Kernel Size") == nil { set("Kernel Size", 16) }
-        if get("Noise Mode") == nil { set("Noise Mode", 0) }
-        if get("Reject Offscreen Samples") == nil { set("Reject Offscreen Samples", 1) }
+        depthCompareFunction = .always
+
+        let orderedParameters = ParameterGroup()
+        orderedParameters.append(
+            FloatParameter(
+                "Radius",
+                get("Radius", as: FloatParameter.self)?.value ?? 0.75,
+                0.05,
+                3.0,
+                .slider,
+                "View-space occlusion radius."
+            )
+        )
+        orderedParameters.append(
+            IntParameter(
+                "Quality",
+                get("Quality", as: IntParameter.self)?.value ?? 2,
+                1,
+                3,
+                .slider
+            )
+        )
+        parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
+
+        set(uniformsBuffer, index: FragmentBufferIndex.Custom0)
         set(depthTexture, index: FragmentTextureIndex.Custom0)
         set(normalTexture, index: FragmentTextureIndex.Custom1)
-        self.depthCompareFunction = .always
+        set(blueNoiseTexture, index: FragmentTextureIndex.Custom2)
     }
 
     public func update(camera: Camera) {
-        set("Projection Matrix", camera.projectionMatrix)
-        set("Inverse Projection Matrix", camera.projectionMatrix.inverse)
-        set("View Matrix", camera.viewMatrix)
+        projectionMatrix = camera.projectionMatrix
+        inverseProjectionMatrix = camera.projectionMatrix.inverse
+        viewMatrix = camera.viewMatrix
+        uniformsNeedUpdate = true
+    }
+
+    override public func update() {
+        if uniformsNeedUpdate {
+            uniformsBuffer.update(data: [Uniforms(
+                projectionMatrix: projectionMatrix,
+                inverseProjectionMatrix: inverseProjectionMatrix,
+                viewMatrix: viewMatrix,
+                radius: radius,
+                bias: max(0.01, min(radius * 0.05, 0.05)),
+                sampleCount: sampleCount(for: quality),
+                _padding: 0
+            )])
+            uniformsNeedUpdate = false
+        }
+
+        super.update()
+    }
+
+    private func sampleCount(for quality: Int32) -> Int32 {
+        switch max(1, min(quality, 3)) {
+        case 1:
+            return 8
+        case 2:
+            return 12
+        default:
+            return 16
+        }
     }
 }

@@ -1,6 +1,5 @@
 typedef struct {
     float intensity; // slider,0.0,2.0,1.0, Intensity
-    float lift;      // slider,0.0,1.0,0.0, Lift
 } SsaoCompositeUniforms;
 
 fragment float4 ssaoCompositeFragment(
@@ -14,7 +13,7 @@ fragment float4 ssaoCompositeFragment(
     const float2 uv = in.texcoord;
     const float4 color = colorTex.sample(s, uv);
     const float ao = aoTex.sample(s, uv).r;
-    const float occlusion = mix(1.0, max(ao, uniforms.lift), uniforms.intensity);
+    const float occlusion = mix(1.0, ao, uniforms.intensity);
 
     return float4(color.rgb * occlusion, color.a);
 }

@@ -54,14 +54,12 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["SSAO", "SSAO Blur", "SSAO Composite", "Motion Blur", "DOF"]
+        ["SSAO", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
         [
-            "SSAO": ssaoPostProcessEncoder.ssaoMaterial.parameters,
-            "SSAO Blur": ssaoPostProcessEncoder.blurMaterial.parameters,
-            "SSAO Composite": ssaoPostProcessEncoder.compositeMaterial.parameters,
+            "SSAO": ssaoPostProcessEncoder.parameters,
             "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters,
             "DOF": bokehDepthOfFieldPostProcessEncoder.parameters
         ]
@@ -206,10 +204,6 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         setupSponzaScene()
         setupLights()
         setupOverlayScene()
-
-        ssaoPostProcessEncoder.resolutionScale = 0.5
-        ssaoPostProcessEncoder.ssaoMaterial.rejectOffscreenSamples = true
-        ssaoPostProcessEncoder.ssaoMaterial.noiseMode = 0
 
         scene.environmentIntensity = 0.000025
 

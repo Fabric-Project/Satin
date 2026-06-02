@@ -16,11 +16,6 @@ public final class SsaoCompositeMaterial: Material {
         set { set("Intensity", newValue) }
     }
 
-    public var lift: Float {
-        get { get("Lift", as: FloatParameter.self)?.value ?? 0.0 }
-        set { set("Lift", newValue) }
-    }
-
     public required init(context: Context) {
         super.init(context: context)
         configure()
@@ -34,8 +29,20 @@ public final class SsaoCompositeMaterial: Material {
     private func configure() {
         blending = .disabled
         depthWriteEnabled = false
-        if get("Intensity") == nil { set("Intensity", Float(1.0)) }
-        if get("Lift") == nil { set("Lift", Float(0.0)) }
+        depthCompareFunction = .always
+
+        let orderedParameters = ParameterGroup()
+        orderedParameters.append(
+            FloatParameter(
+                "Intensity",
+                get("Intensity", as: FloatParameter.self)?.value ?? 1.0,
+                0.0,
+                2.0,
+                .slider,
+                "Strength of the ambient-occlusion darkening."
+            )
+        )
+        parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
         set(colorTexture, index: FragmentTextureIndex.Custom0)
         set(aoTexture, index: FragmentTextureIndex.Custom1)
     }

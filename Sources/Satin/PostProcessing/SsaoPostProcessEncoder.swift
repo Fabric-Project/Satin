@@ -4,28 +4,29 @@
 //
 
 import Metal
+import MetalKit
 import simd
 
-/// Full SSAO pipeline: raw ambient-occlusion, separable bilateral blur, and color composite.
-/// Requires `RenderEncoder.activeOutputs` to include `.normals`.
+/// XeGTAO-inspired SSAO pipeline:
+/// 1. prefilter hardware depth into a linear view-space depth buffer
+/// 2. generate raw AO from linear depth + normals
+/// 3. denoise AO with edge-aware blue-noise-rotated filtering
+/// 4. composite AO over the color buffer
+///
+/// Public controls stay intentionally narrow: radius, quality, intensity, and resolution scale.
 open class SsaoPostProcessEncoder: PostProcessEncoder {
     private static let defaultResolutionScale: Float = 0.5
     private static let minResolutionScale: Float = 0.25
     private static let maxResolutionScale: Float = 1.0
 
-    // MARK: - Inputs
-
     public var depthTexture: MTLTexture? {
-        didSet {
-            ssaoMaterial.depthTexture = depthTexture
-            blurMaterial.depthTexture = depthTexture
-        }
+        didSet { prefilterMaterial.depthTexture = depthTexture }
     }
 
     public var normalTexture: MTLTexture? {
         didSet {
             ssaoMaterial.normalTexture = normalTexture
-            blurMaterial.normalTexture = normalTexture
+            denoiseMaterial.normalTexture = normalTexture
         }
     }
 
@@ -35,45 +36,98 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
 
     public var sceneCamera: Camera?
 
+    public let parameters: ParameterGroup = ParameterGroup("SSAO", [
+        FloatParameter(
+            "Radius",
+            0.75,
+            0.05,
+            3.0,
+            .slider,
+            "View-space radius used for ambient occlusion sampling."
+        ),
+        IntParameter(
+            "Quality",
+            2,
+            1,
+            3,
+            .slider
+        ),
+        FloatParameter(
+            "Intensity",
+            1.0,
+            0.0,
+            2.0,
+            .slider,
+            "Strength of the ambient-occlusion darkening."
+        ),
+        FloatParameter(
+            "Resolution Scale",
+            defaultResolutionScale,
+            minResolutionScale,
+            maxResolutionScale,
+            .slider,
+            "Internal SSAO resolution relative to the main color buffer."
+        ),
+    ])
+
+    public var radius: Float {
+        get { parameters.get("Radius", as: FloatParameter.self)?.value ?? 0.75 }
+        set { parameters.get("Radius", as: FloatParameter.self)?.value = newValue }
+    }
+
+    public var quality: Int32 {
+        get { parameters.get("Quality", as: IntParameter.self).map { Int32($0.value) } ?? 2 }
+        set { parameters.get("Quality", as: IntParameter.self)?.value = Int(newValue) }
+    }
+
+    public var intensity: Float {
+        get { parameters.get("Intensity", as: FloatParameter.self)?.value ?? 1.0 }
+        set { parameters.get("Intensity", as: FloatParameter.self)?.value = newValue }
+    }
+
     public var resolutionScale: Float {
-        get { _resolutionScale }
+        get { parameters.get("Resolution Scale", as: FloatParameter.self)?.value ?? Self.defaultResolutionScale }
         set {
             let clamped = Self.clampResolutionScale(newValue)
-            guard clamped != _resolutionScale else { return }
-            _resolutionScale = clamped
+            guard let param = parameters.get("Resolution Scale", as: FloatParameter.self) else { return }
+            guard param.value != clamped else { return }
+            param.value = clamped
             resizeResources()
         }
     }
 
-    // MARK: - Output
-
     public private(set) var aoTexture: MTLTexture?
     public private(set) var outputTexture: MTLTexture?
 
-    // MARK: - Materials
-
+    public let prefilterMaterial: SsaoPrefilterMaterial
     public let ssaoMaterial: SsaoMaterial
-    public let blurMaterial: SsaoBlurMaterial
+    public let denoiseMaterial: SsaoDenoiseMaterial
     public let compositeMaterial: SsaoCompositeMaterial
 
-    // MARK: - Internals
-
-    private let blurProcessor: SeparablePostProcessEncoder
+    private let prefilterProcessor: PostProcessEncoder
+    private let denoiseProcessor: PostProcessEncoder
     private let compositeProcessor: PostProcessEncoder
+    private var linearDepthTexture: MTLTexture?
     private var rawTexture: MTLTexture?
+    private var denoisedTexture: MTLTexture?
+    private var linearDepthTextureSize: (width: Int, height: Int) = (0, 0)
     private var rawTextureSize: (width: Int, height: Int) = (0, 0)
+    private var denoisedTextureSize: (width: Int, height: Int) = (0, 0)
     private var outputTextureSize: (width: Int, height: Int) = (0, 0)
     private var lastSize: (width: Float, height: Float) = (0, 0)
     private var whiteAOTexture: MTLTexture?
-    private var _resolutionScale = SsaoPostProcessEncoder.defaultResolutionScale
-
-    // MARK: - Init
+    private var blueNoiseTexture: MTLTexture?
+    private var appliedResolutionScale: Float = 0.5
 
     private static func clampResolutionScale(_ value: Float) -> Float {
         min(max(value, Self.minResolutionScale), Self.maxResolutionScale)
     }
 
-    private static func makeSsaoContext(context: Context) -> Context {
+    private static func makeDepthContext(context: Context) -> Context {
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r16Float)
+    }
+
+    private static func makeAoContext(context: Context) -> Context {
         Context(device: context.device, sampleCount: 1, colorPixelFormat: .r8Unorm)
     }
 
@@ -82,34 +136,51 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
     }
 
     public required init(context: Context) {
-        let ssaoContext = Self.makeSsaoContext(context: context)
+        let depthContext = Self.makeDepthContext(context: context)
+        let aoContext = Self.makeAoContext(context: context)
         let compositeContext = Self.makeCompositeContext(context: context)
-        ssaoMaterial = SsaoMaterial(context: ssaoContext)
-        blurMaterial = SsaoBlurMaterial(context: ssaoContext)
+
+        prefilterMaterial = SsaoPrefilterMaterial(context: depthContext)
+        ssaoMaterial = SsaoMaterial(context: aoContext)
+        denoiseMaterial = SsaoDenoiseMaterial(context: aoContext)
         compositeMaterial = SsaoCompositeMaterial(context: compositeContext)
-        blurProcessor = SeparablePostProcessEncoder(
-            label: "SSAO Blur",
-            context: ssaoContext,
-            horizontalMaterial: blurMaterial,
-            verticalMaterial: blurMaterial
+
+        prefilterProcessor = PostProcessEncoder(
+            label: "SSAO Prefilter",
+            context: depthContext,
+            material: prefilterMaterial,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare
         )
+
+        denoiseProcessor = PostProcessEncoder(
+            label: "SSAO Denoise",
+            context: aoContext,
+            material: denoiseMaterial,
+            depthLoadAction: .dontCare,
+            depthStoreAction: .dontCare
+        )
+
         compositeProcessor = PostProcessEncoder(
             label: "SSAO Composite",
             context: compositeContext,
             material: compositeMaterial,
-            depthLoadAction: .clear,
+            depthLoadAction: .dontCare,
             depthStoreAction: .dontCare
         )
+
         super.init(
             label: "SSAO",
-            context: ssaoContext,
+            context: aoContext,
             material: ssaoMaterial,
-            depthLoadAction: .clear,
+            depthLoadAction: .dontCare,
             depthStoreAction: .dontCare
         )
-    }
 
-    // MARK: - Resize
+        blueNoiseTexture = loadBlueNoiseTexture(device: context.device) ?? makeFallbackBlueNoiseTexture(device: context.device)
+        ssaoMaterial.blueNoiseTexture = blueNoiseTexture
+        denoiseMaterial.blueNoiseTexture = blueNoiseTexture
+    }
 
     override open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         lastSize = size
@@ -118,16 +189,31 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
     }
 
     private func resizeResources() {
+        appliedResolutionScale = resolutionScale
         let scaledWidth = Int(max((lastSize.width * resolutionScale).rounded(.up), 0.0))
         let scaledHeight = Int(max((lastSize.height * resolutionScale).rounded(.up), 0.0))
         let scaledSize = (width: Float(scaledWidth), height: Float(scaledHeight))
 
+        prefilterProcessor.resize(size: scaledSize, scaleFactor: 1.0)
         super.resize(size: scaledSize, scaleFactor: 1.0)
-        blurProcessor.resize(size: lastSize, resolutionScale: resolutionScale)
+        denoiseProcessor.resize(size: scaledSize, scaleFactor: 1.0)
 
         aoTexture = nil
 
         if scaledWidth > 0, scaledHeight > 0 {
+            if linearDepthTextureSize.width != scaledWidth || linearDepthTextureSize.height != scaledHeight {
+                linearDepthTexture = makeTexture(
+                    device: prefilterProcessor.context.device,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    pixelFormat: .r16Float,
+                    usage: [.renderTarget, .shaderRead],
+                    storageMode: .private,
+                    label: "SSAO Linear Depth"
+                )
+                linearDepthTextureSize = (scaledWidth, scaledHeight)
+            }
+
             if rawTextureSize.width != scaledWidth || rawTextureSize.height != scaledHeight {
                 rawTexture = makeTexture(
                     device: context.device,
@@ -140,9 +226,26 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
                 )
                 rawTextureSize = (scaledWidth, scaledHeight)
             }
+
+            if denoisedTextureSize.width != scaledWidth || denoisedTextureSize.height != scaledHeight {
+                denoisedTexture = makeTexture(
+                    device: denoiseProcessor.context.device,
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    pixelFormat: .r8Unorm,
+                    usage: [.renderTarget, .shaderRead],
+                    storageMode: .private,
+                    label: "SSAO Denoised"
+                )
+                denoisedTextureSize = (scaledWidth, scaledHeight)
+            }
         } else {
+            linearDepthTexture = nil
+            linearDepthTextureSize = (0, 0)
             rawTexture = nil
             rawTextureSize = (0, 0)
+            denoisedTexture = nil
+            denoisedTextureSize = (0, 0)
         }
 
         let outputWidth = Int(max(lastSize.width, 0.0))
@@ -167,18 +270,35 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    // MARK: - Draw
-
     override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        let blurOutputTexture = blurProcessor.outputTexture
-        let hasAOInputs = depthTexture != nil && normalTexture != nil && rawTexture != nil && blurOutputTexture != nil
-        aoTexture = hasAOInputs ? blurOutputTexture : nil
+        syncMaterialParameters()
 
-        if hasAOInputs, let rawTexture {
-            if let cam = sceneCamera {
-                ssaoMaterial.update(camera: cam)
-                blurMaterial.update(camera: cam)
-            }
+        let hasAOInputs = depthTexture != nil &&
+            normalTexture != nil &&
+            linearDepthTexture != nil &&
+            rawTexture != nil &&
+            denoisedTexture != nil &&
+            sceneCamera != nil
+
+        aoTexture = hasAOInputs ? denoisedTexture : nil
+
+        if hasAOInputs,
+           let linearDepthTexture,
+           let rawTexture,
+           let denoisedTexture,
+           let sceneCamera
+        {
+            prefilterMaterial.update(camera: sceneCamera)
+            ssaoMaterial.depthTexture = linearDepthTexture
+            ssaoMaterial.update(camera: sceneCamera)
+            denoiseMaterial.depthTexture = linearDepthTexture
+            denoiseMaterial.update(camera: sceneCamera)
+
+            prefilterProcessor.draw(
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: linearDepthTexture
+            )
 
             super.draw(
                 renderPassDescriptor: MTLRenderPassDescriptor(),
@@ -186,10 +306,12 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
                 renderTarget: rawTexture
             )
 
-            blurProcessor.draw(commandBuffer: commandBuffer, inputTexture: rawTexture) { [blurMaterial] pass, inputTexture in
-                blurMaterial.ssaoTexture = inputTexture
-                blurMaterial.direction = pass == .horizontal ? simd_float2(1.0, 0.0) : simd_float2(0.0, 1.0)
-            }
+            denoiseMaterial.aoTexture = rawTexture
+            denoiseProcessor.draw(
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: denoisedTexture
+            )
         }
 
         guard let colorTexture, let outputTexture else { return }
@@ -204,7 +326,19 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         )
     }
 
-    // MARK: - Helpers
+    private func syncMaterialParameters() {
+        let desiredResolutionScale = Self.clampResolutionScale(resolutionScale)
+        if desiredResolutionScale != appliedResolutionScale {
+            parameters.get("Resolution Scale", as: FloatParameter.self)?.value = desiredResolutionScale
+            resizeResources()
+        }
+
+        ssaoMaterial.radius = radius
+        ssaoMaterial.quality = quality
+        denoiseMaterial.aoRadius = radius
+        denoiseMaterial.quality = quality
+        compositeMaterial.intensity = intensity
+    }
 
     private func fallbackAOTexture() -> MTLTexture? {
         if let whiteAOTexture {
@@ -258,6 +392,43 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         descriptor.storageMode = storageMode
         let texture = device.makeTexture(descriptor: descriptor)
         texture?.label = label
+        return texture
+    }
+
+    private func loadBlueNoiseTexture(device: MTLDevice) -> MTLTexture? {
+        guard let url = getTexturesURL("blue_noise_rgba.png") else { return nil }
+        let loader = MTKTextureLoader(device: device)
+        return try? loader.newTexture(URL: url, options: [
+            .SRGB: false,
+            .generateMipmaps: false,
+            .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
+            .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)
+        ])
+    }
+
+    private func makeFallbackBlueNoiseTexture(device: MTLDevice) -> MTLTexture? {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: 1,
+            height: 1,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+        descriptor.storageMode = .shared
+
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        texture.label = "SSAO Fallback Blue Noise"
+
+        let pixel: [UInt8] = [128, 192, 255, 64]
+        pixel.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, 1, 1),
+                mipmapLevel: 0,
+                withBytes: bytes.baseAddress!,
+                bytesPerRow: pixel.count
+            )
+        }
+
         return texture
     }
 }
