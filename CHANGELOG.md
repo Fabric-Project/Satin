@@ -18,8 +18,6 @@ In Satin 1.0, there were a few classes with the name ‘Renderer’ which served
 * Handling Metal Surfaces 
 * Integrating with platform specific views
 
-The old `Renderer` class was conflating two unrelated responsibilities: encoding a scene graph into a `MTLCommandBuffer`, and owning the render loop (display link, command queue, semaphore, frame index). These are now separated into two distinct tiers.
-
 ### RenderEncoders
 
 Classes that encode work into a `MTLCommandBuffer`. They have no display link, no command queue, and no frame index.
@@ -35,11 +33,12 @@ Classes that encode work into a `MTLCommandBuffer`. They have no display link, n
 
 New Render Post Process Encoders
 
+| Class | Description |
 |---|---|
 | `SsaoPostProcessEncoder` | Applies Screen Space Ambient Occlusion |
 | `MotionBlurPostProcessEncoder` | Applies velocity map motion blur |
 | `BokehDepthOfFieldPostProcessEncoder` | Applies fast separable depth of field blur |
-| `SsgiPostProcessEncoder` | Applies experimental Screen Space Global Illumination pass | 
+| `SsgiPostProcessEncoder` | Applies experimental Screen Space Global Illumination | 
 
 
 ### Renderers
@@ -60,46 +59,64 @@ Classes that own the render loop: display link, command queue, GPU sync semaphor
 
 ## Updated Lighting / Shadows
 
-In Satin 2.0, all lights now support shadows, and spotlight now supports cookies (masks) and projector modes (color image projection on to geometry that accepts shadows). See our updated Lighting examples. 
+All three light types — `DirectionalLight`, `PointLight`, and `SpotLight` — now support shadow casting. Enable shadows on any light by setting `castShadow = true`. Each light type gets its own shadow class (`DirectionalShadow`, `PointShadow`, `SpotShadow`) with tunable parameters:
+
+```swift
+let spot = SpotLight(context: context, color: .one, intensity: 2.0, radius: 8.0, angleInner: 30.0, angleOuter: 45.0)
+spot.castShadow = true
+spot.shadow.resolution = (width: 2048, height: 2048)
+spot.shadow.bias = 0.00005
+spot.shadow.strength = 0.8
+```
+
+`SpotLight` additionally supports a `projectionTexture` for cookie and projector effects, controlled by `projectionMode`:
+
+- `.mask` — the texture modulates the spot's intensity (cookie / gobo effect)
+- `.color` — the texture's RGB is projected as colored light onto shadow-receiving geometry
+
+```swift
+spot.projectionTexture = myTexture
+spot.projectionMode = .color   // or .mask
+```
 
 ---
 
 ## Render Mode support
 
-Satin now supports more than just `forward` rendering, but `forwardPlus` and `deferredGeometry`,
+Satin now supports three rendering modes: `forward`, `forwardPlus`, and `deferredGeometry`.
 
-<claude write a short paragraph explaining the differences to a beginner audience />
+**`forward`** is the simplest mode: one pass, one color output. Use it when you don't need any post-processing that requires surface data (normals, PBR properties, velocity).
 
-For Satin updates `Context` and `RenderEncoder` path to support rendering to multiple render targets, including:
+**`forwardPlus`** renders geometry in a single pass but simultaneously writes auxiliary surface data — albedo, normals, PBR, velocity, emissive — to additional render targets alongside color. Use this when you want post-process effects (SSAO, SSGI, motion blur, depth of field) without the overhead of a separate geometry prepass.
 
-* Color
-* Depth
-* Albedo
-* Normal
-* Velocity
-* PBR Map
+**`deferredGeometry`** splits rendering into two passes: a geometry pass that writes surface properties to a G-buffer, followed by a fullscreen lighting resolve pass. Unlit materials always render in a subsequent forward pass on top. Use this for scenes with many dynamic lights where the deferred lighting model reduces per-fragment work.
 
-This allows for new post processor passes, and for users to wire up their own unique passes. This is enabled via:
+Enabling `forwardPlus` or `deferredGeometry` unlocks auxiliary G-buffer outputs alongside the color attachment. Only enable outputs that are actually consumed by a post-processor — each active flag costs a texture allocation and a color attachment write per fragment.
 
-<claude add some sample code here />wire up Context and Render Encoder deferred support>
+```swift
+let context = Context(
+    device: device,
+    sampleCount: 1,
+    colorPixelFormat: .bgra8Unorm,
+    depthPixelFormat: .depth32Float,
+    renderingMode: .forwardPlus,
+    activeOutputs: [.color, .normals, .velocity]
+)
+```
 
-Note, that to support multiple render targets, all Satin Materials have been updated to write to a new Surface structure.
+`activeOutputs` is an `OptionSet` (`RendererOutputs`). Available flags: `.color` (always present), `.albedo`, `.normals`, `.pbr`, `.velocity`, `.emissive`. The `RenderEncoder` inherits `activeOutputs` from the Context; you can reassign it after construction, but doing so triggers pipeline recompilation on the next frame. MRT output requires `sampleCount == 1`.
 
-<claude simple note about surface structure for custom materials />
+### Custom Material Shader API
+
+All Satin surface materials have been updated to write to a `SurfaceOutput` struct. Custom surface materials implement `evaluateSurface()` and populate it — the framework handles lighting and routes the result to the correct G-buffer attachments via `buildFragmentOutput()`. Unlit materials skip `SurfaceOutput` entirely and return a `FragmentOutput` directly using `buildColorFragmentOutput()`. The active attachments in `FragmentOutput` are controlled at compile time by `OUTPUT_*` preprocessor defines injected from the Context, so custom shaders don't need to conditionally compile against each mode manually.
 
 ---
 
 ## Alpha Order-Independent Transparency
 
-Satin now supports turning on a new Weight Blended Order Independent Transparency pass, using Apple GPU’s tile based image block API. 
+Satin now supports Apple image-block order-independent transparency (OIT), which solves the classic problem of alpha-blended objects rendering incorrectly without CPU depth sorting. Enable it by passing `alphaOitEnabled: true` to `Context`.
 
-OIT solves a class of problems for sorting and rendering lots of transparent objects efficiently. 
-
-This is enabled via initializing a Satin `Context` with `alphaOitEnabled:True` passed at init,.
-
-If enabled, `blending = .alpha` now uses Apple image-block order-independent transparency on `MTLGPUFamilyApple4` GPUs (A11 Bionic / M1 and later) for Satin's built-in alpha-capable materials. Alpha-blended content renders correctly in `forward`, `forwardPlus`, and `deferredGeometry` without requiring CPU depth sorting.
-
-On unsupported hardware, `.alpha` falls back to classic hardware alpha blending (order-dependent).
+When enabled, `blending = .alpha` uses Apple’s tile-memory image-block API on `MTLGPUFamilyApple4` GPUs (A11 Bionic / M1 and later). Alpha-blended content renders correctly in `forward`, `forwardPlus`, and `deferredGeometry` without requiring CPU depth sorting. On unsupported hardware, `.alpha` falls back to classic hardware alpha blending (order-dependent).
 
 ### Behavior
 
@@ -112,7 +129,7 @@ On unsupported hardware, `.alpha` falls back to classic hardware alpha blending 
 | `custom` | Classic hardware blending | Always order-dependent; drawn after alpha OIT |
 
 
-### Notes with Deferred Rendering
+### Notes
 
 - Alpha OIT writes only to the `color` attachment. Transparent alpha materials still do not contribute to `albedo`, `normals`, `pbr`, `velocity`, or `emissive`.
 - Bucket order is fixed: `opaque → alpha OIT → classic transparent`. Classic transparent draws always appear over resolved alpha-OIT content regardless of `renderOrder`.
@@ -156,7 +173,7 @@ This is a great option to replace 1d SDF surface text rendering. See `SlugTextMe
 
 ## Performance Improvements
 
-Satin 2.0 walks back some usage of Protocols in the api in lieu of concrete base classes for performance critical paths. This removes a lot of Swift Protocol Witness Table lookups.
+Satin 2.0 replaces some protocol-based types with concrete base classes on performance-critical paths, eliminating Swift Protocol Witness Table overhead.
 
 Satin 2.0 adopts `CAMetalDisplayLink` on our new Mac based views, which removes some overhead of CAMetalDrawable creation. 
 
