@@ -120,6 +120,7 @@ struct ContentView: View {
             ExampleSection(
                 title: "Geometry",
                 items: [
+                    ExampleItem(id: "parametric-surfaces", title: "Parametric Surfaces", systemImage: "rotate.3d") { ParametricSurfacesRendererView() },
                     ExampleItem(id: "super-shapes", title: "Super Shapes", systemImage: "seal") { SuperShapesRendererView() },
                     ExampleItem(id: "obj-loading", title: "Obj Loading", systemImage: "arrow.down.doc") { LoadObjRendererView() },
                     ExampleItem(id: "octasphere", title: "Octasphere", systemImage: "globe") { OctasphereRendererView() },

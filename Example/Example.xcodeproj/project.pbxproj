@@ -188,6 +188,8 @@
 		F0A300012E05000100AAA002 /* ProjectorRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A300012E05000200AAA002 /* ProjectorRendererView.swift */; };
 		F0B200012E06000100AAA001 /* SlugTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA001 /* SlugTextRenderer.swift */; };
 		F0B200012E06000100AAA002 /* SlugTextRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B200012E06000200AAA002 /* SlugTextRendererView.swift */; };
+		F5A100012F20000100AAA001 /* ParametricSurfacesRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A100012F20000200AAA001 /* ParametricSurfacesRenderer.swift */; };
+		F5A100012F20000100AAA002 /* ParametricSurfacesRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A100012F20000200AAA002 /* ParametricSurfacesRendererView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -409,6 +411,8 @@
 		F4C100012FF1000200A0AA01 /* ShadowSceneSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShadowSceneSupport.swift; sourceTree = "<group>"; };
 		F0B200012E06000200AAA001 /* SlugTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRenderer.swift; sourceTree = "<group>"; };
 		F0B200012E06000200AAA002 /* SlugTextRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextRendererView.swift; sourceTree = "<group>"; };
+		F5A100012F20000200AAA001 /* ParametricSurfacesRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParametricSurfacesRenderer.swift; sourceTree = "<group>"; };
+		F5A100012F20000200AAA002 /* ParametricSurfacesRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParametricSurfacesRendererView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -616,6 +620,7 @@
 		E19D4C3A29F9C16E00DF993D /* Geometry */ = {
 			isa = PBXGroup;
 			children = (
+				F5A100012F20000200AAA002 /* ParametricSurfacesRendererView.swift */,
 				E131C07E2CDFDD3600FDBF8A /* PoissonRendererView.swift */,
 				E13B2C032CBF99E000888E66 /* DiskRendererView.swift */,
 				E1E767C728A6D41B005D75AB /* ExportGeometryRendererView.swift */,
@@ -759,6 +764,7 @@
 		E19D4C4529F9C27800DF993D /* Geometry */ = {
 			isa = PBXGroup;
 			children = (
+				F5A100012F20000200AAA001 /* ParametricSurfacesRenderer.swift */,
 				E131C07A2CDFDCAA00FDBF8A /* PoissonRenderer.swift */,
 				E13B2BFF2CBF996E00888E66 /* DiskRenderer.swift */,
 				E11325CC28AEADAA0049CACC /* SuperShapesRenderer.swift */,
@@ -1115,6 +1121,7 @@
 				E103E1002B60348C0017588F /* InstancedMeshRenderer.swift in Sources */,
 				E103E13C2B603FCA0017588F /* PBRStandardMaterialRendererView.swift in Sources */,
 				A1B2C3D52E7F000100000001 /* PBRMRTRendererView.swift in Sources */,
+				F5A100012F20000100AAA002 /* ParametricSurfacesRendererView.swift in Sources */,
 				E1903C122B6046B4004AB175 /* ARPointCloudRendererView.swift in Sources */,
 				E1D43BCC2C65855A0063E2C9 /* ParameterGroupViewController.swift in Sources */,
 				E103E1442B603FF70017588F /* ContactShadowRendererView.swift in Sources */,
@@ -1156,6 +1163,7 @@
 				E1D43BB12C65855A0063E2C9 /* ParameterGroupHeaderViewController.swift in Sources */,
 				E103E1362B603F9A0017588F /* InstancingRendererView.swift in Sources */,
 				E13B2C042CBF99E600888E66 /* DiskRendererView.swift in Sources */,
+				F5A100012F20000100AAA001 /* ParametricSurfacesRenderer.swift in Sources */,
 				E1365B962B70113B008C0033 /* MultipleViewportRendererView.swift in Sources */,
 				E103E14F2B60400E0017588F /* PostProcessingRenderer.swift in Sources */,
 				E103E1422B603FF40017588F /* FXAARendererView.swift in Sources */,
