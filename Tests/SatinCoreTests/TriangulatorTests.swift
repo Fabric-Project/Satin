@@ -110,4 +110,70 @@ class TriangulatorTests: XCTestCase {
             path?.deallocate()
         }
     }
+
+    func testCycloramaGeometryData() {
+        let widthResolution: Int32 = 2
+        let lengthResolution: Int32 = 3
+        let depthResolution: Int32 = 2
+        let angularResolution: Int32 = 4
+
+        var geoData = generateCycloramaGeometryData(
+            2.0,
+            1.0,
+            1.5,
+            0.25,
+            widthResolution,
+            lengthResolution,
+            depthResolution,
+            angularResolution
+        )
+        defer { freeGeometryData(&geoData) }
+
+        XCTAssertEqual(geoData.vertexCount, 30)
+        XCTAssertEqual(geoData.indexCount, 36)
+
+        let perLoop = Int(widthResolution) + 1
+        let vertices = UnsafeBufferPointer(start: geoData.vertexData, count: Int(geoData.vertexCount))
+
+        XCTAssertEqual(vertices[1].position.x, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(vertices[1].position.y, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(vertices[1].position.z, 1.0, accuracy: 0.0001)
+
+        XCTAssertEqual(vertices[3 * perLoop + 1].position.y, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(vertices[3 * perLoop + 1].position.z, 0.25, accuracy: 0.0001)
+
+        XCTAssertEqual(vertices[5 * perLoop + 1].position.y, 0.0732233, accuracy: 0.0001)
+        XCTAssertEqual(vertices[5 * perLoop + 1].position.z, 0.0732233, accuracy: 0.0001)
+
+        XCTAssertEqual(vertices[7 * perLoop + 1].position.y, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(vertices[7 * perLoop + 1].position.z, 0.0, accuracy: 0.0001)
+
+        XCTAssertEqual(vertices[9 * perLoop + 1].position.y, 1.5, accuracy: 0.0001)
+        XCTAssertEqual(vertices[9 * perLoop + 1].position.z, 0.0, accuracy: 0.0001)
+    }
+
+    func testCycloramaGeometryDataClampsRadius() {
+        var geoData = generateCycloramaGeometryData(1.0, 0.2, 0.3, 1.0, 1, 2, 2, 4)
+        defer { freeGeometryData(&geoData) }
+
+        XCTAssertEqual(geoData.vertexCount, 14)
+        XCTAssertEqual(geoData.indexCount, 12)
+
+        let vertices = UnsafeBufferPointer(start: geoData.vertexData, count: Int(geoData.vertexCount))
+
+        for vertex in vertices {
+            XCTAssertFalse(vertex.position.x.isNaN)
+            XCTAssertFalse(vertex.position.y.isNaN)
+            XCTAssertFalse(vertex.position.z.isNaN)
+            XCTAssertFalse(vertex.normal.x.isNaN)
+            XCTAssertFalse(vertex.normal.y.isNaN)
+            XCTAssertFalse(vertex.normal.z.isNaN)
+        }
+
+        XCTAssertEqual(vertices[0].position.y, 0.0, accuracy: 0.0001)
+        XCTAssertEqual(vertices[0].position.z, 0.2, accuracy: 0.0001)
+
+        XCTAssertEqual(vertices[12].position.y, 0.3, accuracy: 0.0001)
+        XCTAssertEqual(vertices[12].position.z, 0.0, accuracy: 0.0001)
+    }
 }

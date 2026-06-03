@@ -50,6 +50,50 @@ final class GeometryCoverageTests: XCTestCase {
         )
     }
 
+    func testCycloramaGeometry() throws {
+        let image = try renderGeometry(size: [176, 176]) { context, _, camera in
+            camera.position = [0.0, 1.1, 3.35]
+            camera.lookAt(target: [0.0, 0.55, 0.32])
+
+            let mesh = Mesh(
+                context: context,
+                label: "geometry-cyclorama",
+                geometry: CycloramaGeometry(
+                    context: context,
+                    width: 1.45,
+                    length: 1.1,
+                    depth: 1.0,
+                    radius: 0.28,
+                    widthResolution: 3,
+                    lengthResolution: 3,
+                    depthResolution: 3,
+                    angularResolution: 20
+                ),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.92, 0.76, 0.25, 1.0), blending: .disabled, hardness: 0.7)
+            )
+            mesh.scale = [1.8, 1.8, 1.8]
+            mesh.orientation = simd_quatf(angle: -.pi * 0.16, axis: simd_normalize(simd_float3(0.7, 1.0, 0.15)))
+            mesh.cullMode = .none
+
+            let light = DirectionalLight(context: context, color: simd_float3(1.0, 0.97, 0.92), intensity: 1.9)
+            light.position = [1.9, 2.4, 3.1]
+            light.lookAt(target: [0.0, 0.55, 0.32])
+
+            let fill = PointLight(context: context, color: simd_float3(0.25, 0.5, 0.95), intensity: 0.8, radius: 10.0)
+            fill.position = [-1.6, 1.0, 2.4]
+
+            return makeScene(context: context, mesh, extras: [light, fill])
+        }
+
+        assertGeometryImage(
+            image,
+            reference: "geometry-cyclorama",
+            threshold: 0.008,
+            minimumChangedPixelRatio: 0.03,
+            minimumMeanNormalizedDifference: 0.006
+        )
+    }
+
     func testExtrudedRoundedRectGeometry() throws {
         try assertLitGeometry(
             reference: "geometry-extruded-rounded-rect",

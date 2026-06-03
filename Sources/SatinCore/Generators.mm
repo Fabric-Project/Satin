@@ -6,9 +6,11 @@
 //
 
 #include <CoreText/CoreText.h>
+#include <algorithm>
 #include <malloc/_malloc.h>
 #include <simd/simd.h>
 #include <iostream>
+#include <vector>
 
 #include "Generators.h"
 #include "Bezier.h"
@@ -462,8 +464,8 @@ GeometryData generateCapsuleGeometryData(
                 const uint32_t bl = index + perLoop;
                 const uint32_t br = bl + 1;
 
-                ind[triangleIndex++] = (TriangleIndices) { .i0 = tl, .i1 = bl, .i2 = tr };
-                ind[triangleIndex++] = (TriangleIndices) { .i0 = tr, .i1 = bl, .i2 = br };
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tl, .i1 = tr, .i2 = bl };
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tr, .i1 = br, .i2 = bl };
             }
         }
     }
@@ -721,6 +723,134 @@ GeometryData generateCylinderGeometryData(
     geometry.indexCount = triangles;
 
     return geometry;
+}
+
+GeometryData generateCycloramaGeometryData(
+    float width,
+    float length,
+    float depth,
+    float radius,
+    int widthResolution,
+    int lengthResolution,
+    int depthResolution,
+    int angularResolution) {
+    const int widthSegments = widthResolution > 0 ? widthResolution : 1;
+    const float widthf = (float)widthSegments;
+    const float halfWidth = width * 0.5f;
+    const float widthInc = width / widthf;
+
+    const float clampedLength = std::max(length, 0.0f);
+    const float clampedDepth = std::max(depth, 0.0f);
+    const float clampedRadius = std::clamp(radius, 0.0f, std::min(clampedLength, clampedDepth));
+
+    const float floorLength = std::max(0.0f, clampedLength - clampedRadius);
+    const float wallHeight = std::max(0.0f, clampedDepth - clampedRadius);
+
+    const int floorSegments = floorLength > 0.0f ? std::max(lengthResolution, 1) : 0;
+    const int wallSegments = wallHeight > 0.0f ? std::max(depthResolution, 1) : 0;
+    const int curveSegments = clampedRadius > 0.0f ? std::max(angularResolution, 1) : 0;
+
+    std::vector<simd_float2> profilePositions;
+    std::vector<simd_float2> profileNormals;
+    std::vector<float> profileDistances;
+
+    profilePositions.reserve(floorSegments + curveSegments + wallSegments + 1);
+    profileNormals.reserve(floorSegments + curveSegments + wallSegments + 1);
+    profileDistances.reserve(floorSegments + curveSegments + wallSegments + 1);
+
+    auto appendProfile = [&](simd_float2 position, simd_float2 normal, float distance) {
+        profilePositions.push_back(position);
+        profileNormals.push_back(normal);
+        profileDistances.push_back(distance);
+    };
+
+    appendProfile(simd_make_float2(0.0f, clampedLength), simd_make_float2(1.0f, 0.0f), 0.0f);
+
+    float accumulatedDistance = 0.0f;
+
+    if (floorSegments > 0) {
+        const float floorInc = floorLength / (float)floorSegments;
+        for (int i = 1; i <= floorSegments; i++) {
+            accumulatedDistance += floorInc;
+            appendProfile(
+                simd_make_float2(0.0f, clampedLength - floorInc * (float)i),
+                simd_make_float2(1.0f, 0.0f),
+                accumulatedDistance);
+        }
+    }
+
+    if (curveSegments > 0) {
+        const float curveInc = (float)(M_PI_2) / (float)curveSegments;
+        const float curveArcLength = clampedRadius * curveInc;
+        for (int i = 1; i <= curveSegments; i++) {
+            const float angle = curveInc * (float)i;
+            const float curveY = clampedRadius - clampedRadius * cosf(angle);
+            const float curveZ = clampedRadius - clampedRadius * sinf(angle);
+            accumulatedDistance += curveArcLength;
+            appendProfile(
+                simd_make_float2(curveY, curveZ),
+                simd_normalize(simd_make_float2(cosf(angle), sinf(angle))),
+                accumulatedDistance);
+        }
+    }
+
+    if (wallSegments > 0) {
+        const float wallInc = wallHeight / (float)wallSegments;
+        for (int i = 1; i <= wallSegments; i++) {
+            accumulatedDistance += wallInc;
+            appendProfile(
+                simd_make_float2(clampedRadius + wallInc * (float)i, 0.0f),
+                simd_make_float2(0.0f, 1.0f),
+                accumulatedDistance);
+        }
+    }
+
+    const int profileRows = (int)profilePositions.size();
+    const int perLoop = widthSegments + 1;
+    const int vertices = perLoop * profileRows;
+    const int quads = widthSegments * std::max(0, profileRows - 1);
+    const int triangles = quads * 2;
+    const float totalDistance = accumulatedDistance > 0.0f ? accumulatedDistance : 1.0f;
+
+    SatinVertex *vtx = (SatinVertex *)malloc(vertices * sizeof(SatinVertex));
+    TriangleIndices *ind =
+        triangles > 0 ? (TriangleIndices *)malloc(triangles * sizeof(TriangleIndices)) : NULL;
+
+    int vertexIndex = 0;
+    int triangleIndex = 0;
+
+    for (int row = 0; row < profileRows; row++) {
+        const simd_float2 profilePosition = profilePositions[row];
+        const simd_float2 profileNormal = profileNormals[row];
+        const float v = profileDistances[row] / totalDistance;
+
+        for (int x = 0; x <= widthSegments; x++) {
+            const float xf = (float)x;
+
+            vtx[vertexIndex++] = (SatinVertex) {
+                .position =
+                    simd_make_float3(-halfWidth + xf * widthInc, profilePosition.x, profilePosition.y),
+                .normal = simd_make_float3(0.0f, profileNormal.x, profileNormal.y),
+                .uv = simd_make_float2(xf / widthf, v)
+            };
+
+            if (row != profileRows - 1 && x != widthSegments) {
+                const uint32_t index = x + row * perLoop;
+
+                const uint32_t tl = index;
+                const uint32_t tr = tl + 1;
+                const uint32_t bl = index + perLoop;
+                const uint32_t br = bl + 1;
+
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tl, .i1 = tr, .i2 = bl };
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tr, .i1 = br, .i2 = bl };
+            }
+        }
+    }
+
+    return (GeometryData) {
+        .vertexCount = vertices, .vertexData = vtx, .indexCount = triangles, .indexData = ind
+    };
 }
 
 enum PlaneOrientation {
