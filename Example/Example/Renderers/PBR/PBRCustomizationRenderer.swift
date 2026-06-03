@@ -24,7 +24,7 @@ final class PBRCustomizationRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
-    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: skyboxMaterial)
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 200), material: skyboxMaterial)
 
     override func setup() {
         camera.lookAt(target: .zero)

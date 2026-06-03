@@ -52,29 +52,28 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
 
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    lazy var floorMesh = Mesh(
+    lazy var cycloramaMesh = Mesh(
         context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, size: 32.0, orientation: .zx),
+        geometry: CycloramaGeometry(
+            context: defaultContext,
+            width: 38.0,
+            length: 30.0,
+            depth: 28.0,
+            radius: 15.0,
+            widthResolution: 8,
+            lengthResolution: 8,
+            depthResolution: 8,
+            angularResolution: 28
+        ),
         material: PhysicalMaterial(
             context: defaultContext,
-            baseColor: [0.8, 0.82, 0.86, 1.0],
+            baseColor: [0.82, 0.84, 0.88, 1.0],
             metallic: 0.0,
-            roughness: 0.95
+            roughness: 0.96
         )
     )
 
-    lazy var backdropMesh = Mesh(
-        context: defaultContext,
-        geometry: PlaneGeometry(context: defaultContext, width: 30.0, height: 24.0, orientation: .xy),
-        material: PhysicalMaterial(
-            context: defaultContext,
-            baseColor: [0.84, 0.86, 0.9, 1.0],
-            metallic: 0.0,
-            roughness: 0.9
-        )
-    )
-
-    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [floorMesh, backdropMesh, mesh, skybox])
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [cycloramaMesh, mesh, skybox])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 6.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
@@ -105,20 +104,17 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }()
 
     lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
-    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 50), material: skyboxMaterial)
+    lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 200), material: skyboxMaterial)
 
     override func setup() {
         camera.lookAt(target: .zero)
         mesh.castShadow = true
         mesh.receiveShadow = true
 
-        floorMesh.label = "Floor"
-        floorMesh.position.y = -13.0
-        floorMesh.receiveShadow = true
-
-        backdropMesh.label = "Backdrop"
-        backdropMesh.position.z = -8.0
-        backdropMesh.receiveShadow = true
+        cycloramaMesh.label = "Cyclorama"
+        cycloramaMesh.position = [0.0, -13.0, -16.0]
+        cycloramaMesh.receiveShadow = true
+        cycloramaMesh.cullMode = .none
 
         setupLights()
         loadHdri()

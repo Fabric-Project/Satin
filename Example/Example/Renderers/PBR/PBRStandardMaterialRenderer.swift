@@ -39,7 +39,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
 
     var model: Object?
     lazy var startTime = getTime()
-    lazy var skybox: Mesh = .init(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(context: defaultContext, size: 250), material: SkyboxMaterial(context: defaultContext))
+    lazy var skybox: Mesh = .init(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(context: defaultContext, size: 200), material: SkyboxMaterial(context: defaultContext))
     lazy var scene = IBLScene(context: defaultContext, label: "Scene", [skybox])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.01, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
