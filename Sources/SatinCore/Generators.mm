@@ -464,8 +464,8 @@ GeometryData generateCapsuleGeometryData(
                 const uint32_t bl = index + perLoop;
                 const uint32_t br = bl + 1;
 
-                ind[triangleIndex++] = (TriangleIndices) { .i0 = tl, .i1 = tr, .i2 = bl };
-                ind[triangleIndex++] = (TriangleIndices) { .i0 = tr, .i1 = br, .i2 = bl };
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tl, .i1 = bl, .i2 = tr };
+                ind[triangleIndex++] = (TriangleIndices) { .i0 = tr, .i1 = bl, .i2 = br };
             }
         }
     }
