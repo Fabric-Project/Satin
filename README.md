@@ -71,96 +71,94 @@ Satin helps to draw things with Metal. To get up and running quickly without ton
 ### Simple Example:
 
 ```swift
+import Metal
 import SwiftUI
 import Satin
 
-// Subclass Satin's Renderer to get triple buffered rendering and
-// callbacks for Setup, Update, Draw, Resize and Events
-final class SimpleRenderer: MetalViewRenderer {
-    // A Satin Renderer handles setting the Content on all the objects in the scene graph
-    // and drawing the scene either to a texture or on screen
+  // Subclass Satin's ViewRenderer to get triple-buffered rendering and
+  // callbacks for setup, update, draw, resize, and input events
+  final class SimpleRenderer: ViewRenderer {
+      // A RenderEncoder handles drawing a scene either to the screen
+      // or into a texture-backed render pass
+      lazy var renderEncoder = RenderEncoder(context: defaultContext)
 
-    // Create a Satin Renderer by passing in a context, scene and camera
-    lazy var renderer = Renderer(context: defaultContext)
+      // A PerspectiveCamera renders the scene using perspective projection
+      // Cameras inherit from Object, so they have transform properties too
+      lazy var camera: PerspectiveCamera = {
+          let camera = PerspectiveCamera(
+              context: defaultContext,
+              position: [3.0, 3.0, 3.0],
+              near: 0.01,
+              far: 100.0,
+              fov: 45.0
+          )
+          camera.lookAt(target: .zero)
+          return camera
+      }()
 
-    // A PerspectiveCamera is used to render the scene using perspective projection
-    // All Satin Cameras inherit from Object, so it has
-    let camera = {
-        let camera = PerspectiveCamera(
-            position: [3.0, 3.0, 3.0],
-            near: 0.01,
-            far: 100.0,
-            fov: 45
-        )
-        camera.lookAt(.zero)
-        return camera
-    }()
+      // An Object is an empty node in Satin's scene graph
+      // It can have children, a parent, and a transform
+      lazy var scene = Object(context: defaultContext, label: "Scene", [boxMesh])
 
-    // An Object is just an empty node in Satin's Scene Graph, it can have children and a parent
-    // Objects have a position, orientation, scale and label
-    lazy var scene = Object(label: "Scene", [boxMesh])
+      // Meshes inherit from Object, so they also have transforms
+      // A Mesh becomes renderable by pairing Geometry with a Material
+      lazy var boxMesh = Mesh(
+          context: defaultContext,
+          label: "Box",
+          geometry: BoxGeometry(context: defaultContext, size: 1.0),
+          material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.75)
+      )
 
-    // Meshes inherit from Object, so they have all the properties an object has.
-    // A Mesh has unique properties like geometry, material and rendering properties
-    // To create renderable object aka a Mesh, you passing it a Geometry and Material like so
-    let boxMesh = Mesh(
-        label: "Box",
-        geometry: BoxGeometry(size: 1.0),
-        material: BasicDiffuseMaterial(0.75)
-    )
+      // Track time so we can animate the scene
+      var time: Float = 0.0
 
-    // Create a time variable so we can change things in our scene over time
-    var time: Float = 0.0
+      // Satin calls setup once after the renderer has a valid MetalView
+      override func setup() {
+          renderEncoder.setClearColor(.one)
+      }
 
-    // Satin calls setup once after it has a valid MTKView (mtkView)
-    override func setup() {
-        renderer.setClearColor(.one)
-    }
+      // Satin calls update once per frame before drawing
+      override func update() {
+          // Advance time so we can animate the box orientation and color
+          time += 0.05
+          let sx = sin(time)
+          let sy = cos(time)
 
-    // Satin calls update whenever a new frame is ready to be updated, make scene changes here
-    override func update() {
-        // We increment our time variable so we can procedurally set the box mesh's orientation and material color
-        time += 0.05
-        let sx = sin(time)
-        let sy = cos(time)
+          // Setting a material property updates the material's uniforms
+          boxMesh.material?.set("Color", [abs(sx), abs(sy), abs(sx + sy), 1.0])
 
-        // Setting a material property done by using the set function, this modifies the material's uniforms
-        boxMesh.material?.set("Color", [abs(sx), abs(sy), abs(sx + sy), 1.0])
+          // Objects can update their transform directly, or use helpers like
+          // lookAt to orient themselves toward a target point
+          boxMesh.lookAt([sx, sy, 2.0])
+      }
 
-        // You can manually an object's position, orientation, scale, and localMatrix. Here I'm using a
-        // convenience lookAt function to orient the box to face the point passed from its current position
-        boxMesh.lookAt([sx, sy, 2.0])
-    }
+      // Satin calls draw when a new frame is ready to be encoded
+      override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+          // To render a scene into a render pass, call draw and pass
+          // in the render pass descriptor, command buffer, scene, and camera
+          renderEncoder.draw(
+              renderPassDescriptor: renderPassDescriptor,
+              commandBuffer: commandBuffer,
+              scene: scene,
+              camera: camera
+          )
+      }
 
-    // Satin calls draw when a new frame is ready to be encoded for drawing
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        // To render a scene into a render pass, just call draw and pass in the render pass descriptor
-        // You can also specify a render target and render to a texture instead
-        renderer.draw(
-            renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            scene: scene,
-            camera: camera
-        )
-    }
+      // Satin calls resize whenever the drawable size changes
+      override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
+          // Update the camera aspect ratio
+          camera.aspect = size.width / size.height
 
-    // Satin calls resize whenever the view is resized
-    override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
-        // our camera's aspect ratio is set
-        camera.aspect = size.width / size.height
+          // Update the renderer's viewport and internal textures
+          renderEncoder.resize(size)
+      }
+  }
 
-        // our renderer's viewport & texture sizes are set
-        renderer.resize(size)
-        // if you need to render to a custom viewport, you can specify that after the resize call:
-        // renderer.viewport = MTLViewport(...)
-    }
-}
-
-struct ContentView: View {
-    var body: some View {
-        SatinMetalView(renderer:  SimpleRenderer())
-    }
-}
+  struct ContentView: View {
+      var body: some View {
+          SatinMetalView(renderer: SimpleRenderer())
+      }
+  }
 ```
 
 # Credits
