@@ -35,10 +35,10 @@ Satin is mostly Swift based, however when performing expensive CPU operations, S
 
 Satin supports modern techniques, like deferred rendering, post processing, instancing, lighting with soft shadows (and projection) model loading and more. 
 
-<div align=“center” width=“90%">
-<img width=“90%” src="Images/Sponza.jpeg" alt="Sponza Scene with lighting, projection"  />
+<div align=“center”>
+<img src="Images/Sponza.jpeg" alt="Sponza Scene with lighting, projection"  />
   
-<img width="30%" src="Images/Depth-of-Field.jpeg" alt="Depth of Field"  /><img width="30%" src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry"  /><img width="30%" src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry"  /><img width="30%" src="Images/Lighting-and-Shadow-1.jpeg" alt="Lighting and Shading"  /><img width="30%" src="Images/Lighting-and-Shadow-2.jpeg" alt="Lighting and Shading"  /><img width="30%" src="Images/Lighting-and-Shadow-3.jpeg" alt="Lighting and Shading"  /><img width="30%" src="Images/Lighting-and-Shadow-4.jpeg" alt="Lighting and Shading"  /><img width="30%" src="Images/PBR-Materials-and-Lighting.jpeg" alt="PBR Materials and Lighting"  /><img width="30%" src="Images/Slug-Text.jpeg" alt="Slug Text Rendering"  />
+<img width="33%" src="Images/Depth-of-Field.jpeg" alt="Depth of Field"  /><img width="33%" src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry"  /><img width="33%" src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry"  /><img width="33%" src="Images/Lighting-and-Shadow-1.jpeg" alt="Lighting and Shading"  /><img width="33%" src="Images/Lighting-and-Shadow-2.jpeg" alt="Lighting and Shading"  /><img width="33%" src="Images/Lighting-and-Shadow-3.jpeg" alt="Lighting and Shading"  /><img width="33%" src="Images/Lighting-and-Shadow-4.jpeg" alt="Lighting and Shading"  /><img width="33%" src="Images/PBR-Materials-and-Lighting.jpeg" alt="PBR Materials and Lighting"  /><img width="33%" src="Images/Slug-Text.jpeg" alt="Slug Text Rendering"  />
 </div>
 
 
