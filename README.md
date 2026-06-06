@@ -3,7 +3,7 @@
 <img src="https://img.shields.io/badge/SPM-5.9-blue.svg?style=flat"
      alt="Swift Package Manager (SPM) compatible" />
 
-# About :wave:
+# About
 
 Satin is a 3D graphics framework (inspired by threejs) that helps designers and developers work with Apple's Metal API. Satin provides helpful classes for creating meshes, materials, buffers, uniforms, geometries, pipelines (shaders), compute kernels, and more.
 
@@ -11,10 +11,12 @@ Satin makes simple graphics tasks fun and easy to accomplish quickly and complex
 
 Satin is mostly Swift based, however when performing expensive CPU operations, Satin uses SatinCore, which is written in C (for tasks like geometry generation, triangulation, bounds & computational geometry calculations, and more) to make sure things are as fast as possible.
 
+
+
 # Supported Platforms
 
-- macOS 14.0+
-- iOS 17.0+
+- macOS 15.0+
+- iOS 18.0+
 - visionOS 2.0+
 
 # Installation
@@ -31,14 +33,87 @@ Satin is mostly Swift based, however when performing expensive CPU operations, S
 
 # Features :clipboard:
 
+Satin supports modern techniques, like deferred rendering, post processing, instancing, lighting with soft shadows (and projection) model loading and more. 
+
+<style>
+  .carousel-container {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 16px;
+    padding-bottom: 16px;
+    scrollbar-width: thin; /* Firefox */
+  }
+  
+  /* Hide scrollbar for Chrome/Safari */
+  .carousel-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .carousel-slide {
+    flex: 0 0 100%; /* Shows 1 image at a time */
+    scroll-snap-align: center;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .carousel-slide img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    display: block;
+  }
+</style>
+
+<div class="carousel-container">
+  <div class="carousel-slide">
+    <img src="Images/Sponza.jpeg" alt="Sponza Scene with lighting, projection">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Depth of Field.jpeg" alt="Depth of Field">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Procedural-Geo-1.jpeg" alt=“Procedural Geometry">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Slug-Text.jpeg" alt="Slug Text Rendering">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Procedural-Geo-2.jpeg" alt=“Procedural Geometry">
+  </div>  <div class="carousel-slide">
+    <img src="Images/Lighting-and-Shadow-1.jpeg" alt="Lighting and Shading">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Lighting-and-Shadow-2.jpeg" alt="Lighting and Shading">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Lighting-and-Shadow-3.jpeg" alt="Lighting and Shading">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Lighting-and-Shadow-4.jpeg" alt="Lighting and Shading">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/PBR-Materials-and-Lighting.jpeg" alt=“PBR Materials and Lighting">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Procedural-Geo-1.jpeg" alt=“Procedural Geometry">
+  </div>
+  <div class="carousel-slide">
+    <img src="Images/Procedural-Geo-2.jpeg" alt=“Procedural Geometry">
+  </div>
+</div>
+
+
 - [x] Tons of examples that show how to use the API (2D, 3D, Raycasting, Compute, Exporting, Live Coding, AR, etc).
 - [x] Object, Mesh, InstancedMesh, TessellationMesh, Material, Shader, Geometry, Camera and Renderer classes.
-- [x] PBR Standard & Physical Materials (Based on Disney's PBR Implementation)
-- [x] You can live code shaders :fire:.
-- [x] A couple builtin Materials (BasicColor, BasicTexture, BasicDiffuse, Normal, UV Color, Skybox, MatCap, PBR Standard, PBR Physical, and more).
+- [x] Builtin Materials (BasicColor, BasicTexture, BasicDiffuse, Normal, UV Color, Skybox, MatCap and more).
+- [x] PBR Support via Standard & Advanced Physical Materials (Based on Disney's PBR Implementation)
+- [x] You can live code shaders.
+- [x] Support for Forward, Forward + and Deferred rendering modes with support for multiple render targets.
+- [x] Built in Post Processing Techniques (Motion Blur, Depth of Field and Post Processor base class)
 - [x] Tons of Geometries (Box, Sphere, IcoSphere, Circle, Cone, Quad, Plane, Capsule, RoundedRect, Text, and more).
 - [x] Cameras (Orthographic, Perspective) & Camera Controllers.
-- [x] SDF Text Rendering
+- [x] Slug Text Rendering
 - [x] Flexible Vertex Structure
 - [x] Run-time & Dynamic Struct creation via Parameters for Buffers and Uniforms.
 - [x] Metal Shader Compiler (useful when live coding, using #include during runtime)
@@ -49,11 +124,9 @@ Satin is mostly Swift based, however when performing expensive CPU operations, S
 - [x] Hooks for custom Metal rendering via Mesh's preDraw, Material's onBind, Buffer & Texture Computes' preCompute, etc
 - [x] Hooks for custom rendering via the Renderable protocol
 - [x] FileWatcher for checking if a resource or shader file has changed.
-- [x] Tons of examples to show how to use the API.
-- [x] Examples that show how to use Satin & ARKit
-- [x] Basic Directional Shadows
+- [x] Platform specific examples for iOS / AR Kit integration
 
-# Usage :rocket:
+# Usage
 
 Satin helps to draw things with Metal. To get up and running quickly without tons of boilerplate code and worrying about triple buffering or event (setup, update, resize, key, mouse, touch) callbacks, The example below shows how to use Satin to render a color changing box that looks at a moving point in the scene.
 
@@ -152,10 +225,12 @@ struct ContentView: View {
 }
 ```
 
-# Credits :sweat_smile:
+# Credits
 
-Satin was created by [Reza Ali](https://www.syedrezaali.com) with contributions & feedback from [Haris Ali](https://syedharisali.com/) and [Taylor Holliday](https://taylorholliday.com/). 
+Satin was created by [Reza Ali](https://www.syedrezaali.com) with contributions & feedback from [Haris Ali](https://syedharisali.com/) and [Taylor Holliday](https://taylorholliday.com/) 
 
-# License :mortar_board:
+Satin is now forked and maintained by the Fabric Project, led by [Anton Marini](https://vade.info)
+
+# License
 
 Satin is released under the MIT license.
