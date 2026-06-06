@@ -65,7 +65,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
   }
 </style> -->
 
-<div class="carousel-container” style="display: flex;
+<div class="carousel-container" style="display: flex;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     gap: 16px;
@@ -76,7 +76,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Sponza.jpeg" alt="Sponza Scene with lighting, projection” style="width: 100%;
+    <img src="Images/Sponza.jpeg" alt="Sponza Scene with lighting, projection" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -85,7 +85,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Depth of Field.jpeg" alt="Depth of Field” style="width: 100%;
+    <img src="Images/Depth-of-Field.jpeg" alt="Depth of Field" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -94,7 +94,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry” style="width: 100%;
+    <img src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -103,7 +103,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Slug-Text.jpeg" alt="Slug Text Rendering” style="width: 100%;
+    <img src="Images/Slug-Text.jpeg" alt="Slug Text Rendering" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -112,7 +112,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry” style="width: 100%;
+    <img src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -120,16 +120,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Lighting-and-Shadow-1.jpeg" alt="Lighting and Shading” style="width: 100%;
-    height: auto;
-    object-fit: cover;
-    display: block;” />
-  </div>
-  <div class="carousel-slide"  style="flex: 0 0 100%;
-    scroll-snap-align: center;
-    border-radius: 8px;
-    overflow: hidden;">
-    <img src="Images/Lighting-and-Shadow-2.jpeg" alt="Lighting and Shading” style="width: 100%;
+    <img src="Images/Lighting-and-Shadow-1.jpeg" alt="Lighting and Shading" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
@@ -138,43 +129,52 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Lighting-and-Shadow-3.jpeg" alt="Lighting and Shading” style="width: 100%;
+    <img src="Images/Lighting-and-Shadow-2.jpeg" alt="Lighting and Shading" style="width: 100%;
     height: auto;
     object-fit: cover;
-    display: block;” />
+    display: block;" />
   </div>
   <div class="carousel-slide"  style="flex: 0 0 100%;
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Lighting-and-Shadow-4.jpeg" alt="Lighting and Shading” style="width: 100%;
-    height: auto;
-    object-fit: cover;
-    display: block;” />
-  </div>
-  <div class="carousel-slide”  style="flex: 0 0 100%;
-    scroll-snap-align: center;
-    border-radius: 8px;
-    overflow: hidden;">
-    <img src="Images/PBR-Materials-and-Lighting.jpeg" alt=“PBR Materials and Lighting” style="width: 100%;
+    <img src="Images/Lighting-and-Shadow-3.jpeg" alt="Lighting and Shading" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
   </div>
-  <div class="carousel-slide”  style="flex: 0 0 100%;
+  <div class="carousel-slide"  style="flex: 0 0 100%;
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry” style="width: 100%;
+    <img src="Images/Lighting-and-Shadow-4.jpeg" alt="Lighting and Shading" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
   </div>
-  <div class="carousel-slide”  style="flex: 0 0 100%;
+  <div class="carousel-slide"  style="flex: 0 0 100%;
     scroll-snap-align: center;
     border-radius: 8px;
     overflow: hidden;">
-    <img src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry” style="width: 100%;
+    <img src="Images/PBR-Materials-and-Lighting.jpeg" alt=“PBR Materials and Lighting" style="width: 100%;
+    height: auto;
+    object-fit: cover;
+    display: block;" />
+  </div>
+  <div class="carousel-slide"  style="flex: 0 0 100%;
+    scroll-snap-align: center;
+    border-radius: 8px;
+    overflow: hidden;">
+    <img src="Images/Procedural-Geo-1.jpeg" alt="Procedural Geometry" style="width: 100%;
+    height: auto;
+    object-fit: cover;
+    display: block;" />
+  </div>
+  <div class="carousel-slide"  style="flex: 0 0 100%;
+    scroll-snap-align: center;
+    border-radius: 8px;
+    overflow: hidden;">
+    <img src="Images/Procedural-Geo-2.jpeg" alt="Procedural Geometry" style="width: 100%;
     height: auto;
     object-fit: cover;
     display: block;" />
