@@ -1,6 +1,5 @@
 # Satin 2.0 Changelog
 
-<<<<<<< HEAD
 ## Context Init
 
 In Satin 1.0, an object’s `Context` could change out from under it (was a var) causing some subtle issues, and `Context` was assigned lazily. In Satin 2.0, all objects have a let `Context`, thus requiring new initializers. This change fixes a class of bugs, and for most use cases, a Satin `Context` does not change, so we decided this would be an acceptable change. 
