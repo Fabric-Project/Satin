@@ -1,4 +1,5 @@
 #include "Library/Gamma.metal"
+#include "Library/TextureTransform.metal"
 #include "Library/Tonemap.metal"
 
 typedef struct {
@@ -6,7 +7,7 @@ typedef struct {
     float gammaCorrection;      // slider,0.0,1.0,1.0
     float environmentIntensity; // slider,0,1,1
     float blur;                 // slider,0,1,0
-    float3x3 texcoordTransform;
+    float4x4 textureTransform;
 } SkyboxUniforms;
 
 typedef struct {
@@ -43,7 +44,7 @@ fragment float4 skyboxFragment(
     const float mipLevel = uniforms.blur * levels;
 
     float4 color =
-        cubeTex.sample(cubeTexSampler, uniforms.texcoordTransform * in.texcoord, level(mipLevel));
+        cubeTex.sample(cubeTexSampler, applyDirectionTransform(in.texcoord, uniforms.textureTransform), level(mipLevel));
     color.rgb *= uniforms.environmentIntensity;
 
     color.rgb = tonemap(color.rgb);

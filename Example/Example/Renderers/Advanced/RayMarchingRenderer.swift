@@ -11,13 +11,13 @@ import Satin
 
 final class RayMarchingRenderer: BaseRenderer {
     final class RayMarchedMaterial: SourceMaterial {
-        init(pipelinesURL: URL) {
-            super.init(pipelinesURL: pipelinesURL, live: true)
+        init(context: Context, pipelinesURL: URL) {
+            super.init(context: context, pipelinesURL: pipelinesURL, live: true)
             blending = .disabled
         }
 
-        required init() {
-            fatalError("init() has not been implemented")
+        required init(context: Context) {
+            super.init(context: context)
         }
 
         required init(from decoder: Decoder) throws {
@@ -25,21 +25,21 @@ final class RayMarchingRenderer: BaseRenderer {
         }
     }
 
-    let mesh = Mesh(geometry: BoxGeometry(size: 2.0), material: BasicDiffuseMaterial(hardness: 0.7))
-    let camera = PerspectiveCamera(position: [10.0, 10.0, 10.0], near: 0.1, far: 100.0, fov: 45)
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: BoxGeometry(context: defaultContext, size: 2.0), material: material)
+    }()
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [10.0, 10.0, 10.0], near: 0.1, far: 100.0, fov: 45)
 
-    lazy var rayMarchedMaterial = RayMarchedMaterial(pipelinesURL: pipelinesURL)
-    lazy var rayMarchedMesh = Mesh(geometry: QuadGeometry(), material: rayMarchedMaterial)
-    lazy var scene = Object(label: "Scene", [mesh, rayMarchedMesh])
+    lazy var rayMarchedMaterial = RayMarchedMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+    lazy var rayMarchedMesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: rayMarchedMaterial)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, rayMarchedMesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         camera.lookAt(target: .zero)
-    }
-
-    deinit {
-        cameraController.disable()
     }
 
     override func update() {

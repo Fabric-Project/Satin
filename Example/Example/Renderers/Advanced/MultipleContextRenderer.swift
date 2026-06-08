@@ -13,10 +13,25 @@ import MetalKit
 import Satin
 
 final class MultipleContextRenderer: BaseRenderer {
-    let mesh = Mesh(geometry: IcoSphereGeometry(radius: 0.5, resolution: 0), material: BasicDiffuseMaterial(hardness: 0.7))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: material)
+    }()
+    lazy var noDepthContext = Context(
+        device: device,
+        sampleCount: 1,
+        colorPixelFormat: colorPixelFormat
+    )
+    lazy var meshNoDepth: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
+        material.ambient = 0.15
+        return Mesh(context: noDepthContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: material)
+    }()
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var sceneNoDepth = Object(context: defaultContext, label: "Scene No Depth", [meshNoDepth])
 
     override var sampleCount: Int {
 #if targetEnvironment(simulator)
@@ -26,16 +41,12 @@ final class MultipleContextRenderer: BaseRenderer {
 #endif
     }
 
-    lazy var renderer = Renderer(context: defaultContext)
-    lazy var rendererNoDepth = Renderer(
-        context: Context(
-            device: device,
-            sampleCount: 1,
-            colorPixelFormat: colorPixelFormat
-        )
+    lazy var renderer = RenderEncoder(context: defaultContext)
+    lazy var rendererNoDepth = RenderEncoder(
+        context: noDepthContext
     )
 
-    lazy var camera = PerspectiveCamera(position: [5, 5, 5], near: 0.01, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [5, 5, 5], near: 0.01, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     var tween: Tween?
@@ -57,7 +68,6 @@ final class MultipleContextRenderer: BaseRenderer {
     }
 
     deinit {
-        cameraController.disable()
         tween?.remove()
     }
 
@@ -76,7 +86,7 @@ final class MultipleContextRenderer: BaseRenderer {
         rendererNoDepth.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
-            scene: scene,
+            scene: sceneNoDepth,
             camera: camera
         )
     }

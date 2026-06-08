@@ -54,6 +54,16 @@ GeometryData generateCylinderGeometryData(
     int radialResolution,
     int verticalResolution);
 
+GeometryData generateCycloramaGeometryData(
+    float width,
+    float length,
+    float depth,
+    float radius,
+    int widthResolution,
+    int lengthResolution,
+    int depthResolution,
+    int angularResolution);
+
 GeometryData generatePlaneGeometryData(
     float width, float height, int widthResolution, int heightResolution, int plane, bool centered);
 

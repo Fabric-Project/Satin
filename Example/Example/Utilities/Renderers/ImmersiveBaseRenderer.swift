@@ -11,7 +11,15 @@
 import Foundation
 import Satin
 
-class ImmersiveBaseRenderer: MetalLayerRenderer {
+class ImmersiveBaseRenderer: SpatialRenderer {
+    override init(context: Context) {
+        super.init(context: context)
+    }
+
+    convenience init() {
+        self.init(context: .makePlatformDefault())
+    }
+
     var assetsURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Assets") }
     var sharedAssetsURL: URL { assetsURL.appendingPathComponent("Shared") }
     var rendererAssetsURL: URL { assetsURL.appendingPathComponent(String(describing: type(of: self))) }
@@ -19,6 +27,7 @@ class ImmersiveBaseRenderer: MetalLayerRenderer {
     var pipelinesURL: URL { rendererAssetsURL.appendingPathComponent("Pipelines") }
     var texturesURL: URL { rendererAssetsURL.appendingPathComponent("Textures") }
     var modelsURL: URL { rendererAssetsURL.appendingPathComponent("Models") }
+
 }
 
 #endif

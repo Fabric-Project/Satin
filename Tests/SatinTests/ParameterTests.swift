@@ -2,8 +2,14 @@ import Satin
 import XCTest
 
 final class ParameterTests: XCTestCase {
+    private func makeContext() -> Context? {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        return Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
+    }
+
     func testMaterialSetUpdatesExistingParameterWithoutDuplicatingIt() {
-        let material = BasicColorMaterial()
+        guard let context = makeContext() else { return }
+        let material = BasicColorMaterial(context: context)
 
         material.set("Exposure", 0.5)
         material.set("Exposure", 1.25)
@@ -15,7 +21,8 @@ final class ParameterTests: XCTestCase {
     }
 
     func testSetParametersClonesIncomingGroup() {
-        let material = BasicColorMaterial()
+        guard let context = makeContext() else { return }
+        let material = BasicColorMaterial(context: context)
         let incoming = ParameterGroup("Incoming", [
             FloatParameter("Amount", 0.25),
             BoolParameter("Enabled", true),

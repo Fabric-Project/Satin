@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 10/2/20.
@@ -13,37 +13,37 @@ import ModelIO
 import Satin
 
 final class ExportGeometryRenderer: BaseRenderer {
-    lazy var material = BasicDiffuseMaterial(hardness: 0.9)
+    lazy var material: BasicDiffuseMaterial = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.9)
+        material.ambient = 0.15
+        return material
+    }()
 
     lazy var metal: Mesh = {
-        let geo = ExtrudedTextGeometry(text: "SATIN", fontName: "Ariel", fontSize: 1, distance: 0.5)
-        let mesh = Mesh(label: "SATIN", geometry: geo, material: material)
+        lazy var geo = ExtrudedTextGeometry(context: defaultContext, text: "SATIN", fontName: "Ariel", fontSize: 1, distance: 0.5)
+        lazy var mesh = Mesh(context: defaultContext, label: "SATIN", geometry: geo, material: material)
         mesh.position = [0, 0.25, 0]
         return mesh
     }()
 
     lazy var rocks: Mesh = {
-        let mesh = Mesh(label: "PRO", geometry: ExtrudedTextGeometry(text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
+        lazy var mesh = Mesh(context: defaultContext, label: "PRO", geometry: ExtrudedTextGeometry(context: defaultContext, text: "PRO", fontName: "Ariel", fontSize: 1, distance: 0.5),
                         material: material)
         mesh.position = [0, -0.75, 0]
         return mesh
     }()
 
     lazy var scene: Object = {
-        let scene = Object()
+        lazy var scene = Object(context: defaultContext)
         scene.add(metal)
         scene.add(rocks)
         scene.localMatrix = lookAtMatrix3f([0, 0, -1], [0, 1, 1], worldUpDirection)
         return scene
     }()
 
-    var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.001, far: 100.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
-
-    deinit {
-        cameraController.disable()
-    }
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         #if os(visionOS)

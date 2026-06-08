@@ -25,14 +25,14 @@ final class ARDrawingRenderer: BaseRenderer {
 
     // MARK: - 3D
 
-    lazy var material = RainbowMaterial(pipelinesURL: pipelinesURL)
-    lazy var mesh = InstancedMesh(geometry: IcoSphereGeometry(radius: 0.03, resolution: 3), material: material, count: 20000)
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var material = RainbowMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
+    lazy var mesh = InstancedMesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.03, resolution: 3), material: material, count: 20000)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        let renderer = Renderer(context: defaultContext)
-        renderer.label = "Content Renderer"
+        lazy var renderer = RenderEncoder(context: defaultContext)
+        renderer.label = "Content RenderEncoder"
         renderer.setClearColor(.zero)
         renderer.colorLoadAction = .load
         renderer.depthLoadAction = .load
@@ -48,17 +48,23 @@ final class ARDrawingRenderer: BaseRenderer {
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
 
     // MARK: - Init
 
     var clear: Binding<Bool>
 
-    init(clear: Binding<Bool>) {
+    convenience init(clear: Binding<Bool>) {
+
+        self.init(context: .makePlatformDefault())
         self.clear = clear
+    }
 
-        super.init()
-
+    override init(context: Context)
+    {
+        self.clear = .constant(false)
+        super.init(context: context)
+       
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.smoothedSceneDepth]
         session.run(config)
@@ -70,7 +76,7 @@ final class ARDrawingRenderer: BaseRenderer {
         metalView.preferredFramesPerSecond = 60
 
         mesh.drawCount = 0
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),
@@ -79,7 +85,7 @@ final class ARDrawingRenderer: BaseRenderer {
             far: camera.far
         )
 
-//        backgroundRenderer = ARBackgroundRenderer(
+//        backgroundRenderer = ARBackgroundEncoder(
 //            context: defaultContext,
 //            session: session
 //        )

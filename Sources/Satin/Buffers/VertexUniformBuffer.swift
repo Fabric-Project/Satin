@@ -21,9 +21,16 @@ public final class VertexUniformBuffer {
     private var uniforms: UnsafeMutablePointer<VertexUniforms>!
     private let alignedSize = ((MemoryLayout<VertexUniforms>.size + 255) / 256) * 256
 
+    private var previousModelMatrices: [simd_float4x4]
+    private var previousViewProjectionMatrices: [simd_float4x4]
+
     public init(context: Context) {
         self.context = context
-        let length = alignedSize * context.maxBuffersInFlight * context.vertexAmplificationCount
+        let amplificationCount = max(context.vertexAmplificationCount, 1)
+        previousModelMatrices = Array(repeating: matrix_identity_float4x4, count: amplificationCount)
+        previousViewProjectionMatrices = Array(repeating: matrix_identity_float4x4, count: amplificationCount)
+        let totalSlots = context.maxBuffersInFlight * Satin.maxSubPassesPerFrame
+        let length = alignedSize * totalSlots * amplificationCount
         guard let buffer = context.device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else { fatalError("Couldn't not create Vertex Uniform Buffer") }
         self.buffer = buffer
         self.buffer.label = "Vertex Uniforms"
@@ -31,23 +38,35 @@ public final class VertexUniformBuffer {
 
     public func update(object: Object, camera: Camera, viewport: simd_float4, index: Int) {
         if index == 0 {
-            self.index = (self.index + 1) % context.maxBuffersInFlight
+            let totalSlots = context.maxBuffersInFlight * Satin.maxSubPassesPerFrame
+            self.index = (self.index + 1) % totalSlots
             offset = alignedSize * self.index * context.vertexAmplificationCount
         }
 
         uniforms = UnsafeMutableRawPointer(buffer.contents() + offset).bindMemory(to: VertexUniforms.self, capacity: context.vertexAmplificationCount)
 
-        uniforms[index].modelMatrix = object.worldMatrix
+        let currentModelMatrix = object.worldMatrix
+        let currentViewProjectionMatrix = camera.viewProjectionMatrix
+
+        uniforms[index].modelMatrix = currentModelMatrix
         uniforms[index].viewMatrix = camera.viewMatrix
-        uniforms[index].modelViewMatrix = camera.viewMatrix * object.worldMatrix
+        uniforms[index].modelViewMatrix = camera.viewMatrix * currentModelMatrix
         uniforms[index].projectionMatrix = camera.projectionMatrix
-        uniforms[index].viewProjectionMatrix = camera.viewProjectionMatrix
-        uniforms[index].modelViewProjectionMatrix = camera.viewProjectionMatrix * object.worldMatrix
+        uniforms[index].viewProjectionMatrix = currentViewProjectionMatrix
+        uniforms[index].modelViewProjectionMatrix = currentViewProjectionMatrix * currentModelMatrix
         uniforms[index].inverseModelViewProjectionMatrix = uniforms[index].modelViewProjectionMatrix.inverse
         uniforms[index].inverseViewMatrix = camera.worldMatrix
         uniforms[index].normalMatrix = object.normalMatrix
         uniforms[index].viewport = viewport
         uniforms[index].worldCameraPosition = camera.worldPosition
         uniforms[index].worldCameraViewDirection = camera.viewDirection
+        let previousModelMatrix = previousModelMatrices[index]
+        let previousViewProjectionMatrix = previousViewProjectionMatrices[index]
+        uniforms[index].previousModelMatrix = previousModelMatrix
+        uniforms[index].previousViewProjectionMatrix = previousViewProjectionMatrix
+        uniforms[index].previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
+
+        previousModelMatrices[index] = currentModelMatrix
+        previousViewProjectionMatrices[index] = currentViewProjectionMatrix
     }
 }

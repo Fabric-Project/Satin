@@ -37,14 +37,7 @@ open class Object: Codable {
         }
     }
 
-    open var context: Context? = nil {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-                //objectWillChange.send()
-            }
-        }
-    }
+    public let context: Context
 
     // MARK: - Position
 
@@ -440,14 +433,14 @@ open class Object: Codable {
 
     // MARK: - Init
 
-    public init() {}
-
-    public init(label: String = "Object", visible: Bool = true, _ children: [Object] = []) {
+    public init(context: Context, label: String = "Object", visible: Bool = true, _ children: [Object] = []) {
+        self.context = context
         self.label = label
         self.visible = visible
         for child in children {
             add(child)
         }
+        setup()
     }
 
     // MARK: - Deinit
@@ -469,6 +462,7 @@ open class Object: Codable {
     // MARK: - Decode
 
     public required init(from decoder: Decoder) throws {
+        context = try decoder.requireSatinContext(typeName: String(describing: type(of: self)))
         let values = try decoder.container(keyedBy: CodingKeys.self)
         id = try values.decode(String.self, forKey: .id)
         label = try values.decode(String.self, forKey: .label)
@@ -477,6 +471,7 @@ open class Object: Codable {
         orientation = try values.decode(simd_quatf.self, forKey: .orientation)
         visible = try values.decode(Bool.self, forKey: .visible)
         try decodeChildren(from: decoder)
+        setup()
     }
 
     open func decodeChildren(from decoder: Decoder) throws {
@@ -484,7 +479,6 @@ open class Object: Codable {
         children = try values.decode([Object].self, forKey: .children)
         for child in children {
             child.parent = self
-            child.context = context
         }
     }
 
@@ -539,7 +533,6 @@ open class Object: Codable {
             if setParent {
                 child.parent = self
             }
-            child.context = context
             children.insert(child, at: at)
         }
     }
@@ -551,8 +544,6 @@ open class Object: Codable {
             child.removeFromParent()
             child.parent = self
         }
-
-        child.context = context
 
         children.append(child)
         childAddedPublisher.send(child)
@@ -575,6 +566,8 @@ open class Object: Codable {
             add(obj, setParent)
         }
     }
+
+   
 
     open func remove(_ child: Object) {
         guard let childIndex = children.firstIndex(of: child) else { return }

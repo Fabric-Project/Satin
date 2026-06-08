@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Cubemap
 //
 //  Created by Reza Ali on 6/7/20.
@@ -16,15 +16,15 @@ import Satin
 final class CubemapRenderer: BaseRenderer {
     final class CustomMaterial: SourceMaterial {}
 
-    var camera = PerspectiveCamera(position: [0.0, 0.0, 6.0], near: 0.001, far: 200.0, fov: 45.0)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 6.0], near: 0.001, far: 200.0, fov: 45.0)
 
-    lazy var scene = Object(label: "Scene", [skybox, mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [skybox, mesh])
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var mesh: Mesh = {
         let twoPi = Float.pi * 2.0
-        let geometry = ParametricGeometry(rangeU: 0.0...twoPi, rangeV: 0.0...twoPi, resolution: [400, 32], generator: { u, v in
+        lazy var geometry = ParametricGeometry(context: defaultContext, rangeU: 0.0...twoPi, rangeV: 0.0...twoPi, resolution: [400, 32], generator: { u, v in
             let R: Float = 0.75
             let r: Float = 0.25
             let c: Float = 0.125
@@ -33,7 +33,7 @@ final class CubemapRenderer: BaseRenderer {
             return torusKnotGenerator(u, v, R, r, c, q, p)
         })
 
-        let mesh = Mesh(geometry: geometry, material: customMaterial)
+        lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: customMaterial)
         mesh.cullMode = .none
         mesh.label = "Knot"
         mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
@@ -42,10 +42,10 @@ final class CubemapRenderer: BaseRenderer {
         return mesh
     }()
 
-    lazy var customMaterial = CustomMaterial(pipelineURL: pipelinesURL.appendingPathComponent("Shaders.metal"))
+    lazy var customMaterial = CustomMaterial(context: defaultContext, pipelineURL: pipelinesURL.appendingPathComponent("Shaders.metal"))
 
     lazy var skybox: Mesh = {
-        let mesh = Mesh(label: "Skybox", geometry: SkyboxGeometry(), material: SkyboxMaterial())
+        lazy var mesh = Mesh(context: defaultContext, label: "Skybox", geometry: SkyboxGeometry(context: defaultContext), material: SkyboxMaterial(context: defaultContext))
         mesh.scale = [50, 50, 50]
         return mesh
     }()
@@ -70,10 +70,6 @@ final class CubemapRenderer: BaseRenderer {
         if let texture = cubeTexture, let material = skybox.material as? SkyboxMaterial {
             material.texture = texture
         }
-    }
-
-    deinit {
-        cameraController.disable()
     }
 
     override func update() {

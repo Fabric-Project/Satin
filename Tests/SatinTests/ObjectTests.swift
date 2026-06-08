@@ -14,8 +14,14 @@ import simd
 import XCTest
 
 final class ObjectTests: XCTestCase {
+    private func makeContext() -> Context? {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        return Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
+    }
+
     func testObjectConcurrency() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
 //        let lock = NSLock()
 //        let mutex = PThreadMutex(type: .normal)
 //        let queue = DispatchQueue(label: "ObjectQueue", attributes: .concurrent)
@@ -30,7 +36,7 @@ final class ObjectTests: XCTestCase {
         // 0.244 w/ Unfair
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
 //                Task {
 //                    lock.lock()
@@ -108,7 +114,8 @@ final class ObjectTests: XCTestCase {
     }
 
     func testObjectLocalTransforms() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
 
         XCTAssertTrue(simd_equal(object.localMatrix, matrix_identity_float4x4))
 
@@ -123,8 +130,9 @@ final class ObjectTests: XCTestCase {
     }
 
     func testObjectWorldTransforms() throws {
-        let object = Object()
-        let child = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
+        let child = Object(context: context)
         object.add(child)
         object.position = .init(1, 2, 3)
 
@@ -133,8 +141,9 @@ final class ObjectTests: XCTestCase {
     }
 
     func testAddRemoveChild() {
-        let object = Object()
-        let child = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
+        let child = Object(context: context)
 
         XCTAssertEqual(object.children.count, 0)
         object.add(child)
@@ -144,8 +153,10 @@ final class ObjectTests: XCTestCase {
     }
 
     func testLocalBounds() {
+        guard let context = makeContext() else { return }
         let mesh = Mesh(
-            geometry: SphereGeometry(),
+            context: context,
+            geometry: SphereGeometry(context: context),
             material: nil
         )
         XCTAssert(

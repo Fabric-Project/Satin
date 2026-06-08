@@ -64,41 +64,41 @@ public final class BoxGeometry: SatinGeometry {
         }
     }
 
-    public init(size: Float = 2, resolution: Int = 1) {
+    public init(context: Context, size: Float = 2, resolution: Int = 1) {
         self.size = .init(repeating: size)
         self.resolution = .init(repeating: Int32(resolution))
-        super.init()
+        super.init(context: context)
     }
 
-    public init(size: simd_float3, resolution: Int = 1) {
+    public init(context: Context, size: simd_float3, resolution: Int = 1) {
         self.size = size
         self.resolution = .init(repeating: Int32(resolution))
-        super.init()
+        super.init(context: context)
     }
 
-    public init(size: simd_float3, resolution: simd_int3 = .init(repeating: 1)) {
+    public init(context: Context, size: simd_float3, resolution: simd_int3 = .init(repeating: 1)) {
         self.size = size
         self.resolution = resolution
-        super.init()
+        super.init(context: context)
     }
 
-    public init(width: Float, height: Float, depth: Float, resolution: Int = 1) {
+    public init(context: Context, width: Float, height: Float, depth: Float, resolution: Int = 1) {
         self.size = simd_make_float3(width, height, depth)
         self.resolution = .init(repeating: Int32(resolution))
-        super.init()
+        super.init(context: context)
     }
 
-    public init(width: Float, height: Float, depth: Float, widthResolution: Int, heightResolution: Int, depthResolution: Int) {
+    public init(context: Context, width: Float, height: Float, depth: Float, widthResolution: Int, heightResolution: Int, depthResolution: Int) {
         self.size = simd_make_float3(width, height, depth)
         self.resolution = simd_make_int3(Int32(widthResolution), Int32(heightResolution), Int32(depthResolution))
-        super.init()
+        super.init(context: context)
     }
 
-    public init(bounds: Bounds, res: (width: Int, height: Int, depth: Int) = (1, 1, 1)) {
+    public init(context: Context, bounds: Bounds, res: (width: Int, height: Int, depth: Int) = (1, 1, 1)) {
         self.size = bounds.size
         self.center = bounds.center
         self.resolution = simd_make_int3(Int32(res.width), Int32(res.height), Int32(res.depth))
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

@@ -26,10 +26,10 @@ public final class UVDiskGeometry: SatinGeometry {
         }
     }
 
-    public init(innerRadius: Float = 0.85, outerRadius: Float = 1.0) {
+    public init(context: Context, innerRadius: Float = 0.85, outerRadius: Float = 1.0) {
         self.outerRadius = outerRadius
         self.innerRadius = innerRadius
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

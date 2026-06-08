@@ -9,6 +9,10 @@
 import Foundation
 
 open class SourceMaterial: Material {
+    override var supportsAlphaOrderIndependentTransparency: Bool {
+        source?.contains("SATIN_ALPHA_OIT_ENABLED") == true
+    }
+
     public enum CodingKeys: String, CodingKey {
         case pipelineURL
     }
@@ -27,23 +31,30 @@ open class SourceMaterial: Material {
         return shader.source
     }
 
-    public init(pipelineURL: URL, live: Bool = false) {
+    public init(context: Context, pipelineURL: URL, live: Bool = false) {
         self.pipelineURL = pipelineURL
         self.live = live
-        super.init()
+        super.init(context: context)
     }
 
-    public init(pipelinesURL: URL, live: Bool = false) {
-        pipelineURL = pipelinesURL
-        self.live = live
-        super.init()
-        if pipelinesURL.pathExtension != "metal" {
-            pipelineURL = pipelinesURL.appendingPathComponent(label).appendingPathComponent("Shaders.metal")
+    public init(context: Context, pipelinesURL: URL, live: Bool = false) {
+        if pipelinesURL.pathExtension == "metal" {
+            pipelineURL = pipelinesURL
+        } else {
+            // Compute the label prefix before super.init (same logic as Material.prefix)
+            var labelPrefix = String(describing: type(of: self)).replacingOccurrences(of: "Material", with: "")
+            if let bundleName = Bundle(for: type(of: self)).displayName, bundleName != labelPrefix {
+                labelPrefix = labelPrefix.replacingOccurrences(of: bundleName, with: "")
+            }
+            labelPrefix = labelPrefix.replacingOccurrences(of: ".", with: "")
+            pipelineURL = pipelinesURL.appendingPathComponent(labelPrefix).appendingPathComponent("Shaders.metal")
         }
+        self.live = live
+        super.init(context: context)
     }
 
     override open func createShader() -> Shader {
-        let shader = SourceShader(label: label, pipelineURL: pipelineURL)
+        let shader = SourceShader(context: context, label: label, pipelineURL: pipelineURL)
         shader.live = live
         shader.blending = blending
         return shader
@@ -61,12 +72,12 @@ open class SourceMaterial: Material {
         try container.encode(pipelineURL, forKey: .pipelineURL)
     }
 
-    public required init() {
+    public required init(context: Context) {
         fatalError("Please specify a pipeline url to use SourceMaterial")
     }
 
-    override public func clone() -> Material {
-        let clone = SourceMaterial(pipelineURL: pipelineURL, live: live)
+    override open func clone(context: Context) -> Material {
+        let clone = SourceMaterial(context: context, pipelineURL: pipelineURL, live: live)
         clone.isClone = true
         cloneProperties(clone: clone)
         return clone

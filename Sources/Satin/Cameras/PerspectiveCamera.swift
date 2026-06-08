@@ -84,16 +84,16 @@ open class PerspectiveCamera: Camera {
         }
     }
 
-    public convenience init(label: String = "Perspective Camera", position: simd_float3, near: Float, far: Float, fov: Float = 45) {
-        self.init(label: label)
+    public convenience init(context: Context, label: String = "Perspective Camera", position: simd_float3, near: Float, far: Float, fov: Float = 45) {
+        self.init(context: context, label: label)
         self.position = position
         self.near = near
         self.far = far
         self.fov = fov
     }
 
-    override public init(label: String = "Perspective Camera") {
-        super.init(label: label)
+    override public init(context: Context, label: String = "Perspective Camera") {
+        super.init(context: context, label: label)
         orientation = simd_quatf(matrix_identity_float4x4)
         position = simd_make_float3(0.0, 0.0, 1.0)
     }

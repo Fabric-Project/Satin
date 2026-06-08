@@ -115,6 +115,9 @@ typedef struct VertexUniforms {
     simd_float4 viewport;
     simd_float3 worldCameraPosition;
     simd_float3 worldCameraViewDirection;
+    simd_float4x4 previousModelMatrix;
+    simd_float4x4 previousViewProjectionMatrix;
+    simd_float4x4 previousModelViewProjectionMatrix;
 } VertexUniforms;
 
 Points2D createPoints2D(void);

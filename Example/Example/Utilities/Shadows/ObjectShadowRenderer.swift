@@ -12,7 +12,7 @@ import Metal
 import MetalPerformanceShaders
 import Satin
 
-final class ShadowPostProcessor: PostProcessor {
+final class ShadowPostProcessEncoder: PostProcessEncoder {
     class ShadowPostMaterial: SourceMaterial {
         public unowned var colorTexture: MTLTexture? {
             didSet {
@@ -26,8 +26,8 @@ final class ShadowPostProcessor: PostProcessor {
             }
         }
 
-        public required init() {
-            super.init(pipelinesURL: Bundle.main.resourceURL!
+        required init(context: Context) {
+            super.init(context: context, pipelinesURL: Bundle.main.resourceURL!
                 .appendingPathComponent("Assets")
                 .appendingPathComponent("Shared")
                 .appendingPathComponent("Pipelines")
@@ -57,7 +57,7 @@ final class ShadowPostProcessor: PostProcessor {
     }
 
     public init(context: Context) {
-        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial())
+        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial(context: context))
         renderer.setClearColor(.zero)
     }
 }
@@ -91,8 +91,8 @@ final class ObjectShadowRenderer {
     var color: simd_float4
 
     private var camera: OrthographicCamera
-    private var renderer: Renderer
-    private var processor: ShadowPostProcessor
+    private var renderer: RenderEncoder
+    private var processor: ShadowPostProcessEncoder
 
     public private(set) var texture: MTLTexture?
     public private(set) var renderTexture: MTLTexture?
@@ -103,7 +103,7 @@ final class ObjectShadowRenderer {
 
     var materialCache: [Object: Material] = [:]
 
-    var material = BasicColorMaterial(color: .one, blending: .disabled)
+    lazy var material = BasicColorMaterial(context: context, color: .one, blending: .alpha)
 
     init(context: Context,
          object: Object,
@@ -129,11 +129,11 @@ final class ObjectShadowRenderer {
         self.far = far
         self.color = color
 
-        renderer = Renderer(context: context, clearColor: .zero, depthStoreAction: .store, frameBufferOnly: false)
-        renderer.label = "Object Shadow Renderer"
+        renderer = RenderEncoder(context: context, clearColor: .zero, depthStoreAction: .store, frameBufferOnly: false)
+        renderer.label = "Object Shadow RenderEncoder"
 
-        processor = ShadowPostProcessor(context: Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float))
-        camera = OrthographicCamera()
+        processor = ShadowPostProcessEncoder(context: Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float))
+        camera = OrthographicCamera(context: context)
 
         let size = (Float(resolution), Float(resolution))
         renderer.resize(size)
@@ -145,7 +145,7 @@ final class ObjectShadowRenderer {
     public func update(commandBuffer: MTLCommandBuffer) {
         update()
 
-        let finalScene = Object(label: "Shadow Scene")
+        let finalScene = Object(context: context, label: "Shadow Scene")
         let renderables = getRenderables(object, true, false)
         materialCache.removeAll(keepingCapacity: true)
 

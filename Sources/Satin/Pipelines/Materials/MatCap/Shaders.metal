@@ -1,3 +1,5 @@
+#include "Library/TextureTransform.metal"
+
 typedef struct {
     float4 position [[position]];
     float3 eye;
@@ -6,6 +8,7 @@ typedef struct {
 
 typedef struct {
     float4 color; // color
+    float4x4 textureTransform;
 } MatCapUniforms;
 
 vertex MatCapVertexData matCapVertex(
@@ -38,6 +41,6 @@ fragment half4 matCapFragment(
     sampler texSampler [[sampler(FragmentSamplerCustom0)]]) {
     const float3 r = reflect(in.eye, normalize(in.normal));
     const float m = 2.0 * sqrt(pow(r.x, 2.0) + pow(r.y, 2.0) + pow(r.z + 1.0, 2.0));
-    const float2 uv = r.xy / m + 0.5;
+    const float2 uv = applyTextureTransform(r.xy / m + 0.5, uniforms.textureTransform);
     return half4(uniforms.color * tex.sample(texSampler, uv));
 }

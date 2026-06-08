@@ -14,11 +14,11 @@ final class PBRSubmeshRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
     override var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    var scene = IBLScene(label: "Scene", [Mesh(geometry: SkyboxGeometry(size: 250), material: SkyboxMaterial())])
+    lazy var scene = IBLScene(context: defaultContext, label: "Scene", [Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 800), material: SkyboxMaterial(context: defaultContext))])
 
     lazy var camera: PerspectiveCamera = {
         let pos = simd_make_float3(125.0, 125.0, 125.0)
-        camera = PerspectiveCamera(position: pos, near: 0.01, far: 1000.0, fov: 45)
+        camera = PerspectiveCamera(context: defaultContext, position: pos, near: 0.01, far: 1000.0, fov: 45)
         camera.orientation = simd_quatf(from: [0, 0, 1], to: simd_normalize(pos))
 
         let forward = simd_normalize(camera.forwardDirection)
@@ -31,7 +31,7 @@ final class PBRSubmeshRenderer: BaseRenderer {
     }()
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var textureLoader = MTKTextureLoader(device: device)
 
     override func setup() {
@@ -42,11 +42,11 @@ final class PBRSubmeshRenderer: BaseRenderer {
         end()
 
         start("Model Setup")
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("chair_swan.usdz"), textureLoader: textureLoader) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("chair_swan.usdz"), context: defaultContext, textureLoader: textureLoader) {
             print("loaded model")
             scene.add(model)
-            let sceneBounds = scene.worldBounds
-            model.position.y -= sceneBounds.size.y * 0.25
+//            let sceneBounds = scene.worldBounds
+//            model.position.y -= sceneBounds.size.y * 0.25
         }
 
         end()
@@ -56,16 +56,12 @@ final class PBRSubmeshRenderer: BaseRenderer {
         end()
 
         start("Light Setup")
-        let light = DirectionalLight(color: .one, intensity: 2.0)
+        lazy var light = DirectionalLight(context: defaultContext, color: .one, intensity: 2.0)
         light.position = .init(repeating: 5.0)
         light.lookAt(target: scene.worldBounds.center)
         end()
 
         scene.add(light)
-    }
-
-    deinit {
-        cameraController.disable()
     }
 
     override func update() {

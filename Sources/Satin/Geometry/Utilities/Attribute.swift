@@ -57,7 +57,7 @@ public enum AttributeType: String, Codable {
         }
     }
 
-    public var metatype: any BufferAttribute.Type {
+    public var metatype: BufferAttribute.Type {
         switch self {
             case .float4:
                 return Float4BufferAttribute.self

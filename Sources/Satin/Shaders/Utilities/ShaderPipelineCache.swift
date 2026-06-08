@@ -98,6 +98,10 @@ public final class ShaderPipelineCache: Sendable {
 
         setupRenderPipelineDescriptorContext(context: context, descriptor: &descriptor)
         setupRenderPipelineDescriptorBlending(blending: configuration.rendering.blending, descriptor: &descriptor)
+        if context.alphaOitEnabled {
+            descriptor.colorAttachments[0].isBlendingEnabled = false
+            descriptor.colorAttachments[0].writeMask = []
+        }
 
         var pipelineReflection: MTLRenderPipelineReflection?
 

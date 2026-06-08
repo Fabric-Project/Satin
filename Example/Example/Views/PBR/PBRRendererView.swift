@@ -13,7 +13,7 @@ struct PBRRendererView: View {
     var body: some View {
         SatinMetalView(renderer: PBRRenderer())
             .ignoresSafeArea()
-            .navigationTitle("Physically Based Rendering")
+            .navigationTitle("PBR Point Shadows")
     }
 }
 

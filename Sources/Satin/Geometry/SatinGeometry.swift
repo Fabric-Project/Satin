@@ -14,8 +14,8 @@ open class SatinGeometry: Geometry {
 
     public var _updateData: Bool = true
 
-    public init() {
-        super.init()
+    public init(context: Context) {
+        super.init(context: context)
         updateGeometryData()
     }
 

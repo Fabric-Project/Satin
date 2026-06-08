@@ -10,40 +10,50 @@ import Metal
 open class BasicTextureMaterial: BasicColorMaterial {
     public var texture: MTLTexture?
     public var sampler: MTLSamplerState?
-    public var flipped = false {
-        didSet {
-            set("Flipped", flipped)
+    open var textureTransform: simd_float4x4 {
+        get {
+            get("Texture Transform", as: Float4x4Parameter.self)?.value ?? matrix_identity_float4x4
+        }
+        set {
+            set("Texture Transform", newValue)
         }
     }
 
-    public required init() {
-        super.init()
+    public var flipped = false {
+        didSet {
+            textureTransform = flipped ? .textureVerticalFlip : matrix_identity_float4x4
+        }
+    }
+
+    public required init(context: Context) {
+        super.init(context: context)
+        initializeTextureTransform()
     }
 
     public required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
-        set("Flipped", flipped)
+        initializeTextureTransform(flipped ? .textureVerticalFlip : matrix_identity_float4x4)
     }
 
-    public init(texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
-        super.init()
+    public init(context: Context, texture: MTLTexture?, sampler: MTLSamplerState? = nil, flipped: Bool = false) {
+        super.init(context: context)
         if let texture = texture, texture.textureType != .type2D, texture.textureType != .type2DMultisample {
             fatalError("BasicTextureMaterial expects a 2D texture")
         }
         self.flipped = flipped
         self.texture = texture
-        self.sampler = sampler
-        set("Flipped", flipped)
+        if let sampler { self.sampler = sampler }
+        initializeTextureTransform(flipped ? .textureVerticalFlip : matrix_identity_float4x4)
     }
 
-    public init(texture: MTLTexture, sampler: MTLSamplerState? = nil) {
-        super.init()
+    public init(context: Context, texture: MTLTexture, sampler: MTLSamplerState? = nil) {
+        super.init(context: context)
         if texture.textureType != .type2D, texture.textureType != .type2DMultisample {
             fatalError("BasicTextureMaterial expects a 2D texture")
         }
         self.texture = texture
-        self.sampler = sampler
-        set("Flipped", flipped)
+        if let sampler { self.sampler = sampler }
+        initializeTextureTransform()
     }
 
     override public func setup() {
@@ -58,7 +68,7 @@ open class BasicTextureMaterial: BasicColorMaterial {
         desc.minFilter = .linear
         desc.magFilter = .linear
         desc.mipFilter = .linear
-        sampler = context?.device.makeSamplerState(descriptor: desc)
+        sampler = context.device.makeSamplerState(descriptor: desc)
     }
 
     public func bindTexture(_ renderEncoder: MTLRenderCommandEncoder) {
@@ -70,6 +80,15 @@ open class BasicTextureMaterial: BasicColorMaterial {
     public func bindSampler(_ renderEncoder: MTLRenderCommandEncoder) {
         if let sampler = sampler {
             renderEncoder.setFragmentSamplerState(sampler, index: FragmentSamplerIndex.Custom0.rawValue)
+        }
+    }
+
+    private func initializeTextureTransform(_ transform: simd_float4x4 = matrix_identity_float4x4) {
+        if get("Texture Transform") == nil {
+            set("Texture Transform", transform)
+        }
+        else {
+            textureTransform = transform
         }
     }
 

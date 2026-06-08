@@ -10,6 +10,8 @@ import Metal
 import simd
 
 open class BasicColorMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
+    override var supportsAlphaOrderIndependentTransparency: Bool { true }
     public var color: simd_float4 {
         set {
             set("Color", newValue)
@@ -19,16 +21,23 @@ open class BasicColorMaterial: Material {
         }
     }
 
-    public init(color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .alpha) {
-        super.init()
+    public var pointSize: Float {
+        get { get("Point Size", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Point Size", newValue) }
+    }
+
+    public init(context: Context, color: simd_float4 = simd_float4(repeating: 1.0), blending: Blending = .disabled) {
+        super.init(context: context)
         set("Color", color)
+        set("Point Size", Float(1.0))
         self.blending = blending
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         set("Color", simd_float4.one)
-        blending = .alpha
+        set("Point Size", Float(1.0))
+        blending = .disabled
     }
 
     public required init(from decoder: Decoder) throws {

@@ -9,9 +9,9 @@ import Foundation
 
 open class AnyBufferAttribute: Codable {
     public let type: AttributeType
-    public let attribute: any BufferAttribute
+    public let attribute: BufferAttribute
 
-    public init(_ attribute: any BufferAttribute) {
+    public init(_ attribute: BufferAttribute) {
         type = attribute.type
         self.attribute = attribute
     }

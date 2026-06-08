@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 6/27/20.
@@ -12,41 +12,41 @@ import MetalKit
 import Satin
 
 final class Renderer3D: BaseRenderer {
-    let mesh = Mesh(
+    lazy var mesh = Mesh(context: defaultContext, 
         label: "Sphere",
-        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial(hardness: 0.7)
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
+        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.7)
     )
 
-    let intersectionMesh = Mesh(
+    lazy var intersectionMesh = Mesh(context: defaultContext, 
         label: "Intersection Mesh",
-        geometry: IcoSphereGeometry(radius: 0.05, resolution: 2),
-        material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.05, resolution: 2),
+        material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled),
         visible: false,
-        renderPass: 1
+         renderLayer: .overlay
     )
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
-    lazy var camera = PerspectiveCamera(position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
+    lazy var light = DirectionalLight(context: defaultContext, color: .one)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, light])
+    lazy var renderer = RenderEncoder(context: defaultContext)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     override var sampleCount: Int { 1 }
 
     override func setup() {
         mesh.add(intersectionMesh)
-
+        
+        light.position = [5, 10, 10]
+        light.lookAt(target: .zero)
+        
         camera.lookAt(target: .zero)
 
         #if os(visionOS)
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
         #endif
-    }
-
-    deinit {
-        cameraController.disable()
     }
 
     override func update() {

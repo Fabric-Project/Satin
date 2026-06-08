@@ -15,29 +15,29 @@ import MetalPerformanceShaders
 
 import Satin
 
-fileprivate final class ARScene: Object, IBLEnvironment {
+fileprivate final class ARScene:  IBLEnvironment {
     private var assetsURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Assets") }
     private var sharedAssetsURL: URL { assetsURL.appendingPathComponent("Shared") }
     private var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
 
-    var environmentIntensity: Float = 1.0
-
-    var environment: MTLTexture?
-    var cubemapTexture: MTLTexture?
-
-    var irradianceTexture: MTLTexture?
-    var irradianceTexcoordTransform: simd_float3x3 = matrix_identity_float3x3
-
-    var reflectionTexture: MTLTexture?
-    var reflectionTexcoordTransform: simd_float3x3 = matrix_identity_float3x3
-
-    var brdfTexture: MTLTexture?
+//    var environmentIntensity: Float = 1.0
+//
+//    var environment: MTLTexture?
+//    var cubemapTexture: MTLTexture?
+//
+//    var irradianceTexture: MTLTexture?
+//    var irradianceTexcoordTransform: simd_float3x3 = matrix_identity_float3x3
+//
+//    var reflectionTexture: MTLTexture?
+//    var reflectionTexcoordTransform: simd_float3x3 = matrix_identity_float3x3
+//
+//    var brdfTexture: MTLTexture?
 
     unowned var session: ARSession
 
-    public init(label: String, _ children: [Object] = [], session: ARSession) {
+    public init(context:Context, label: String, _ children: [Object] = [], session: ARSession) {
         self.session = session
-        super.init(label: label, children)
+        super.init(context:context, label: label, children)
         Task(priority: .background) {
             if let device = MTLCreateSystemDefaultDevice() {
                 self.generateBRDFLUT(device: device)
@@ -123,9 +123,9 @@ fileprivate final class ARObject: Object {
 
     unowned var session: ARSession
 
-    init(label: String, children: [Object] = [], session: ARSession) {
+    init(context:Context, label: String, children: [Object] = [], session: ARSession) {
         self.session = session
-        super.init(label: label, children)
+        super.init(context:context, label: label, children)
         self.visible = false
     }
 
@@ -150,10 +150,10 @@ final class Model: Object {
     private var texturesURL: URL { sharedAssetsURL.appendingPathComponent("Textures") }
     private var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
 
-    var material = PhysicalMaterial()
+    lazy var material = PhysicalMaterial(context: self.context)
 
-    override init() {
-        super.init(label: "Suzanne")
+    override init(context: Context, label: String = "Suzanne", visible: Bool = true, _ children: [Object] = []) {
+        super.init(context:context, label: label, visible: visible, children)
         Task(priority: .background) {
             self.setupModel()
             await self.setupTextures()
@@ -183,7 +183,7 @@ final class Model: Object {
         material.setTexture(tmpTexture, type: .normal)
         material.setTexture(tmpTexture, type: .roughness)
 
-        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")) {
+        if let model = loadAsset(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"), context: context) {
             var mesh: Mesh?
             model.apply { obj in
                 if let m = obj as? Mesh {
@@ -290,21 +290,21 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     var session = ARSession()
 
-    var shadowPlaneMesh = {
-        let material = BasicTextureMaterial(texture: nil, flipped: false)
+    lazy var shadowPlaneMesh = {
+        lazy var material = BasicTextureMaterial(context: self.context, texture: nil, flipped: false)
         material.depthBias = DepthBias(bias: 100.0, slope: 100.0, clamp: 100.0)
-        let mesh = Mesh(geometry: PlaneGeometry(size: 1.0, orientation: .zx), material: material)
+        let mesh = Mesh(context: self.context, geometry: PlaneGeometry(context: self.context, size: 1.0, orientation: .zx), material: material)
         mesh.label = "Shadow Catcher"
         return mesh
     }()
 
-    fileprivate lazy var modelContainer = ARObject(
+    fileprivate lazy var modelContainer = ARObject(context: self.context,
         label: "Model Container",
         children: [shadowPlaneMesh, model],
         session: session
     )
 
-    var model = Model()
+    lazy var model = Model(context: self.context)
 
     lazy var shadowRenderer = ObjectShadowRenderer(
         context: context,
@@ -318,24 +318,25 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         color: [0.0, 0.0, 0.0, 0.9]
     )
 
-    fileprivate lazy var scene = ARScene(label: "Scene", [modelContainer], session: session)
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context, frameBufferOnly: false)
+    fileprivate lazy var scene = ARScene(context:defaultContext, label: "Scene", [modelContainer], session: session)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var renderer = RenderEncoder(context: defaultContext, frameBufferOnly: false)
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
     var featheredDepthMaskGenerator: ARFeatheredDepthMaskGenerator!
 
+    lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
+
     lazy var postMaterial: PostMaterial = {
-        let material = PostMaterial(pipelinesURL: pipelinesURL)
+        lazy var material = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
         material.depthWriteEnabled = false
         material.blending = .alpha
         return material
     }()
 
-    lazy var postProcessor = PostProcessor(
+    lazy var postProcessor = PostProcessEncoder(
         label: "Post Processor",
-        context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
+        context: postContext,
         material: postMaterial
     )
 
@@ -343,8 +344,8 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let config = ARWorldTrackingConfiguration()
         config.environmentTexturing = .manual
@@ -363,7 +364,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         renderer.setClearColor(.zero)
         renderer.depthStoreAction = .store
 
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: context,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),

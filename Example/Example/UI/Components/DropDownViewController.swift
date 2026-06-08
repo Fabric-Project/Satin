@@ -200,10 +200,12 @@ class DropDownViewController: WidgetViewController {
 }
 
 let testParam = StringParameter("Color", "Red", ["Red", "Green", "Blue"], .dropdown)
-#Preview {
-    let vc = DropDownViewController()
-    vc.parameter = testParam
-    return vc
-}
+#if false
+    #Preview {
+        let vc = DropDownViewController()
+        vc.parameter = testParam
+        return vc
+    }
+#endif
 
 #endif

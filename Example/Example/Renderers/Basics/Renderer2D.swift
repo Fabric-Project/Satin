@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  2D-macOS
 //
 //  Created by Reza Ali on 4/22/20.
@@ -11,17 +11,17 @@ import MetalKit
 import Satin
 
 final class Renderer2D: BaseRenderer {
-    let mesh = Mesh(label: "Quad", geometry: QuadGeometry(size: 500), material: UVColorMaterial())
+    lazy var mesh = Mesh(context: defaultContext, label: "Quad", geometry: QuadGeometry(context: defaultContext, size: 500), material: UVColorMaterial(context: defaultContext))
 
-    var camera = OrthographicCamera()
+    lazy var camera = OrthographicCamera(context: defaultContext)
     lazy var cameraController = OrthographicCameraController(camera: camera, view: metalView)
-    lazy var scene = Object(label: "Scene", [mesh, intersectionMesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, intersectionMesh])
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
-    var intersectionMesh: Mesh = {
-        let mesh = Mesh(geometry: CircleGeometry(radius: 10), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+    lazy var intersectionMesh: Mesh = {
+        lazy var mesh = Mesh(context: defaultContext, geometry: CircleGeometry(context: defaultContext, radius: 10), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
-        mesh.renderPass = 1
+        mesh.renderLayer = .overlay
         mesh.visible = false
         return mesh
     }()

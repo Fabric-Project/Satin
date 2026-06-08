@@ -38,8 +38,8 @@ final class ARPlaneGeometry: Geometry {
         }
     }
 
-    public init() {
-        super.init()
+    public init(context:Context) {
+        super.init(context: context)
         addAttribute(positionBuffer, for: .Position)
         addAttribute(texcoodsBuffer, for: .Texcoord)
         setElements(indicesBuffer)
@@ -53,22 +53,23 @@ final class ARPlaneContainer: Object {
         }
     }
 
-    var geometry = ARPlaneGeometry()
+    var geometry:ARPlaneGeometry
     var planeMesh: Mesh
     var meshWireframe: Mesh
 
-    init(label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
+    init(context:Context, label: String, anchor: ARPlaneAnchor, material: Satin.Material) {
         self.anchor = anchor
-
+        self.geometry  = ARPlaneGeometry(context: context)
         let mat = material.clone()
         mat.set("Color", [Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), Float.random(in: 0 ... 1), 0.25])
 
-        planeMesh = Mesh(geometry: geometry, material: mat)
-        meshWireframe = Mesh(geometry: geometry, material: mat)
+        planeMesh = Mesh(context: context, geometry: geometry, material: mat)
+        meshWireframe = Mesh(context: context, geometry: geometry, material: mat)
         meshWireframe.triangleFillMode = .lines
         planeMesh.add(meshWireframe)
 
-        super.init(label: label, [planeMesh])
+        super.init(context:context, label: label, [planeMesh])
+
         updateAnchor()
     }
 
@@ -97,7 +98,7 @@ final class ARPlanesRenderer: BaseRenderer {
     private var anchorsUpdatedSubscription: AnyCancellable?
 
     lazy var planeMaterial: Satin.Material = {
-        let material = BasicColorMaterial(color: .one, blending: .additive)
+        lazy var material = BasicColorMaterial(context: defaultContext, color: .one, blending: .additive)
         material.depthWriteEnabled = false
         return material
     }()
@@ -106,23 +107,23 @@ final class ARPlanesRenderer: BaseRenderer {
 
     // MARK: - 3D
 
-    lazy var scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        let renderer = Renderer(label: "Content Renderer", context: defaultContext)
+        let renderer = RenderEncoder(label: "Content RenderEncoder", context: defaultContext)
         renderer.colorLoadAction = .load
         return renderer
     }()
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     // MARK: - Init
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
@@ -134,13 +135,13 @@ final class ARPlanesRenderer: BaseRenderer {
     override func setup() {
         metalView.preferredFramesPerSecond = 60
 
-        backgroundRenderer = ARBackgroundRenderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat), session: session)
+        backgroundRenderer = ARBackgroundEncoder(context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat), session: session)
 
         anchorsAddedSubscription = sessionPublisher.updatedAnchorsPublisher.sink { [weak self] anchors in
             guard let self else { return }
             for anchor in anchors {
                 if self.planesMap[anchor] == nil, let planeAnchor = anchor as? ARPlaneAnchor {
-                    let planeContainer = ARPlaneContainer(label: "\(planeAnchor.identifier)", anchor: planeAnchor, material: self.planeMaterial)
+                    let planeContainer = ARPlaneContainer(context:defaultContext, label: "\(planeAnchor.identifier)", anchor: planeAnchor, material: self.planeMaterial)
                     self.planesMap[anchor] = planeContainer
                     self.scene.add(planeContainer)
                 }

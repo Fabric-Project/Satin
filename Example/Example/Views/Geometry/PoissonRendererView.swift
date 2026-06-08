@@ -17,7 +17,8 @@ struct PoissonRendererView: View {
     }
 }
 
-#Preview {
-    PoissonRendererView()
-}
-
+#if false
+    #Preview {
+        PoissonRendererView()
+    }
+#endif

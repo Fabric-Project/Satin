@@ -5,13 +5,15 @@
 typedef struct {
     float4 position [[position]];
     float depth;
+    float pointSize [[point_size]];
 } DepthVertexData;
 
 typedef struct {
-    float near;  // input
-    float far;   // input
-    bool invert; // toggle
-    bool color;  // toggle
+    float near;      // input
+    float far;       // input
+    bool invert;     // toggle
+    bool color;      // toggle
+    float pointSize; // slider,1.0,64.0,1.0
 } DepthUniforms;
 
 vertex DepthVertexData depthVertex(
@@ -45,6 +47,7 @@ vertex DepthVertexData depthVertex(
     DepthVertexData out;
     out.position = projection * position;
     out.depth = depth;
+    out.pointSize = uniforms.pointSize;
     return out;
 }
 

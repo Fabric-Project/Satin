@@ -14,13 +14,10 @@ class RenderableTests: XCTestCase {
 
         let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
         let label = "BasicColor"
-        let shader = SourceShader(
-            label: label,
-            pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal")
-        )
+        let pipelineURL = getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal")
 
         measure {
-            shader.context = context
+            _ = SourceShader(context: context, label: label, pipelineURL: pipelineURL)
         }
     }
 }

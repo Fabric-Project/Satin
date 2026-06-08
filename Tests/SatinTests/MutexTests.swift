@@ -16,14 +16,20 @@ import XCTest
 final class MutexTests: XCTestCase {
     let iterationCount = 100000
 
+    private func makeContext() -> Context? {
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        return Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
+    }
+
     // 0.244 sec
     func testDispatchQueue() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
         let queue = DispatchQueue(label: "ObjectQueue", attributes: .concurrent)
 
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
                 Task {
                     queue.sync(flags: .barrier) {
@@ -48,12 +54,13 @@ final class MutexTests: XCTestCase {
 
     // 0.236 sec
     func testNSLock() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
         let lock = NSLock()
 
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
                 Task {
                     lock.lock()
@@ -78,12 +85,13 @@ final class MutexTests: XCTestCase {
 
     // 0.251 sec
     func testNSRecursiveLock() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
         let lock = NSRecursiveLock()
 
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
                 Task {
                     lock.lock()
@@ -108,12 +116,13 @@ final class MutexTests: XCTestCase {
 
     // 0.244 sec
     func testPThreadMutex() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
         let mutex = PThreadMutex(type: .normal)
 
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
                 Task {
                     mutex.unbalancedLock()
@@ -138,12 +147,13 @@ final class MutexTests: XCTestCase {
 
     // 0.250 sec
     func testUnfairLock() throws {
-        let object = Object()
+        guard let context = makeContext() else { return }
+        let object = Object(context: context)
         let unfairLock = UnfairLock()
 
         measure {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
-                let newObject = Object()
+                let newObject = Object(context: context)
 
                 Task {
                     unfairLock.unbalancedLock()

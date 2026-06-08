@@ -113,6 +113,7 @@ open class PhysicalMaterial: StandardMaterial {
     }
 
     public init(
+        context: Context,
         baseColor: simd_float4 = .one,
         metallic: Float = 1.0,
         roughness: Float = 1.0,
@@ -133,6 +134,7 @@ open class PhysicalMaterial: StandardMaterial {
         maps: [PBRTextureType: MTLTexture?] = [:]
     ) {
         super.init(
+            context: context,
             baseColor: baseColor,
             metallic: metallic,
             roughness: roughness,
@@ -164,12 +166,12 @@ open class PhysicalMaterial: StandardMaterial {
         try super.init(from: decoder)
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
     }
 
     override open func createShader() -> Shader {
-        PhysicalShader(label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
+        PhysicalShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     override func setTextureMultiplierUniformToOne(type: PBRTextureType) {
@@ -559,13 +561,13 @@ public extension PhysicalMaterial {
                     loadTexture(loader: textureLoader, mdlTexture: mdlTexture, options: options, target: .normal)
                 }
             } else if property.type == .color, let color = property.color, let rgba = color.components {
-                print(simd_make_float4(Float(rgba[0]), Float(rgba[1]), Float(rgba[2]), Float(rgba[3])))
+//                print(simd_make_float4(Float(rgba[0]), Float(rgba[1]), Float(rgba[2]), Float(rgba[3])))
             } else if property.type == .float4 {
-                print(property.float4Value)
+//                print(property.float4Value)
             } else if property.type == .float3 {
-                print(simd_make_float4(property.float3Value, 1.0))
+//                print(simd_make_float4(property.float3Value, 1.0))
             } else if property.type == .float {
-                print(simd_make_float4(1.0, 1.0, 1.0, property.floatValue))
+//                print(simd_make_float4(1.0, 1.0, 1.0, property.floatValue))
             } else {
                 print("tangentSpaceNormal not supported")
                 print("Unsupported MDLMaterial Property: \(property.name)")

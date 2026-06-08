@@ -8,13 +8,22 @@
 
 import Foundation
 import Metal
+import CoreText
 import Satin
 
 #if canImport(AppKit)
 import AppKit
 #endif
 
-class BaseRenderer: MetalViewRenderer {
+class BaseRenderer: ViewRenderer {
+    override init(context: Context) {
+        super.init(context: context)
+    }
+
+    convenience init() {
+        self.init(context: .makePlatformDefault())
+    }
+
     // MARK: - Paths
 
     var assetsURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Assets") }
@@ -35,6 +44,10 @@ class BaseRenderer: MetalViewRenderer {
 
     var params: [String: ParameterGroup?] {
         return [:]
+    }
+
+    var availableFontFamilyNames: [String] {
+        (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
     }
 
     override func setup() {

@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  AR
 //
 //  Created by Reza Ali on 9/26/20.
@@ -19,24 +19,24 @@ final class ARRenderer: BaseRenderer {
     private let sessionPublisher = ARSessionPublisher(session: ARSession())
     private var anchorsSubscription: AnyCancellable?
 
-    private let boxGeometry = BoxGeometry(width: 0.1, height: 0.1, depth: 0.1)
-    private let boxMaterial = UVColorMaterial()
+    private lazy var boxGeometry = BoxGeometry(context: defaultContext, width: 0.1, height: 0.1, depth: 0.1)
+    private lazy var boxMaterial = UVColorMaterial(context: defaultContext)
     private var meshAnchorMap: [UUID: Mesh] = [:]
 
-    private var scene = Object(label: "Scene")
+    private lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    private lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
-    private lazy var renderer = Renderer(context: context)
+//    private lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
+    private lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    private lazy var renderer = RenderEncoder(context: defaultContext)
 
-    private var backgroundRenderer: ARBackgroundRenderer!
+    private var backgroundRenderer: ARBackgroundEncoder!
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context:context)
 
         session.run(ARWorldTrackingConfiguration())
     }
@@ -46,10 +46,7 @@ final class ARRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        boxGeometry.context = context
-        boxMaterial.context = context
-
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )
@@ -91,7 +88,7 @@ final class ARRenderer: BaseRenderer {
         if let currentFrame = session.currentFrame {
             let anchor = ARAnchor(transform: simd_mul(currentFrame.camera.transform, translationMatrixf(0.0, 0.0, -0.25)))
             session.add(anchor: anchor)
-            let mesh = Mesh(geometry: boxGeometry, material: boxMaterial)
+            let mesh = Mesh(context: defaultContext, geometry: boxGeometry, material: boxMaterial)
             mesh.worldMatrix = anchor.transform
             meshAnchorMap[anchor.identifier] = mesh
             scene.add(mesh)

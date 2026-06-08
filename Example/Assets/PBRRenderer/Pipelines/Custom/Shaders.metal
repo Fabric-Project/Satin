@@ -32,17 +32,22 @@ vertex CustomVertexData customVertex(Vertex in [[stage_in]],
     out.position = vertexUniforms.modelViewProjectionMatrix * position;
     out.worldPosition = (vertexUniforms.modelMatrix * position).xyz;
     out.normal = vertexUniforms.normalMatrix * in.normal;
+    out.roughness = 0.0;
+    out.metallic = 0.0;
 #endif
 
     out.cameraPosition = vertexUniforms.worldCameraPosition;
+#if INSTANCING
     out.roughness = (float) ( (int)instanceID % 11 ) / 10.0;
     out.metallic = (float) ( (int)instanceID / 11 ) / 10.0;
+#endif
     
     return out;
 }
 
 fragment float4 customFragment( CustomVertexData in [[stage_in]],
     // inject lighting args
+    // inject direct shadow args
 #include "Chunks/PbrTextures.metal"
     constant CustomUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]])
 {

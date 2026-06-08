@@ -48,14 +48,14 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - 3D
 
-    lazy var mesh = Mesh(geometry: IcoSphereGeometry(radius: 0.001, resolution: 1), material: PointMaterial(pipelinesURL: pipelinesURL))
+    lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.001, resolution: 1), material: PointMaterial(context:defaultContext, pipelinesURL: pipelinesURL))
 
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext,session: session, metalView: metalView, near: 0.01, far: 100.0)
     lazy var renderer = {
-        let renderer = Renderer(context: defaultContext)
-        renderer.label = "Content Renderer"
+        lazy var renderer = RenderEncoder(context: defaultContext)
+        renderer.label = "Content RenderEncoder"
         renderer.setClearColor(.zero)
         renderer.colorLoadAction = .load
         renderer.depthLoadAction = .load
@@ -67,10 +67,10 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - Background
 
-    var backgroundRenderer: ARBackgroundDepthRenderer!
+    var backgroundRenderer: ARBackgroundDepthEncoder!
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context: context)
 
         let config = ARWorldTrackingConfiguration()
         config.frameSemantics = [.sceneDepth, .smoothedSceneDepth]
@@ -91,7 +91,7 @@ final class ARPointCloudRenderer: BaseRenderer {
             )
         }
 
-        backgroundRenderer = ARBackgroundDepthRenderer(
+        backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
             session: session,
             sessionPublisher: ARSessionPublisher(session: session),

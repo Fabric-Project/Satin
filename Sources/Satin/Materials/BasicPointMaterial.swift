@@ -9,6 +9,7 @@ import Metal
 import simd
 
 open class BasicPointMaterial: Material {
+    override open var lightingModel: LightingModel { .unlit }
     public var color: simd_float4 {
         get {
             get("Color", as: Float4Parameter.self)!.value
@@ -30,8 +31,8 @@ open class BasicPointMaterial: Material {
         }
     }
 
-    public init(color: simd_float4, size: Float, blending: Blending = .alpha, depthWriteEnabled: Bool = true, depthCompareFunction: MTLCompareFunction = .greaterEqual) {
-        super.init()
+    public init(context: Context, color: simd_float4, size: Float, blending: Blending = .alpha, depthWriteEnabled: Bool = true, depthCompareFunction: MTLCompareFunction = .greaterEqual) {
+        super.init(context: context)
 
         self.blending = blending
         self.depthWriteEnabled = depthWriteEnabled
@@ -42,8 +43,8 @@ open class BasicPointMaterial: Material {
         updateSize()
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
 
         blending = .alpha
 

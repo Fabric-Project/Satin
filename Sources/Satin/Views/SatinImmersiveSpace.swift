@@ -12,11 +12,11 @@ import Foundation
 import SwiftUI
 
 public struct SatinImmersiveSpace: SwiftUI.Scene {
-    private let renderer: MetalLayerRenderer
+    private let renderer: SpatialRenderer
 
     @Binding private var immersionStyle: ImmersionStyle
 
-    public init(renderer: MetalLayerRenderer, immersionStyle: Binding<ImmersionStyle>) {
+    public init(renderer: SpatialRenderer, immersionStyle: Binding<ImmersionStyle>) {
         self.renderer = renderer
         _immersionStyle = immersionStyle
     }
@@ -24,12 +24,7 @@ public struct SatinImmersiveSpace: SwiftUI.Scene {
     public var body: some SwiftUI.Scene {
         ImmersiveSpace(id: renderer.id) {
             CompositorLayer(configuration: renderer) { layerRenderer in
-
-                guard let queue = layerRenderer.device.makeCommandQueue() else { fatalError("MTLDevice failed to create command queue") }
-
                 renderer.layerRenderer = layerRenderer
-                renderer.device = layerRenderer.device
-                renderer.commandQueue = queue
                 if !renderer.isSetup {
                     renderer.setup()
                     renderer.isSetup = true

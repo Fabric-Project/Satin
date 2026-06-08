@@ -31,11 +31,11 @@ final class ContactShadowRenderer: BaseRenderer {
     // MARK: - 3D Scene
 
     lazy var spheres: Object = {
-        let geometry = RoundedBoxGeometry(size: 1, radius: 0.25, resolution: 3)
+        lazy var geometry = RoundedBoxGeometry(context: defaultContext, size: 1, radius: 0.25, resolution: 3)
         let geometrySize = geometry.bounds.size
 
-        let material = MatCapMaterial(texture: matcapTexture)
-        let sphere0 = Mesh(geometry: geometry, material: material)
+        lazy var material = MatCapMaterial(context: defaultContext, texture: matcapTexture)
+        lazy var sphere0 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere0.position.y += 0.5
         sphere0.onUpdate = { [weak self, weak sphere0] in
             if let self = self, let sphere = sphere0 {
@@ -44,7 +44,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere1 = Mesh(geometry: geometry, material: material)
+        lazy var sphere1 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere1.position.x += 1.5
         sphere1.position.y += 0.25
         sphere1.scale *= 0.75
@@ -56,7 +56,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere2 = Mesh(geometry: geometry, material: material)
+        lazy var sphere2 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere2.position.x -= 1.5
         sphere2.position.z -= 1.0
         sphere2.position.y += 0.25
@@ -69,7 +69,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere3 = Mesh(geometry: geometry, material: material)
+        lazy var sphere3 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere3.position.x -= 0.25
         sphere3.position.z += 1.5
         sphere3.position.y += 0.0
@@ -82,7 +82,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere4 = Mesh(geometry: geometry, material: material)
+        lazy var sphere4 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere4.position.x += 0.75
         sphere4.position.z -= 1.25
         sphere4.position.y += 0.875
@@ -95,7 +95,7 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let sphere5 = Mesh(geometry: geometry, material: material)
+        lazy var sphere5 = Mesh(context: defaultContext, geometry: geometry, material: material)
         sphere5.position.x -= 1.5
         sphere5.position.z += 1.25
         sphere5.position.y += 0.25
@@ -108,24 +108,24 @@ final class ContactShadowRenderer: BaseRenderer {
             }
         }
 
-        let spheres = Object(label: "Spheres", [sphere0, sphere1, sphere2, sphere3, sphere4, sphere5])
+        lazy var spheres = Object(context: defaultContext, label: "Spheres", [sphere0, sphere1, sphere2, sphere3, sphere4, sphere5])
         spheres.position.y += geometrySize.y
         return spheres
     }()
 
-    lazy var spheresContainer = Object(label: "Spheres Container", [spheres, floorMesh])
+    lazy var spheresContainer = Object(context: defaultContext, label: "Spheres Container", [spheres, floorMesh])
 
-    lazy var scene = Object(label: "Scene", [spheresContainer])
-    lazy var floorMesh = Mesh(geometry: PlaneGeometry(size: 1.0, orientation: .zx), material: BasicTextureMaterial())
+    lazy var scene = Object(context: defaultContext, label: "Scene", [spheresContainer])
+    lazy var floorMesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 1.0, orientation: .zx), material: BasicTextureMaterial(context: defaultContext))
 
     lazy var camera: PerspectiveCamera = {
-        var camera = PerspectiveCamera(position: [20, 20, 20], near: 0.01, far: 100.0, fov: 10)
+        lazy var camera = PerspectiveCamera(context: defaultContext, position: [20, 20, 20], near: 0.01, far: 100.0, fov: 10)
         camera.lookAt(target: .zero)
         return camera
     }()
 
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     lazy var shadowRenderer = ObjectShadowRenderer(
         context: defaultContext,
@@ -140,10 +140,7 @@ final class ContactShadowRenderer: BaseRenderer {
         spheres.position.y = 1.5
         cameraController.target.position.y += 1
         renderer.setClearColor(.one)
-    }
-
-    deinit {
-        cameraController.disable()
+        floorMesh.material?.blending = .alpha
     }
 
     lazy var startTime = getTime()

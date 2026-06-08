@@ -21,12 +21,21 @@ public final class OrthographicCameraController: CameraController, Codable {
         }
     }
 
+    private weak var _view: MetalView?
     public var view: MetalView? {
-        willSet {
-            disable()
+        get {
+            _view
         }
-        didSet {
-            enable()
+        set {
+            guard _view !== newValue else { return }
+
+            disable()
+            _view = newValue
+            isSetup = false
+
+            if newValue != nil {
+                enable()
+            }
         }
     }
 
@@ -95,7 +104,7 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     public init(camera: OrthographicCamera, view: MetalView, defaultZoom: Float = 0.5) {
         self.camera = camera
-        self.view = view
+        _view = view
 
         zoomDelta = defaultZoom
         self.defaultZoom = defaultZoom
@@ -106,6 +115,10 @@ public final class OrthographicCameraController: CameraController, Codable {
         setup()
 
         enable()
+    }
+
+    deinit {
+        disable()
     }
 
     // MARK: - Update
@@ -288,52 +301,72 @@ public final class OrthographicCameraController: CameraController, Codable {
 
         leftMouseDownHandler = NSEvent.addLocalMonitorForEvents(
             matching: .leftMouseDown,
-            handler: mouseDown
+            handler: { [weak self] event in
+                self?.mouseDown(with: event) ?? event
+            }
         )
 
         leftMouseDraggedHandler = NSEvent.addLocalMonitorForEvents(
             matching: .leftMouseDragged,
-            handler: mouseDragged
+            handler: { [weak self] event in
+                self?.mouseDragged(with: event) ?? event
+            }
         )
 
         leftMouseUpHandler = NSEvent.addLocalMonitorForEvents(
             matching: .leftMouseUp,
-            handler: mouseUp
+            handler: { [weak self] event in
+                self?.mouseUp(with: event) ?? event
+            }
         )
 
         rightMouseDownHandler = NSEvent.addLocalMonitorForEvents(
             matching: .rightMouseDown,
-            handler: rightMouseDown
+            handler: { [weak self] event in
+                self?.rightMouseDown(with: event) ?? event
+            }
         )
 
         rightMouseDraggedHandler = NSEvent.addLocalMonitorForEvents(
             matching: .rightMouseDragged,
-            handler: rightMouseDragged
+            handler: { [weak self] event in
+                self?.rightMouseDragged(with: event) ?? event
+            }
         )
 
         rightMouseUpHandler = NSEvent.addLocalMonitorForEvents(
             matching: .rightMouseUp,
-            handler: rightMouseUp
+            handler: { [weak self] event in
+                self?.rightMouseUp(with: event) ?? event
+            }
         )
 
         otherMouseDownHandler = NSEvent.addLocalMonitorForEvents(
             matching: .otherMouseDown,
-            handler: mouseDown
+            handler: { [weak self] event in
+                self?.mouseDown(with: event) ?? event
+            }
         )
 
         otherMouseDraggedHandler = NSEvent.addLocalMonitorForEvents(
             matching: .otherMouseDragged,
-            handler: mouseDragged
+            handler: { [weak self] event in
+                self?.mouseDragged(with: event) ?? event
+            }
         )
 
         otherMouseUpHandler = NSEvent.addLocalMonitorForEvents(
             matching: .otherMouseUp,
-            handler: mouseUp
+            handler: { [weak self] event in
+                self?.mouseUp(with: event) ?? event
+            }
         )
 
         scrollWheelHandler = NSEvent.addLocalMonitorForEvents(
             matching: .scrollWheel,
-            handler: scrollWheel
+            handler: { [weak self] event in
+                self?.scrollWheel(with: event) ?? event
+            }
         )
 
         magnifyGestureRecognizer = NSMagnificationGestureRecognizer(target: self, action: #selector(magnifyGesture))
@@ -371,30 +404,78 @@ public final class OrthographicCameraController: CameraController, Codable {
     }
 
     private func disableEvents() {
-        guard let view = view else { return }
+        let view = view
 
         #if os(macOS)
 
-        NSEvent.removeMonitor(leftMouseDownHandler!)
-        NSEvent.removeMonitor(leftMouseDraggedHandler!)
-        NSEvent.removeMonitor(leftMouseUpHandler!)
-        NSEvent.removeMonitor(rightMouseDownHandler!)
-        NSEvent.removeMonitor(rightMouseDraggedHandler!)
-        NSEvent.removeMonitor(rightMouseUpHandler!)
-        NSEvent.removeMonitor(otherMouseDownHandler!)
-        NSEvent.removeMonitor(otherMouseDraggedHandler!)
-        NSEvent.removeMonitor(otherMouseUpHandler!)
-        NSEvent.removeMonitor(scrollWheelHandler!)
+        if let leftMouseDownHandler {
+            NSEvent.removeMonitor(leftMouseDownHandler)
+            self.leftMouseDownHandler = nil
+        }
+        if let leftMouseDraggedHandler {
+            NSEvent.removeMonitor(leftMouseDraggedHandler)
+            self.leftMouseDraggedHandler = nil
+        }
+        if let leftMouseUpHandler {
+            NSEvent.removeMonitor(leftMouseUpHandler)
+            self.leftMouseUpHandler = nil
+        }
+        if let rightMouseDownHandler {
+            NSEvent.removeMonitor(rightMouseDownHandler)
+            self.rightMouseDownHandler = nil
+        }
+        if let rightMouseDraggedHandler {
+            NSEvent.removeMonitor(rightMouseDraggedHandler)
+            self.rightMouseDraggedHandler = nil
+        }
+        if let rightMouseUpHandler {
+            NSEvent.removeMonitor(rightMouseUpHandler)
+            self.rightMouseUpHandler = nil
+        }
+        if let otherMouseDownHandler {
+            NSEvent.removeMonitor(otherMouseDownHandler)
+            self.otherMouseDownHandler = nil
+        }
+        if let otherMouseDraggedHandler {
+            NSEvent.removeMonitor(otherMouseDraggedHandler)
+            self.otherMouseDraggedHandler = nil
+        }
+        if let otherMouseUpHandler {
+            NSEvent.removeMonitor(otherMouseUpHandler)
+            self.otherMouseUpHandler = nil
+        }
+        if let scrollWheelHandler {
+            NSEvent.removeMonitor(scrollWheelHandler)
+            self.scrollWheelHandler = nil
+        }
 
-        view.removeGestureRecognizer(magnifyGestureRecognizer)
-        view.removeGestureRecognizer(rollGestureRecognizer)
+        if let magnifyGestureRecognizer {
+            view?.removeGestureRecognizer(magnifyGestureRecognizer)
+            self.magnifyGestureRecognizer = nil
+        }
+        if let rollGestureRecognizer {
+            view?.removeGestureRecognizer(rollGestureRecognizer)
+            self.rollGestureRecognizer = nil
+        }
 
         #else
 
-        view.removeGestureRecognizer(rollGestureRecognizer)
-        view.removeGestureRecognizer(panGestureRecognizer)
-        view.removeGestureRecognizer(tapGestureRecognizer)
-        view.removeGestureRecognizer(pinchGestureRecognizer)
+        if let rollGestureRecognizer {
+            view?.removeGestureRecognizer(rollGestureRecognizer)
+            self.rollGestureRecognizer = nil
+        }
+        if let panGestureRecognizer {
+            view?.removeGestureRecognizer(panGestureRecognizer)
+            self.panGestureRecognizer = nil
+        }
+        if let tapGestureRecognizer {
+            view?.removeGestureRecognizer(tapGestureRecognizer)
+            self.tapGestureRecognizer = nil
+        }
+        if let pinchGestureRecognizer {
+            view?.removeGestureRecognizer(pinchGestureRecognizer)
+            self.pinchGestureRecognizer = nil
+        }
 
         #endif
     }
@@ -404,7 +485,9 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Mouse
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
+            self?.state = .inactive
+        }) else { return event }
 
         if event.clickCount == 2 {
             reset()
@@ -430,7 +513,9 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Right Mouse
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
+            self?.state = .inactive
+        }) else { return event }
         state = .zooming
         return event
     }
@@ -450,7 +535,7 @@ public final class OrthographicCameraController: CameraController, Codable {
     // MARK: - Scroll Wheel
 
     private func scrollWheel(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window else { return event }
+        guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
         if event.phase == .began {
             state = .panning

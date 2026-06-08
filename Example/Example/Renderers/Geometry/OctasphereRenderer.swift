@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Example
 //
 //  Created by Reza Ali on 6/27/20.
@@ -11,15 +11,15 @@ import MetalKit
 import Satin
 
 final class OctasphereRenderer: BaseRenderer {
-    lazy var mesh = Mesh(geometry: OctaSphereGeometry(radius: 1, resolution: 3), material: BasicDiffuseMaterial(hardness: 0.75))
-    lazy var scene = Object(label: "Scene", [mesh])
-    let camera = PerspectiveCamera(position: simd_make_float3(0.0, 0.0, 5.0), near: 0.01, far: 100.0, fov: 30)
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.75)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: OctaSphereGeometry(context: defaultContext, radius: 1, resolution: 3), material: material)
+    }()
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(0.0, 0.0, 5.0), near: 0.01, far: 100.0, fov: 30)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
-
-    deinit {
-        cameraController.disable()
-    }
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         #if os(visionOS)

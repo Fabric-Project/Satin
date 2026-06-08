@@ -42,12 +42,12 @@ public final class SquircleGeometry: SatinGeometry {
         }
     }
 
-    public init(size: Float, radius: Float, angularResolution: Int, radialResolution: Int) {
+    public init(context: Context, size: Float, radius: Float, angularResolution: Int, radialResolution: Int) {
         self.size = size
         self.radius = radius
         self.angularResolution = angularResolution
         self.radialResolution = radialResolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

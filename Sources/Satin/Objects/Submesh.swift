@@ -12,13 +12,7 @@ import simd
 open class Submesh {
     public var id: String = UUID().uuidString
     public var label = "Submesh"
-    open var context: Context? {
-        didSet {
-            if context != nil, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public private(set) var context: Context
 
     public var visible = true
     public var indexBufferOffset = 0
@@ -30,19 +24,39 @@ open class Submesh {
 
     weak var parent: Mesh?
     var material: Material?
-    var geometry = Geometry()
+    var geometry: Geometry!
 
     public init(
+        context: Context,
         label: String = "Submesh",
         parent: Mesh,
         elementBuffer: ElementBuffer,
         indexBufferOffset: Int = 0,
         material: Material? = nil
     ) {
+        self.context = context
         self.parent = parent
         self.indexBufferOffset = indexBufferOffset
         self.material = material
+        geometry = Geometry(context: context)
         geometry.setElements(elementBuffer)
+    }
+
+    public convenience init(
+        label: String = "Submesh",
+        parent: Mesh,
+        elementBuffer: ElementBuffer,
+        indexBufferOffset: Int = 0,
+        material: Material? = nil
+    ) {
+        self.init(
+            context: parent.context,
+            label: label,
+            parent: parent,
+            elementBuffer: elementBuffer,
+            indexBufferOffset: indexBufferOffset,
+            material: material
+        )
     }
 
     open func setup() {
@@ -61,15 +75,13 @@ open class Submesh {
     }
 
     open func setupMaterial() {
-        guard let context, let material, let parent else { return }
+        guard let material, let parent else { return }
         material.vertexDescriptor = parent.geometry.vertexDescriptor
-        material.context = context
+        material.tessellationDescriptor = parent.geometry.tessellationDescriptor
+        material.setup()
     }
 
-    open func setupGeometry() {
-        guard let context else { return }
-        geometry.context = context
-    }
+    open func setupGeometry() {}
 
     open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
         material?.bind(

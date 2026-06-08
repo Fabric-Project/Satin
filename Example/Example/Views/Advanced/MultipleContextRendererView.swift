@@ -17,8 +17,9 @@ struct MultipleContextRendererView: View {
     }
 }
 
-#Preview {
-    MultipleContextRendererView()
-}
-
+#if false
+    #Preview {
+        MultipleContextRendererView()
+    }
+#endif
 

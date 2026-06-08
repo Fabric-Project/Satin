@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  LiveCode-macOS
 //
 //  Created by Reza Ali on 6/1/20.
@@ -15,27 +15,27 @@ final class LiveCodeRenderer: BaseRenderer {
     // Material names must not be the target name, i.e. LiveCodeMaterial won't work
 
     final class CustomMaterial: SourceMaterial {
-        override init(pipelinesURL: URL, live: Bool = true) {
-            super.init(pipelinesURL: pipelinesURL, live: true)
+        override init(context: Context, pipelinesURL: URL, live: Bool = true) {
+            super.init(context: context, pipelinesURL: pipelinesURL, live: true)
             self.blending = .alpha
+        }
+
+        required init(context: Context) {
+            super.init(context: context)
         }
 
         required init(from decoder: Decoder) throws {
             fatalError("init(from:) has not been implemented")
         }
-
-        required init() {
-            fatalError("init() has not been implemented")
-        }
     }
 
     var startTime: CFAbsoluteTime = 0.0
 
-    let camera = OrthographicCamera()
+    lazy var camera = OrthographicCamera(context: defaultContext)
 
-    lazy var mesh = Mesh(geometry: QuadGeometry(), material: CustomMaterial(pipelinesURL: pipelinesURL))
-    lazy var scene = Object(label: "Scene", [mesh])
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL))
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }
     override var depthPixelFormat: MTLPixelFormat { .invalid }

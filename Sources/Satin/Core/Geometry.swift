@@ -18,13 +18,7 @@ import SatinCore
 open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
     public var id: String = UUID().uuidString
 
-    public var context: Context? {
-        didSet {
-            if oldValue == nil, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public let context: Context
 
     public var windingOrder: MTLWinding = .counterClockwise
     public var primitiveType: MTLPrimitiveType = .triangle {
@@ -39,12 +33,14 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     public var vertexDescriptor: MTLVertexDescriptor { _vertexDescriptor.get { generateVertexDescriptor() } }
     public var tessellationDescriptor: TessellationDescriptor? { nil }
 
-    public private(set) var vertexAttributes: [VertexAttributeIndex: any VertexAttribute] = [:] {
+    public private(set) var vertexAttributes: [VertexAttributeIndex: VertexAttribute] = [:] {
         didSet {
             _updateVertexBuffers = true
             _vertexDescriptor.clear()
         }
     }
+    private var bufferAttributes: [VertexAttributeIndex: BufferAttribute] = [:]
+    private var interleavedAttributes: [VertexAttributeIndex: InterleavedBufferAttribute] = [:]
 
     public let onUpdate = PassthroughSubject<Geometry, Never>()
 
@@ -112,9 +108,11 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Init
 
-    public init(primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+    public init(context: Context, primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
+        self.context = context
         self.windingOrder = windingOrder
         self.primitiveType = primitiveType
+        setup()
     }
 
     open func setup() {
@@ -178,39 +176,50 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Attributes
 
-    public func getAttribute(_ index: VertexAttributeIndex) -> (any VertexAttribute)? {
+    public func getAttribute(_ index: VertexAttributeIndex) -> VertexAttribute? {
         vertexAttributes[index]
     }
 
-    public func addAttribute(_ attribute: any VertexAttribute, for index: VertexAttributeIndex) {
+    public func addAttribute(_ attribute: VertexAttribute, for index: VertexAttributeIndex) {
         vertexAttributes[index] = attribute
-        if let bufferAttribute = attribute as? any BufferAttribute {
+        if let bufferAttribute = attribute as? BufferAttribute {
+            bufferAttributes[index] = bufferAttribute
+            interleavedAttributes.removeValue(forKey: index)
             bufferAttribute.delegate = self
-        }
-        else if let interleavedBuffer = attribute as? any InterleavedBufferAttribute {
+        } else if let interleavedBuffer = attribute as? InterleavedBufferAttribute {
+            interleavedAttributes[index] = interleavedBuffer
+            bufferAttributes.removeValue(forKey: index)
             interleavedBuffer.parent.delegate = self
+        } else {
+            bufferAttributes.removeValue(forKey: index)
+            interleavedAttributes.removeValue(forKey: index)
         }
     }
 
     public func removeAttribute(_ index: VertexAttributeIndex) {
         if let attribute = vertexAttributes[index] {
-            if let bufferAttribute = attribute as? any BufferAttribute {
+            if let bufferAttribute = attribute as? BufferAttribute {
                 bufferAttribute.delegate = nil
+            } else if let interleavedAttribute = attribute as? InterleavedBufferAttribute {
+                interleavedAttribute.parent.delegate = nil
             }
             vertexAttributes.removeValue(forKey: index)
+            bufferAttributes.removeValue(forKey: index)
+            interleavedAttributes.removeValue(forKey: index)
         }
     }
 
     public func removeAttributes() {
         for (index, attribute) in vertexAttributes {
-            if let bufferAttribute = attribute as? any BufferAttribute {
+            if let bufferAttribute = attribute as? BufferAttribute {
                 bufferAttribute.delegate = nil
-            }
-            else if let interleavedAttribute = attribute as? (any InterleavedBufferAttribute) {
+            } else if let interleavedAttribute = attribute as? InterleavedBufferAttribute {
                 interleavedAttribute.parent.delegate = nil
             }
             vertexAttributes.removeValue(forKey: index)
         }
+        bufferAttributes.removeAll()
+        interleavedAttributes.removeAll()
     }
 
     public func hasAttribute(_ index: VertexAttributeIndex) -> Bool {
@@ -233,27 +242,25 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Setup Vertex Buffers
 
     private func setupVertexBuffers() {
-        guard let device = context?.device else { return }
-        for (attributeIndex, attribute) in vertexAttributes {
-            if let bufferAttribute = attribute as? any BufferAttribute {
-                setupBufferAttribute(device, attribute: bufferAttribute, for: attributeIndex)
-            }
-            else if let interleavedBufferAttribute = attribute as? any InterleavedBufferAttribute {
-                setupInterleavedBufferAttribute(device, attribute: interleavedBufferAttribute)
-            }
+        let device = context.device
+        for (attributeIndex, attribute) in bufferAttributes {
+            setupBufferAttribute(device, attribute: attribute, for: attributeIndex)
+        }
+        for attribute in interleavedAttributes.values {
+            setupInterleavedBufferAttribute(device, attribute: attribute)
         }
     }
 
     // MARK: - Setup Index Buffer
 
     private func setupIndexBuffer() {
-        guard let device = context?.device, let elementBuffer else { return }
-        indexBuffer = elementBuffer.getBuffer(device: device)
+        guard let elementBuffer else { return }
+        indexBuffer = elementBuffer.getBuffer(device: context.device)
     }
 
     // MARK: - Setup Vertex Attributes
 
-    private func setupBufferAttribute(_ device: MTLDevice, attribute: any BufferAttribute, for index: VertexAttributeIndex) {
+    private func setupBufferAttribute(_ device: MTLDevice, attribute: BufferAttribute, for index: VertexAttributeIndex) {
         let bufferIndex = index.bufferIndex
 
         guard attribute.needsUpdate || vertexBuffers[bufferIndex] == nil else { return }
@@ -269,7 +276,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         attribute.needsUpdate = false
     }
 
-    private func setupInterleavedBufferAttribute(_ device: MTLDevice, attribute: any InterleavedBufferAttribute) {
+    private func setupInterleavedBufferAttribute(_ device: MTLDevice, attribute: InterleavedBufferAttribute) {
         let interleavedBuffer = attribute.parent
         let bufferIndex = interleavedBuffer.index
 
@@ -289,31 +296,30 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     open func generateVertexDescriptor() -> MTLVertexDescriptor {
         let descriptor = MTLVertexDescriptor()
 
-        for (attributeIndex, attribute) in vertexAttributes {
-            if let interleavedAttribute = attribute as? any InterleavedBufferAttribute {
-                let index = attributeIndex.rawValue
-                let interleavedBuffer = interleavedAttribute.parent
-                let bufferIndex = interleavedBuffer.index.rawValue
+        for (attributeIndex, attribute) in bufferAttributes {
+            let index = attributeIndex.rawValue
+            let bufferIndex = attributeIndex.bufferIndex.rawValue
+            descriptor.attributes[index].format = attribute.format
+            descriptor.attributes[index].offset = 0
+            descriptor.attributes[index].bufferIndex = bufferIndex
 
-                descriptor.attributes[index].format = interleavedAttribute.format
-                descriptor.attributes[index].offset = interleavedAttribute.offset
-                descriptor.attributes[index].bufferIndex = bufferIndex
+            descriptor.layouts[bufferIndex].stride = attribute.stride
+            descriptor.layouts[bufferIndex].stepRate = attribute.stepRate
+            descriptor.layouts[bufferIndex].stepFunction = attribute.stepFunction
+        }
 
-                descriptor.layouts[bufferIndex].stride = interleavedBuffer.stride
-                descriptor.layouts[bufferIndex].stepRate = interleavedBuffer.stepRate
-                descriptor.layouts[bufferIndex].stepFunction = interleavedBuffer.stepFunction
-            }
-            else {
-                let index = attributeIndex.rawValue
-                let bufferIndex = attributeIndex.bufferIndex.rawValue
-                descriptor.attributes[index].format = attribute.format
-                descriptor.attributes[index].offset = 0
-                descriptor.attributes[index].bufferIndex = bufferIndex
+        for (attributeIndex, interleavedAttribute) in interleavedAttributes {
+            let index = attributeIndex.rawValue
+            let interleavedBuffer = interleavedAttribute.parent
+            let bufferIndex = interleavedBuffer.index.rawValue
 
-                descriptor.layouts[bufferIndex].stride = attribute.stride
-                descriptor.layouts[bufferIndex].stepRate = attribute.stepRate
-                descriptor.layouts[bufferIndex].stepFunction = attribute.stepFunction
-            }
+            descriptor.attributes[index].format = interleavedAttribute.format
+            descriptor.attributes[index].offset = interleavedAttribute.offset
+            descriptor.attributes[index].bufferIndex = bufferIndex
+
+            descriptor.layouts[bufferIndex].stride = interleavedBuffer.stride
+            descriptor.layouts[bufferIndex].stepRate = interleavedBuffer.stepRate
+            descriptor.layouts[bufferIndex].stepFunction = interleavedBuffer.stepFunction
         }
 
         return descriptor
@@ -346,7 +352,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
                 false
             )
         }
-        else if let interleavedBufferAttribute = positionAttribute as? (any InterleavedBufferAttribute) {
+        else if let interleavedBufferAttribute = positionAttribute as? InterleavedBufferAttribute {
             let interleavedBuffer = interleavedBufferAttribute.parent
             return createBVHFromFloatData(
                 interleavedBuffer.data,
@@ -384,7 +390,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
                     Int32(positionBufferAttribute.count)
                 )
             }
-            else if let interleavedBufferAttribute = positionAttribute as? (any InterleavedBufferAttribute) {
+            else if let interleavedBufferAttribute = positionAttribute as? InterleavedBufferAttribute {
                 let interleavedBuffer = interleavedBufferAttribute.parent
                 return computeBoundsFromFloatData(
                     interleavedBuffer.data,
@@ -422,7 +428,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Updated Buffer Attribute Data
 
-    public func updated(attribute: any BufferAttribute) {
+    public func updated(attribute: BufferAttribute) {
         _updateVertexBuffers = true
     }
 

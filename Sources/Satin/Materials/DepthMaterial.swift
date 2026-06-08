@@ -8,6 +8,7 @@
 import Metal
 
 public final class DepthMaterial: Material {
+    override public var lightingModel: LightingModel { .unlit }
     public var color: Bool {
         get {
             get("Color", as: BoolParameter.self)!.value
@@ -44,8 +45,13 @@ public final class DepthMaterial: Material {
         }
     }
 
-    public init(color: Bool = true, invert: Bool = false, camera: Camera? = nil) {
-        super.init()
+    public var pointSize: Float {
+        get { get("Point Size", as: FloatParameter.self)?.value ?? 1.0 }
+        set { set("Point Size", newValue) }
+    }
+
+    public init(context: Context, color: Bool = true, invert: Bool = false, camera: Camera? = nil) {
+        super.init(context: context)
         set("Color", color)
         set("Invert", invert)
         if let camera = camera {
@@ -55,14 +61,16 @@ public final class DepthMaterial: Material {
             set("Near", -1.0)
             set("Far", -1.0)
         }
+        set("Point Size", Float(1.0))
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
         set("Color", true)
         set("Invert", false)
         set("Near", -1.0)
         set("Far", -1.0)
+        set("Point Size", Float(1.0))
     }
 
     public required init(from decoder: Decoder) throws {

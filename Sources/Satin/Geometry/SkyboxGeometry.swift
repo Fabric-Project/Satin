@@ -17,9 +17,9 @@ public final class SkyboxGeometry: SatinGeometry {
         }
     }
 
-    public init(size: Float = 2) {
+    public init(context: Context, size: Float = 2) {
         self.size = size
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

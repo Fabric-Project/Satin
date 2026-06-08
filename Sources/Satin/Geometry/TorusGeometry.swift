@@ -43,12 +43,12 @@ public final class TorusGeometry: SatinGeometry {
         }
     }
 
-    public init(minorRadius: Float, majorRadius: Float, minorResolution: Int = 30, majorResolution: Int = 60) {
+    public init(context: Context, minorRadius: Float, majorRadius: Float, minorResolution: Int = 30, majorResolution: Int = 60) {
         self.minorRadius = minorRadius
         self.majorRadius = majorRadius
         self.minorResolution = minorResolution
         self.majorResolution = majorResolution
-        super.init()
+        super.init(context: context)
     }
 
     override public func generateGeometryData() -> GeometryData {

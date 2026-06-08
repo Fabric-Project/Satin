@@ -28,6 +28,10 @@ public enum FragmentBufferIndex: Int {
     case Custom8 = 13
     case Custom9 = 14
     case Custom10 = 15
+    case ProjectorMatrices = 16
+    case ProjectorTransforms = 17
+    case DirectShadows = 18
+    case DirectShadowMatrices = 19
 }
 
 public enum FragmentTextureIndex: Int {
@@ -64,6 +68,8 @@ public enum FragmentTextureIndex: Int {
     case Shadow5 = 30
     case Shadow6 = 31
     case Shadow7 = 32
+    case Projector0 = 33
+    case DirectShadow0 = 41
 }
 
 public enum FragmentSamplerIndex: Int {

@@ -24,8 +24,8 @@ fileprivate final class ARObject: Object {
         }
     }
 
-    override init(label: String, visible: Bool = true, _ children: [Object] = []) {
-        super.init(label: label, visible: visible, children)
+    override init(context:Context, label: String, visible: Bool = true, _ children: [Object] = []) {
+        super.init(context:context, label: label, visible: visible, children)
         self.visible = false
     }
 
@@ -37,11 +37,12 @@ fileprivate final class ARObject: Object {
 fileprivate final class Invader: Object {
     let voxelScale: Float = 0.025
 
-    let voxels = Object(label: "Voxels")
+    let voxels:Object
 
-    override public init() {
-        super.init(label: "Invader", [voxels])
-        let geometry = BoxGeometry(size: voxelScale)
+    override init(context:Context, label: String = "Invader", visible: Bool = true, _ children: [Object] = []) {
+        self.voxels =  Object(context: context, label: "Voxels")
+        super.init(context:context, label: label, visible: visible, [voxels])
+        lazy var geometry = BoxGeometry(context: context, size: voxelScale)
 
         let BDY: simd_float4 = [0.0, 1.0, 0.0, 1.0]
         let _E_: simd_float4 = [1.0, 1.0, 1.0, 1.0]
@@ -69,12 +70,12 @@ fileprivate final class Invader: Object {
                     if let existingMaterial = materialMap[color] {
                         mat = existingMaterial
                     } else {
-                        let newMaterial = StandardMaterial(baseColor: color, metallic: 0.1, roughness: 0.25)
+                        lazy var newMaterial = StandardMaterial(context: context, baseColor: color, metallic: 0.1, roughness: 0.25)
                         materialMap[color] = newMaterial
                         mat = newMaterial
                     }
 
-                    let voxel = Mesh(geometry: geometry, material: mat!)
+                    lazy var voxel = Mesh(context: context, geometry: geometry, material: mat!)
                     voxel.position = voxelScale * simd_make_float3(Float(x) - 11.0 / 2.0, 4.0 - Float(y), 0)
                     voxels.add(voxel)
                 }
@@ -94,13 +95,13 @@ final class ARContactShadowRenderer: BaseRenderer {
     private let sessionPublisher = ARSessionPublisher(session: ARSession())
     private var anchorsSubscription: AnyCancellable?
 
-    var shadowPlaneMesh = Mesh(
-        geometry: PlaneGeometry(size: 1.0, orientation: .zx),
-        material: BasicTextureMaterial(texture: nil, flipped: false)
+    lazy var shadowPlaneMesh = Mesh(context: defaultContext, 
+        geometry: PlaneGeometry(context: defaultContext, size: 1.0, orientation: .zx),
+        material: BasicTextureMaterial(context: defaultContext, texture: nil, flipped: false)
     )
 
-    fileprivate lazy var invaderContainer = ARObject(label: "Invader Container", [invader, shadowPlaneMesh])
-    fileprivate var invader = Invader()
+    fileprivate lazy var invaderContainer = ARObject(context:defaultContext, label: "Invader Container", [invader, shadowPlaneMesh])
+    fileprivate lazy var invader = Invader(context:defaultContext)
 
     lazy var shadowRenderer = ObjectShadowRenderer(
         context: context,
@@ -113,21 +114,21 @@ final class ARContactShadowRenderer: BaseRenderer {
         color: [0.0, 0.0, 0.0, 0.66]
     )
 
-    lazy var scene = Object(label: "Scene", [invaderContainer])
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context)
+    lazy var scene = Object(context: defaultContext, label: "Scene", [invaderContainer])
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     lazy var startTime = getTime()
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
-
-    override init() {
-        super.init()
+    
+    override init(context: Context)
+    {
+        super.init(context: context)
 
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal]
@@ -138,7 +139,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         var lights = [PointLight]()
         var positions: [simd_float3] = [[1, 1, 1], [-1, 1, 1], [-1, 1, -1], [1, 1, -1]]
         for position in positions {
-            let l = PointLight(color: .one, intensity: 3.0)
+            lazy var l = PointLight(context: defaultContext, color: .one, intensity: 3.0)
             l.position = position
             lights.append(l)
         }
@@ -152,7 +153,7 @@ final class ARContactShadowRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )

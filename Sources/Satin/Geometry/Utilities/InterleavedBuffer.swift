@@ -8,9 +8,17 @@
 import Foundation
 import Metal
 
-public protocol InterleavedBufferAttribute: VertexAttribute {
-    var parent: InterleavedBuffer { get }
-    var offset: Int { get }
+open class InterleavedBufferAttribute: VertexAttribute {
+    public let parent: InterleavedBuffer
+    public let offset: Int
+
+    public init(parent: InterleavedBuffer, offset: Int) {
+        self.parent = parent
+        self.offset = offset
+        super.init()
+    }
+
+    open var interleavedStride: Int { parent.stride }
 }
 
 public protocol InterleavedBufferDelegate: AnyObject {

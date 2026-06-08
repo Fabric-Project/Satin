@@ -15,7 +15,11 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     final class FloodMaterial: SourceMaterial {}
     final class PostMaterial: SourceMaterial {}
 
-    lazy var mesh = Mesh(geometry: RoundedBoxGeometry(size: 1.0, radius: 0.25, resolution: 4), material: BasicDiffuseMaterial(hardness: 0))
+    lazy var mesh: Mesh = {
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0)
+        material.ambient = 0.15
+        return Mesh(context: defaultContext, geometry: RoundedBoxGeometry(context: defaultContext, size: 1.0, radius: 0.25, resolution: 4), material: material)
+    }()
 
     final class JumpFloodComputeSystem: TextureComputeSystem {
         var spacing: Int = 8
@@ -36,20 +40,20 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     final class JumpFloodInitComputeSystem: TextureComputeSystem {}
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
-    lazy var quad = Mesh(geometry: QuadGeometry(), material: PostMaterial(pipelinesURL: pipelinesURL, live: true))
+    lazy var quad = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: PostMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true))
 
     override var sampleCount: Int { 1 }
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }
 
     var renderTexture: MTLTexture?
-    lazy var renderer = Renderer(context: defaultContext, clearColor: .zero)
+    lazy var renderer = RenderEncoder(context: defaultContext, clearColor: .zero)
 
-    let camera = PerspectiveCamera(position: [0, 0, 5], near: 0.01, far: 100.0, fov: 30)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 5], near: 0.01, far: 100.0, fov: 30)
     lazy var cameraController = OrbitPerspectiveCameraController(camera: camera, view: metalView)
 
-    let orthoCamera = OrthographicCamera()
+    lazy var orthoCamera = OrthographicCamera(context: defaultContext)
 
     lazy var jumpFlood = JumpFloodComputeSystem(
         device: device,
@@ -89,7 +93,6 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
     }
 
     deinit {
-        cameraController.disable()
         tween?.remove()
     }
 

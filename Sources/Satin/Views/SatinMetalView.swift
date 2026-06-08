@@ -11,9 +11,9 @@ import SwiftUI
 #if os(macOS)
 
 public struct SatinMetalView: NSViewControllerRepresentable {
-    public var renderer: MetalViewRenderer
+    public var renderer: ViewRenderer
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: ViewRenderer) {
         self.renderer = renderer
     }
 
@@ -27,9 +27,9 @@ public struct SatinMetalView: NSViewControllerRepresentable {
 #elseif os(iOS) || os(tvOS) || os(visionOS)
 
 public struct SatinMetalView: UIViewControllerRepresentable {
-    public var renderer: MetalViewRenderer
+    public var renderer: ViewRenderer
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: ViewRenderer) {
         self.renderer = renderer
     }
 

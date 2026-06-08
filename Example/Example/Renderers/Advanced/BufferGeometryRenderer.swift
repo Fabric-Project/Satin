@@ -11,207 +11,33 @@ import MetalKit
 
 import Satin
 
-final class BufferGeometryMesh: Renderable {
-    var geometry: Geometry {
-        didSet {
-            if geometry != oldValue {
-                setupGeometry()
-                updateLocalBounds = true
-            }
-        }
-    }
-
-    override var opaque: Bool { get {  material?.blending == .disabled } set { } }
-
-    override var lighting: Bool { material?.lighting ?? false }
-    override var receiveShadow: Bool{  get { material?.receiveShadow ?? false } set { } }
-    override var castShadow: Bool { get { material?.castShadow ?? false } set { } }
-
-    var instanceCount: Int = 1
-
-    override func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard let material,
-              material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
-              !geometry.vertexBuffers.isEmpty,
-              instanceCount > 0,
-              vertexUniforms[renderContext] != nil else { return false }
-        return true
-    }
-
-    public init(label: String = "Buffer Geometry Mesh", geometry: Geometry, material: Material) {
-        self.geometry = geometry
-        super.init(label: label)
-        self.material = material
+final class BufferGeometryMesh: Mesh {
+    init(context: Context, label: String = "Buffer Geometry Mesh", geometry: Geometry, material: Material) {
+        super.init(context: context, label: label, geometry: geometry, material: material)
     }
 
     required init(from decoder: Decoder) throws {
-        fatalError("Not Implemented")
-    }
-
-    override func setup() {
-        setupVertexUniforms()
-        setupGeometry()
-        setupMaterial()
-        super.setup()
-    }
-
-    func setupGeometry() {
-        guard let context else { return }
-        geometry.context = context
-    }
-
-    func setupMaterial() {
-        guard let context, let material else { return }
-        material.vertexDescriptor = geometry.vertexDescriptor
-        material.context = context
-    }
-
-    func setupVertexUniforms() {
-        guard let context, vertexUniforms[context] == nil else { return }
-        vertexUniforms[context] = VertexUniformBuffer(context: context)
-    }
-
-    override func update() {
-        geometry.update()
-        material?.update()
-        super.update()
-    }
-
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
-        geometry.encode(commandBuffer)
-        material?.encode(commandBuffer)
-        super.encode(commandBuffer)
-    }
-
-    override func update(
-        renderContext: Context,
-        camera: Camera,
-        viewport: simd_float4,
-        index: Int
-    ) {
-        vertexUniforms[renderContext]?.update(
-            object: self,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-
-        super.update(
-            renderContext: renderContext,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-    }
-
-    override func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        if let material, let shader = material.shader {
-            if shader.vertexWantsVertexUniforms {
-                renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext]
-            }
-
-            if shader.vertexWantsMaterialUniforms {
-                renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext]
-            }
-
-            material.bind(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: shadow
-            )
-        }
-        geometry.bind(renderEncoderState: renderEncoderState, shadow: shadow)
-        geometry.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount)
-    }
-
-    // MARK: - Comoute Bounds
-
-    override public func computeLocalBounds() -> Bounds {
-        return transformBounds(geometry.bounds, localMatrix)
-    }
-
-    override public func computeWorldBounds() -> Bounds {
-        var result = transformBounds(geometry.bounds, worldMatrix)
-        for child in children {
-            result = mergeBounds(result, child.worldBounds)
-        }
-        return result
-    }
-
-    // MARK: - Intersect
-
-    override public func intersect(
-        ray: Ray,
-        intersections: inout [RaycastResult],
-        options: RaycastOptions
-    ) -> Bool {
-        guard visible || options.invisible, intersects(ray: ray) else { return false }
-
-        var geometryIntersections = [IntersectionResult]()
-        geometry.intersect(
-            ray: worldMatrixInverse.act(ray),
-            intersections: &geometryIntersections
-        )
-
-        var results = [RaycastResult]()
-        for geometryIntersection in geometryIntersections {
-            let hitPosition = simd_make_float3(
-                worldMatrix * simd_make_float4(geometryIntersection.position, 1.0)
-            )
-
-            let raycastResult = RaycastResult(
-                barycentricCoordinates: geometryIntersection.barycentricCoordinates,
-                distance: simd_length(hitPosition - ray.origin),
-                normal: normalMatrix * geometryIntersection.normal,
-                position: hitPosition,
-                primitiveIndex: geometryIntersection.primitiveIndex,
-                object: self,
-                submesh: nil
-            )
-
-            if options.first {
-                intersections.append(raycastResult)
-                return true
-            } else {
-                results.append(raycastResult)
-            }
-        }
-
-        intersections.append(contentsOf: results)
-
-        if options.recursive {
-            for child in children {
-                if child.intersect(
-                    ray: ray,
-                    intersections: &intersections,
-                    options: options
-                ), options.first {
-                    return true
-                }
-            }
-        }
-
-        return results.count > 0
+        try super.init(from: decoder)
     }
 }
 
 final class BufferGeometryRenderer: BaseRenderer {
     var geometryData = createGeometryData()
-    var geometry = Geometry()
-    lazy var mesh = BufferGeometryMesh(geometry: geometry, material: NormalColorMaterial(true))
+    lazy var geometry = Geometry(context: defaultContext)
+    lazy var mesh = BufferGeometryMesh(context: defaultContext, geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
 
-    let intersectionMesh: Mesh = {
-        let mesh = Mesh(geometry: IcoSphereGeometry(radius: 0.1, resolution: 2), material: BasicColorMaterial(color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
+    lazy var intersectionMesh: Mesh = {
+        lazy var mesh = Mesh(context: defaultContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.1, resolution: 2), material: BasicColorMaterial(context: defaultContext, color: [0.0, 1.0, 0.0, 1.0], blending: .disabled))
         mesh.label = "Intersection Mesh"
-        mesh.renderPass = 1
+        mesh.renderLayer = .overlay
         mesh.visible = false
         return mesh
     }()
 
-    lazy var scene = Object(label: "Scene", [mesh, intersectionMesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [mesh, intersectionMesh])
 
-    lazy var camera = PerspectiveCamera(position: [0, 0, -5], near: 0.01, far: 100.0, fov: 30)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, -5], near: 0.01, far: 100.0, fov: 30)
+    lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
     let interleaved = true
@@ -233,7 +59,6 @@ final class BufferGeometryRenderer: BaseRenderer {
 
     deinit {
         freeGeometryData(&geometryData)
-        cameraController.disable()
     }
 
     var theta: Float = 0.0

@@ -1,5 +1,5 @@
 //
-//  Renderer.swift
+//  RenderEncoder.swift
 //  Obj-macOS
 //
 //  Created by Reza Ali on 5/23/20.
@@ -15,10 +15,10 @@ import Satin
 final class LoadObjRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
 
-    let scene = Object(label: "Scene")
-    let camera = PerspectiveCamera(position: [0.0, 0.0, 9.0], near: 0.001, far: 100.0)
+    lazy var scene = Object(context: defaultContext, label: "Scene")
+    lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 9.0], near: 0.001, far: 100.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func setup() {
         loadOBJ(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"))
@@ -29,14 +29,12 @@ final class LoadObjRenderer: BaseRenderer {
         #endif
     }
 
-    deinit {
-        cameraController.disable()
-    }
-
     func loadOBJ(url: URL) {
         let asset = MDLAsset(url: url, vertexDescriptor: SatinModelIOVertexDescriptor(), bufferAllocator: MTKMeshBufferAllocator(device: device))
-        let geometry = Geometry()
-        let mesh = Mesh(geometry: geometry, material: BasicDiffuseMaterial(hardness: 0.0))
+        lazy var geometry = Geometry(context: defaultContext)
+        let material = BasicDiffuseMaterial(context: defaultContext, hardness: 0.0)
+        material.ambient = 0.15
+        lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: material)
         mesh.label = "Suzanne"
 
         let object0 = asset.object(at: 0)

@@ -7,9 +7,22 @@
 //
 
 import Foundation
+import simd
 
 public struct ShadowData {
-    var strength: Float
-    var bias: Float
-    var radius: Float
+    var parameters: simd_float4
+    var indices: simd_uint4
+
+    init(
+        strength: Float,
+        bias: Float,
+        normalBias: Float,
+        radius: Float,
+        textureIndex: UInt32 = 0,
+        matrixIndex: UInt32 = 0,
+        viewCount: UInt32 = 1
+    ) {
+        parameters = simd_make_float4(strength, bias, normalBias, radius)
+        indices = simd_make_uint4(textureIndex, matrixIndex, viewCount, 0)
+    }
 }

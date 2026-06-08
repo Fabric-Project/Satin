@@ -1,3 +1,5 @@
+#include "../TextureTransform.metal"
+
 float3 getIBLRadiance(texturecube<float> reflectionMap, float3 dir, float roughness) {
     const float levels = float(reflectionMap.get_num_mip_levels() - 1);
     const float mipLevel = roughness * levels;
@@ -27,7 +29,8 @@ void pbrIndirectLighting(
     float2 ggxLut = brdfMap.sample(brdfSampler, saturate(float2(NdotV, roughness))).rg;
     float3 Fs = (Ks * ggxLut.x + ggxLut.y);
 
-    const float3 irradianceSampleDirection = pixel.material.irradianceTexcoordTransform * N;
+    const float3 irradianceSampleDirection =
+        applyDirectionTransform(N, pixel.material.irradianceTexcoordTransform);
     // Diffuse
     radiance_d += Kd * baseColor * pixel.material.environmentIntensity *
                   irradianceMap.sample(irradianceSampler, irradianceSampleDirection).rgb;
@@ -46,7 +49,8 @@ void pbrIndirectLighting(
     }
 #endif
 
-    const float3 reflectionSampleDirection = pixel.material.reflectionTexcoordTransform * R;
+    const float3 reflectionSampleDirection =
+        applyDirectionTransform(R, pixel.material.reflectionTexcoordTransform);
 
     // Specular
     float3 specularLight = pixel.material.environmentIntensity *
@@ -58,7 +62,8 @@ void pbrIndirectLighting(
     float ior = pixel.material.ior;
     // float3 thickness = pixel.material.thickness;
     float3 transmissionRay =
-        pixel.material.reflectionTexcoordTransform * getVolumeTransmissionRay(N, V, 1.0, ior);
+        applyDirectionTransform(
+            getVolumeTransmissionRay(N, V, 1.0, ior), pixel.material.reflectionTexcoordTransform);
     // float3 refractedRayExit = pixel.position + transmissionRay;
 
     // Since Satin's render isn't ready for multiple passes we are going to default to refract into

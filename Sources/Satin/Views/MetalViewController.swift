@@ -10,7 +10,7 @@
 import AppKit
 
 public final class MetalViewController: NSViewController {
-    public let renderer: MetalViewRenderer
+    public let renderer: ViewRenderer
     public private(set) var metalView = MetalView()
 
     override public var acceptsFirstResponder: Bool { return true }
@@ -21,7 +21,7 @@ public final class MetalViewController: NSViewController {
 
     // MARK: - Init
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: ViewRenderer) {
         self.renderer = renderer
         super.init(nibName: nil, bundle: nil)
     }
@@ -66,28 +66,24 @@ public final class MetalViewController: NSViewController {
     // MARK: - Setup View
 
     private func setupView() {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
 #if DEBUG_VIEWS
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
-        self.metalView.metalLayer.device = device
     }
 
     // MARK: - Renderer
 
     private func setupRenderer() {
-        guard let device = metalView.metalLayer.device, let queue = device.makeCommandQueue(), !renderer.isSetup else { return }
+        guard !renderer.isSetup else { return }
 #if DEBUG_VIEWS
         print("setupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
+        self.metalView.metalLayer.device = self.renderer.context.device
+        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.device = device
-        self.renderer.commandQueue = queue
         self.renderer.setup()
         self.renderer.isSetup = true
         self.renderer.appearance = self.getAppearance()
-
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.metalView.delegate = self.renderer
     }
 
@@ -102,7 +98,7 @@ public final class MetalViewController: NSViewController {
 
     // MARK: - Appearance
 
-    private func getAppearance() -> MetalViewRenderer.Appearance {
+    private func getAppearance() -> ViewRenderer.Appearance {
         let name = self.metalView.effectiveAppearance.name
         if name == NSAppearance.Name.vibrantDark || name == NSAppearance.Name.darkAqua {
             return .dark
@@ -321,14 +317,14 @@ public final class MetalViewController: NSViewController {
 import UIKit
 
 public final class MetalViewController: UIViewController {
-    public let renderer: MetalViewRenderer
+    public let renderer: ViewRenderer
     public private(set) var metalView = MetalView()
 
     override public var shouldAutorotate: Bool { return true }
 
     // MARK: - Init
 
-    public init(renderer: MetalViewRenderer) {
+    public init(renderer: ViewRenderer) {
         self.renderer = renderer
         super.init(nibName: nil, bundle: nil)
     }
@@ -376,33 +372,28 @@ public final class MetalViewController: UIViewController {
     // MARK: - Setup View
 
     private func setupView() {
-        guard let device = MTLCreateSystemDefaultDevice() else { return }
 #if DEBUG_VIEWS
         print("setupView - MetalViewController: \(self.renderer.id)")
 #endif
-        self.metalView.metalLayer.device = device
     }
 
     // MARK: - Renderer
 
     private func setupRenderer() {
-        guard let device = metalView.metalLayer.device, let queue = device.makeCommandQueue(), !renderer.isSetup
-        else { return }
+        guard !renderer.isSetup else { return }
 #if DEBUG_VIEWS
         print("setupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
+        self.metalView.metalLayer.device = self.renderer.context.device
+        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.device = device
-        self.renderer.commandQueue = queue
         self.renderer.setup()
         self.renderer.isSetup = true
         self.renderer.appearance = self.getAppearance()
-
-        self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.metalView.delegate = self.renderer
     }
 
-    private func getAppearance() -> MetalViewRenderer.Appearance {
+    private func getAppearance() -> ViewRenderer.Appearance {
         if self.traitCollection.userInterfaceStyle == .dark {
             return .dark
         }

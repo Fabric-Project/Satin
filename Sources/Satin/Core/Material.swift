@@ -27,6 +27,14 @@ public struct DepthBias: Codable, Equatable {
 }
 
 open class Material: Codable {
+    private static func vertexDescriptorHasAttributes(_ descriptor: MTLVertexDescriptor) -> Bool {
+        for attribute in VertexAttributeIndex.allCases {
+            if descriptor.attributes[attribute.rawValue].format != .invalid {
+                return true
+            }
+        }
+        return false
+    }
     
     let id: String = UUID().uuidString
 
@@ -116,12 +124,12 @@ open class Material: Codable {
     }
 
     public private(set) var vertexUniformBuffers: [VertexBufferIndex: UniformBuffer] = [:]
-    public private(set) var vertexStructBuffers: [VertexBufferIndex: any BindableBuffer] = [:]
+    public private(set) var vertexStructBuffers: [VertexBufferIndex: BindableBuffer] = [:]
     public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
     public private(set) var vertexTextures: [VertexTextureIndex: MTLTexture] = [:]
 
     public private(set) var fragmentUniformBuffers: [FragmentBufferIndex: UniformBuffer] = [:]
-    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: any BindableBuffer] = [:]
+    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: BindableBuffer] = [:]
     public private(set) var fragmentBuffers: [FragmentBufferIndex: MTLBuffer] = [:]
     public private(set) var fragmentTextures: [FragmentTextureIndex: MTLTexture] = [:]
 
@@ -130,13 +138,7 @@ open class Material: Codable {
 
     public let updatedPublisher = PassthroughSubject<Material, Never>()
 
-    public var context: Context? {
-        didSet {
-            if let context, context != oldValue {
-                setup()
-            }
-        }
-    }
+    public let context: Context
 
     public var instancing: Bool {
         get { renderingConfiguration.instancing }
@@ -158,9 +160,19 @@ open class Material: Codable {
         set { renderingConfiguration.lighting = newValue }
     }
 
-    public var shadowCount: Int {
-        get { renderingConfiguration.shadowCount }
-        set { renderingConfiguration.shadowCount = newValue }
+    public var directShadowCount: Int {
+        get { renderingConfiguration.directShadowCount }
+        set { renderingConfiguration.directShadowCount = newValue }
+    }
+
+    public var directShadowTextureCount: Int {
+        get { renderingConfiguration.directShadowTextureCount }
+        set { renderingConfiguration.directShadowTextureCount = newValue }
+    }
+
+    public var projectorCount: Int {
+        get { renderingConfiguration.projectorCount }
+        set { renderingConfiguration.projectorCount = newValue }
     }
 
     public var lightCount: Int {
@@ -175,10 +187,12 @@ open class Material: Codable {
 
     public var depthClipMode: MTLDepthClipMode = .clip
     public var depthStencilState: MTLDepthStencilState?
+    private var alphaOitDepthStencilState: MTLDepthStencilState?
     public var depthCompareFunction: MTLCompareFunction = .greaterEqual {
         didSet {
             if oldValue != depthCompareFunction {
                 depthNeedsUpdate = true
+                alphaOitDepthStencilState = nil
             }
         }
     }
@@ -187,6 +201,7 @@ open class Material: Codable {
         didSet {
             if oldValue != depthWriteEnabled {
                 depthNeedsUpdate = true
+                alphaOitDepthStencilState = nil
             }
         }
     }
@@ -198,9 +213,43 @@ open class Material: Codable {
     public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
 
-    public required init() {}
+    // MARK: - Rendering Path
+
+    /// Controls which render pass this material participates in.
+    ///
+    /// - `.unlit`: Fragment function returns color directly. No G-buffer writes. Material always
+    ///   renders in a forward pass after the main surface pass, regardless of `renderer.renderingMode`.
+    ///   Fragment function signature is unchanged from the traditional `half4` return.
+    /// - `.surface`: Material implements `evaluateSurface()` and includes `SurfaceOutput.metal`.
+    ///   Participates in the G-buffer pass under `.forwardPlus` and `.deferredGeometry` modes.
+    public enum LightingModel {
+        case unlit
+        case surface
+    }
+
+    /// The lighting model for this material. Override in subclasses to change routing.
+    /// Default is `.surface` — override to `.unlit` for fonts, video planes, UI overlays, etc.
+    open var lightingModel: LightingModel { .surface }
+
+    /// Declares which G-buffer outputs this material's shader writes.
+    ///
+    /// The renderer intersects this with `renderer.activeOutputs` per draw call. Outputs not
+    /// declared here receive the attachment clear value (zeros) for this material's pixels —
+    /// declaring an output the shader doesn't write is a silent no-op, not a compile error.
+    /// Surface materials that implement `evaluateSurface()` should override this to declare
+    /// all outputs their shader supports.
+    open var supportedOutputs: RendererOutputs { [.color] }
+
+    var supportsAlphaOrderIndependentTransparency: Bool { false }
+
+    public required init(context: Context) {
+        self.context = context
+        setupParameterGroupSubscriptions(parameters)
+        parametersSetPublisher.send(parameters)
+    }
 
     public init(shader: Shader) {
+        self.context = shader.context
         self.shader = shader
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
@@ -208,7 +257,6 @@ open class Material: Codable {
         setupParameterGroupSubscriptions(parameters)
         uniformsNeedsUpdate = true
         parametersSetPublisher.send(parameters)
-
     }
 
     // MARK: - CodingKeys
@@ -237,7 +285,9 @@ open class Material: Codable {
     // MARK: - Decode
 
     public required init(from decoder: Decoder) throws {
+        context = try decoder.requireSatinContext(typeName: String(describing: Self.self))
         try decode(from: decoder)
+        setupParameterGroupSubscriptions(parameters)
     }
 
     public func decode(from decoder: Decoder) throws {
@@ -328,18 +378,28 @@ open class Material: Codable {
         }.store(in: &parameterGroupSubscriptions)
     }
 
-    func setupDepthStencilState() {
-        guard let context,
-              context.depthPixelFormat != .invalid,
-              depthNeedsUpdate || depthStencilState == nil
-        else { return }
-
+    private func makeDepthStencilState(depthWriteEnabled: Bool, labelSuffix: String) -> MTLDepthStencilState? {
         let depthStateDesciptor = MTLDepthStencilDescriptor()
-        depthStateDesciptor.label = "\(label) Depth Stencil State"
+        depthStateDesciptor.label = "\(label) \(labelSuffix)"
         depthStateDesciptor.depthCompareFunction = depthCompareFunction
         depthStateDesciptor.isDepthWriteEnabled = depthWriteEnabled
 
-        depthStencilState = context.device.makeDepthStencilState(descriptor: depthStateDesciptor)
+        return context.device.makeDepthStencilState(descriptor: depthStateDesciptor)
+    }
+
+    func setupDepthStencilState() {
+        guard context.depthPixelFormat != .invalid,
+              depthNeedsUpdate || depthStencilState == nil || alphaOitDepthStencilState == nil
+        else { return }
+
+        depthStencilState = makeDepthStencilState(
+            depthWriteEnabled: depthWriteEnabled,
+            labelSuffix: "Depth Stencil State"
+        )
+        alphaOitDepthStencilState = makeDepthStencilState(
+            depthWriteEnabled: false,
+            labelSuffix: "Alpha OIT Depth Stencil State"
+        )
 
         depthNeedsUpdate = false
     }
@@ -347,10 +407,7 @@ open class Material: Codable {
     // MARK: - Shader
 
     open func createShader() -> Shader {
-        SourceShader(
-            label: label,
-            pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal")
-        )
+        SourceShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
     open func setupShader() {
@@ -362,7 +419,7 @@ open class Material: Codable {
             isClone = false
         }
 
-        shader?.context = context
+        guard Self.vertexDescriptorHasAttributes(vertexDescriptor) else { return }
         shader?.setup()
     }
 
@@ -372,8 +429,12 @@ open class Material: Codable {
     }
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
+        var receivedInitialParameters = false
         parametersSubscription = shader.parametersPublisher.sink { [weak self] newParameters in
             guard let self else { return }
+
+            let isInitialParameters = !receivedInitialParameters
+            receivedInitialParameters = true
 
             self.parameters.setFrom(newParameters)
 
@@ -385,14 +446,20 @@ open class Material: Codable {
 
             self.parametersSetPublisher.send(self.parameters)
 
-            self.updatedPublisher.send(self)
-
-            self.delegate?.updated(material: self)
+            if !isInitialParameters {
+                self.updatedPublisher.send(self)
+                self.delegate?.updated(material: self)
+            }
         }
     }
 
     open func setupUniforms() {
-        guard let context, parameters.size > 0, uniformsNeedsUpdate else { return }
+        guard parameters.size > 0, uniformsNeedsUpdate
+        else
+        {
+            uniformsNeedsUpdate = false
+            return
+        }
 
         uniforms = UniformBuffer(
             device: context.device,
@@ -412,6 +479,7 @@ open class Material: Codable {
 
     open func updateShader() {
         if shader == nil { setupShader() }
+        guard Self.vertexDescriptorHasAttributes(vertexDescriptor) else { return }
         shader?.update()
     }
 
@@ -445,7 +513,7 @@ open class Material: Codable {
 
     open func bindDepthStates(renderContext: Context, renderEncoderState: RenderEncoderState) {
         guard renderContext.depthPixelFormat != .invalid else { return }
-        renderEncoderState.depthStencilState = depthStencilState
+        renderEncoderState.depthStencilState = renderContext.alphaOitEnabled ? alphaOitDepthStencilState : depthStencilState
         renderEncoderState.depthBias = depthBias
         renderEncoderState.depthClipMode = depthClipMode
     }
@@ -749,11 +817,15 @@ open class Material: Codable {
         shader = nil
     }
 
-    open func clone() -> Material {
-        let clone: Material = type(of: self).init()
+    open func clone(context: Context) -> Material {
+        let clone: Material = type(of: self).init(context: context)
         clone.isClone = true
         cloneProperties(clone: clone)
         return clone
+    }
+
+    open func clone() -> Material {
+        clone(context: context)
     }
 
     public func cloneProperties(clone: Material) {
@@ -771,9 +843,11 @@ open class Material: Codable {
 
         clone.renderingConfiguration = renderingConfiguration
 
-        clone.depthStencilState = depthStencilState
         clone.depthCompareFunction = depthCompareFunction
         clone.depthWriteEnabled = depthWriteEnabled
+        clone.depthStencilState = nil
+        clone.alphaOitDepthStencilState = nil
+        clone.depthNeedsUpdate = true
     }
 }
 

@@ -20,24 +20,23 @@ final class ARLidarMeshRenderer: BaseRenderer {
     private var anchorsUpdatedSubscription: AnyCancellable?
     private var anchorsAddedSubscription: AnyCancellable?
 
-    var material = BasicColorMaterial()
+    lazy var material = BasicColorMaterial(context: defaultContext)
 
     var lidarMeshes: [UUID: ARLidarMesh] = [:]
 
-    var scene = Object(label: "Scene")
+    lazy var scene = Object(context: defaultContext, label: "Scene")
 
-    lazy var context = Context(device: device, sampleCount: sampleCount, colorPixelFormat: colorPixelFormat, depthPixelFormat: .depth32Float)
-    lazy var camera = ARPerspectiveCamera(session: session, metalView: metalView, near: 0.01, far: 100.0)
-    lazy var renderer = Renderer(context: context)
+    lazy var camera = ARPerspectiveCamera(context:defaultContext, session: session, metalView: metalView, near: 0.01, far: 100.0)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
-    var backgroundRenderer: ARBackgroundRenderer!
+    var backgroundRenderer: ARBackgroundEncoder!
 
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
 
-    override init() {
-        super.init()
+    override init(context:Context) {
+        super.init(context:context)
 
         let config = ARWorldTrackingConfiguration()
         config.sceneReconstruction = .mesh
@@ -49,7 +48,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
 
         renderer.colorLoadAction = .load
 
-        backgroundRenderer = ARBackgroundRenderer(
+        backgroundRenderer = ARBackgroundEncoder(
             context: Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat),
             session: session
         )
@@ -59,7 +58,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
             for anchor in anchors {
                 if let meshAnchor = anchor as? ARMeshAnchor {
                     let id = anchor.identifier
-                    let mesh = ARLidarMesh(meshAnchor: meshAnchor, material: material)
+                    let mesh = ARLidarMesh(context:defaultContext, meshAnchor: meshAnchor, material: material)
                     mesh.triangleFillMode = .lines
                     self.lidarMeshes[id] = mesh
                     self.scene.add(mesh)

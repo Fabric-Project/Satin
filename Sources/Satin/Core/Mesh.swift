@@ -50,12 +50,20 @@ open class Mesh: Renderable {
     override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
               !geometry.vertexBuffers.isEmpty,
-              vertexUniforms[renderContext] != nil
+              vertexUniforms[renderContext.id] != nil
         else { return false }
 
-        if submeshes.isEmpty, let material = material, material.getPipeline(renderContext: renderContext, shadow: shadow) != nil {
+        if submeshes.isEmpty,
+           let material = material,
+           materialMatchesCurrentPass(material, shadow: shadow),
+           material.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+        {
             return true
-        } else if let submesh = submeshes.first, let material = submesh.material, material.getPipeline(renderContext: renderContext, shadow: false) != nil {
+        } else if submeshes.contains(where: {
+            $0.visible &&
+                materialMatchesCurrentPass($0.material, shadow: shadow) &&
+                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+        }) {
             return true
         } else {
             return false
@@ -70,7 +78,7 @@ open class Mesh: Renderable {
     }
 
 
-    open var geometry = Geometry() {
+    open var geometry: Geometry! {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
@@ -96,12 +104,12 @@ open class Mesh: Renderable {
         }
     }
 
-    public init(label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String = "Mesh", geometry: Geometry, material: Material?, visible: Bool = true, renderOrder: Int = 0, renderLayer: RenderLayer = .opaque) {
         self.geometry = geometry
-        super.init(label: label, visible: visible)
+        super.init(context: context, label: label, visible: visible)
         self.material = material
         self.renderOrder = renderOrder
-        self.renderPass = renderPass
+        self.renderLayer = renderLayer
     }
 
     // MARK: - Decode
@@ -133,37 +141,37 @@ open class Mesh: Renderable {
     // MARK: - Setup Uniforms
 
     open func setupVertexUniforms() {
-        guard let context, vertexUniforms[context] == nil else { return }
-        vertexUniforms[context] = VertexUniformBuffer(context: context)
+        guard vertexUniforms[context.id] == nil else { return }
+        vertexUniforms[context.id] = VertexUniformBuffer(context: context)
     }
 
     open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
-        vertexUniforms[renderContext]
+        vertexUniforms[renderContext.id]
     }
 
     open func setupGeometry() {
-        guard let context else { return }
+        if geometry == nil {
+            geometry = Geometry(context: context)
+        }
         geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
             guard let self = self else { return }
             self.updateBounds = true
             self.material?.vertexDescriptor = geo.vertexDescriptor
         }
-        geometry.context = context
     }
 
     open func setupSubmeshes() {
-        guard let context else { return }
         for submesh in submeshes {
-            submesh.context = context
+            assert(submesh.context == context, "Submesh context mismatch")
         }
     }
 
     open func setupMaterial() {
-        guard let context, let material else { return }
+        guard let material else { return }
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
-        material.context = context
-        
+        material.setup()
+
         self.updateAllMaterials()
     }
 
@@ -177,10 +185,10 @@ open class Mesh: Renderable {
     open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
         guard let shader = material?.shader else { return }
         if shader.vertexWantsVertexUniforms {
-            renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext]
+            renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext.id]
         }
         if shader.fragmentWantsVertexUniforms {
-            renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext]
+            renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext.id]
         }
     }
 
@@ -209,7 +217,7 @@ open class Mesh: Renderable {
     }
 
     override open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms[renderContext]?.update(
+        vertexUniforms[renderContext.id]?.update(
             object: self,
             camera: camera,
             viewport: viewport,
@@ -258,7 +266,7 @@ open class Mesh: Renderable {
         )
 
         if !submeshes.isEmpty {
-            for submesh in submeshes where submesh.visible {
+            for submesh in submeshes where submesh.visible && materialMatchesCurrentPass(submesh.material, shadow: shadow) {
                 submesh.draw(
                     renderContext: renderContext,
                     renderEncoderState: renderEncoderState,
@@ -266,7 +274,7 @@ open class Mesh: Renderable {
                     shadow: shadow
                 )
             }
-        } else {
+        } else if materialMatchesCurrentPass(material, shadow: shadow) {
             material?.bind(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
@@ -279,7 +287,32 @@ open class Mesh: Renderable {
         }
     }
 
+    private func materialMatchesCurrentPass(_ material: Material?, shadow: Bool) -> Bool {
+        guard let material else { return false }
+        if shadow {
+            return true
+        }
+
+        let isTransparent = material.blending != .disabled
+
+        switch materialPass {
+        case .all:
+            return true
+        case .opaque:
+            return !isTransparent
+        case .alphaTransparent:
+            return material.blending == .alpha
+        case .classicTransparent:
+            return isTransparent
+        case .surfaceOpaque:
+            return material.lightingModel == .surface && !isTransparent
+        case .unlitOpaque:
+            return material.lightingModel == .unlit && !isTransparent
+        }
+    }
+
     open func addSubmesh(_ submesh: Submesh) {
+        assert(submesh.context == context, "Submesh context mismatch")
         submesh.parent = self
         submeshes.append(submesh)
     }

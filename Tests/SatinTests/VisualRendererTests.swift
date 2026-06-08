@@ -5,6 +5,10 @@ import XCTest
 final class VisualRendererTests: XCTestCase {
     func testComputeNoiseTextureMatchesReference() throws {
         let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { renderer, camera in
+<<<<<<< HEAD
+=======
+            let context = renderer.context
+>>>>>>> development
             let device = renderer.context.device
             let commandQueue = device.makeCommandQueue()!
             let commandBuffer = commandQueue.makeCommandBuffer()!
@@ -15,20 +19,38 @@ final class VisualRendererTests: XCTestCase {
             commandBuffer.waitUntilCompleted()
 
             let quad = Mesh(
+<<<<<<< HEAD
                 label: "Noise Quad",
                 geometry: QuadGeometry(size: 2.0),
                 material: BasicTextureMaterial(texture: noiseTexture)
+=======
+                context: context,
+                label: "Noise Quad",
+                geometry: QuadGeometry(context: context, size: 2.0),
+                material: BasicTextureMaterial(context: context, texture: noiseTexture)
+>>>>>>> development
             )
 
             camera.position = [0, 0, 3]
             camera.lookAt(target: .zero)
 
+<<<<<<< HEAD
             return (scene: Object(label: "Scene", [quad]), camera: camera)
         }
 
         VisualTestHarness.assertContainsVisibleContent(image, minimumChangedPixelRatio: 0.85, minimumMeanNormalizedDifference: 0.1)
         try VisualTestHarness.assertVisualMatch(
             image,
+=======
+            return (scene: Object(context: context, label: "Scene", [quad]), camera: camera)
+        }
+
+        let opaqueImage = makeOpaque(image)
+
+        VisualTestHarness.assertContainsVisibleContent(opaqueImage, minimumChangedPixelRatio: 0.85, minimumMeanNormalizedDifference: 0.1)
+        try VisualTestHarness.assertVisualMatch(
+            opaqueImage,
+>>>>>>> development
             reference: .bundle(name: "compute-noise"),
             threshold: 0.003
         )
@@ -36,18 +58,33 @@ final class VisualRendererTests: XCTestCase {
 
     func testMaterialGridMatchesReference() throws {
         let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { renderer, camera in
+<<<<<<< HEAD
             let device = renderer.context.device
 
             let root = Object(label: "Scene")
             let group = Object(label: "Material Group")
+=======
+            let context = renderer.context
+            let device = renderer.context.device
+
+            let root = Object(context: context, label: "Scene")
+            let group = Object(context: context, label: "Material Group")
+>>>>>>> development
 
             let checkerTexture = makeCheckerTexture(device: device, width: 32, height: 32)
 
             let materials: [Material] = [
+<<<<<<< HEAD
                 BasicColorMaterial(color: simd_float4(0.9, 0.2, 0.15, 1.0), blending: .disabled),
                 UVColorMaterial(),
                 NormalColorMaterial(),
                 BasicTextureMaterial(texture: checkerTexture)
+=======
+                BasicColorMaterial(context: context, color: simd_float4(0.9, 0.2, 0.15, 1.0), blending: .disabled),
+                UVColorMaterial(context: context),
+                NormalColorMaterial(context: context),
+                BasicTextureMaterial(context: context, texture: checkerTexture)
+>>>>>>> development
             ]
 
             let positions: [simd_float3] = [
@@ -59,8 +96,14 @@ final class VisualRendererTests: XCTestCase {
 
             for (index, material) in materials.enumerated() {
                 let mesh = Mesh(
+<<<<<<< HEAD
                     label: "Material Mesh \(index)",
                     geometry: RoundedRectGeometry(width: 0.75, height: 0.75, radius: 0.14, angularResolution: 32, radialResolution: 16),
+=======
+                    context: context,
+                    label: "Material Mesh \(index)",
+                    geometry: RoundedRectGeometry(context: context, width: 0.75, height: 0.75, radius: 0.14, angularResolution: 32, radialResolution: 16),
+>>>>>>> development
                     material: material
                 )
                 mesh.position = positions[index]
@@ -83,6 +126,7 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testGeometryGalleryMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(224, 192)) { _, camera in
             let scene = Object(label: "Scene")
 
@@ -108,6 +152,34 @@ final class VisualRendererTests: XCTestCase {
             roundedBox.orientation = simd_quatf(angle: .pi * 0.22, axis: simd_normalize(simd_float3(0.3, 1.0, 0.2)))
 
             let octa = Mesh(geometry: OctaSphereGeometry(radius: 0.35, resolution: 3), material: material.clone())
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(224, 192)) { renderer, camera in
+            let context = renderer.context
+            let scene = Object(context: context, label: "Scene")
+
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.9)
+            light.position = [2.2, 2.8, 3.2]
+            light.lookAt(target: .zero)
+
+            let material = BasicDiffuseMaterial(context: context, color: simd_float4(0.92, 0.78, 0.28, 1.0), blending: .disabled, hardness: 0.65)
+
+            let torus = Mesh(context: context, geometry: TorusGeometry(context: context, minorRadius: 0.14, majorRadius: 0.34), material: material.clone())
+            torus.position = [-1.2, 0.55, 0.0]
+            torus.orientation = simd_quatf(angle: .pi * 0.35, axis: simd_normalize(simd_float3(1.0, 0.2, 0.0)))
+
+            let capsule = Mesh(context: context, geometry: CapsuleGeometry(context: context, radius: 0.2, height: 0.75), material: material.clone())
+            capsule.position = [0.0, 0.55, 0.0]
+            capsule.orientation = simd_quatf(angle: .pi * 0.1, axis: simd_normalize(simd_float3(0.1, 1.0, 0.3)))
+
+            let cone = Mesh(context: context, geometry: ConeGeometry(context: context, radius: 0.32, height: 0.72, radialResolution: 32, verticalResolution: 1), material: material.clone())
+            cone.position = [1.2, 0.55, 0.0]
+
+            let roundedBox = Mesh(context: context, geometry: RoundedBoxGeometry(context: context, size: simd_float3(repeating: 0.58), radius: 0.12, resolution: 2), material: material.clone())
+            roundedBox.position = [-0.6, -0.72, 0.0]
+            roundedBox.orientation = simd_quatf(angle: .pi * 0.22, axis: simd_normalize(simd_float3(0.3, 1.0, 0.2)))
+
+            let octa = Mesh(context: context, geometry: OctaSphereGeometry(context: context, radius: 0.35, resolution: 3), material: material.clone())
+>>>>>>> development
             octa.position = [0.75, -0.72, 0.0]
 
             scene.add(light)
@@ -132,6 +204,7 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testSceneHierarchyTransformsMatchReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { _, camera in
             let scene = Object(label: "Scene")
 
@@ -140,22 +213,47 @@ final class VisualRendererTests: XCTestCase {
             parent.orientation = simd_quatf(angle: .pi * 0.16, axis: simd_normalize(simd_float3(0.2, 1.0, 0.0)))
 
             let child = Object(label: "Child")
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { renderer, camera in
+            let context = renderer.context
+            let scene = Object(context: context, label: "Scene")
+
+            let parent = Object(context: context, label: "Parent")
+            parent.position = [-0.25, 0.0, 0.0]
+            parent.orientation = simd_quatf(angle: .pi * 0.16, axis: simd_normalize(simd_float3(0.2, 1.0, 0.0)))
+
+            let child = Object(context: context, label: "Child")
+>>>>>>> development
             child.position = [0.9, 0.0, 0.0]
             child.scale = [0.8, 1.2, 0.8]
             child.orientation = simd_quatf(angle: -.pi * 0.32, axis: simd_normalize(simd_float3(0.0, 0.0, 1.0)))
 
             let grandchild = Mesh(
+<<<<<<< HEAD
                 label: "Grandchild Mesh",
                 geometry: BoxGeometry(size: 0.7),
                 material: BasicColorMaterial(color: simd_float4(0.95, 0.82, 0.2, 1.0), blending: .disabled)
+=======
+                context: context,
+                label: "Grandchild Mesh",
+                geometry: BoxGeometry(context: context, size: 0.7),
+                material: BasicColorMaterial(context: context, color: simd_float4(0.95, 0.82, 0.2, 1.0), blending: .disabled)
+>>>>>>> development
             )
             grandchild.position = [0.85, 0.0, 0.0]
             grandchild.scale = [0.7, 1.3, 0.6]
 
             let anchorMesh = Mesh(
+<<<<<<< HEAD
                 label: "Anchor Mesh",
                 geometry: IcoSphereGeometry(radius: 0.35, resolution: 2),
                 material: BasicColorMaterial(color: simd_float4(0.15, 0.7, 0.95, 1.0), blending: .disabled)
+=======
+                context: context,
+                label: "Anchor Mesh",
+                geometry: IcoSphereGeometry(context: context, radius: 0.35, resolution: 2),
+                material: BasicColorMaterial(context: context, color: simd_float4(0.15, 0.7, 0.95, 1.0), blending: .disabled)
+>>>>>>> development
             )
             anchorMesh.position = [-0.5, -0.55, 0.0]
 
@@ -178,10 +276,18 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testDirectionalShadowMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(224, 192)) { _, camera in
             let scene = Object(label: "Scene")
 
             let light = DirectionalLight(color: simd_float3(repeating: 1.0), intensity: 1.2)
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(224, 192)) { renderer, camera in
+            let context = renderer.context
+            let scene = Object(context: context, label: "Scene")
+
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.2)
+>>>>>>> development
             light.position = [2.8, 3.5, 2.8]
             light.lookAt(target: .zero, up: Satin.worldUpDirection)
             light.castShadow = true
@@ -194,26 +300,47 @@ final class VisualRendererTests: XCTestCase {
             }
 
             let floor = Mesh(
+<<<<<<< HEAD
                 label: "Floor",
                 geometry: PlaneGeometry(size: 6.0, orientation: .zx),
                 material: BasicDiffuseMaterial(color: simd_float4(0.24, 0.24, 0.28, 1.0), blending: .disabled, hardness: 0.2)
+=======
+                context: context,
+                label: "Floor",
+                geometry: PlaneGeometry(context: context, size: 6.0, orientation: .zx),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.24, 0.24, 0.28, 1.0), blending: .disabled, hardness: 0.2)
+>>>>>>> development
             )
             floor.position.y = -0.9
             floor.receiveShadow = true
 
             let sphere = Mesh(
+<<<<<<< HEAD
                 label: "Sphere",
                 geometry: IcoSphereGeometry(radius: 0.45, resolution: 2),
                 material: BasicDiffuseMaterial(color: simd_float4(0.95, 0.72, 0.25, 1.0), blending: .disabled, hardness: 0.55)
+=======
+                context: context,
+                label: "Sphere",
+                geometry: IcoSphereGeometry(context: context, radius: 0.45, resolution: 2),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.95, 0.72, 0.25, 1.0), blending: .disabled, hardness: 0.55)
+>>>>>>> development
             )
             sphere.position = [-0.55, -0.15, 0.0]
             sphere.castShadow = true
             sphere.receiveShadow = true
 
             let torus = Mesh(
+<<<<<<< HEAD
                 label: "Torus",
                 geometry: TorusGeometry(minorRadius: 0.12, majorRadius: 0.36),
                 material: BasicDiffuseMaterial(color: simd_float4(0.25, 0.8, 0.6, 1.0), blending: .disabled, hardness: 0.8)
+=======
+                context: context,
+                label: "Torus",
+                geometry: TorusGeometry(context: context, minorRadius: 0.12, majorRadius: 0.36),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.25, 0.8, 0.6, 1.0), blending: .disabled, hardness: 0.8)
+>>>>>>> development
             )
             torus.position = [0.75, -0.18, 0.0]
             torus.orientation = simd_quatf(angle: .pi * 0.25, axis: simd_normalize(simd_float3(1.0, 0.4, 0.0)))
@@ -240,6 +367,7 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testLightingRigMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { _, camera in
             let scene = Object(label: "Scene")
 
@@ -251,34 +379,76 @@ final class VisualRendererTests: XCTestCase {
             point.position = [-1.8, 1.2, 1.8]
 
             let spot = SpotLight(color: simd_float3(1.0, 0.3, 0.2), intensity: 3.8, radius: 10.0, angleInner: 22.0, angleOuter: 34.0)
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { renderer, camera in
+            let context = renderer.context
+            let scene = Object(context: context, label: "Scene")
+
+            let directional = DirectionalLight(context: context, color: simd_float3(1.0, 0.96, 0.9), intensity: 1.4)
+            directional.position = [1.5, 2.2, 2.8]
+            directional.lookAt(target: .zero)
+
+            let point = PointLight(context: context, color: simd_float3(0.15, 0.55, 1.0), intensity: 2.2, radius: 8.0)
+            point.position = [-1.8, 1.2, 1.8]
+
+            let spot = SpotLight(context: context, color: simd_float3(1.0, 0.3, 0.2), intensity: 3.8, radius: 10.0, angleInner: 22.0, angleOuter: 34.0)
+>>>>>>> development
             spot.position = [0.0, 2.5, 2.8]
             spot.lookAt(target: [0.0, -0.2, 0.0])
 
             let left = Mesh(
+<<<<<<< HEAD
                 label: "Left Sphere",
                 geometry: IcoSphereGeometry(radius: 0.5, resolution: 2),
                 material: BasicDiffuseMaterial(color: simd_float4(0.92, 0.55, 0.18, 1.0), blending: .disabled, hardness: 0.35)
+=======
+                context: context,
+                label: "Left Sphere",
+                geometry: IcoSphereGeometry(context: context, radius: 0.5, resolution: 2),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.92, 0.55, 0.18, 1.0), blending: .disabled, hardness: 0.35)
+>>>>>>> development
             )
             left.position = [-0.95, 0.0, 0.0]
 
             let center = Mesh(
+<<<<<<< HEAD
                 label: "Center Sphere",
                 geometry: IcoSphereGeometry(radius: 0.5, resolution: 2),
                 material: BasicDiffuseMaterial(color: simd_float4(0.82, 0.84, 0.88, 1.0), blending: .disabled, hardness: 0.8)
+=======
+                context: context,
+                label: "Center Sphere",
+                geometry: IcoSphereGeometry(context: context, radius: 0.5, resolution: 2),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.82, 0.84, 0.88, 1.0), blending: .disabled, hardness: 0.8)
+>>>>>>> development
             )
             center.position = [0.0, 0.0, 0.0]
 
             let right = Mesh(
+<<<<<<< HEAD
                 label: "Right Sphere",
                 geometry: IcoSphereGeometry(radius: 0.5, resolution: 2),
                 material: BasicDiffuseMaterial(color: simd_float4(0.18, 0.85, 0.55, 1.0), blending: .disabled, hardness: 0.55)
+=======
+                context: context,
+                label: "Right Sphere",
+                geometry: IcoSphereGeometry(context: context, radius: 0.5, resolution: 2),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.18, 0.85, 0.55, 1.0), blending: .disabled, hardness: 0.55)
+>>>>>>> development
             )
             right.position = [0.95, 0.0, 0.0]
 
             let ground = Mesh(
+<<<<<<< HEAD
                 label: "Ground",
                 geometry: PlaneGeometry(size: 4.0),
                 material: BasicDiffuseMaterial(color: simd_float4(0.16, 0.18, 0.22, 1.0), blending: .disabled, hardness: 0.25)
+=======
+                context: context,
+                label: "Ground",
+                geometry: PlaneGeometry(context: context, size: 4.0),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.16, 0.18, 0.22, 1.0), blending: .disabled, hardness: 0.25)
+>>>>>>> development
             )
             ground.position = [0.0, -0.75, 0.0]
             ground.orientation = simd_quatf(angle: -.pi * 0.5, axis: simd_float3(1.0, 0.0, 0.0))
@@ -347,24 +517,42 @@ final class VisualRendererTests: XCTestCase {
 //    }
 
     func testInstancingHierarchyMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { _, camera in
             let scene = Object(label: "Scene")
             let container = Object(label: "Container")
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(192, 192)) { renderer, camera in
+            let context = renderer.context
+            let scene = Object(context: context, label: "Scene")
+            let container = Object(context: context, label: "Container")
+>>>>>>> development
             container.position = [0.2, -0.1, 0.0]
             container.scale = simd_float3(repeating: 1.15)
             container.orientation = simd_quatf(angle: .pi * 0.15, axis: simd_normalize(simd_float3(0.3, 1.0, 0.2)))
 
             let instanced = InstancedMesh(
+<<<<<<< HEAD
                 label: "Instanced Spheres",
                 geometry: IcoSphereGeometry(radius: 0.18, resolution: 1),
                 material: BasicDiffuseMaterial(color: simd_float4(0.92, 0.72, 0.24, 1.0), blending: .disabled, hardness: 0.6),
+=======
+                context: context,
+                label: "Instanced Spheres",
+                geometry: IcoSphereGeometry(context: context, radius: 0.18, resolution: 1),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.92, 0.72, 0.24, 1.0), blending: .disabled, hardness: 0.6),
+>>>>>>> development
                 count: 16
             )
 
             var matrices: [simd_float4x4] = []
             for row in 0..<4 {
                 for column in 0..<4 {
+<<<<<<< HEAD
                     let object = Object()
+=======
+                    let object = Object(context: context)
+>>>>>>> development
                     object.position = [
                         Float(column) * 0.48 - 0.72,
                         Float(row) * 0.48 - 0.72,
@@ -380,7 +568,11 @@ final class VisualRendererTests: XCTestCase {
             }
             instanced.setInstanceMatrices(matrices)
 
+<<<<<<< HEAD
             let light = DirectionalLight(color: simd_float3(repeating: 1.0), intensity: 1.8)
+=======
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.8)
+>>>>>>> development
             light.position = [2.0, 2.0, 3.0]
             light.lookAt(target: .zero)
 
@@ -402,15 +594,28 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testTessellatedTextGeometryMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(224, 160)) { _, camera in
             let light = DirectionalLight(color: simd_float3(repeating: 1.0), intensity: 1.6)
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(224, 160)) { renderer, camera in
+            let context = renderer.context
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.6)
+>>>>>>> development
             light.position = [1.5, 2.0, 2.5]
             light.lookAt(target: .zero)
 
             let text = Mesh(
+<<<<<<< HEAD
                 label: "Text",
                 geometry: TesselatedTextGeometry(text: "SATIN", fontName: "Helvetica", fontSize: 1.2, pivot: simd_float2(0.5, 0.5)),
                 material: BasicDiffuseMaterial(color: simd_float4(0.95, 0.82, 0.3, 1.0), blending: .disabled, hardness: 0.7)
+=======
+                context: context,
+                label: "Text",
+                geometry: TesselatedTextGeometry(context: context, text: "SATIN", fontName: "Helvetica", fontSize: 1.2, pivot: simd_float2(0.5, 0.5)),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.95, 0.82, 0.3, 1.0), blending: .disabled, hardness: 0.7)
+>>>>>>> development
             )
             text.scale = [0.42, 0.42, 0.42]
             text.position = [0.0, -0.1, 0.0]
@@ -418,7 +623,11 @@ final class VisualRendererTests: XCTestCase {
             camera.position = [0, 0, 4.5]
             camera.lookAt(target: .zero)
 
+<<<<<<< HEAD
             return (scene: Object(label: "Scene", [light, text]), camera: camera)
+=======
+            return (scene: Object(context: context, label: "Scene", [light, text]), camera: camera)
+>>>>>>> development
         }
 
         VisualTestHarness.assertContainsVisibleContent(image, minimumChangedPixelRatio: 0.02, minimumMeanNormalizedDifference: 0.008)
@@ -430,15 +639,28 @@ final class VisualRendererTests: XCTestCase {
     }
     
     func testExtrudedTextGeometryMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(224, 160)) { _, camera in
             let light = DirectionalLight(color: simd_float3(repeating: 1.0), intensity: 1.6)
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(224, 160)) { renderer, camera in
+            let context = renderer.context
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.6)
+>>>>>>> development
             light.position = [1.5, 2.0, 2.5]
             light.lookAt(target: .zero)
 
             let text = Mesh(
+<<<<<<< HEAD
                 label: "Text",
                 geometry: ExtrudedTextGeometry(text: "SATIN", fontName: "Helvetica", fontSize: 1.2, pivot: simd_float2(0.5, 0.5)),
                 material: BasicDiffuseMaterial(color: simd_float4(0.95, 0.82, 0.3, 1.0), blending: .disabled, hardness: 0.7)
+=======
+                context: context,
+                label: "Text",
+                geometry: ExtrudedTextGeometry(context: context, text: "SATIN", fontName: "Helvetica", fontSize: 1.2, pivot: simd_float2(0.5, 0.5)),
+                material: BasicDiffuseMaterial(context: context, color: simd_float4(0.95, 0.82, 0.3, 1.0), blending: .disabled, hardness: 0.7)
+>>>>>>> development
             )
             text.scale = [0.42, 0.42, 0.42]
             text.orientation = simd_quatf(angle: degToRad(20), axis: simd_float3(1, 1, 0))
@@ -447,7 +669,11 @@ final class VisualRendererTests: XCTestCase {
             camera.position = [0, 0, 4.5]
             camera.lookAt(target: .zero)
 
+<<<<<<< HEAD
             return (scene: Object(label: "Scene", [light, text]), camera: camera)
+=======
+            return (scene: Object(context: context, label: "Scene", [light, text]), camera: camera)
+>>>>>>> development
         }
 
         VisualTestHarness.assertContainsVisibleContent(image, minimumChangedPixelRatio: 0.02, minimumMeanNormalizedDifference: 0.008)
@@ -459,17 +685,31 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testUVQuadMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(128, 128)) { _, camera in
             let mesh = Mesh(
                 label: "Quad",
                 geometry: QuadGeometry(size: 1.6),
                 material: UVColorMaterial()
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(128, 128)) { renderer, camera in
+            let context = renderer.context
+            let mesh = Mesh(
+                context: context,
+                label: "Quad",
+                geometry: QuadGeometry(context: context, size: 1.6),
+                material: UVColorMaterial(context: context)
+>>>>>>> development
             )
 
             camera.position = [0, 0, 3]
             camera.lookAt(target: .zero)
 
+<<<<<<< HEAD
             return (scene: Object(label: "Scene", [mesh]), camera: camera)
+=======
+            return (scene: Object(context: context, label: "Scene", [mesh]), camera: camera)
+>>>>>>> development
         }
 
         try VisualTestHarness.assertVisualMatch(
@@ -480,23 +720,41 @@ final class VisualRendererTests: XCTestCase {
     }
 
     func testLitSphereMatchesReference() throws {
+<<<<<<< HEAD
         let image = try VisualTestHarness.render(size: SIMD2(128, 128)) { _, camera in
             let material = BasicDiffuseMaterial(color: simd_float4(0.95, 0.4, 0.15, 1.0), blending: .disabled, hardness: 0.75)
             let mesh = Mesh(
                 label: "Sphere",
                 geometry: IcoSphereGeometry(radius: 0.7, resolution: 2),
+=======
+        let image = try VisualTestHarness.render(size: SIMD2(128, 128)) { renderer, camera in
+            let context = renderer.context
+            let material = BasicDiffuseMaterial(context: context, color: simd_float4(0.95, 0.4, 0.15, 1.0), blending: .disabled, hardness: 0.75)
+            let mesh = Mesh(
+                context: context,
+                label: "Sphere",
+                geometry: IcoSphereGeometry(context: context, radius: 0.7, resolution: 2),
+>>>>>>> development
                 material: material
             )
             mesh.orientation = simd_quatf(angle: .pi * 0.2, axis: simd_normalize(simd_float3(0.3, 1.0, 0.2)))
 
+<<<<<<< HEAD
             let light = DirectionalLight(color: simd_float3(repeating: 1.0), intensity: 2.0)
+=======
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 2.0)
+>>>>>>> development
             light.position = [1.5, 2.0, 3.0]
             light.lookAt(target: .zero)
 
             camera.position = [0, 0, 4]
             camera.lookAt(target: .zero)
 
+<<<<<<< HEAD
             return (scene: Object(label: "Scene", [light, mesh]), camera: camera)
+=======
+            return (scene: Object(context: context, label: "Scene", [light, mesh]), camera: camera)
+>>>>>>> development
         }
 
         try VisualTestHarness.assertVisualMatch(
@@ -507,6 +765,17 @@ final class VisualRendererTests: XCTestCase {
     }
 }
 
+<<<<<<< HEAD
+=======
+private func makeOpaque(_ image: RGBAImage) -> RGBAImage {
+    var pixels = image.pixels
+    for index in stride(from: 3, to: pixels.count, by: 4) {
+        pixels[index] = 255
+    }
+    return RGBAImage(width: image.width, height: image.height, pixels: pixels)
+}
+
+>>>>>>> development
 private func makeCheckerTexture(device: MTLDevice, width: Int, height: Int) -> MTLTexture {
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
         pixelFormat: .rgba8Unorm,

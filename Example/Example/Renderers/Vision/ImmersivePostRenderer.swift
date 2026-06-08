@@ -16,46 +16,51 @@ import Satin
 final class ImmersivePostRenderer: ImmersiveBaseRenderer {
     final class GridMaterial: SourceMaterial {}
 
-    lazy var background = Mesh(
+    lazy var background = Mesh(context: defaultContext, 
         label: "Background",
-        geometry: SkyboxGeometry(size: 200),
-        material: GridMaterial(pipelinesURL: pipelinesURL, live: true)
+        geometry: SkyboxGeometry(context: defaultContext, size: 200),
+        material: GridMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
     )
 
-    let mesh = Mesh(
+    lazy var mesh = Mesh(context: defaultContext, 
         label: "Blob",
-        geometry: IcoSphereGeometry(radius: 0.5, resolution: 0),
-        material: BasicDiffuseMaterial()
+        geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0),
+        material: {
+            let material = BasicDiffuseMaterial(context: defaultContext)
+            material.ambient = 0.15
+            return material
+        }()
     )
 
-    let floor = Mesh(
+    lazy var floor = Mesh(context: defaultContext, 
         label: "Floor",
-        geometry: PlaneGeometry(size: 3.0, orientation: .zx, centered: true),
-        material: UVColorMaterial(),
+        geometry: PlaneGeometry(context: defaultContext, size: 3.0, orientation: .zx, centered: true),
+        material: UVColorMaterial(context: defaultContext),
         visible: false
     )
 
     final class PostMaterial: SourceMaterial {}
 
-    lazy var postMaterial = PostMaterial(pipelinesURL: pipelinesURL)
+    lazy var postContext = Context(
+        device: device,
+        sampleCount: 1,
+        colorPixelFormat: colorPixelFormat,
+        vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
+    )
+    lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
 
     lazy var startTime = getTime()
-    lazy var scene = Object(label: "Scene", [background, floor, mesh])
+    lazy var scene = Object(context: defaultContext, label: "Scene", [background, floor, mesh])
 
     var renderTexture: MTLTexture?
 
-    lazy var renderer = Renderer(
+    lazy var renderer = RenderEncoder(
         context: defaultContext,
         depthStoreAction: sampleCount > 1 ? .multisampleResolve : .store
     )
 
-    lazy var postProcessor = PostProcessor(
-        context: Context(
-            device: device,
-            sampleCount: 1,
-            colorPixelFormat: colorPixelFormat,
-            vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
-        ),
+    lazy var postProcessor = PostProcessEncoder(
+        context: postContext,
         material: postMaterial
     )
 

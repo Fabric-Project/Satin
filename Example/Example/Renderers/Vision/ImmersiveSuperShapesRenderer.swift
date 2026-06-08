@@ -16,10 +16,10 @@ import Satin
 final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     final class GridMaterial: SourceMaterial {}
 
-    lazy var background = Mesh(
+    lazy var background = Mesh(context: defaultContext, 
         label: "Background",
-        geometry: SkyboxGeometry(size: 200),
-        material: GridMaterial(pipelinesURL: pipelinesURL, live: true)
+        geometry: SkyboxGeometry(context: defaultContext, size: 200),
+        material: GridMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
     )
 
     var wireframe = false {
@@ -64,7 +64,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
 
     var parametersSubscription: AnyCancellable?
 
-    lazy var geometry = SuperShapeGeometry(
+    lazy var geometry = SuperShapeGeometry(context: defaultContext, 
         r1: r1Param.value,
         a1: a1Param.value,
         b1: b1Param.value,
@@ -83,10 +83,10 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     )
 
     lazy var startTime = getTime()
-    lazy var mesh = Mesh(geometry: geometry, material: NormalColorMaterial(true))
-    lazy var scene = Object(label: "Scene", [background, mesh])
+    lazy var mesh = Mesh(geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
+    lazy var scene = Object(context: defaultContext, label: "Scene", [background, mesh])
 
-    lazy var renderer = Renderer(context: defaultContext)
+    lazy var renderer = RenderEncoder(context: defaultContext)
 
 #if targetEnvironment(simulator)
     override var layerLayout: LayerRenderer.Layout { .dedicated }

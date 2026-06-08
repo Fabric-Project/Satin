@@ -1,6 +1,7 @@
 #include "Satin/PbrConstants.metal"
 
 #include "Library/Pbr/Pbr.metal"
+#include "../../Includes/FragmentOutput.metal"
 
 typedef struct {
 #include "Chunks/StandardUniforms.metal"
@@ -8,7 +9,7 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
-    // inject shadow coords
+    float pointSize [[point_size]];
     float3 normal;
     float2 texcoord;
 #if defined(HAS_COLOR)
@@ -22,14 +23,20 @@ typedef struct {
 #endif
     float3 worldPosition;
     float3 cameraPosition;
+
+#ifdef OUTPUT_VELOCITY
+    float4 currentClipPos;
+    float4 previousClipPos;
+#endif
 } CustomVertexData;
 
 vertex CustomVertexData standardVertex(
     Vertex in [[stage_in]],
     // inject instancing args
-    // inject shadow vertex args
     ushort amp_id [[amplification_id]],
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
+    constant StandardUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]
+    ) {
 #if defined(INSTANCING)
     const float3x3 normalMatrix = instanceUniforms[instanceID].normalMatrix;
     const float4x4 modelMatrix = instanceUniforms[instanceID].modelMatrix;
@@ -64,24 +71,51 @@ vertex CustomVertexData standardVertex(
 
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
+    out.pointSize = uniforms.pointSize;
 
-    // inject shadow vertex calc
+#ifdef OUTPUT_VELOCITY
+    out.currentClipPos = out.position;
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * worldPosition;
+#endif
 
     return out;
 }
 
-fragment float4 standardFragment(
+fragment FragmentOutput standardFragment(
     CustomVertexData in [[stage_in]],
 // inject lighting args
-// inject shadow fragment args
+#if defined(PROJECTOR_COUNT)
+    constant float4x4 *projectorMatrices [[buffer(FragmentBufferProjectorMatrices)]],
+    constant float4x4 *projectorTransforms [[buffer(FragmentBufferProjectorTransforms)]],
+    array<texture2d<float>, PROJECTOR_COUNT> projectorTextures [[texture(FragmentTextureProjector0)]],
+#endif
+#if defined(DIRECT_SHADOW_COUNT) && defined(DIRECT_SHADOW_TEXTURE_COUNT)
+    constant ShadowData *directShadows [[buffer(FragmentBufferDirectShadows)]],
+    constant float4x4 *directShadowMatrices [[buffer(FragmentBufferDirectShadowMatrices)]],
+    array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
+#endif
 #include "Chunks/PbrTextures.metal"
-    constant StandardUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
+    constant StandardUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     float4 outColor;
 #include "Chunks/PixelInfoInit.metal"
 #include "Chunks/PbrInit.metal"
+
+    SurfaceOutput surface;
+#include "Chunks/PixelInfoSurfaceOutput.metal"
+
+#if defined(DEFERRED_GEOMETRY)
+    outColor = float4(pbrTonemap(pixel), pixel.material.alpha);
+#else
 #include "Chunks/PbrDirectLighting.metal"
 #include "Chunks/PbrInDirectLighting.metal"
 #include "Chunks/PbrTonemap.metal"
-    // inject shadow fragment calc
-    return outColor;
+#endif
+
+    return buildFragmentOutput(surface, half4(outColor)
+#ifdef OUTPUT_VELOCITY
+        , in.currentClipPos, in.previousClipPos
+#endif
+        SATIN_ALPHA_OIT_FORWARD_ARGS
+    );
 }

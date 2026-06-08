@@ -21,7 +21,7 @@ final class MeshShadowRenderer {
 
     private var subscription: AnyCancellable?
     private var device: MTLDevice
-    private var renderer: Renderer
+    private var renderer: RenderEncoder
     private var camera: OrthographicCamera
     private var scene: Object
     private var shadowMesh: Mesh
@@ -30,25 +30,27 @@ final class MeshShadowRenderer {
     private var blurFilter: MPSImageGaussianBlur
 
     private var _texture: MTLTexture?
+    private let context: Context
 
     init(device: MTLDevice, mesh: Mesh, size: (width: Float, height: Float)) {
         self.device = device
+        context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
 
-        let mat = BasicColorMaterial(color: [0, 0, 0, 0.75], blending: .alpha)
+        let mat = BasicColorMaterial(context: context, color: [0, 0, 0, 0.75], blending: .alpha)
 
-        shadowMesh = Mesh(geometry: mesh.geometry, material: mat)
+        shadowMesh = Mesh(context: context, geometry: mesh.geometry, material: mat)
         shadowMesh.cullMode = .front
 
-        scene = Object(label: "Scene")
+        scene = Object(context: context, label: "Scene")
         scene.add(shadowMesh, false)
 
-        renderer = Renderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
-        renderer.label = "Shadow Renderer"
+        renderer = RenderEncoder(context: context)
+        renderer.label = "Shadow RenderEncoder"
         renderer.setClearColor(.zero)
         renderer.resize(size)
 
         let distance: Float = 2.0
-        camera = OrthographicCamera(
+        camera = OrthographicCamera(context: context, 
             left: -distance,
             right: distance,
             bottom: -distance,

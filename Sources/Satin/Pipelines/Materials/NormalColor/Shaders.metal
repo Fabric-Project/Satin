@@ -1,17 +1,20 @@
 typedef struct {
-    bool absolute; // toggle
+    bool absolute;   // toggle
+    float pointSize; // slider,1.0,64.0,1.0
 } NormalColorUniforms;
 
 typedef struct {
     float4 position [[position]];
     float3 normal;
+    float pointSize [[point_size]];
 } NormalColorVertexData;
 
 vertex NormalColorVertexData normalColorVertex(
     Vertex in [[stage_in]],
     // inject instancing args
     ushort amp_id [[amplification_id]],
-    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+    constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
+    constant NormalColorUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
     NormalColorVertexData out;
 
 #if INSTANCING
@@ -23,6 +26,7 @@ vertex NormalColorVertexData normalColorVertex(
     out.normal = vertexUniforms[amp_id].normalMatrix * in.normal;
 #endif
 
+    out.pointSize = uniforms.pointSize;
     return out;
 }
 

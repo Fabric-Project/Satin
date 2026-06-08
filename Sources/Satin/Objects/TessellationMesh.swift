@@ -21,16 +21,17 @@ open class TessellationMesh: Mesh {
 
     public let tessellatePublisher = PassthroughSubject<Bool, Never>()
 
-    public init(label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderPass: Int = 0) {
+    public init(context: Context, label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderLayer: RenderLayer = .opaque) {
         self.tessellator = tessellator
         self.tessellate = tessellate
         super.init(
+            context: context,
             label: label,
             geometry: geometry,
             material: material,
             visible: visible,
             renderOrder: renderOrder,
-            renderPass: renderPass
+            renderLayer: renderLayer
         )
     }
 
@@ -48,7 +49,7 @@ open class TessellationMesh: Mesh {
     // MARK: - Draw
 
     override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext], let material, !geometry.vertexBuffers.isEmpty else { return }
+        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext.id], let material, !geometry.vertexBuffers.isEmpty else { return }
 
         renderEncoderState.vertexVertexUniforms = vertexUniforms
 

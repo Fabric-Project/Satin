@@ -9,6 +9,19 @@ import Metal
 import simd
 
 public final class BasicDiffuseMaterial: BasicColorMaterial {
+    override public var lightingModel: LightingModel { .surface }
+    override public var supportedOutputs: RendererOutputs { [.color, .albedo, .normals, .pbr, .velocity, .emissive] }
+    override var supportsAlphaOrderIndependentTransparency: Bool { true }
+
+    public var ambient: Float {
+        get {
+            get("Ambient", as: FloatParameter.self)!.value
+        }
+        set {
+            set("Ambient", newValue)
+        }
+    }
+
     public var hardness: Float {
         get {
             get("Hardness", as: FloatParameter.self)!.value
@@ -18,13 +31,17 @@ public final class BasicDiffuseMaterial: BasicColorMaterial {
         }
     }
 
-    public init(color: simd_float4 = .one, blending: Blending = .alpha, hardness: Float = 0.75) {
-        super.init(color: color, blending: blending)
+    public init(context: Context, color: simd_float4 = .one, blending: Blending = .disabled, hardness: Float = 0.75) {
+        super.init(context: context, color: color, blending: blending)
+        lighting = true
+        ambient = 0.0
         self.hardness = hardness
     }
 
-    public required init() {
-        super.init()
+    public required init(context: Context) {
+        super.init(context: context)
+        lighting = true
+        ambient = 0.0
         hardness = 0.75
     }
 

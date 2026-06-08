@@ -1,7 +1,6 @@
 vertex VertexData satinVertex(
     Vertex in [[stage_in]],
     // inject instancing args
-    // inject shadow vertex args
     ushort amp_id [[amplification_id]],
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
     VertexData out;
@@ -27,6 +26,5 @@ vertex VertexData satinVertex(
     out.texcoord = in.texcoord;
 #endif
 
-    // inject shadow vertex calc
     return out;
 }
