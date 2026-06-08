@@ -42,10 +42,6 @@ let package = Package(
             dependencies: ["Satin", "SatinCore"]
         ),
         .testTarget(
-            name: "SatinCoreTests",
-            dependencies: ["Satin", "SatinCore"]
-        ),
-        .testTarget(
             name: "SatinTests",
             dependencies: ["Satin"],
             resources: [.process("Resources")]
