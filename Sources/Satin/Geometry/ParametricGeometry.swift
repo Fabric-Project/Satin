@@ -44,8 +44,8 @@ public final class ParametricGeometry: Geometry {
         }
     }
 
-    var vertexData: [SatinVertex] = []
-    var indexData: [UInt32] = []
+    public var vertexData: [SatinVertex] = []
+    public var indexData: [UInt32] = []
 
     var _updateGeometry = true
 
