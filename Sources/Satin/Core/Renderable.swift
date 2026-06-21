@@ -87,12 +87,24 @@ open class Renderable : Object {
     open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         fatalError("Subclasses must implement this method")
     }
-    
+
 //    func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
 //        fatalError("Subclasses must implement this method")
 //    }
 
     open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
         fatalError("Subclasses must implement this method")
+    }
+
+    /// Prepares this renderable to be encoded `count` times in a single render pass.
+    /// Expands all ring buffers (vertex uniforms, material uniforms, geometry) so that
+    /// each encoding sees independent data. Call once before the iteration loop begins,
+    /// whenever `count` or the set of child renderables changes.
+    open func prepareForRepeatedEncoding(count: Int) {
+        // Default: no-op. Mesh and InstancedMesh provide implementations.
+    }
+
+    open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
+        // Default: no-op. Mesh and InstancedMesh provide implementations.
     }
 }

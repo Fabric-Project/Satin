@@ -22,6 +22,7 @@ public final class UniformBuffer {
     public private(set) var offset = 0
     public private(set) var alignedSize: Int
     public private(set) var maxBuffersInFlight: Int
+    private var latestUpdatedIndex: Int = -1
 
     public init(device: MTLDevice, parameters: ParameterGroup, options: MTLResourceOptions = [.cpuCacheModeWriteCombined], maxBuffersInFlight: Int = Satin.maxBuffersInFlight) {
         self.parameters = parameters
@@ -37,8 +38,18 @@ public final class UniformBuffer {
 
     public func update() {
         index = (index + 1) % maxBuffersInFlight
+        latestUpdatedIndex = index
         offset = alignedSize * index
         (buffer.contents() + offset).copyMemory(from: parameters.data, byteCount: parameters.size)
+    }
+
+    public func selectRecentSlot(iteration: Int, count: Int) {
+        guard latestUpdatedIndex >= 0 else { return }
+        let sanitizedCount = max(1, count)
+        let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
+        let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
+        index = (latestUpdatedIndex - distanceFromCurrent + maxBuffersInFlight) % maxBuffersInFlight
+        offset = alignedSize * index
     }
 
     public func reset() {

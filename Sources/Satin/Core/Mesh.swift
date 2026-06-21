@@ -82,6 +82,7 @@ open class Mesh: Renderable {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
+                geometry.setMinimumSlotCount(minimumRepeatedEncodingCount)
                 _updateLocalBounds = true
             }
         }
@@ -96,6 +97,7 @@ open class Mesh: Renderable {
     }
 
     var geometrySubscription: AnyCancellable?
+    private var minimumRepeatedEncodingCount = 1
 
     public internal(set) var submeshes: [Submesh] = []
     {
@@ -171,8 +173,39 @@ open class Mesh: Renderable {
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
         material.setup()
+        material.setMinimumSlotCount(minimumRepeatedEncodingCount)
 
         self.updateAllMaterials()
+    }
+
+    // MARK: - Repeated Encoding
+
+    override open func prepareForRepeatedEncoding(count: Int) {
+        minimumRepeatedEncodingCount = max(minimumRepeatedEncodingCount, max(1, count))
+        // Build a sizing context with iterationsPerFrame = count so VertexUniformBuffer
+        // allocates maxBuffersInFlight × max(maxSubPassesPerFrame, count) slots.
+        // Store under the original context.id so bindUniforms finds it without
+        // changing the renderContext passed by SubgraphIteratorRenderable.
+        vertexUniforms[context.id] = VertexUniformBuffer(context: context.with(iterationsPerFrame: minimumRepeatedEncodingCount))
+
+        // Expand material uniform buffer to hold one slot per in-flight iteration.
+        material?.setMinimumSlotCount(minimumRepeatedEncodingCount)
+        for submesh in submeshes {
+            submesh.material?.setMinimumSlotCount(minimumRepeatedEncodingCount)
+        }
+
+        // Static geometry ignores this. Dynamic geometry uploads directly into versioned slots.
+        geometry.setMinimumSlotCount(minimumRepeatedEncodingCount)
+    }
+
+    override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
+        geometry.selectRecentSlot(iteration: iteration, count: count)
+        material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
+
+        for submesh in submeshes {
+            submesh.geometry.selectRecentSlot(iteration: iteration, count: count)
+            submesh.material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
+        }
     }
 
     // MARK: - Binding

@@ -63,6 +63,7 @@ public class InstancedMesh: Mesh {
     private var _setupInstanceMatrixBuffer = true
     private var _updateInstanceMatrixBuffer = true
     private var instanceMatrixBuffer: InstanceMatrixUniformBuffer?
+    private var minimumRepeatedEncodingCount = 1
 
     override public var material: Material? {
         didSet {
@@ -135,6 +136,18 @@ public class InstancedMesh: Mesh {
         setupInstanceBuffer()
     }
 
+    override public func prepareForRepeatedEncoding(count: Int) {
+        super.prepareForRepeatedEncoding(count: count)
+        minimumRepeatedEncodingCount = max(minimumRepeatedEncodingCount, max(1, count))
+        guard instanceCount > 0 else { return }
+        setupInstanceBuffer()
+    }
+
+    override public func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
+        super.selectRepeatedEncodingSlot(iteration: iteration, count: count)
+        instanceMatrixBuffer?.selectRecentSlot(iteration: iteration, count: count)
+    }
+
     override public func update() {
         if _updateInstanceMatricesUniforms { updateInstanceMatricesUniforms() }
         if _setupInstanceMatrixBuffer { setupInstanceBuffer() }
@@ -155,7 +168,11 @@ public class InstancedMesh: Mesh {
 
     func setupInstanceBuffer() {
         guard instanceCount > 0 else { return }
-        instanceMatrixBuffer = InstanceMatrixUniformBuffer(device: context.device, count: instanceCount)
+        instanceMatrixBuffer = InstanceMatrixUniformBuffer(
+            device: context.device,
+            count: instanceCount,
+            slotsInFlight: context.maxBuffersInFlight * max(1, minimumRepeatedEncodingCount)
+        )
         _setupInstanceMatrixBuffer = false
         _updateInstanceMatrixBuffer = true
     }

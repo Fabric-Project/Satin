@@ -15,10 +15,40 @@ import SatinCore
 
 // add on change publishers for vertex & index data
 
+/// Describes whether geometry data is expected to change after initial upload.
+public enum GeometryMutability {
+    case staticData
+    case dynamicData
+}
+
 open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
     public var id: String = UUID().uuidString
 
     public let context: Context
+
+    // MARK: - Versioned Uploads
+
+    public var mutability: GeometryMutability = .staticData {
+        didSet {
+            if mutability != oldValue {
+                versionedVertexBuffers.removeAll()
+                vertexBufferOffsets.removeAll()
+                _updateVertexBuffers = true
+            }
+        }
+    }
+
+    private struct VersionedVertexBuffer {
+        let buffer: MTLBuffer
+        let alignedStride: Int
+        let slotCount: Int
+    }
+
+    private var minimumSlotCount: Int = 1
+    private var versionedSlotIndex: Int = -1
+    private var latestVersionedSlotIndex: Int = -1
+    private var versionedVertexBuffers: [VertexBufferIndex: VersionedVertexBuffer] = [:]
+    private var vertexBufferOffsets: [VertexBufferIndex: Int] = [:]
 
     public var windingOrder: MTLWinding = .counterClockwise
     public var primitiveType: MTLPrimitiveType = .triangle {
@@ -129,7 +159,31 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     open func bind(renderEncoderState: RenderEncoderState, shadow: Bool) {
         for (index, buffer) in vertexBuffers {
-            renderEncoderState.setVertexBuffer(buffer, offset: 0, index: index)
+            renderEncoderState.setVertexBuffer(buffer, offset: vertexBufferOffsets[index, default: 0], index: index)
+        }
+    }
+
+    open func setMinimumSlotCount(_ count: Int) {
+        let sanitizedCount = max(1, count)
+        guard sanitizedCount != minimumSlotCount else { return }
+        minimumSlotCount = sanitizedCount
+        versionedVertexBuffers.removeAll()
+        vertexBufferOffsets.removeAll()
+        versionedSlotIndex = -1
+        latestVersionedSlotIndex = -1
+        _updateVertexBuffers = true
+    }
+
+    public func selectRecentSlot(iteration: Int, count: Int) {
+        guard usesVersionedVertexBuffers, latestVersionedSlotIndex >= 0 else { return }
+        let sanitizedCount = max(1, count)
+        let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
+        let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
+        versionedSlotIndex = (latestVersionedSlotIndex - distanceFromCurrent + requiredVersionedSlotCount) % requiredVersionedSlotCount
+
+        for (bufferIndex, versionedBuffer) in versionedVertexBuffers {
+            vertexBuffers[bufferIndex] = versionedBuffer.buffer
+            vertexBufferOffsets[bufferIndex] = versionedBuffer.alignedStride * versionedSlotIndex
         }
     }
 
@@ -243,6 +297,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     private func setupVertexBuffers() {
         let device = context.device
+        if usesVersionedVertexBuffers {
+            advanceVersionedSlot()
+        }
         for (attributeIndex, attribute) in bufferAttributes {
             setupBufferAttribute(device, attribute: attribute, for: attributeIndex)
         }
@@ -265,12 +322,25 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
         guard attribute.needsUpdate || vertexBuffers[bufferIndex] == nil else { return }
 
-        if let buffer = attribute.getBuffer(device: device) {
+        if usesVersionedVertexBuffers {
+            let data = attribute.getData()
+            data.withUnsafeBytes { dataPointer in
+                uploadVersionedVertexBuffer(
+                    dataPointer.baseAddress,
+                    length: data.count,
+                    bufferIndex: bufferIndex,
+                    label: index.name
+                )
+            }
+        }
+        else if let buffer = attribute.getBuffer(device: device) {
             buffer.label = index.name
             vertexBuffers[bufferIndex] = buffer
+            vertexBufferOffsets[bufferIndex] = 0
         }
         else {
             vertexBuffers.removeValue(forKey: bufferIndex)
+            vertexBufferOffsets.removeValue(forKey: bufferIndex)
         }
 
         attribute.needsUpdate = false
@@ -282,12 +352,23 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
         guard interleavedBuffer.needsUpdate || vertexBuffers[bufferIndex] == nil else { return }
 
-        if let buffer = interleavedBuffer.getBuffer(device: device) {
+        if usesVersionedVertexBuffers {
+            uploadVersionedVertexBuffer(
+                interleavedBuffer.data,
+                length: interleavedBuffer.length,
+                bufferIndex: bufferIndex,
+                label: bufferIndex.label
+            )
+            interleavedBuffer.needsUpdate = false
+        }
+        else if let buffer = interleavedBuffer.getBuffer(device: device) {
             buffer.label = bufferIndex.label
             vertexBuffers[bufferIndex] = buffer
+            vertexBufferOffsets[bufferIndex] = 0
         }
         else {
             vertexBuffers[bufferIndex] = nil
+            vertexBufferOffsets.removeValue(forKey: bufferIndex)
         }
     }
 
@@ -413,6 +494,69 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         bvh?.intersect(ray: ray, intersections: &intersections)
     }
 
+    // MARK: - Versioned Vertex Buffers
+
+    private var usesVersionedVertexBuffers: Bool {
+        mutability == .dynamicData && minimumSlotCount > 1
+    }
+
+    private var requiredVersionedSlotCount: Int {
+        max(1, minimumSlotCount * context.maxBuffersInFlight)
+    }
+
+    private func advanceVersionedSlot() {
+        versionedSlotIndex = (versionedSlotIndex + 1) % requiredVersionedSlotCount
+        latestVersionedSlotIndex = versionedSlotIndex
+    }
+
+    private func uploadVersionedVertexBuffer(_ source: UnsafeRawPointer?,
+                                             length: Int,
+                                             bufferIndex: VertexBufferIndex,
+                                             label: String)
+    {
+        guard length > 0, let source else {
+            vertexBuffers.removeValue(forKey: bufferIndex)
+            vertexBufferOffsets.removeValue(forKey: bufferIndex)
+            versionedVertexBuffers.removeValue(forKey: bufferIndex)
+            return
+        }
+
+        if versionedSlotIndex < 0 {
+            advanceVersionedSlot()
+        }
+
+        let alignedStride = align256(size: length)
+        let slotCount = requiredVersionedSlotCount
+        let existing = versionedVertexBuffers[bufferIndex]
+
+        let versionedBuffer: VersionedVertexBuffer
+        if let existing,
+           existing.alignedStride >= alignedStride,
+           existing.slotCount >= slotCount
+        {
+            versionedBuffer = existing
+        }
+        else {
+            guard let buffer = context.device.makeBuffer(
+                length: alignedStride * slotCount,
+                options: [.cpuCacheModeWriteCombined]
+            ) else { return }
+            buffer.label = "\(label) Versioned"
+            versionedBuffer = VersionedVertexBuffer(
+                buffer: buffer,
+                alignedStride: alignedStride,
+                slotCount: slotCount
+            )
+            versionedVertexBuffers[bufferIndex] = versionedBuffer
+        }
+
+        let offset = versionedBuffer.alignedStride * versionedSlotIndex
+        memcpy(versionedBuffer.buffer.contents().advanced(by: offset), source, length)
+
+        vertexBuffers[bufferIndex] = versionedBuffer.buffer
+        vertexBufferOffsets[bufferIndex] = offset
+    }
+
     // MARK: - Deinit
 
     deinit {
@@ -420,6 +564,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
         vertexAttributes.removeAll()
         vertexBuffers.removeAll()
+        vertexBufferOffsets.removeAll()
+        versionedVertexBuffers.removeAll()
 
         elementBuffer?.delegate = nil
         elementBuffer = nil
