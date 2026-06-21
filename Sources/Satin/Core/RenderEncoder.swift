@@ -274,6 +274,13 @@ open class RenderEncoder {
         case classicTransparent
     }
 
+    private struct CurrentEncodePass {
+        let cameras: [Camera]
+        let viewports: [simd_float4]
+        let phase: MaterialPassType
+        let overrideMaterial: Material?
+    }
+
     private struct ColorAttachmentState {
         let texture: MTLTexture?
         let resolveTexture: MTLTexture?
@@ -283,6 +290,7 @@ open class RenderEncoder {
     }
 
     private var renderContextCache: [RenderContextKey: Context] = [:]
+    private var currentEncodePass: CurrentEncodePass?
     private let supportsAlphaOit: Bool
     private let alphaOitTileSize = MTLSize(width: 32, height: 16, depth: 1)
     private lazy var alphaOitResources = AlphaOitResources(renderer: self)
@@ -690,6 +698,118 @@ open class RenderEncoder {
         )
     }
 
+    public func encodeCurrentPass(
+        scene: Object,
+        renderEncoderState: RenderEncoderState,
+        repeatedIteration: Int? = nil,
+        repeatedCount: Int = 1
+    ) {
+        var renderables = [Renderable]()
+        collectCurrentPassRenderables(
+            object: scene,
+            parentVisible: true,
+            renderables: &renderables
+        )
+        encodeCurrentPass(
+            renderables: renderables,
+            renderEncoderState: renderEncoderState,
+            repeatedIteration: repeatedIteration,
+            repeatedCount: repeatedCount
+        )
+    }
+
+    public func encodeCurrentPass(
+        renderables: [Renderable],
+        renderEncoderState: RenderEncoderState,
+        repeatedIteration: Int? = nil,
+        repeatedCount: Int = 1
+    ) {
+        guard let currentEncodePass else {
+            assertionFailure("encodeCurrentPass called outside an active Satin encode pass.")
+            return
+        }
+
+        let visibleRenderables = renderables.filter(\.isVisible)
+        let orderedRenderables = sortObjects
+            ? visibleRenderables.sorted { $0.renderOrder < $1.renderOrder }
+            : visibleRenderables
+
+        for renderable in orderedRenderables {
+            encodeCurrentPassRenderable(
+                renderable,
+                currentEncodePass: currentEncodePass,
+                renderEncoderState: renderEncoderState,
+                repeatedIteration: repeatedIteration,
+                repeatedCount: repeatedCount
+            )
+        }
+    }
+
+    private func collectCurrentPassRenderables(
+        object: Object,
+        parentVisible: Bool,
+        renderables: inout [Renderable]
+    ) {
+        let visible = parentVisible && object.visible
+        guard visible else { return }
+
+        if let renderable = object as? Renderable {
+            renderables.append(renderable)
+        }
+
+        for child in object.children {
+            collectCurrentPassRenderables(
+                object: child,
+                parentVisible: visible,
+                renderables: &renderables
+            )
+        }
+    }
+
+    private func encodeCurrentPassRenderable(
+        _ renderable: Renderable,
+        currentEncodePass: CurrentEncodePass,
+        renderEncoderState: RenderEncoderState,
+        repeatedIteration: Int?,
+        repeatedCount: Int
+    ) {
+        let repeatedCount = max(1, repeatedCount)
+        let drawContext = currentEncodePass.overrideMaterial?.context ?? renderContext(
+            for: renderable,
+            phase: currentEncodePass.phase
+        )
+
+        if let repeatedIteration {
+            renderable.selectRepeatedEncodingSlot(
+                iteration: repeatedIteration,
+                count: repeatedCount
+            )
+
+            let existingVertexUniforms = renderable.vertexUniforms[drawContext.id]
+            if existingVertexUniforms == nil ||
+                (existingVertexUniforms?.context.iterationsPerFrame ?? 1) < repeatedCount
+            {
+                renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(
+                    context: drawContext.with(iterationsPerFrame: repeatedCount)
+                )
+            }
+        } else if renderable.vertexUniforms[drawContext.id] == nil {
+            renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(context: drawContext)
+        }
+
+        guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { return }
+
+        _encode(
+            renderEncoder: renderEncoderState.renderEncoder,
+            renderEncoderState: renderEncoderState,
+            renderable: renderable,
+            cameras: currentEncodePass.cameras,
+            viewports: currentEncodePass.viewports,
+            phase: currentEncodePass.phase,
+            overrideMaterial: currentEncodePass.overrideMaterial
+        )
+    }
+
     private func normalizedOutputs(_ outputs: RendererOutputs) -> RendererOutputs {
         RendererOutputs(rawValue: outputs.rawValue | RendererOutputs.color.rawValue)
     }
@@ -728,6 +848,10 @@ open class RenderEncoder {
     }
 
     private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
+        if renderable.rendersIntoAllMaterialPasses {
+            return true
+        }
+
         let materials = materials(for: renderable)
         let hasOpaque = materials.contains { $0.blending == .disabled }
         let hasAlphaTransparent = materials.contains { usesAlphaOit($0) }
@@ -1991,6 +2115,16 @@ open class RenderEncoder {
         overrideMaterial: Material? = nil
     ) {
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
+        let previousEncodePass = currentEncodePass
+        currentEncodePass = CurrentEncodePass(
+            cameras: cameras,
+            viewports: viewports,
+            phase: phase,
+            overrideMaterial: overrideMaterial
+        )
+        defer {
+            currentEncodePass = previousEncodePass
+        }
 
         if !lightReceivers.isEmpty {
             if let lightBuffer = lightDataBuffer {
