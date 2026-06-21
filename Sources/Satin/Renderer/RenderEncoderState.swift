@@ -11,6 +11,11 @@ import Metal
 public final class RenderEncoderState {
     public let renderEncoder: MTLRenderCommandEncoder
 
+    private struct BufferBinding {
+        let buffer: MTLBuffer
+        let offset: Int
+    }
+
     public var cullMode: MTLCullMode? {
         didSet {
             if oldValue != cullMode, let cullMode {
@@ -76,11 +81,11 @@ public final class RenderEncoderState {
 
     public var vertexVertexUniforms: VertexUniformBuffer? {
         didSet {
-            if oldValue !== vertexVertexUniforms, let vertexVertexUniforms {
-                renderEncoder.setVertexBuffer(
+            if let vertexVertexUniforms {
+                setVertexBuffer(
                     vertexVertexUniforms.buffer,
                     offset: vertexVertexUniforms.offset,
-                    index: VertexBufferIndex.VertexUniforms.rawValue
+                    index: .VertexUniforms
                 )
             }
         }
@@ -88,11 +93,11 @@ public final class RenderEncoderState {
 
     public var fragmentVertexUniforms: VertexUniformBuffer? {
         didSet {
-            if oldValue !== fragmentVertexUniforms, let fragmentVertexUniforms {
-                renderEncoder.setFragmentBuffer(
+            if let fragmentVertexUniforms {
+                setFragmentBuffer(
                     fragmentVertexUniforms.buffer,
                     offset: fragmentVertexUniforms.offset,
-                    index: FragmentBufferIndex.VertexUniforms.rawValue
+                    index: .VertexUniforms
                 )
             }
         }
@@ -100,11 +105,11 @@ public final class RenderEncoderState {
 
     public var vertexMaterialUniforms: UniformBuffer? {
         didSet {
-            if oldValue !== vertexMaterialUniforms, let vertexMaterialUniforms {
-                renderEncoder.setVertexBuffer(
+            if let vertexMaterialUniforms {
+                setVertexBuffer(
                     vertexMaterialUniforms.buffer,
                     offset: vertexMaterialUniforms.offset,
-                    index: VertexBufferIndex.MaterialUniforms.rawValue
+                    index: .MaterialUniforms
                 )
             }
         }
@@ -112,11 +117,11 @@ public final class RenderEncoderState {
 
     public var vertexInstanceUniforms: InstanceMatrixUniformBuffer? {
         didSet {
-            if oldValue !== vertexInstanceUniforms, let vertexInstanceUniforms {
-                renderEncoder.setVertexBuffer(
+            if let vertexInstanceUniforms {
+                setVertexBuffer(
                     vertexInstanceUniforms.buffer,
                     offset: vertexInstanceUniforms.offset,
-                    index: VertexBufferIndex.InstanceMatrixUniforms.rawValue
+                    index: .InstanceMatrixUniforms
                 )
             }
         }
@@ -124,41 +129,52 @@ public final class RenderEncoderState {
 
     public var fragmentMaterialUniforms: UniformBuffer? {
         didSet {
-            if oldValue !== fragmentMaterialUniforms, let fragmentMaterialUniforms {
-                renderEncoder.setFragmentBuffer(
+            if let fragmentMaterialUniforms {
+                setFragmentBuffer(
                     fragmentMaterialUniforms.buffer,
                     offset: fragmentMaterialUniforms.offset,
-                    index: FragmentBufferIndex.MaterialUniforms.rawValue
+                    index: .MaterialUniforms
                 )
             }
         }
     }
 
-    private var vertexBuffers = [VertexBufferIndex: MTLBuffer]()
+    private var vertexBuffers = [VertexBufferIndex: BufferBinding]()
     private var vertexTextures = [VertexTextureIndex: MTLTexture?]()
 
-    private var fragmentBuffers = [FragmentBufferIndex: MTLBuffer]()
+    private var fragmentBuffers = [FragmentBufferIndex: BufferBinding]()
     private var fragmentPBRTextures = [PBRTextureType: MTLTexture?]()
     private var fragmentTextures = [FragmentTextureIndex: MTLTexture?]()
 
     public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, index: VertexBufferIndex) {
-        if let existingBuffer = vertexBuffers[index], existingBuffer === buffer {
+        if let existingBinding = vertexBuffers[index],
+           existingBinding.buffer === buffer,
+           existingBinding.offset == offset
+        {
             return
         }
         else {
             renderEncoder.setVertexBuffer(buffer, offset: offset, index: index.rawValue)
-            vertexBuffers[index] = buffer
+            vertexBuffers[index] = BufferBinding(buffer: buffer, offset: offset)
         }
     }
 
     public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
-        if let existingBuffer = fragmentBuffers[index], existingBuffer === buffer {
+        if let existingBinding = fragmentBuffers[index],
+           existingBinding.buffer === buffer,
+           existingBinding.offset == offset
+        {
             return
         }
         else {
             renderEncoder.setFragmentBuffer(buffer, offset: offset, index: index.rawValue)
-            fragmentBuffers[index] = buffer
+            fragmentBuffers[index] = BufferBinding(buffer: buffer, offset: offset)
         }
+    }
+
+    public func invalidateBufferBindings() {
+        vertexBuffers.removeAll(keepingCapacity: true)
+        fragmentBuffers.removeAll(keepingCapacity: true)
     }
 
     public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {

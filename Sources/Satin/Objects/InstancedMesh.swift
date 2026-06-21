@@ -56,7 +56,7 @@ public class InstancedMesh: Mesh {
     }
 
     var instanceMatrices: [simd_float4x4]
-    var instanceMatricesUniforms: [InstanceMatrixUniforms]
+    public private(set) var instanceMatricesUniforms: [InstanceMatrixUniforms]
 
     private var transformSubscriber: AnyCancellable?
     private var _updateInstanceMatricesUniforms = true
