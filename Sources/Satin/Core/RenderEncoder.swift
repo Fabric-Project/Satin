@@ -281,6 +281,18 @@ open class RenderEncoder {
         let overrideMaterial: Material?
     }
 
+    private struct ScheduledCurrentPassEncodingCommand {
+        let renderLayer: Int
+        let routeRenderables: [Renderable]
+        let encode: (RenderEncoderState) -> Void
+    }
+
+    private struct RenderRouteEntry {
+        let pass: Int
+        let renderables: [Renderable]
+        let commands: [ScheduledCurrentPassEncodingCommand]
+    }
+
     private struct ColorAttachmentState {
         let texture: MTLTexture?
         let resolveTexture: MTLTexture?
@@ -291,6 +303,7 @@ open class RenderEncoder {
 
     private var renderContextCache: [RenderContextKey: Context] = [:]
     private var currentEncodePass: CurrentEncodePass?
+    private var scheduledCurrentPassEncodingCommands = [ScheduledCurrentPassEncodingCommand]()
     private let supportsAlphaOit: Bool
     private let alphaOitTileSize = MTLSize(width: 32, height: 16, depth: 1)
     private lazy var alphaOitResources = AlphaOitResources(renderer: self)
@@ -479,6 +492,10 @@ open class RenderEncoder {
     /// Shadow passes run before the main scene pass. Surface materials render first according to
     /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
     public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
+        defer {
+            scheduledCurrentPassEncodingCommands.removeAll(keepingCapacity: true)
+        }
+
         let simd_viewports = viewports.map(\.float4)
         update(
             commandBuffer: commandBuffer,
@@ -698,6 +715,44 @@ open class RenderEncoder {
         )
     }
 
+    public func scheduleCurrentPassEncoding(
+        scene: Object,
+        encode: @escaping (RenderEncoderState) -> Void
+    ) {
+        var renderables = [Renderable]()
+        collectCurrentPassRenderables(
+            object: scene,
+            parentVisible: true,
+            renderables: &renderables
+        )
+        scheduleCurrentPassEncoding(
+            renderables: renderables,
+            encode: encode
+        )
+    }
+
+    public func scheduleCurrentPassEncoding(
+        renderables: [Renderable],
+        encode: @escaping (RenderEncoderState) -> Void
+    ) {
+        let visibleRenderables = renderables.filter(\.isVisible)
+        guard !visibleRenderables.isEmpty else { return }
+
+        let renderablesByLayer = Dictionary(grouping: visibleRenderables) {
+            $0.renderLayer.rawValue
+        }
+
+        for (renderLayer, layerRenderables) in renderablesByLayer {
+            scheduledCurrentPassEncodingCommands.append(
+                ScheduledCurrentPassEncodingCommand(
+                    renderLayer: renderLayer,
+                    routeRenderables: layerRenderables,
+                    encode: encode
+                )
+            )
+        }
+    }
+
     public func encodeCurrentPass(
         scene: Object,
         renderEncoderState: RenderEncoderState,
@@ -879,15 +934,28 @@ open class RenderEncoder {
         }
     }
 
-    private func routePassEntries(route: RenderRoute) -> [(pass: Int, renderables: [Renderable])] {
-        renderLists
-            .sorted { $0.key < $1.key }
+    private func routePassEntries(route: RenderRoute) -> [RenderRouteEntry] {
+        let renderListLayers = Set(renderLists.keys)
+        let commandLayers = Set(scheduledCurrentPassEncodingCommands.map(\.renderLayer))
+        let layers = renderListLayers.union(commandLayers).sorted()
+
+        return layers
             .enumerated()
-            .compactMap { pass, entry in
-                let renderables = entry.value
+            .compactMap { pass, renderLayer in
+                let renderables = renderLists[renderLayer]?
                     .getRenderables(sorted: sortObjects)
-                    .filter { shouldRender($0, route: route) }
-                return renderables.isEmpty ? nil : (pass, renderables)
+                    .filter { shouldRender($0, route: route) } ?? []
+                let commands = scheduledCurrentPassEncodingCommands.filter {
+                    $0.renderLayer == renderLayer &&
+                        $0.routeRenderables.contains { shouldRender($0, route: route) }
+                }
+
+                guard !renderables.isEmpty || !commands.isEmpty else { return nil }
+                return RenderRouteEntry(
+                    pass: pass,
+                    renderables: renderables,
+                    commands: commands
+                )
             }
     }
 
@@ -1081,7 +1149,7 @@ open class RenderEncoder {
         simdViewports: [simd_float4],
         viewMappings: [MTLVertexAmplificationViewMapping],
         colorStoreAction: MTLStoreAction,
-        unlitEntries: [(pass: Int, renderables: [Renderable])] = [],
+        unlitEntries: [RenderRouteEntry] = [],
         unlitCameras: [Camera] = [],
         finalDepthStoreAction: MTLStoreAction = .dontCare,
         finalStencilStoreAction: MTLStoreAction = .dontCare
@@ -1164,6 +1232,7 @@ open class RenderEncoder {
                 renderEncoder: renderEncoder,
                 pass: firstEntry.pass,
                 renderables: firstEntry.renderables,
+                commands: firstEntry.commands,
                 cameras: unlitCameras,
                 viewports: simdViewports,
                 phase: .unlitOpaque
@@ -1203,7 +1272,15 @@ open class RenderEncoder {
                 }
                 enc.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
             }
-            encode(renderEncoder: enc, pass: entry.pass, renderables: entry.renderables, cameras: unlitCameras, viewports: simdViewports, phase: .unlitOpaque)
+            encode(
+                renderEncoder: enc,
+                pass: entry.pass,
+                renderables: entry.renderables,
+                commands: entry.commands,
+                cameras: unlitCameras,
+                viewports: simdViewports,
+                phase: .unlitOpaque
+            )
 #if DEBUG
             enc.popDebugGroup()
 #endif
@@ -1267,9 +1344,10 @@ open class RenderEncoder {
         renderPassDescriptor.imageblockSampleLength = imageblockSampleLength
     }
 
-    private func alphaOitImageblockSampleLength(for routeEntries: [(pass: Int, renderables: [Renderable])]) -> Int? {
+    private func alphaOitImageblockSampleLength(for routeEntries: [RenderRouteEntry]) -> Int? {
         for entry in routeEntries {
-            for renderable in entry.renderables {
+            let renderables = entry.renderables + entry.commands.flatMap(\.routeRenderables)
+            for renderable in renderables {
                 let renderContext = renderContext(for: renderable, phase: .alphaTransparent)
                 for material in materials(for: renderable) where usesAlphaOit(material) {
                     if let pipeline = material.getPipeline(renderContext: renderContext, shadow: false) {
@@ -1354,6 +1432,7 @@ open class RenderEncoder {
                     renderEncoder: renderEncoder,
                     pass: entry.pass,
                     renderables: entry.renderables,
+                    commands: entry.commands,
                     cameras: cameras,
                     viewports: simdViewports,
                     phase: .alphaTransparent
@@ -1387,7 +1466,7 @@ open class RenderEncoder {
     private func encodeEntries(
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
-        entries: [(pass: Int, renderables: [Renderable])],
+        entries: [RenderRouteEntry],
         phase: MaterialPassType,
         label: String,
         cameras: [Camera],
@@ -1441,6 +1520,7 @@ open class RenderEncoder {
                 renderEncoder: renderEncoder,
                 pass: entry.pass,
                 renderables: entry.renderables,
+                commands: entry.commands,
                 cameras: cameras,
                 viewports: simdViewports,
                 phase: phase
@@ -1525,6 +1605,7 @@ open class RenderEncoder {
                 renderEncoder: renderEncoder,
                 pass: entry.pass,
                 renderables: entry.renderables,
+                commands: entry.commands,
                 cameras: cameras,
                 viewports: simdViewports,
                 phase: phase
@@ -2109,6 +2190,7 @@ open class RenderEncoder {
         renderEncoder: MTLRenderCommandEncoder,
         pass: Int,
         renderables: [Renderable],
+        commands: [ScheduledCurrentPassEncodingCommand] = [],
         cameras: [Camera],
         viewports: [simd_float4],
         phase: MaterialPassType,
@@ -2227,6 +2309,10 @@ open class RenderEncoder {
                 phase: phase,
                 overrideMaterial: overrideMaterial
             )
+        }
+
+        for command in commands {
+            command.encode(renderEncoderState)
         }
     }
 
