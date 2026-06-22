@@ -81,7 +81,6 @@ open class Renderable : Object {
 
     open var material: Material? = nil
     open var materials: [Material] = []
-    open var rendersIntoAllMaterialPasses = false
 
     open var preDraw: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)? = nil
 

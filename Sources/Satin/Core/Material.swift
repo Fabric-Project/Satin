@@ -208,7 +208,7 @@ open class Material: Codable {
 
     private var uniformsNeedsUpdate = true
     private var depthNeedsUpdate = false
-    private var minimumRepeatedEncodingCount = 1
+    private var minimumEncodesPerFrame = 1
 
     public var depthBias: DepthBias?
     public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
@@ -465,22 +465,24 @@ open class Material: Codable {
         uniforms = UniformBuffer(
             device: context.device,
             parameters: parameters,
-            maxBuffersInFlight: context.maxBuffersInFlight * max(1, minimumRepeatedEncodingCount)
+            maxBuffersInFlight: context.maxBuffersInFlight,
+            encodesPerFrame: minimumEncodesPerFrame
         )
 
         uniformsNeedsUpdate = false
     }
 
     /// Ensures material uniforms have enough slots for repeated encodes before GPU completion.
-    public func setMinimumSlotCount(_ count: Int) {
-        minimumRepeatedEncodingCount = max(minimumRepeatedEncodingCount, max(1, count))
+    public func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
+        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, encodesPerFrame))
         guard parameters.size > 0 else { return }
-        let minSlots = context.maxBuffersInFlight * minimumRepeatedEncodingCount
-        guard minSlots > (uniforms?.maxBuffersInFlight ?? context.maxBuffersInFlight) else { return }
+        let minSlots = context.maxBuffersInFlight * minimumEncodesPerFrame
+        guard minSlots > (uniforms?.totalSlotCount ?? context.maxBuffersInFlight) else { return }
         uniforms = UniformBuffer(
             device: context.device,
             parameters: parameters,
-            maxBuffersInFlight: minSlots
+            maxBuffersInFlight: context.maxBuffersInFlight,
+            encodesPerFrame: minimumEncodesPerFrame
         )
     }
 

@@ -14,6 +14,8 @@ import SatinCore
 
 public final class VertexUniformBuffer {
     public private(set) var context: Context
+    public private(set) var maxBuffersInFlight: Int
+    public private(set) var encodesPerFrame: Int
     public private(set) var buffer: MTLBuffer
     public private(set) var offset = 0
 
@@ -25,15 +27,18 @@ public final class VertexUniformBuffer {
     private var previousModelMatrices: [simd_float4x4]
     private var previousViewProjectionMatrices: [simd_float4x4]
 
-    /// Total slots = maxBuffersInFlight × max(maxSubPassesPerFrame, iterationsPerFrame).
-    /// `context.iterationsPerFrame > 1` expands capacity for iterator subgraph use; the shadow
-    /// pass budget (maxSubPassesPerFrame) is used when it is larger.
-    public init(context: Context) {
+    public init(
+        context: Context,
+        maxBuffersInFlight: Int? = nil,
+        encodesPerFrame: Int = Satin.maxSubPassesPerFrame
+    ) {
         self.context = context
+        self.maxBuffersInFlight = max(1, maxBuffersInFlight ?? context.maxBuffersInFlight)
+        self.encodesPerFrame = max(1, encodesPerFrame)
         let amplificationCount = max(context.vertexAmplificationCount, 1)
         previousModelMatrices = Array(repeating: matrix_identity_float4x4, count: amplificationCount)
         previousViewProjectionMatrices = Array(repeating: matrix_identity_float4x4, count: amplificationCount)
-        totalSlots = context.maxBuffersInFlight * max(Satin.maxSubPassesPerFrame, context.iterationsPerFrame)
+        totalSlots = self.maxBuffersInFlight * self.encodesPerFrame
         let length = alignedSize * totalSlots * amplificationCount
         guard let buffer = context.device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else { fatalError("Couldn't not create Vertex Uniform Buffer") }
         self.buffer = buffer

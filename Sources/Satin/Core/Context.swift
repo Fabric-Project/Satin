@@ -18,9 +18,6 @@ public struct Context {
     public let stencilPixelFormat: MTLPixelFormat
     public let vertexAmplificationCount: Int
     public let maxBuffersInFlight: Int
-    /// Number of independent encodes per frame. Default 1 (normal rendering).
-    /// Set to N in an iterator subgraph context so ring buffers allocate N × maxBuffersInFlight slots.
-    public let iterationsPerFrame: Int
 
     // Rendering mode and active auxiliary outputs. Switching renderingMode at runtime causes
     // pipeline states to recompile on the next frame — avoid toggling per-frame.
@@ -46,7 +43,6 @@ public struct Context {
         stencilPixelFormat: MTLPixelFormat = .invalid,
         vertexAmplificationCount: Int = 1,
         maxBuffersInFlight: Int = Satin.maxBuffersInFlight,
-        iterationsPerFrame: Int = 1,
         renderingMode: RenderingMode = .forward,
         activeOutputs: RendererOutputs = [.color],
         alphaOitEnabled: Bool = false,
@@ -65,7 +61,6 @@ public struct Context {
         self.stencilPixelFormat = stencilPixelFormat
         self.vertexAmplificationCount = vertexAmplificationCount
         self.maxBuffersInFlight = maxBuffersInFlight
-        self.iterationsPerFrame = iterationsPerFrame
         self.renderingMode = renderingMode
         self.activeOutputs = activeOutputs
         self.alphaOitEnabled = alphaOitEnabled
@@ -108,7 +103,6 @@ extension Context: Hashable {
         hasher.combine(stencilPixelFormat)
         hasher.combine(vertexAmplificationCount)
         hasher.combine(maxBuffersInFlight)
-        hasher.combine(iterationsPerFrame)
         hasher.combine(renderingMode)
         hasher.combine(activeOutputs)
         hasher.combine(alphaOitEnabled)
@@ -130,7 +124,6 @@ extension Context: Equatable {
             lhs.stencilPixelFormat == rhs.stencilPixelFormat &&
             lhs.vertexAmplificationCount == rhs.vertexAmplificationCount &&
             lhs.maxBuffersInFlight == rhs.maxBuffersInFlight &&
-            lhs.iterationsPerFrame == rhs.iterationsPerFrame &&
             lhs.renderingMode == rhs.renderingMode &&
             lhs.activeOutputs == rhs.activeOutputs &&
             lhs.alphaOitEnabled == rhs.alphaOitEnabled &&
@@ -143,30 +136,6 @@ extension Context: Equatable {
 }
 
 public extension Context {
-    /// Returns a new Context identical to this one but with a different `iterationsPerFrame`.
-    /// The new UUID ensures VertexUniformBuffer cache entries are distinct per slot count.
-    func with(iterationsPerFrame: Int) -> Context {
-        Context(
-            id: UUID(),
-            device: device,
-            sampleCount: sampleCount,
-            colorPixelFormat: colorPixelFormat,
-            depthPixelFormat: depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat,
-            vertexAmplificationCount: vertexAmplificationCount,
-            maxBuffersInFlight: maxBuffersInFlight,
-            iterationsPerFrame: iterationsPerFrame,
-            renderingMode: renderingMode,
-            activeOutputs: activeOutputs,
-            alphaOitEnabled: alphaOitEnabled,
-            albedoPixelFormat: albedoPixelFormat,
-            normalsPixelFormat: normalsPixelFormat,
-            pbrPixelFormat: pbrPixelFormat,
-            velocityPixelFormat: velocityPixelFormat,
-            emissivePixelFormat: emissivePixelFormat
-        )
-    }
-
     static func makePlatformDefault(device: MTLDevice? = nil) -> Context {
         let device = device ?? MTLCreateSystemDefaultDevice()!
 #if os(visionOS)

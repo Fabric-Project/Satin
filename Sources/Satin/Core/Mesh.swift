@@ -82,7 +82,7 @@ open class Mesh: Renderable {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
-                geometry.setMinimumSlotCount(minimumRepeatedEncodingCount)
+                geometry.setMinimumSlotCount(minimumEncodesPerFrame)
                 _updateLocalBounds = true
             }
         }
@@ -97,7 +97,7 @@ open class Mesh: Renderable {
     }
 
     var geometrySubscription: AnyCancellable?
-    private var minimumRepeatedEncodingCount = 1
+    private var minimumEncodesPerFrame = 1
 
     public internal(set) var submeshes: [Submesh] = []
     {
@@ -173,7 +173,7 @@ open class Mesh: Renderable {
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
         material.setup()
-        material.setMinimumSlotCount(minimumRepeatedEncodingCount)
+        material.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
 
         self.updateAllMaterials()
     }
@@ -181,21 +181,20 @@ open class Mesh: Renderable {
     // MARK: - Repeated Encoding
 
     override open func prepareForRepeatedEncoding(count: Int) {
-        minimumRepeatedEncodingCount = max(minimumRepeatedEncodingCount, max(1, count))
-        // Build a sizing context with iterationsPerFrame = count so VertexUniformBuffer
-        // allocates maxBuffersInFlight × max(maxSubPassesPerFrame, count) slots.
-        // Store under the original context.id so bindUniforms finds it without
-        // changing the renderContext passed by SubgraphIteratorRenderable.
-        vertexUniforms[context.id] = VertexUniformBuffer(context: context.with(iterationsPerFrame: minimumRepeatedEncodingCount))
+        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
+        vertexUniforms[context.id] = VertexUniformBuffer(
+            context: context,
+            encodesPerFrame: max(Satin.maxSubPassesPerFrame, minimumEncodesPerFrame)
+        )
 
         // Expand material uniform buffer to hold one slot per in-flight iteration.
-        material?.setMinimumSlotCount(minimumRepeatedEncodingCount)
+        material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
         for submesh in submeshes {
-            submesh.material?.setMinimumSlotCount(minimumRepeatedEncodingCount)
+            submesh.material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
         }
 
         // Static geometry ignores this. Dynamic geometry uploads directly into versioned slots.
-        geometry.setMinimumSlotCount(minimumRepeatedEncodingCount)
+        geometry.setMinimumSlotCount(minimumEncodesPerFrame)
     }
 
     override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {

@@ -842,10 +842,11 @@ open class RenderEncoder {
 
             let existingVertexUniforms = renderable.vertexUniforms[drawContext.id]
             if existingVertexUniforms == nil ||
-                (existingVertexUniforms?.context.iterationsPerFrame ?? 1) < repeatedCount
+                (existingVertexUniforms?.encodesPerFrame ?? Satin.maxSubPassesPerFrame) < repeatedCount
             {
                 renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(
-                    context: drawContext.with(iterationsPerFrame: repeatedCount)
+                    context: drawContext,
+                    encodesPerFrame: max(Satin.maxSubPassesPerFrame, repeatedCount)
                 )
             }
         } else if renderable.vertexUniforms[drawContext.id] == nil {
@@ -903,10 +904,6 @@ open class RenderEncoder {
     }
 
     private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
-        if renderable.rendersIntoAllMaterialPasses {
-            return true
-        }
-
         let materials = materials(for: renderable)
         let hasOpaque = materials.contains { $0.blending == .disabled }
         let hasAlphaTransparent = materials.contains { usesAlphaOit($0) }

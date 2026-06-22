@@ -13,15 +13,22 @@ public final class InstanceMatrixUniformBuffer {
     public private(set) var offset = 0
     public private(set) var index = 0
     public private(set) var count: Int
-    private let slotsInFlight: Int
+    public private(set) var maxBuffersInFlight: Int
+    public private(set) var encodesPerFrame: Int
+    public private(set) var totalSlotCount: Int
     private var latestUpdatedIndex: Int = 0
 
-    /// - Parameter slotsInFlight: Total ring-buffer slots. Default is `maxBuffersInFlight` (3).
-    ///   Pass `maxBuffersInFlight * iterationCount` when this buffer is updated multiple times per frame.
-    public init(device: MTLDevice, count: Int, slotsInFlight: Int = Satin.maxBuffersInFlight) {
+    public init(
+        device: MTLDevice,
+        count: Int,
+        maxBuffersInFlight: Int = Satin.maxBuffersInFlight,
+        encodesPerFrame: Int = 1
+    ) {
         self.count = count
-        self.slotsInFlight = slotsInFlight
-        let length = alignedSize * slotsInFlight
+        self.maxBuffersInFlight = max(1, maxBuffersInFlight)
+        self.encodesPerFrame = max(1, encodesPerFrame)
+        self.totalSlotCount = self.maxBuffersInFlight * self.encodesPerFrame
+        let length = alignedSize * totalSlotCount
         guard let buffer = device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else { fatalError("Couldn't not create Instance Matrix Uniform Buffer") }
         self.buffer = buffer
         self.buffer.label = "Instance Matrix Uniforms"
@@ -37,7 +44,7 @@ public final class InstanceMatrixUniformBuffer {
 //    }
     
     public func update(data: [InstanceMatrixUniforms]) {
-        index = (index + 1) % slotsInFlight
+        index = (index + 1) % totalSlotCount
         latestUpdatedIndex = index
         offset = alignedSize * index
 
@@ -60,7 +67,7 @@ public final class InstanceMatrixUniformBuffer {
         let sanitizedCount = max(1, count)
         let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
         let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
-        index = (latestUpdatedIndex - distanceFromCurrent + slotsInFlight) % slotsInFlight
+        index = (latestUpdatedIndex - distanceFromCurrent + totalSlotCount) % totalSlotCount
         offset = alignedSize * index
     }
 
