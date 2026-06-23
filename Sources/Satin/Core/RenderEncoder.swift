@@ -835,22 +835,17 @@ open class RenderEncoder {
         )
 
         if let repeatedIteration {
-            renderable.selectRepeatedEncodingSlot(
+            renderable.ensureVertexUniformBuffer(
+                context: drawContext,
+                encodesPerFrame: max(Satin.maxSubPassesPerFrame, repeatedCount)
+            )
+
+            renderable.selectRepeatedEncodingState(
                 iteration: repeatedIteration,
                 count: repeatedCount
             )
-
-            let existingVertexUniforms = renderable.vertexUniforms[drawContext.id]
-            if existingVertexUniforms == nil ||
-                (existingVertexUniforms?.encodesPerFrame ?? Satin.maxSubPassesPerFrame) < repeatedCount
-            {
-                renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(
-                    context: drawContext,
-                    encodesPerFrame: max(Satin.maxSubPassesPerFrame, repeatedCount)
-                )
-            }
         } else if renderable.vertexUniforms[drawContext.id] == nil {
-            renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(context: drawContext)
+            renderable.ensureVertexUniformBuffer(context: drawContext)
         }
 
         guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { return }
@@ -2294,7 +2289,7 @@ open class RenderEncoder {
         for renderable in renderables {
             let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
             if renderable.vertexUniforms[drawContext.id] == nil {
-                renderable.vertexUniforms[drawContext.id] = VertexUniformBuffer(context: drawContext)
+                renderable.ensureVertexUniformBuffer(context: drawContext)
             }
             guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
             _encode(

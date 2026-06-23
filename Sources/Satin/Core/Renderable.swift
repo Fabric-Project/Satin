@@ -79,6 +79,8 @@ open class Renderable : Object {
     open var vertexUniforms: [UUID: VertexUniformBuffer] = [:]
     var materialPass: MaterialPass = .all
 
+    private var repeatedVertexUniformSourceStates: [VertexUniformBuffer.SourceState] = []
+
     open var material: Material? = nil
     open var materials: [Material] = []
 
@@ -101,10 +103,92 @@ open class Renderable : Object {
     /// each encoding sees independent data. Call once before the iteration loop begins,
     /// whenever `count` or the set of child renderables changes.
     open func prepareForRepeatedEncoding(count: Int) {
-        // Default: no-op. Mesh and InstancedMesh provide implementations.
+        prepareRepeatedVertexUniformSourceStates(count: count)
+        for vertexUniformBuffer in vertexUniforms.values {
+            vertexUniformBuffer.prepareForRepeatedEncoding(count: count)
+        }
+    }
+
+    open func captureRepeatedEncodingState(iteration: Int, count: Int) {
+        captureRepeatedVertexUniformSourceState(iteration: iteration, count: count)
+        for vertexUniformBuffer in vertexUniforms.values {
+            vertexUniformBuffer.captureRepeatedEncodingSourceState(
+                object: self,
+                iteration: iteration,
+                count: count
+            )
+        }
+    }
+
+    open func selectRepeatedEncodingState(iteration: Int, count: Int) {
+        for vertexUniformBuffer in vertexUniforms.values {
+            vertexUniformBuffer.selectRepeatedEncodingState(
+                iteration: iteration,
+                count: count
+            )
+        }
+    }
+
+    open func captureRepeatedEncodingSlot(iteration: Int, count: Int) {
+        captureRepeatedEncodingState(iteration: iteration, count: count)
     }
 
     open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        // Default: no-op. Mesh and InstancedMesh provide implementations.
+        selectRepeatedEncodingState(iteration: iteration, count: count)
+    }
+
+    @discardableResult
+    func ensureVertexUniformBuffer(
+        context: Context,
+        encodesPerFrame: Int = Satin.maxSubPassesPerFrame
+    ) -> VertexUniformBuffer {
+        let encodesPerFrame = max(1, encodesPerFrame)
+        if let existingVertexUniformBuffer = vertexUniforms[context.id],
+           existingVertexUniformBuffer.encodesPerFrame >= encodesPerFrame
+        {
+            return existingVertexUniformBuffer
+        }
+
+        let vertexUniformBuffer = VertexUniformBuffer(
+            context: context,
+            encodesPerFrame: encodesPerFrame
+        )
+
+        if !repeatedVertexUniformSourceStates.isEmpty {
+            vertexUniformBuffer.loadRepeatedEncodingSourceStates(repeatedVertexUniformSourceStates)
+        }
+
+        vertexUniforms[context.id] = vertexUniformBuffer
+        return vertexUniformBuffer
+    }
+
+    private func prepareRepeatedVertexUniformSourceStates(count: Int) {
+        let count = max(1, count)
+        if count > 1 {
+            repeatedVertexUniformSourceStates.reserveCapacity(count)
+        }
+        else {
+            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
+        }
+    }
+
+    private func captureRepeatedVertexUniformSourceState(iteration: Int, count: Int) {
+        let count = max(1, count)
+        guard count > 1 else {
+            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
+            return
+        }
+
+        let state = VertexUniformBuffer.SourceState(
+            modelMatrix: worldMatrix,
+            normalMatrix: normalMatrix
+        )
+
+        if repeatedVertexUniformSourceStates.count != count {
+            repeatedVertexUniformSourceStates = Array(repeating: state, count: count)
+        }
+        
+        let slot = min(max(iteration, 0), count - 1)
+        repeatedVertexUniformSourceStates[slot] = state
     }
 }

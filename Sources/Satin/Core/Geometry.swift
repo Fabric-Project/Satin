@@ -32,7 +32,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         didSet {
             if mutability != oldValue {
                 versionedVertexBuffers.removeAll()
+                versionedIndexBuffer = nil
                 vertexBufferOffsets.removeAll()
+                drawStates.removeAll()
+                selectedDrawState = nil
                 _updateVertexBuffers = true
             }
         }
@@ -44,11 +47,32 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         let slotCount: Int
     }
 
-    private var minimumSlotCount: Int = 1
+    private struct VersionedIndexBuffer {
+        let buffer: MTLBuffer
+        let alignedStride: Int
+        let slotCount: Int
+    }
+
+    private struct DrawState {
+        let vertexBuffers: [VertexBufferIndex: MTLBuffer]
+        let vertexBufferOffsets: [VertexBufferIndex: Int]
+        let indexBuffer: MTLBuffer?
+        let indexBufferOffset: Int
+        let indexType: MTLIndexType?
+        let indexCount: Int
+        let vertexCount: Int
+        let primitiveType: MTLPrimitiveType
+    }
+
+    private var minimumEncodesPerFrame: Int = 1
     private var versionedSlotIndex: Int = -1
     private var latestVersionedSlotIndex: Int = -1
     private var versionedVertexBuffers: [VertexBufferIndex: VersionedVertexBuffer] = [:]
     private var vertexBufferOffsets: [VertexBufferIndex: Int] = [:]
+    private var versionedIndexBuffer: VersionedIndexBuffer?
+    private var indexBufferOffset = 0
+    private var drawStates: [Int: DrawState] = [:]
+    private var selectedDrawState: DrawState?
 
     public var windingOrder: MTLWinding = .counterClockwise
     public var primitiveType: MTLPrimitiveType = .triangle {
@@ -89,7 +113,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     public internal(set) var elementBuffer: ElementBuffer? {
         didSet {
-            if oldValue != elementBuffer, elementBuffer != nil {
+            if oldValue != elementBuffer {
                 _updateIndexBuffer = true
             }
         }
@@ -163,52 +187,63 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         }
     }
 
-    open func setMinimumSlotCount(_ count: Int) {
-        let sanitizedCount = max(1, count)
-        guard sanitizedCount != minimumSlotCount else { return }
-        minimumSlotCount = sanitizedCount
+    open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
+        let sanitizedCount = max(1, encodesPerFrame)
+        guard sanitizedCount != minimumEncodesPerFrame else { return }
+        minimumEncodesPerFrame = sanitizedCount
         versionedVertexBuffers.removeAll()
-        vertexBufferOffsets.removeAll()
+        versionedIndexBuffer = nil
+        drawStates.removeAll()
         versionedSlotIndex = -1
         latestVersionedSlotIndex = -1
-        _updateVertexBuffers = true
+        selectedDrawState = nil
     }
 
     public func selectRecentSlot(iteration: Int, count: Int) {
-        guard usesVersionedVertexBuffers, latestVersionedSlotIndex >= 0 else { return }
+        guard usesVersionedDrawStates, latestVersionedSlotIndex >= 0 else { return }
         let sanitizedCount = max(1, count)
         let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
         let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
         versionedSlotIndex = (latestVersionedSlotIndex - distanceFromCurrent + requiredVersionedSlotCount) % requiredVersionedSlotCount
+        guard let drawState = drawStates[versionedSlotIndex] else { return }
 
-        for (bufferIndex, versionedBuffer) in versionedVertexBuffers {
-            vertexBuffers[bufferIndex] = versionedBuffer.buffer
-            vertexBufferOffsets[bufferIndex] = versionedBuffer.alignedStride * versionedSlotIndex
-        }
+        selectedDrawState = drawState
+        vertexBuffers = drawState.vertexBuffers
+        vertexBufferOffsets = drawState.vertexBufferOffsets
+        indexBuffer = drawState.indexBuffer
+        indexBufferOffset = drawState.indexBufferOffset
     }
 
     // MARK: - Draw
 
     open func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
         let renderEncoder = renderEncoderState.renderEncoder
-        if let indexBuffer = indexBuffer, let indexType = indexType {
-            if indexCount > 0 {
+        let drawState = selectedDrawState
+        let drawPrimitiveType = drawState?.primitiveType ?? primitiveType
+        let drawIndexBuffer = drawState?.indexBuffer ?? indexBuffer
+        let drawIndexType = drawState?.indexType ?? indexType
+        let drawIndexCount = drawState?.indexCount ?? indexCount
+        let drawIndexBufferOffset = (drawState?.indexBufferOffset ?? self.indexBufferOffset) + indexBufferOffset
+        let drawVertexCount = drawState?.vertexCount ?? vertexCount
+
+        if let indexBuffer = drawIndexBuffer, let indexType = drawIndexType {
+            if drawIndexCount > 0 {
                 renderEncoder.drawIndexedPrimitives(
-                    type: primitiveType,
-                    indexCount: indexCount,
+                    type: drawPrimitiveType,
+                    indexCount: drawIndexCount,
                     indexType: indexType,
                     indexBuffer: indexBuffer,
-                    indexBufferOffset: indexBufferOffset,
+                    indexBufferOffset: drawIndexBufferOffset,
                     instanceCount: instanceCount
                 )
             }
         }
         else {
-            if vertexCount > 0 {
+            if drawVertexCount > 0 {
                 renderEncoder.drawPrimitives(
-                    type: primitiveType,
+                    type: drawPrimitiveType,
                     vertexStart: vertexStart,
-                    vertexCount: vertexCount,
+                    vertexCount: drawVertexCount,
                     instanceCount: instanceCount
                 )
             }
@@ -283,6 +318,14 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Update Buffers
 
     private func updateBuffers() {
+        if !usesVersionedDrawStates {
+            selectedDrawState = nil
+        }
+
+        if usesVersionedDrawStates {
+            advanceVersionedSlot()
+        }
+
         if _updateVertexBuffers {
             setupVertexBuffers()
             _updateVertexBuffers = false
@@ -291,15 +334,16 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             setupIndexBuffer()
             _updateIndexBuffer = false
         }
+
+        if usesVersionedDrawStates {
+            captureVersionedDrawState()
+        }
     }
 
     // MARK: - Setup Vertex Buffers
 
     private func setupVertexBuffers() {
         let device = context.device
-        if usesVersionedVertexBuffers {
-            advanceVersionedSlot()
-        }
         for (attributeIndex, attribute) in bufferAttributes {
             setupBufferAttribute(device, attribute: attribute, for: attributeIndex)
         }
@@ -311,8 +355,19 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Setup Index Buffer
 
     private func setupIndexBuffer() {
-        guard let elementBuffer else { return }
-        indexBuffer = elementBuffer.getBuffer(device: context.device)
+        guard let elementBuffer else {
+            indexBuffer = nil
+            indexBufferOffset = 0
+            return
+        }
+
+        if usesVersionedDrawStates {
+            uploadVersionedIndexBuffer(elementBuffer)
+        }
+        else {
+            indexBuffer = elementBuffer.getBuffer(device: context.device)
+            indexBufferOffset = 0
+        }
     }
 
     // MARK: - Setup Vertex Attributes
@@ -322,7 +377,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
         guard attribute.needsUpdate || vertexBuffers[bufferIndex] == nil else { return }
 
-        if usesVersionedVertexBuffers {
+        if usesVersionedDrawStates {
             let data = attribute.getData()
             data.withUnsafeBytes { dataPointer in
                 uploadVersionedVertexBuffer(
@@ -352,7 +407,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
         guard interleavedBuffer.needsUpdate || vertexBuffers[bufferIndex] == nil else { return }
 
-        if usesVersionedVertexBuffers {
+        if usesVersionedDrawStates {
             uploadVersionedVertexBuffer(
                 interleavedBuffer.data,
                 length: interleavedBuffer.length,
@@ -494,19 +549,34 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         bvh?.intersect(ray: ray, intersections: &intersections)
     }
 
-    // MARK: - Versioned Vertex Buffers
+    // MARK: - Versioned Draw State
 
-    private var usesVersionedVertexBuffers: Bool {
-        mutability == .dynamicData && minimumSlotCount > 1
+    private var usesVersionedDrawStates: Bool {
+        minimumEncodesPerFrame > 1
     }
 
     private var requiredVersionedSlotCount: Int {
-        max(1, minimumSlotCount * context.maxBuffersInFlight)
+        max(1, minimumEncodesPerFrame * context.maxBuffersInFlight)
     }
 
     private func advanceVersionedSlot() {
         versionedSlotIndex = (versionedSlotIndex + 1) % requiredVersionedSlotCount
         latestVersionedSlotIndex = versionedSlotIndex
+    }
+
+    private func captureVersionedDrawState() {
+        guard versionedSlotIndex >= 0 else { return }
+        drawStates[versionedSlotIndex] = DrawState(
+            vertexBuffers: vertexBuffers,
+            vertexBufferOffsets: vertexBufferOffsets,
+            indexBuffer: indexBuffer,
+            indexBufferOffset: indexBufferOffset,
+            indexType: indexType,
+            indexCount: indexCount,
+            vertexCount: vertexCount,
+            primitiveType: primitiveType
+        )
+        selectedDrawState = drawStates[versionedSlotIndex]
     }
 
     private func uploadVersionedVertexBuffer(_ source: UnsafeRawPointer?,
@@ -557,6 +627,52 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         vertexBufferOffsets[bufferIndex] = offset
     }
 
+    private func uploadVersionedIndexBuffer(_ elementBuffer: ElementBuffer) {
+        guard elementBuffer.count > 0, elementBuffer.length > 0, let source = elementBuffer.data else {
+            indexBuffer = nil
+            indexBufferOffset = 0
+            versionedIndexBuffer = nil
+            elementBuffer.markClean()
+            return
+        }
+
+        if versionedSlotIndex < 0 {
+            advanceVersionedSlot()
+        }
+
+        let alignedStride = align256(size: elementBuffer.length)
+        let slotCount = requiredVersionedSlotCount
+        let existing = versionedIndexBuffer
+
+        let versionedBuffer: VersionedIndexBuffer
+        if let existing,
+           existing.alignedStride >= alignedStride,
+           existing.slotCount >= slotCount
+        {
+            versionedBuffer = existing
+        }
+        else {
+            guard let buffer = context.device.makeBuffer(
+                length: alignedStride * slotCount,
+                options: [.cpuCacheModeWriteCombined]
+            ) else { return }
+            buffer.label = "Indices Versioned"
+            versionedBuffer = VersionedIndexBuffer(
+                buffer: buffer,
+                alignedStride: alignedStride,
+                slotCount: slotCount
+            )
+            versionedIndexBuffer = versionedBuffer
+        }
+
+        let offset = versionedBuffer.alignedStride * versionedSlotIndex
+        memcpy(versionedBuffer.buffer.contents().advanced(by: offset), source, elementBuffer.length)
+
+        indexBuffer = versionedBuffer.buffer
+        indexBufferOffset = offset
+        elementBuffer.markClean()
+    }
+
     // MARK: - Deinit
 
     deinit {
@@ -566,6 +682,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         vertexBuffers.removeAll()
         vertexBufferOffsets.removeAll()
         versionedVertexBuffers.removeAll()
+        versionedIndexBuffer = nil
+        drawStates.removeAll()
+        selectedDrawState = nil
 
         elementBuffer?.delegate = nil
         elementBuffer = nil

@@ -82,7 +82,7 @@ open class Mesh: Renderable {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
-                geometry.setMinimumSlotCount(minimumEncodesPerFrame)
+                geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
                 _updateLocalBounds = true
             }
         }
@@ -144,7 +144,7 @@ open class Mesh: Renderable {
 
     open func setupVertexUniforms() {
         guard vertexUniforms[context.id] == nil else { return }
-        vertexUniforms[context.id] = VertexUniformBuffer(context: context)
+        ensureVertexUniformBuffer(context: context)
     }
 
     open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
@@ -181,8 +181,9 @@ open class Mesh: Renderable {
     // MARK: - Repeated Encoding
 
     override open func prepareForRepeatedEncoding(count: Int) {
+        super.prepareForRepeatedEncoding(count: count)
         minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
-        vertexUniforms[context.id] = VertexUniformBuffer(
+        ensureVertexUniformBuffer(
             context: context,
             encodesPerFrame: max(Satin.maxSubPassesPerFrame, minimumEncodesPerFrame)
         )
@@ -193,11 +194,16 @@ open class Mesh: Renderable {
             submesh.material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
         }
 
-        // Static geometry ignores this. Dynamic geometry uploads directly into versioned slots.
-        geometry.setMinimumSlotCount(minimumEncodesPerFrame)
+        // Geometry records one draw state per encode and uploads changed buffers into versioned slots.
+        geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
     }
 
     override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
+        selectRepeatedEncodingState(iteration: iteration, count: count)
+    }
+
+    override open func selectRepeatedEncodingState(iteration: Int, count: Int) {
+        super.selectRepeatedEncodingState(iteration: iteration, count: count)
         geometry.selectRecentSlot(iteration: iteration, count: count)
         material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
 

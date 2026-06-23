@@ -144,7 +144,11 @@ public class InstancedMesh: Mesh {
     }
 
     override public func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        super.selectRepeatedEncodingSlot(iteration: iteration, count: count)
+        selectRepeatedEncodingState(iteration: iteration, count: count)
+    }
+
+    override public func selectRepeatedEncodingState(iteration: Int, count: Int) {
+        super.selectRepeatedEncodingState(iteration: iteration, count: count)
         instanceMatrixBuffer?.selectRecentSlot(iteration: iteration, count: count)
     }
 

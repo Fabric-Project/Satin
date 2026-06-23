@@ -83,7 +83,7 @@ public class ARLidarMesh: Renderable {
 
     func setupUniforms() {
         guard vertexUniforms[context.id] == nil else { return }
-        vertexUniforms[context.id] = VertexUniformBuffer(context: context)
+        ensureVertexUniformBuffer(context: context)
     }
 
     required init(from decoder: Decoder) throws {

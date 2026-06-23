@@ -46,6 +46,10 @@ public class ElementBuffer: Equatable {
         delegate?.updated(buffer: self)
     }
 
+    func markClean() {
+        needsUpdate = false
+    }
+
     func getBuffer(device: MTLDevice) -> MTLBuffer? {
         guard count > 0, let data else { return nil }
 
