@@ -22,8 +22,8 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
         }
     }
 
-    var geometryExtrudeCache: [Character: GeometryData] = [:]
-    var geometryReverseCache: [Character: GeometryData] = [:]
+    var geometryExtrudeCache: [TesselatedTextGlyphCacheKey: GeometryData] = [:]
+    var geometryReverseCache: [TesselatedTextGlyphCacheKey: GeometryData] = [:]
 
     public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, distance: Float = 1.0, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0) {
         self.distance = distance
@@ -33,9 +33,30 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
     override func addGlyphGeometryData(_ gData: inout GeometryData, _ charOffset: Int, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
         guard let framePivot = framePivot, let verticalOffset = verticalOffset else { return }
 
+        addGlyphGeometryData(
+            &gData,
+            charOffset,
+            glyph,
+            glyphPosition,
+            origin,
+            framePivot: framePivot,
+            verticalOffset: verticalOffset
+        )
+    }
+
+    override func addGlyphGeometryData(
+        _ gData: inout GeometryData,
+        _ charOffset: Int,
+        _ glyph: CGGlyph,
+        _ glyphPosition: CGPoint,
+        _ origin: CGPoint,
+        framePivot: CGPoint,
+        verticalOffset: CGFloat
+    ) {
         let charIndex = text.index(text.startIndex, offsetBy: Int(charOffset))
         let char = text[charIndex]
         characterPaths[char] = []
+        let cacheKey = glyphCacheKey(for: glyph)
 
         // front face character data
         var cData = GeometryData(vertexCount: 0, vertexData: nil, indexCount: 0, indexData: nil)
@@ -44,10 +65,10 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
         // side faces character data
         var sData = GeometryData(vertexCount: 0, vertexData: nil, indexCount: 0, indexData: nil)
 
-        if let cacheData = geometryCache[char],
-           let cacheReverseData = geometryReverseCache[char],
-           let cacheExtrudeData = geometryExtrudeCache[char],
-           let charPaths = characterPathsCache[char]
+        if let cacheData = geometryCache[cacheKey],
+           let cacheReverseData = geometryReverseCache[cacheKey],
+           let cacheExtrudeData = geometryExtrudeCache[cacheKey],
+           let charPaths = characterPathsCache[cacheKey]
         {
             cData = cacheData
             bData = cacheReverseData
@@ -83,7 +104,7 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
 
             copyGeometryData(&bData, &cData)
             reverseFacesOfGeometryData(&bData)
-            geometryReverseCache[char] = bData
+            geometryReverseCache[cacheKey] = bData
 
             if extrudePaths(&_paths, &_lengths, Int32(glyphPaths.count), &sData) == 0 {
                 computeNormalsOfGeometryData(&sData)
@@ -92,10 +113,10 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
                 print("PATH EXTRUSION FOR \(char) FAILED!")
             }
 
-            geometryCache[char] = cData
-            geometryExtrudeCache[char] = sData
+            geometryCache[cacheKey] = cData
+            geometryExtrudeCache[cacheKey] = sData
             characterPaths[char] = glyphPaths
-            characterPathsCache[char] = glyphPaths
+            characterPathsCache[cacheKey] = glyphPaths
         }
 
         let glyphOffset = simd_make_float2(Float(glyphPosition.x + origin.x - framePivot.x), Float(glyphPosition.y + origin.y - framePivot.y - verticalOffset))

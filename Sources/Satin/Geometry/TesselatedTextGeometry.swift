@@ -16,6 +16,42 @@ import SatinCore
 
 extension CTTextAlignment: @retroactive Codable {}
 
+struct TesselatedTextGlyphCacheKey: Hashable {
+    let glyph: CGGlyph
+    let fontName: String
+    let fontSize: Float
+    let angleLimit: Float
+    let distanceLimit: Float
+}
+
+private struct TesselatedTextLayoutCacheKey: Hashable {
+    let text: String
+    let fontName: String
+    let fontSize: Float
+    let kern: Float
+    let lineSpacing: Float
+    let textAlignment: UInt8
+    let verticalAlignment: Int
+    let textBoundsWidth: CGFloat
+    let textBoundsHeight: CGFloat
+    let pivotX: Float
+    let pivotY: Float
+}
+
+private struct TesselatedTextGlyphLayout {
+    let charOffset: Int
+    let glyph: CGGlyph
+    let glyphPosition: CGPoint
+    let origin: CGPoint
+}
+
+private struct TesselatedTextLayoutData {
+    let glyphs: [TesselatedTextGlyphLayout]
+    let suggestFrameSize: CGSize?
+    let framePivot: CGPoint
+    let verticalOffset: CGFloat
+}
+
 public class TesselatedTextGeometry: SatinGeometry {
     public enum VerticalAlignment: Int, Codable {
         case top = 0
@@ -73,7 +109,7 @@ public class TesselatedTextGeometry: SatinGeometry {
 
     public var lineSpacing: Float = 0.0 {
         didSet {
-            if oldValue != kern {
+            if oldValue != lineSpacing {
                 _updateData = true
             }
         }
@@ -277,8 +313,11 @@ public class TesselatedTextGeometry: SatinGeometry {
         }
     }
 
-    var geometryCache: [Character: GeometryData] = [:]
-    var characterPathsCache: [Character: [Polyline2D]] = [:]
+    var geometryCache: [TesselatedTextGlyphCacheKey: GeometryData] = [:]
+    var characterPathsCache: [TesselatedTextGlyphCacheKey: [Polyline2D]] = [:]
+    private var layoutCache: [TesselatedTextLayoutCacheKey: TesselatedTextLayoutData] = [:]
+    private var layoutCacheOrder: [TesselatedTextLayoutCacheKey] = []
+    private let layoutCacheLimit = 64
 
     public var characterPaths: [Character: [Polyline2D]] = [:]
     public var characterOffsets: [String.Index: simd_float2] = [:]
@@ -307,25 +346,21 @@ public class TesselatedTextGeometry: SatinGeometry {
             needsClear = false
         }
 
-        var charOffset = 0
-        for (lineIndex, line) in lines.enumerated() {
-            let origin = origins[lineIndex]
-            let runs: [CTRun] = CTLineGetGlyphRuns(line) as! [CTRun]
-            for run in runs {
-                let glyphCount = CTRunGetGlyphCount(run)
-                let glyphPositions = UnsafeMutablePointer<CGPoint>.allocate(capacity: glyphCount)
-                CTRunGetPositions(run, CFRangeMake(0, 0), glyphPositions)
-                let glyphs = UnsafeMutablePointer<CGGlyph>.allocate(capacity: glyphCount)
-                CTRunGetGlyphs(run, CFRangeMake(0, 0), glyphs)
-                for glyphIndex in 0 ..< glyphCount {
-                    let glyph = glyphs[glyphIndex]
-                    let glyphPosition = glyphPositions[glyphIndex]
-                    addGlyphGeometryData(&gData, charOffset, glyph, glyphPosition, origin)
-                    charOffset += 1
-                }
-                glyphPositions.deallocate()
-                glyphs.deallocate()
-            }
+        characterPaths.removeAll(keepingCapacity: true)
+        characterOffsets.removeAll(keepingCapacity: true)
+        characterOffsets.reserveCapacity(text.count)
+
+        let layoutData = textLayoutData()
+        for glyphLayout in layoutData.glyphs {
+            addGlyphGeometryData(
+                &gData,
+                glyphLayout.charOffset,
+                glyphLayout.glyph,
+                glyphLayout.glyphPosition,
+                glyphLayout.origin,
+                framePivot: layoutData.framePivot,
+                verticalOffset: layoutData.verticalOffset
+            )
         }
 
         return gData
@@ -334,13 +369,34 @@ public class TesselatedTextGeometry: SatinGeometry {
     func addGlyphGeometryData(_ gData: inout GeometryData, _ charOffset: Int, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
         guard let framePivot = framePivot, let verticalOffset = verticalOffset else { return }
 
+        addGlyphGeometryData(
+            &gData,
+            charOffset,
+            glyph,
+            glyphPosition,
+            origin,
+            framePivot: framePivot,
+            verticalOffset: verticalOffset
+        )
+    }
+
+    func addGlyphGeometryData(
+        _ gData: inout GeometryData,
+        _ charOffset: Int,
+        _ glyph: CGGlyph,
+        _ glyphPosition: CGPoint,
+        _ origin: CGPoint,
+        framePivot: CGPoint,
+        verticalOffset: CGFloat
+    ) {
         let charIndex = text.index(text.startIndex, offsetBy: Int(charOffset))
         let char = text[charIndex]
         characterPaths[char] = []
 
         var cData = createGeometryData()
+        let cacheKey = glyphCacheKey(for: glyph)
 
-        if let cacheData = geometryCache[char], let charPaths = characterPathsCache[char] {
+        if let cacheData = geometryCache[cacheKey], let charPaths = characterPathsCache[cacheKey] {
             cData = cacheData
             characterPaths[char] = charPaths
         } else if let glyphPath = CTFontCreatePathForGlyph(ctFont, glyph, nil) {
@@ -426,14 +482,124 @@ public class TesselatedTextGeometry: SatinGeometry {
                 }
             }
 
-            geometryCache[char] = cData
+            geometryCache[cacheKey] = cData
             characterPaths[char] = glyphPaths
-            characterPathsCache[char] = glyphPaths
+            characterPathsCache[cacheKey] = glyphPaths
         }
 
         let glyphOffset = simd_make_float2(Float(glyphPosition.x + origin.x - framePivot.x), Float(glyphPosition.y + origin.y - framePivot.y - verticalOffset))
         characterOffsets[charIndex] = glyphOffset
         combineAndOffsetGeometryData(&gData, &cData, simd_make_float3(glyphOffset, 0.0))
+    }
+
+    func glyphCacheKey(for glyph: CGGlyph) -> TesselatedTextGlyphCacheKey {
+        TesselatedTextGlyphCacheKey(
+            glyph: glyph,
+            fontName: fontName,
+            fontSize: fontSize,
+            angleLimit: angleLimit,
+            distanceLimit: fontSize / 10.0
+        )
+    }
+
+    private func textLayoutData() -> TesselatedTextLayoutData {
+        let cacheKey = textLayoutCacheKey()
+        if let cached = layoutCache[cacheKey] {
+            applyCachedLayoutMetadata(cached)
+            return cached
+        }
+
+        guard let framePivot, let verticalOffset else {
+            return TesselatedTextLayoutData(
+                glyphs: [],
+                suggestFrameSize: suggestFrameSize,
+                framePivot: .zero,
+                verticalOffset: 0
+            )
+        }
+
+        var glyphLayouts: [TesselatedTextGlyphLayout] = []
+        glyphLayouts.reserveCapacity(text.count)
+
+        var charOffset = 0
+        for (lineIndex, line) in lines.enumerated() {
+            let origin = origins[lineIndex]
+            let runs: [CTRun] = CTLineGetGlyphRuns(line) as! [CTRun]
+            for run in runs {
+                let glyphCount = CTRunGetGlyphCount(run)
+                var glyphPositions = [CGPoint](repeating: .zero, count: glyphCount)
+                var glyphs = [CGGlyph](repeating: 0, count: glyphCount)
+
+                glyphPositions.withUnsafeMutableBufferPointer { positionBuffer in
+                    glyphs.withUnsafeMutableBufferPointer { glyphBuffer in
+                        guard let positionBaseAddress = positionBuffer.baseAddress,
+                              let glyphBaseAddress = glyphBuffer.baseAddress
+                        else { return }
+
+                        CTRunGetPositions(run, CFRangeMake(0, 0), positionBaseAddress)
+                        CTRunGetGlyphs(run, CFRangeMake(0, 0), glyphBaseAddress)
+
+                        for glyphIndex in 0 ..< glyphCount {
+                            glyphLayouts.append(
+                                TesselatedTextGlyphLayout(
+                                    charOffset: charOffset,
+                                    glyph: glyphBaseAddress[glyphIndex],
+                                    glyphPosition: positionBaseAddress[glyphIndex],
+                                    origin: origin
+                                )
+                            )
+                            charOffset += 1
+                        }
+                    }
+                }
+            }
+        }
+
+        let layoutData = TesselatedTextLayoutData(
+            glyphs: glyphLayouts,
+            suggestFrameSize: suggestFrameSize,
+            framePivot: framePivot,
+            verticalOffset: verticalOffset
+        )
+        storeLayoutData(layoutData, for: cacheKey)
+        return layoutData
+    }
+
+    private func textLayoutCacheKey() -> TesselatedTextLayoutCacheKey {
+        TesselatedTextLayoutCacheKey(
+            text: text,
+            fontName: fontName,
+            fontSize: fontSize,
+            kern: kern,
+            lineSpacing: lineSpacing,
+            textAlignment: textAlignment.rawValue,
+            verticalAlignment: verticalAlignment.rawValue,
+            textBoundsWidth: textBounds.width,
+            textBoundsHeight: textBounds.height,
+            pivotX: pivot.x,
+            pivotY: pivot.y
+        )
+    }
+
+    private func applyCachedLayoutMetadata(_ layoutData: TesselatedTextLayoutData) {
+        _suggestFrameSize = layoutData.suggestFrameSize
+        _framePivot = layoutData.framePivot
+        _verticalOffset = layoutData.verticalOffset
+        needsSuggestFrameSizeSetup = false
+        needsFramePivotSetup = false
+        needsVerticalOffsetSetup = false
+    }
+
+    private func storeLayoutData(_ layoutData: TesselatedTextLayoutData, for cacheKey: TesselatedTextLayoutCacheKey) {
+        if layoutCache[cacheKey] == nil {
+            layoutCacheOrder.append(cacheKey)
+        }
+        layoutCache[cacheKey] = layoutData
+
+        while layoutCacheOrder.count > layoutCacheLimit {
+            let removedKey = layoutCacheOrder.removeFirst()
+            layoutCache.removeValue(forKey: removedKey)
+        }
     }
 
     func getPolylines(_ glyphPath: CGPath, _ angleLimit: Float, _ distanceLimit: Float) -> [Polyline2D] {
@@ -539,22 +705,22 @@ public class TesselatedTextGeometry: SatinGeometry {
         CFAttributedStringSetAttributes(attributedText, CFRangeMake(0, text.count), attributes as CFDictionary, false)
 
         // Paragraph Attributes
-        let alignment = UnsafeMutablePointer<CTTextAlignment>.allocate(capacity: 1)
-        alignment.pointee = textAlignment
+        var alignment = textAlignment
+        var lineSpace = lineSpacing
 
-        let lineSpace = UnsafeMutablePointer<Float>.allocate(capacity: 1)
-        lineSpace.pointee = lineSpacing
+        withUnsafePointer(to: &alignment) { alignmentPointer in
+            withUnsafePointer(to: &lineSpace) { lineSpacePointer in
+                let settings = [
+                    CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: alignmentPointer),
+                    CTParagraphStyleSetting(spec: .lineSpacingAdjustment, valueSize: MemoryLayout<Float>.size, value: lineSpacePointer),
+                ]
 
-        let settings = [
-            CTParagraphStyleSetting(spec: .alignment, valueSize: MemoryLayout<CTTextAlignment>.size, value: alignment),
-            CTParagraphStyleSetting(spec: .lineSpacingAdjustment, valueSize: MemoryLayout<Float>.size, value: lineSpace),
-        ]
-
-        let style = CTParagraphStyleCreate(settings, settings.count)
-        CFAttributedStringSetAttribute(attributedText, CFRangeMake(0, text.count), kCTParagraphStyleAttributeName, style)
-
-        alignment.deallocate()
-        lineSpace.deallocate()
+                let style = settings.withUnsafeBufferPointer {
+                    CTParagraphStyleCreate($0.baseAddress, settings.count)
+                }
+                CFAttributedStringSetAttribute(attributedText, CFRangeMake(0, text.count), kCTParagraphStyleAttributeName, style)
+            }
+        }
 
         return attributedText
     }
@@ -615,9 +781,15 @@ public class TesselatedTextGeometry: SatinGeometry {
         characterPathsCache = [:]
     }
 
+    func clearLayoutCache() {
+        layoutCache = [:]
+        layoutCacheOrder = []
+    }
+
     func clearCache() {
         clearGeometryCache()
         clearCharacterPaths()
+        clearLayoutCache()
     }
 
     deinit {
