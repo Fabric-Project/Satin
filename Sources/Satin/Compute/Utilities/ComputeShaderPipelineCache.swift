@@ -131,7 +131,7 @@ public final class ComputeShaderPipelineCache: Sendable {
 
             return parameters
         }
-        else if let reflection = updatePipelineReflectionCache[configuration] {
+        else if let reflection = getUpdatePipelineReflection(configuration: configuration) {
             for binding in reflection.bindings {
                 if binding.index == ComputeBufferIndex.Uniforms.rawValue,
                    let bufferBinding = binding as? MTLBufferBinding,
@@ -176,7 +176,7 @@ public final class ComputeShaderPipelineCache: Sendable {
 
             return [buffer]
         }
-        else if let reflection = updatePipelineReflectionCache[configuration] {
+        else if let reflection = getUpdatePipelineReflection(configuration: configuration) {
             var parameters = [ParameterGroup]()
 
             for binding in reflection.bindings {

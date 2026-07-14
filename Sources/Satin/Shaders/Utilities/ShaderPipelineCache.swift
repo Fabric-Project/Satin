@@ -125,7 +125,7 @@ public final class ShaderPipelineCache: Sendable {
     public static func getShadowPipeline(configuration: ShaderConfiguration) throws -> MTLRenderPipelineState? {
         var cachedShadowPipeline: MTLRenderPipelineState?
 
-        pipelineCacheQueue.sync {
+        shadowPipelineCacheQueue.sync {
             cachedShadowPipeline = shadowPipelineCache[configuration]
         }
 
@@ -176,7 +176,13 @@ public final class ShaderPipelineCache: Sendable {
     }
 
     public static func getPipelineParameters(configuration: ShaderConfiguration) throws -> ParameterGroup? {
-        if let parameters = pipelineParametersCache[configuration] { return parameters }
+        var cachedParameters: ParameterGroup?
+
+        pipelineParametersCacheQueue.sync {
+            cachedParameters = pipelineParametersCache[configuration]
+        }
+
+        if let cachedParameters { return cachedParameters }
 
         if let pipelineURL = configuration.pipelineURL,
            let shaderSource = try ShaderSourceCache.getSource(url: pipelineURL),
@@ -190,7 +196,7 @@ public final class ShaderPipelineCache: Sendable {
 
             return parameters
         }
-        else if let reflection = pipelineReflectionCache[configuration] {
+        else if let reflection = getPipelineReflection(configuration: configuration) {
             for binding in reflection.fragmentBindings {
                 if binding.index == FragmentBufferIndex.MaterialUniforms.rawValue,
                    let bufferBinding = binding as? MTLBufferBinding,
