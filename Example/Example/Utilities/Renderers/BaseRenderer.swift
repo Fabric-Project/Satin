@@ -50,7 +50,7 @@ class BaseRenderer: ViewRenderer {
         (CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []).sorted()
     }
 
-    override func setup() {
+    override func setup() throws {
         setupInspector()
     }
 
@@ -98,8 +98,8 @@ class BaseRenderer: ViewRenderer {
     }
 #endif
 
-    override func cleanup() {
-        super.cleanup()
+    override func cleanup() throws {
+        try super.cleanup()
 #if os(macOS)
         inspectorWindow?.close()
 #endif

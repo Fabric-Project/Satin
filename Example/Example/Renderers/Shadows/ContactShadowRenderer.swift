@@ -136,7 +136,7 @@ final class ContactShadowRenderer: BaseRenderer {
         padding: 0.25
     )
 
-    override func setup() {
+    override func setup() throws {
         spheres.position.y = 1.5
         cameraController.target.position.y += 1
         renderer.setClearColor(.one)
@@ -146,15 +146,15 @@ final class ContactShadowRenderer: BaseRenderer {
     lazy var startTime = getTime()
     var theta: Float = 0
 
-    override func update() {
+    override func update() throws {
         theta = 2.0 * Float(getTime() - startTime)
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         shadowRenderer.update(commandBuffer: commandBuffer)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -160,7 +160,7 @@ final class ScreenCaptureRenderer: BaseRenderer {
     var frameSubscription: AnyCancellable?
 
     var texture: MTLTexture?
-    override func setup() {
+    override func setup() throws {
 #if os(visionOS)
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
@@ -195,7 +195,7 @@ final class ScreenCaptureRenderer: BaseRenderer {
         }
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         if let texture {
@@ -207,8 +207,8 @@ final class ScreenCaptureRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -221,12 +221,12 @@ final class ScreenCaptureRenderer: BaseRenderer {
         renderer.resize(size)
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         Task {
             await captureManager.stop()
             print("Stopped Screen Capture")
         }
-        super.cleanup()
+        try super.cleanup()
     }
 }
 

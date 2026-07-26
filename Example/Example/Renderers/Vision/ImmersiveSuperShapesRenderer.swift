@@ -94,7 +94,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     override var layerLayout: LayerRenderer.Layout { .layered }
 #endif
 
-    override func setup() {
+    override func setup() throws {
         mesh.position = [0, 1, -2]
 
         mesh.scale = .init(repeating: 0.25)
@@ -105,7 +105,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         // }
     }
 
-    override func update() {
+    override func update() throws {
         mesh.orientation = simd_quatf(angle: Float(getTime() - startTime), axis: simd_normalize(simd_float3.one))
     }
 
@@ -117,7 +117,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping]
     ) {
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -128,7 +128,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     }
 
     override func drawView(view: Int, frame: LayerRenderer.Frame, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, camera: PerspectiveCamera, viewport: MTLViewport) {
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

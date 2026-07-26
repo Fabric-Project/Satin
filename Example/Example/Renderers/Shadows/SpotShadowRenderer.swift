@@ -59,7 +59,7 @@ final class SpotShadowRenderer: BaseRenderer {
         }
     }
 
-    override func setup() {
+    override func setup() throws {
         loadHdri()
         renderer.clearColor = .init(red: 0.11, green: 0.12, blue: 0.14, alpha: 1.0)
 
@@ -115,7 +115,7 @@ final class SpotShadowRenderer: BaseRenderer {
         }
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         let time = Float(getTime() - startTime)
@@ -151,8 +151,8 @@ final class SpotShadowRenderer: BaseRenderer {
         light1.lookAt(target: target1, up: Satin.worldUpDirection)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

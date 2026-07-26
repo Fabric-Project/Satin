@@ -47,7 +47,7 @@ final class SlugTextRenderer: BaseRenderer {
         ["Text": parameters]
     }
 
-    override func setup() {
+    override func setup() throws {
         scene.add(textMesh)
 
         cancellable = fontParam.valuePublisher.sink { [weak self] fontName in
@@ -59,23 +59,23 @@ final class SlugTextRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         textMesh.text = "Satin 2.0\nframe: \(frame)"
         frame += 1
         cameraController.update()
     }
     
-//    override func update() {
+//    override func update() throws {
 //        frame += 1
 //        textMesh.text = "SLUG \(Int(frame) % 360)"
 //        cameraController.update()
 //    }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

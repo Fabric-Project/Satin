@@ -37,14 +37,14 @@ final class TextRenderer: BaseRenderer {
         ["Text": parameters]
     }
 
-    override func setup() {
+    override func setup() throws {
         setupText()
 
 #if os(visionOS)
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
-        super.setup()
+        try super.setup()
     }
 
     func setupText() {
@@ -70,14 +70,14 @@ final class TextRenderer: BaseRenderer {
     }
 
     private var frame: Int = 0
-    override func update() {
+    override func update() throws {
         geo?.text = "Satin 2.0\nframe: \(frame)"
         frame += 1
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -59,7 +59,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
     }
 #endif
 
-    override func setup() {
+    override func setup() throws {
         mesh.position = [0, 1, -3]
 
 #if !targetEnvironment(simulator)
@@ -74,7 +74,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         let theta = Float(getTime() - startTime)
         mesh.orientation = simd_quatf(angle: theta * 0.75, axis: simd_normalize(simd_make_float3(sin(theta), cos(theta), 1.0)))
     }
@@ -87,7 +87,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping]
     ) {
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -98,7 +98,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
     }
 
     override func drawView(view: Int, frame: LayerRenderer.Frame, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, camera: PerspectiveCamera, viewport: MTLViewport) {
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

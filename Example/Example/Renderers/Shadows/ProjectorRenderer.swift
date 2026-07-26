@@ -60,7 +60,7 @@ final class ProjectorRenderer: BaseRenderer {
         }
     }
 
-    override func setup() {
+    override func setup() throws {
         loadHdri()
         loadProjectorTexture()
         renderer.clearColor = .init(red: 0.11, green: 0.12, blue: 0.14, alpha: 1.0)
@@ -85,7 +85,7 @@ final class ProjectorRenderer: BaseRenderer {
         projectorLight.lookAt(target: shadowScene.sceneTarget, up: Satin.worldUpDirection)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         let time = Float(getTime() - startTime)
@@ -107,8 +107,8 @@ final class ProjectorRenderer: BaseRenderer {
         projectorLight.lookAt(target: target, up: Satin.worldUpDirection)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

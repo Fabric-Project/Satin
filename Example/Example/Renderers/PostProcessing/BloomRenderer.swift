@@ -104,7 +104,7 @@ final class BloomRenderer: BaseRenderer {
 
     lazy var bloomGenerator = BloomGenerator(device: device, levels: 5)
 
-    override func update() {
+    override func update() throws {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {
             renderTexture = createTexture(
                 "Render Texture",
@@ -119,9 +119,9 @@ final class BloomRenderer: BaseRenderer {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let renderTexture else { return }
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

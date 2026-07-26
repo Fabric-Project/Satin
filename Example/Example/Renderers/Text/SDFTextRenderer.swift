@@ -36,7 +36,7 @@ final class SDFTextRenderer: BaseRenderer {
         return TextMesh(context: defaultContext, geometry: TextGeometry(context: defaultContext, text: "Hello World", font: fontAtlas), material: TextMaterial(context: defaultContext, color: .one, fontTexture: fontTexture))
     }()
 
-    override func setup() {
+    override func setup() throws {
         textMesh.material?.depthWriteEnabled = false
         textMesh.scale = .init(repeating: 1.0 / 128.0)
         textMesh.position.y = 4.75 / 128.0
@@ -49,14 +49,14 @@ final class SDFTextRenderer: BaseRenderer {
     }
 
     private var frame: Int = 0
-    override func update() {
+    override func update() throws {
         textMesh.text = "Satin 2.0\nframe: \(frame)"
         frame += 1
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

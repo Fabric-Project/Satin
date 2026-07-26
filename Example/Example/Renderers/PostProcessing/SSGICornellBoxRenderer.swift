@@ -154,7 +154,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         depthStoreAction: .dontCare
     )
 
-    override func setup() {
+    override func setup() throws {
         setupScene()
 
         ssgiPostProcessEncoder.resolutionScale = 1.0
@@ -177,10 +177,10 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         cameraController.minimumZoomDistance = 8.0
         scene.attach(cameraController.target)
 
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         ssgiPostProcessEncoder.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 1.0
@@ -193,7 +193,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         lightSource.position = [0.0, min(lightHeight + 2.0, 14.92), 0.0]
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,

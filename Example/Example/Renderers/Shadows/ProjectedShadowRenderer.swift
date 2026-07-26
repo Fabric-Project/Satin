@@ -35,13 +35,13 @@ final class ProjectedShadowRenderer: BaseRenderer {
 
     var angle: Float = 0
 
-    override func setup() {
+    override func setup() throws {
         renderer.setClearColor(.one)
         cameraController.target.position.y += 1
         shadowMaterial.blending = .alpha
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         mesh.orientation = simd_quatf(angle: angle, axis: simd_normalize([sin(angle), cos(angle), 0.25]))
@@ -49,11 +49,11 @@ final class ProjectedShadowRenderer: BaseRenderer {
         mesh.position.y = 2.0 + sin(angle)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         shadowRenderer.draw(commandBuffer: commandBuffer)
 
         shadowMaterial.texture = shadowRenderer.texture
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

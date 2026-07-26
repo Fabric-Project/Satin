@@ -34,7 +34,7 @@ final class PBRSubmeshRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var textureLoader = MTKTextureLoader(device: device)
 
-    override func setup() {
+    override func setup() throws {
         start("Setup")
 
         start("Loading HDRI")
@@ -64,12 +64,12 @@ final class PBRSubmeshRenderer: BaseRenderer {
         scene.add(light)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

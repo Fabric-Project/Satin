@@ -134,7 +134,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
     private lazy var textureLoader = MTKTextureLoader(device: device)
     private lazy var startTime = getTime()
 
-    override func setup() {
+    override func setup() throws {
         loadHdri()
         loadProjectorTexture()
         sceneRenderer.clearColor = .init(red: 0.07, green: 0.075, blue: 0.09, alpha: 1.0)
@@ -144,10 +144,10 @@ final class SSGIProjectorRenderer: BaseRenderer {
 
         camera.lookAt(target: [0.0, -0.2, -1.0])
 
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         let projectorMotion = appParams.get("Projector Motion", as: FloatParameter.self)?.value ?? 1.0
@@ -182,7 +182,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
         projectorLight.lookAt(target: target, up: Satin.worldUpDirection)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,

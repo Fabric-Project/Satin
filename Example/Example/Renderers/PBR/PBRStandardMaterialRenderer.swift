@@ -47,7 +47,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
 
     lazy var material = StandardMaterial(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
         loadHdri()
         setupTextures()
         setupLights()
@@ -61,13 +61,13 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         model?.orientation = simd_quatf(angle: Float(getTime() - startTime) * 0.5, axis: worldUpDirection)
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -105,16 +105,16 @@ final class MotionBlurRenderer: BaseRenderer {
 
     // MARK: - Lifecycle
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: [0, 2, 0])
         loadEnvironment()
         buildScene()
         scene.environmentIntensity = 0.5
 
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         let now = getTime()
         let dt = lastTime > 0 ? Float(now - lastTime) : 1.0 / 60.0
@@ -126,8 +126,8 @@ final class MotionBlurRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
