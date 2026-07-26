@@ -52,7 +52,7 @@ final class CubemapRenderer: BaseRenderer {
 
     var cubeTexture: MTLTexture!
 
-    override func setup() {
+    override func setup() throws {
         let url = texturesURL.appendingPathComponent("Cubemap")
         cubeTexture = loadCubemap(
             device,
@@ -72,12 +72,12 @@ final class CubemapRenderer: BaseRenderer {
         }
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

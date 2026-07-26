@@ -49,7 +49,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         session.run(config)
     }
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         backgroundRenderer = ARBackgroundEncoder(
@@ -81,14 +81,14 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         }
     }
 
-    override func update() {
+    override func update() throws {
         if _updateTextures {
             backgroundTexture = createTexture("Background Texture", colorPixelFormat)
             _updateTextures = false
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         matteRenderer.encode(commandBuffer: commandBuffer)
 
         if let backgroundTexture = backgroundTexture {
@@ -99,7 +99,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
             )
         }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -127,7 +127,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         _updateTextures = true
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 

@@ -41,7 +41,7 @@ class MatcapRenderer: BaseRenderer {
     override var sampleCount: Int { 4 }
 #endif
 
-    override func setup() {
+    override func setup() throws {
         loadModel()
         loadKnot()
 
@@ -149,12 +149,12 @@ class MatcapRenderer: BaseRenderer {
         scene.add(mesh)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

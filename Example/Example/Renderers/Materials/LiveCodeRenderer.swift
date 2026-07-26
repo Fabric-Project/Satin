@@ -40,7 +40,7 @@ final class LiveCodeRenderer: BaseRenderer {
     override var colorPixelFormat: MTLPixelFormat { .rgba16Float }
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
-    override func setup() {
+    override func setup() throws {
         startTime = getTime()
 #if os(macOS)
         openEditor()
@@ -52,15 +52,15 @@ final class LiveCodeRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         // Uniforms are parsed and title cases, i.e. time -> Time, appResolution -> App Resolution, etc
         if let material = mesh.material {
             material.set("Time", Float(getTime() - startTime))
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

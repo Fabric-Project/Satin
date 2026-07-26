@@ -199,7 +199,7 @@ final class SuperShapesRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: simd_make_float3(2.0, 1.0, 4.0), near: 0.001, far: 200.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
 
-    override func setup() {
+    override func setup() throws {
 //        parametersSubscription = parameters.objectWillChange.sink { [weak self] in
 //            self?.updateGeometry()
 //        }
@@ -214,7 +214,7 @@ final class SuperShapesRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         camera.update()
 
@@ -222,8 +222,8 @@ final class SuperShapesRenderer: BaseRenderer {
         mesh.orientation = simd_quatf(angle: theta * 0.25, axis: simd_normalize(simd_make_float3(sin(theta), cos(theta), 1.0)))
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

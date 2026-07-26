@@ -73,7 +73,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
 
     var tween: Tween?
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
 
         quad.material?.blending = .alpha
@@ -96,14 +96,14 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         tween?.remove()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let renderTexture else { return }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -138,7 +138,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         quad.material?.set(renderTexture, index: FragmentTextureIndex.Custom0)
         quad.material?.set(jumpFlood.dstTexture, index: FragmentTextureIndex.Custom1)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: quad,

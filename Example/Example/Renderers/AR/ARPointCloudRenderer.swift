@@ -79,7 +79,7 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - Setup
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         mesh.instanceCount = 256 * 192
@@ -103,7 +103,7 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - Draw
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
@@ -122,7 +122,7 @@ final class ARPointCloudRenderer: BaseRenderer {
             pointCloud.update(commandBuffer)
         }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -139,7 +139,7 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     // MARK: - Deinit
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 

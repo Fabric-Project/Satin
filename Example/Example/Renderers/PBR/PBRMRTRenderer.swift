@@ -201,7 +201,7 @@ final class PBRMRTRenderer: BaseRenderer {
         sceneBounds.min.x.isFinite && sceneBounds.max.x.isFinite
     }
 
-    override func setup() {
+    override func setup() throws {
         loadHdri()
         setupTextures()
         setupSuzanneScene()
@@ -215,10 +215,10 @@ final class PBRMRTRenderer: BaseRenderer {
         skybox.visible = false
 #endif
 
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         
         let time = Float(getTime() - startTime)
         let theta = time * 0.2
@@ -234,7 +234,7 @@ final class PBRMRTRenderer: BaseRenderer {
         )
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,

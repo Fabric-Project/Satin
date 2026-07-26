@@ -25,12 +25,12 @@ final class GridRenderer: BaseRenderer {
         return mesh
     }()
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

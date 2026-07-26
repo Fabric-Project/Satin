@@ -39,14 +39,14 @@ final class RadianceCascadesRenderer: BaseRenderer {
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
 #if os(visionOS)
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         if updateRadianceCascadeTextures {
             radianceCascadeTexture = createRadianceCascadeTextures()
@@ -57,10 +57,10 @@ final class RadianceCascadesRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         radianceCascadesProcessor.update(commandBuffer)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

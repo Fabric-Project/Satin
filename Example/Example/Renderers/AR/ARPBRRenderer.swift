@@ -356,7 +356,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         session.run(config)
     }
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         model.material.delegate = self
@@ -384,12 +384,12 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         )
     }
 
-    override func update() {
+    override func update() throws {
         let time = getTime() - startTime
         model.orientation = simd_quatf(angle: Float(time), axis: Satin.worldUpDirection)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
@@ -399,7 +399,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
             shadowRenderer.update(commandBuffer: commandBuffer)
         }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -440,7 +440,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         featheredDepthMaskGenerator.resize(size)
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 

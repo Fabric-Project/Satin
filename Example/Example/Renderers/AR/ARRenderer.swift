@@ -41,7 +41,7 @@ final class ARRenderer: BaseRenderer {
         session.run(ARWorldTrackingConfiguration())
     }
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         renderer.colorLoadAction = .load
@@ -61,13 +61,13 @@ final class ARRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -80,7 +80,7 @@ final class ARRenderer: BaseRenderer {
         backgroundRenderer.resize(size: size, scaleFactor: scaleFactor)
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 

@@ -69,7 +69,7 @@ final class CameraControllerRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
         scene.attach(cameraController.target)
         cameraController.target.add(targetMesh)
 
@@ -79,13 +79,13 @@ final class CameraControllerRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         targetMesh.orientation = cameraController.camera.worldOrientation.inverse
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -42,7 +42,7 @@ final class BufferGeometryRenderer: BaseRenderer {
 
     let interleaved = true
 
-    override func setup() {
+    override func setup() throws {
         if interleaved {
             setupInterleavedBufferGeometry(size: 1.0)
         } else {
@@ -63,15 +63,15 @@ final class BufferGeometryRenderer: BaseRenderer {
 
     var theta: Float = 0.0
 
-    override func update() {
+    override func update() throws {
         setupInterleavedBufferGeometry(size: 1.0 + 0.25 * sin(theta))
         cameraController.update()
 
         theta += 0.1
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

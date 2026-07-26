@@ -56,7 +56,7 @@ final class WaveSimulationRenderer: BaseRenderer {
 
     var subscriptions = Set<AnyCancellable>()
 
-    override func setup() {
+    override func setup() throws {
         computer.parameters.parameterUpdatedPublisher.sink { [weak self] param in
             if param.controlType != .none {
                 self?.computer.reset()
@@ -75,22 +75,22 @@ final class WaveSimulationRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
-        super.setup()
+        try super.setup()
     }
 
     lazy var startTime = getTime()
 
-    override func update() {
+    override func update() throws {
         computer.set("Time", Float(getTime() - startTime))
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         computer.update(commandBuffer, iterations: appParams.get("Iterations", as: IntParameter.self)?.value ?? 1)
         material.set(computer.dstTexture, index: VertexTextureIndex.Custom0)
         material.set(computer.dstTexture, index: FragmentTextureIndex.Custom0)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

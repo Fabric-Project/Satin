@@ -106,7 +106,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
     lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 200), material: skyboxMaterial)
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
         mesh.castShadow = true
         mesh.receiveShadow = true
@@ -191,7 +191,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         }
     }
 
-    override func update() {
+    override func update() throws {
         let time = Float(getTime() - startTime)
         for animatedLight in animatedLights {
             let orbitTime = time * animatedLight.speed + animatedLight.phase
@@ -205,8 +205,8 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

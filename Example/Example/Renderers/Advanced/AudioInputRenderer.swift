@@ -39,12 +39,12 @@ final class AudioInputRenderer: BaseRenderer {
         .invalid
     }
 
-    override func setup() {
+    override func setup() throws {
         print(audioInput.inputs)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

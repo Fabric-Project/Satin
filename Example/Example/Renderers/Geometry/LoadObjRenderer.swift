@@ -20,7 +20,7 @@ final class LoadObjRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
         loadOBJ(url: modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj"))
 
         #if os(visionOS)
@@ -74,12 +74,12 @@ final class LoadObjRenderer: BaseRenderer {
         scene.add(mesh)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

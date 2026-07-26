@@ -96,7 +96,7 @@ final class DepthMaterialRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext, clearColor: [0.137254902, 0.09411764706, 0.1058823529, 1.0])
 
-    override func setup() {
+    override func setup() throws {
 //        // Setup things here
 //        let mat = UvColorMaterial()
 //        let boundingBoxes = Object("Bounding Boxes")
@@ -114,12 +114,12 @@ final class DepthMaterialRenderer: BaseRenderer {
         #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

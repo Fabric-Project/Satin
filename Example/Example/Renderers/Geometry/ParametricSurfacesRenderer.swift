@@ -110,7 +110,7 @@ final class ParametricSurfacesRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var startTime = getTime()
 
-    override func setup() {
+    override func setup() throws {
         renderer.clearColor = .init(red: 0.1, green: 0.11, blue: 0.13, alpha: 1.0)
 
         cycloramaMesh.label = "Cyclorama"
@@ -141,7 +141,7 @@ final class ParametricSurfacesRenderer: BaseRenderer {
         metalView.backgroundColor = .clear
 #endif
 
-        super.setup()
+        try super.setup()
     }
 
     private var currentSurface: SurfaceOption {
@@ -490,7 +490,7 @@ final class ParametricSurfacesRenderer: BaseRenderer {
         shapeParams.get(label, as: FloatParameter.self)?.value ?? value
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
 
         let theta = Float(getTime() - startTime)
@@ -499,8 +499,8 @@ final class ParametricSurfacesRenderer: BaseRenderer {
         mesh.orientation = spin * tilt * baseOrientation
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

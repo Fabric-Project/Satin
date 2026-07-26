@@ -51,7 +51,7 @@ final class TessellationRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
 
         tessMesh.material?.depthBias = DepthBias(bias: -1, slope: -1, clamp: -1)
@@ -64,7 +64,7 @@ final class TessellationRenderer: BaseRenderer {
     }
 
     lazy var startTime = getTime()
-    override func update() {
+    override func update() throws {
         let currentTime = getTime() - startTime
         let osc = Float(sin(currentTime)) * 0.5
 
@@ -80,9 +80,9 @@ final class TessellationRenderer: BaseRenderer {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         tessellator.update(commandBuffer)
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

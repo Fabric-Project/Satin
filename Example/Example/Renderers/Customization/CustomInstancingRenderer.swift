@@ -37,7 +37,7 @@ final class CustomInstancingRenderer: BaseRenderer {
         .invalid
     }
 
-    override func setup() {
+    override func setup() throws {
         setupData()
 
 #if os(visionOS)
@@ -78,12 +78,12 @@ final class CustomInstancingRenderer: BaseRenderer {
         instanceMaterial.set("Instance Count", Int(data.count / 2))
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -26,7 +26,7 @@ final class PBRCustomizationRenderer: BaseRenderer {
     lazy var skyboxMaterial = SkyboxMaterial(context: defaultContext)
     lazy var skybox = Mesh(context: defaultContext, geometry: SkyboxGeometry(context: defaultContext, size: 200), material: skyboxMaterial)
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
         loadHdri()
         generateNoiseTexture()
@@ -40,7 +40,7 @@ final class PBRCustomizationRenderer: BaseRenderer {
     }
 
     lazy var startTime = getTime()
-    override func update() {
+    override func update() throws {
         cameraController.update()
         let osc = Float(sin(getTime() - startTime)) * 0.5
         let scale = simd_float2(repeating: osc + 1.0)
@@ -49,8 +49,8 @@ final class PBRCustomizationRenderer: BaseRenderer {
         material.setTexcoordTransform(offset: offset, scale: scale, rotation: rotation, type: .roughness)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

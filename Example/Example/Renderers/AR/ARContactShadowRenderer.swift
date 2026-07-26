@@ -146,7 +146,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         return lights
     }()
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         invaderContainer.add(lights)
@@ -169,7 +169,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         }
     }
 
-    override func update() {
+    override func update() throws {
         if invaderContainer.visible {
             let time = Float(getTime() - startTime)
             invader.voxels.orientation = simd_quatf(angle: time, axis: Satin.worldUpDirection)
@@ -185,7 +185,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if invaderContainer.visible {
             shadowRenderer.update(commandBuffer: commandBuffer)
         }
@@ -195,7 +195,7 @@ final class ARContactShadowRenderer: BaseRenderer {
             commandBuffer: commandBuffer
         )
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -208,7 +208,7 @@ final class ARContactShadowRenderer: BaseRenderer {
         backgroundRenderer.resize(size: size, scaleFactor: scaleFactor)
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 

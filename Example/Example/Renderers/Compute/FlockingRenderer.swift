@@ -71,7 +71,7 @@ final class FlockingRenderer: BaseRenderer {
         .invalid
     }
 
-    override func setup() {
+    override func setup() throws {
         setupObservers()
 
         #if os(visionOS)
@@ -94,18 +94,18 @@ final class FlockingRenderer: BaseRenderer {
         }.store(in: &cancellables)
     }
 
-    override func update() {
+    override func update() throws {
         let time = Float(CFAbsoluteTimeGetCurrent() - startTime)
         particleSystem.set("Time", time)
         spriteMaterial.set("Time", time)
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if !pauseParam.value {
             particleSystem.update(commandBuffer)
         }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

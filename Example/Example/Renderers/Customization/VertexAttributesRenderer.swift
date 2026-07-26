@@ -28,7 +28,7 @@ final class VertexAttributesRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func setup() {
+    override func setup() throws {
         let url = modelsURL.appendingPathComponent("Suzanne").appendingPathComponent("Suzanne.obj")
         guard let model = loadAsset(url: url, context: defaultContext), let mesh = getMeshes(model, true, true).first else { return }
 
@@ -41,12 +41,12 @@ final class VertexAttributesRenderer: BaseRenderer {
         #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

@@ -51,7 +51,7 @@ final class MultipleContextRenderer: BaseRenderer {
 
     var tween: Tween?
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
 
 #if os(visionOS)
@@ -71,12 +71,12 @@ final class MultipleContextRenderer: BaseRenderer {
         tween?.remove()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

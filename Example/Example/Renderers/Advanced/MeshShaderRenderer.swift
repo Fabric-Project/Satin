@@ -25,7 +25,7 @@ final class MeshShaderRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var startTime = getTime()
 
-    override func setup() {
+    override func setup() throws {
         mesh.triangleFillMode = MTLTriangleFillMode.lines
         mesh.add(meshNormals)
 #if os(visionOS)
@@ -34,13 +34,13 @@ final class MeshShaderRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() {
+    override func update() throws {
         meshNormals.material?.set("Time", Float(getTime() - startTime))
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

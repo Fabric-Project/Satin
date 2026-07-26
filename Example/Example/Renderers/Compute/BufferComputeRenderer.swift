@@ -57,11 +57,11 @@ final class BufferComputeRenderer: BaseRenderer {
         .invalid
     }
 
-    override func setup() {
+    override func setup() throws {
         startTime = CFAbsoluteTimeGetCurrent()
     }
 
-    override func update() {
+    override func update() throws {
         var time = Float(CFAbsoluteTimeGetCurrent() - startTime)
         chromaMaterial.set("Time", time)
 
@@ -84,7 +84,7 @@ final class BufferComputeRenderer: BaseRenderer {
         _updateRenderTexture = false
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         updateRenderTexture(
             width: Int(metalView.drawableSize.width),
             height: Int(metalView.drawableSize.height)
@@ -92,7 +92,7 @@ final class BufferComputeRenderer: BaseRenderer {
 
         particleSystem.update(commandBuffer)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

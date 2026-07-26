@@ -30,7 +30,7 @@ final class InstancedMeshRenderer: BaseRenderer {
     lazy var startTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
     let dim = 7
 
-    override func setup() {
+    override func setup() throws {
         camera.lookAt(target: .zero)
         setupScene()
 
@@ -87,7 +87,7 @@ final class InstancedMeshRenderer: BaseRenderer {
         return Float(CFAbsoluteTimeGetCurrent() - startTime)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         updateInstances(getTime())
         container.position = [2.0 * sin(getTime()), 0.0, 0.0]
@@ -97,8 +97,8 @@ final class InstancedMeshRenderer: BaseRenderer {
         camera.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

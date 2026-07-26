@@ -145,7 +145,7 @@ final class PoissonRenderer: BaseRenderer {
         return mesh
     }()
 
-    override func setup() {
+    override func setup() throws {
         camera.near = 0.0
         camera.far = 40.96
         camera.position = [0, 0, 10.0]
@@ -216,12 +216,12 @@ final class PoissonRenderer: BaseRenderer {
         freePoints2D(&points2D)
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

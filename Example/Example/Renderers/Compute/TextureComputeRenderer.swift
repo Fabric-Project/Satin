@@ -60,7 +60,7 @@ class TextureComputeRenderer: BaseRenderer {
 
     var subscriptions = Set<AnyCancellable>()
 
-    override func setup() {
+    override func setup() throws {
         textureCompute.parameters.parameterUpdatedPublisher.sink { [weak self] _ in
             self?.textureCompute.reset()
         }.store(in: &subscriptions)
@@ -69,18 +69,18 @@ class TextureComputeRenderer: BaseRenderer {
         renderer.setClearColor(.zero)
         metalView.backgroundColor = .clear
 #endif
-        super.setup()
+        try super.setup()
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         textureCompute.update(commandBuffer, iterations: 30)
         material.set(textureCompute.dstTexture, index: VertexTextureIndex.Custom0)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

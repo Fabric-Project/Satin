@@ -77,7 +77,7 @@ final class MultipleViewportRenderer: BaseRenderer {
         return object
     }()
 
-    override func setup() {
+    override func setup() throws {
         subCamera0.lookAt(target: .zero)
         subCamera0.update()
 
@@ -91,7 +91,7 @@ final class MultipleViewportRenderer: BaseRenderer {
 #endif
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if _updateTextures {
             setupTextures()
         }
@@ -106,7 +106,7 @@ final class MultipleViewportRenderer: BaseRenderer {
 
         material.set(subColorTexture, index: FragmentTextureIndex.Custom0)
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: mesh,

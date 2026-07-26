@@ -43,7 +43,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
         session.run(config)
     }
 
-    override func setup() {
+    override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
         renderer.colorLoadAction = .load
@@ -79,13 +79,13 @@ final class ARLidarMeshRenderer: BaseRenderer {
         }
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -98,7 +98,7 @@ final class ARLidarMeshRenderer: BaseRenderer {
         backgroundRenderer.resize(size: size, scaleFactor: scaleFactor)
     }
 
-    override func cleanup() {
+    override func cleanup() throws {
         session.pause()
     }
 }

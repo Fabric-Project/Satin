@@ -35,7 +35,7 @@ final class Renderer3D: BaseRenderer {
 
     override var sampleCount: Int { 1 }
 
-    override func setup() {
+    override func setup() throws {
         mesh.add(intersectionMesh)
         
         light.position = [5, 10, 10]
@@ -49,13 +49,13 @@ final class Renderer3D: BaseRenderer {
         #endif
     }
 
-    override func update() {
+    override func update() throws {
         cameraController.update()
         mesh.orientation = simd_quatf(angle: Float(getTime() - startTime), axis: simd_normalize(simd_float3.one))
     }
 
-    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
