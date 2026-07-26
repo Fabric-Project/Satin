@@ -12,6 +12,10 @@ import QuartzCore
 import AppKit
 #endif
 
+public protocol SatinErrorDelegate: AnyObject {
+    func renderer(_ renderer: Renderer, didFailWith error: any Error)
+}
+
 protocol ViewRendererDelegate: AnyObject {
     var id: String { get }
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable)

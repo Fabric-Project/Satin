@@ -106,7 +106,7 @@ open class Renderer {
         return nil
     }
 
-    open func draw(texture: MTLTexture, commandBuffer: MTLCommandBuffer) {
+    open func draw(texture: MTLTexture, commandBuffer: MTLCommandBuffer) throws {
         let renderPassDescriptor = MTLRenderPassDescriptor()
         let index = frameIndex % maxBuffersInFlight
 
@@ -129,20 +129,20 @@ open class Renderer {
         renderPassDescriptor.stencilAttachment.loadAction = .clear
         renderPassDescriptor.stencilAttachment.clearStencil = 0
 
-        draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
-    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {}
+    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {}
 
     open func postDraw(commandBuffer: MTLCommandBuffer) {
         commandBuffer.commit()
     }
 
-    open func setup() {}
+    open func setup() throws {}
 
-    open func update() {}
+    open func update() throws {}
 
-    open func cleanup() {}
+    open func cleanup() throws {}
 
     open func resize(size: (width: Float, height: Float), scaleFactor: Float) {}
 

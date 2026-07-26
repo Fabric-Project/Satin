@@ -81,10 +81,14 @@ public final class MetalViewController: NSViewController {
         self.metalView.metalLayer.device = self.renderer.context.device
         self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.setup()
-        self.renderer.isSetup = true
-        self.renderer.appearance = self.getAppearance()
-        self.metalView.delegate = self.renderer
+        do {
+            try self.renderer.setup()
+            self.renderer.isSetup = true
+            self.renderer.appearance = self.getAppearance()
+            self.metalView.delegate = self.renderer
+        } catch {
+            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        }
     }
 
     private func cleanupRenderer() {
@@ -92,7 +96,11 @@ public final class MetalViewController: NSViewController {
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        self.renderer.cleanup()
+        do {
+            try self.renderer.cleanup()
+        } catch {
+            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        }
         self.renderer.isSetup = false
     }
 
@@ -387,10 +395,14 @@ public final class MetalViewController: UIViewController {
         self.metalView.metalLayer.device = self.renderer.context.device
         self.metalView.metalLayer.pixelFormat = self.renderer.colorPixelFormat
         self.renderer.metalView = self.metalView
-        self.renderer.setup()
-        self.renderer.isSetup = true
-        self.renderer.appearance = self.getAppearance()
-        self.metalView.delegate = self.renderer
+        do {
+            try self.renderer.setup()
+            self.renderer.isSetup = true
+            self.renderer.appearance = self.getAppearance()
+            self.metalView.delegate = self.renderer
+        } catch {
+            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        }
     }
 
     private func getAppearance() -> ViewRenderer.Appearance {
@@ -413,7 +425,11 @@ public final class MetalViewController: UIViewController {
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        self.renderer.cleanup()
+        do {
+            try self.renderer.cleanup()
+        } catch {
+            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        }
         self.renderer.isSetup = false
     }
 

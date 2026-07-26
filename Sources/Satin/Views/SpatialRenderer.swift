@@ -47,6 +47,8 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
     var onDisappearAction: (() -> Void)?
 
+    public weak var errorDelegate: SatinErrorDelegate?
+
     open override func makeDefaultContext() -> Context {
         Context(
             device: device,
@@ -85,7 +87,11 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
     func renderLoop() {
         while true {
             if layerRenderer.state == .invalidated {
-                cleanup()
+                do {
+                    try cleanup()
+                } catch {
+                    errorDelegate?.renderer(self, didFailWith: error)
+                }
                 onDisappearAction?()
                 return
             } else if layerRenderer.state == .paused {
@@ -93,7 +99,11 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
                 continue
             } else {
                 autoreleasepool {
-                    self.renderFrame()
+                    do {
+                        try self.renderFrame()
+                    } catch {
+                        self.errorDelegate?.renderer(self, didFailWith: error)
+                    }
                 }
             }
         }
@@ -262,12 +272,12 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
         frame.endSubmission()
     }
 
-    open func renderFrame() {
+    open func renderFrame() throws {
         guard let frame = layerRenderer.queryNextFrame() else { return }
 
         frame.startUpdate()
 
-        update()
+        try update()
 
         frame.endUpdate()
 

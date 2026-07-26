@@ -22,6 +22,7 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     }
 
     public internal(set) unowned var metalView: MetalView!
+    public weak var errorDelegate: SatinErrorDelegate?
 
     public internal(set) var appearance: Appearance = .unspecified {
         didSet {
@@ -31,7 +32,7 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
 
     open func updateAppearance() {}
 
-    open override func cleanup() {
+    open override func cleanup() throws {
 #if DEBUG_VIEW
         print("\ncleanup - ViewRenderer: \(id)\n")
 #endif
@@ -111,9 +112,14 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
         guard isSetup, let commandBuffer = preDraw() else { return }
 
-        update()
-        draw(texture: drawable.texture, commandBuffer: commandBuffer)
-        postDraw(drawable: drawable, commandBuffer: commandBuffer)
+        do {
+            try update()
+            try draw(texture: drawable.texture, commandBuffer: commandBuffer)
+            postDraw(drawable: drawable, commandBuffer: commandBuffer)
+        } catch {
+            postDraw(commandBuffer: commandBuffer)
+            errorDelegate?.renderer(self, didFailWith: error)
+        }
     }
 
     func drawableResized(size: CGSize, scaleFactor: CGFloat) {
