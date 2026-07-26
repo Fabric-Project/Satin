@@ -303,7 +303,7 @@ private func drawFrame(
     }
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
-    renderer.draw(
+    try renderer.draw(
         renderPassDescriptor: renderPassDescriptor,
         commandBuffer: commandBuffer,
         scene: scene,

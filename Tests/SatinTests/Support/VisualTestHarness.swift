@@ -118,7 +118,7 @@ enum VisualTestHarness {
             throw NSError(domain: "VisualTestHarness", code: 4, userInfo: [NSLocalizedDescriptionKey: "Failed to create command buffer"])
         }
 
-        renderer.draw(
+        try renderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: sceneResult.scene,

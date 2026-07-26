@@ -151,7 +151,7 @@ final class AttributeRefactorTests: XCTestCase {
                 throw NSError(domain: "AttributeRefactorTests", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create command buffer"])
             }
 
-            renderer.draw(
+            try renderer.draw(
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,
