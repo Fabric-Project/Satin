@@ -12,7 +12,7 @@ import QuartzCore
 import AppKit
 #endif
 
-public protocol SatinErrorDelegate: AnyObject {
+public protocol ErrorRenderDelegate: AnyObject {
     func renderer(_ renderer: Renderer, didFailWith error: any Error)
 }
 

@@ -22,7 +22,7 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     }
 
     public internal(set) unowned var metalView: MetalView!
-    public weak var errorDelegate: SatinErrorDelegate?
+    public weak var errorDelegate: ErrorRenderDelegate?
 
     public internal(set) var appearance: Appearance = .unspecified {
         didSet {
