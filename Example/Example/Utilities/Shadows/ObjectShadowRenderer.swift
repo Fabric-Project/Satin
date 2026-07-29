@@ -57,8 +57,7 @@ final class ShadowPostProcessEncoder: PostProcessEncoder {
     }
 
     public init(context: Context) {
-        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial(context: context))
-        renderer.setClearColor(.zero)
+        super.init(label: "Shadow Post Processor", context: context, material: ShadowPostMaterial(context: context), clearColor: .zero)
     }
 }
 
