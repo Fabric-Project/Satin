@@ -2468,6 +2468,7 @@ open class RenderEncoder {
         descriptor.arrayLength = arrayLength
         descriptor.usage = frameBufferOnly ? .renderTarget : [.renderTarget, .shaderRead, .shaderWrite]
         descriptor.storageMode = colorTextureStorageMode
+        descriptor.resourceOptions = .storageModePrivate
 
         colorTexture = context.device.makeTexture(descriptor: descriptor)
         colorTexture?.label = label + " Color Texture"
@@ -2495,6 +2496,7 @@ open class RenderEncoder {
         descriptor.arrayLength = arrayLength
         descriptor.usage = .renderTarget
         descriptor.storageMode = colorMultisampleTextureStorageMode
+        descriptor.resourceOptions = .storageModePrivate
 
         colorMultisampleTexture = context.device.makeTexture(descriptor: descriptor)
         colorMultisampleTexture?.label = label + "Multisample Color Texture"
@@ -2523,6 +2525,7 @@ open class RenderEncoder {
         descriptor.arrayLength = arrayLength
         descriptor.usage = frameBufferOnly ? .renderTarget : [.renderTarget, .shaderRead, .shaderWrite]
         descriptor.storageMode = depthTextureStorageMode
+        descriptor.resourceOptions = .storageModePrivate
 
         depthTexture = context.device.makeTexture(descriptor: descriptor)
         depthTexture?.label = label + " Depth Texture"
@@ -2550,6 +2553,7 @@ open class RenderEncoder {
         descriptor.arrayLength = arrayLength
         descriptor.usage = .renderTarget
         descriptor.storageMode = depthMultisampleTextureStorageMode
+        descriptor.resourceOptions = .storageModePrivate
 
         depthMultisampleTexture = context.device.makeTexture(descriptor: descriptor)
         depthMultisampleTexture?.label = label + "Multisample Depth Texture"
@@ -2574,7 +2578,8 @@ open class RenderEncoder {
         descriptor.textureType = arrayLength > 1 ? .type2DArray : .type2D
         descriptor.arrayLength = arrayLength
         descriptor.usage = frameBufferOnly ? .renderTarget : [.renderTarget, .shaderRead, .shaderWrite]
-        descriptor.storageMode = stencilTextureStorageMode
+        descriptor.storageMode = .memoryless
+        descriptor.resourceOptions = .storageModePrivate
 
         stencilTexture = context.device.makeTexture(descriptor: descriptor)
         stencilTexture?.label = label + " Stencil Texture"
@@ -2597,7 +2602,8 @@ open class RenderEncoder {
         descriptor.textureType = arrayLength > 1 ? .type2DMultisampleArray : .type2DMultisample
         descriptor.arrayLength = arrayLength
         descriptor.usage = [.renderTarget]
-        descriptor.storageMode = stencilTextureStorageMode
+        descriptor.storageMode = .memoryless
+        descriptor.resourceOptions = .storageModePrivate
 
         stencilMultisampleTexture = context.device.makeTexture(descriptor: descriptor)
         stencilMultisampleTexture?.label = label + "Multisample Stencil Texture"
