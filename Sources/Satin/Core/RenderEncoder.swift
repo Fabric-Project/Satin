@@ -18,6 +18,9 @@ open class RenderEncoder {
     public var sortObjects: Bool
 
     public let context: Context
+    public let colorPixelFormat: MTLPixelFormat
+    public let depthPixelFormat: MTLPixelFormat
+    public let stencilPixelFormat: MTLPixelFormat
 
     public var size: (width: Float, height: Float) = (0, 0) {
         didSet {
@@ -371,6 +374,9 @@ open class RenderEncoder {
     public init(
         label: String = "Satin RenderEncoder",
         context: Context,
+        colorPixelFormat: MTLPixelFormat,
+        depthPixelFormat: MTLPixelFormat,
+        stencilPixelFormat: MTLPixelFormat,
         sortObjects: Bool = true,
         clearColor: simd_float4 = .init(0, 0, 0, 1),
         colorLoadAction: MTLLoadAction = .clear,
@@ -385,6 +391,9 @@ open class RenderEncoder {
     ) {
         self.label = label
         self.context = context
+        self.colorPixelFormat = colorPixelFormat
+        self.depthPixelFormat = depthPixelFormat
+        self.stencilPixelFormat = stencilPixelFormat
         self.sortObjects = sortObjects
         self.renderingMode = context.renderingMode
         self.activeOutputs = RendererOutputs(rawValue: context.activeOutputs.rawValue | RendererOutputs.color.rawValue)
@@ -405,6 +414,41 @@ open class RenderEncoder {
         self.supportsAlphaOit = context.device.supportsFamily(.apple4)
             && context.alphaOitEnabled
             && context.vertexAmplificationCount <= 1
+    }
+
+    public convenience init(
+        label: String = "Satin RenderEncoder",
+        context: Context,
+        sortObjects: Bool = true,
+        clearColor: simd_float4 = .init(0, 0, 0, 1),
+        colorLoadAction: MTLLoadAction = .clear,
+        colorStoreAction: MTLStoreAction = .store,
+        clearDepth: Double = 0,
+        depthLoadAction: MTLLoadAction = .clear,
+        depthStoreAction: MTLStoreAction = .store,
+        clearStencil: UInt32 = 0,
+        stencilLoadAction: MTLLoadAction = .clear,
+        stencilStoreAction: MTLStoreAction = .store,
+        frameBufferOnly: Bool = true
+    ) {
+        self.init(
+            label: label,
+            context: context,
+            colorPixelFormat: context.colorPixelFormat,
+            depthPixelFormat: context.depthPixelFormat,
+            stencilPixelFormat: context.stencilPixelFormat,
+            sortObjects: sortObjects,
+            clearColor: clearColor,
+            colorLoadAction: colorLoadAction,
+            colorStoreAction: colorStoreAction,
+            clearDepth: clearDepth,
+            depthLoadAction: depthLoadAction,
+            depthStoreAction: depthStoreAction,
+            clearStencil: clearStencil,
+            stencilLoadAction: stencilLoadAction,
+            stencilStoreAction: stencilStoreAction,
+            frameBufferOnly: frameBufferOnly
+        )
     }
 
     public func setClearColor(_ color: simd_float4) {
@@ -577,7 +621,7 @@ open class RenderEncoder {
             }
         }
 
-        if context.colorPixelFormat == .invalid {
+        if colorPixelFormat == .invalid {
             renderPassDescriptor.colorAttachments[0].texture = nil
             renderPassDescriptor.colorAttachments[0].resolveTexture = nil
         } else {
@@ -602,7 +646,7 @@ open class RenderEncoder {
             }
         }
 
-        if context.depthPixelFormat == .invalid {
+        if depthPixelFormat == .invalid {
             renderPassDescriptor.depthAttachment.texture = nil
             renderPassDescriptor.depthAttachment.resolveTexture = nil
         } else {
@@ -622,13 +666,13 @@ open class RenderEncoder {
                 renderPassDescriptor.depthAttachment.texture = depthTexture
             }
 
-            if context.depthPixelFormat == .depth32Float_stencil8 {
+            if depthPixelFormat == .depth32Float_stencil8 {
                 renderPassDescriptor.stencilAttachment.texture = depthTexture
             }
         }
 
-        if context.stencilPixelFormat != .invalid, context.depthPixelFormat != .depth32Float_stencil8 {
-            if context.stencilPixelFormat == .invalid {
+        if stencilPixelFormat != .invalid, depthPixelFormat != .depth32Float_stencil8 {
+            if stencilPixelFormat == .invalid {
                 renderPassDescriptor.stencilAttachment.texture = nil
                 renderPassDescriptor.stencilAttachment.resolveTexture = nil
             } else if context.sampleCount > 1 {
@@ -659,7 +703,7 @@ open class RenderEncoder {
             } else {
                 renderPassDescriptor.depthAttachment.storeAction = .multisampleResolve
             }
-            if context.stencilPixelFormat != .invalid {
+            if stencilPixelFormat != .invalid {
                 if stencilStoreAction == .store || stencilStoreAction == .storeAndMultisampleResolve {
                     renderPassDescriptor.stencilAttachment.storeAction = .storeAndMultisampleResolve
                 } else {
@@ -677,7 +721,7 @@ open class RenderEncoder {
             } else {
                 renderPassDescriptor.depthAttachment.storeAction = .dontCare
             }
-            if context.stencilPixelFormat != .invalid {
+            if stencilPixelFormat != .invalid {
                 if stencilStoreAction == .store || stencilStoreAction == .storeAndMultisampleResolve {
                     renderPassDescriptor.stencilAttachment.storeAction = .store
                 } else {
@@ -974,9 +1018,9 @@ open class RenderEncoder {
             renderingMode: mode,
             activeOutputs: outputs,
             alphaOitEnabled: alphaOitEnabled,
-            colorPixelFormat: context.colorPixelFormat,
-            depthPixelFormat: context.depthPixelFormat,
-            stencilPixelFormat: context.stencilPixelFormat
+            colorPixelFormat: colorPixelFormat,
+            depthPixelFormat: depthPixelFormat,
+            stencilPixelFormat: stencilPixelFormat
         )
 
         if let renderContext = renderContextCache[key] {
@@ -986,9 +1030,9 @@ open class RenderEncoder {
         let renderContext = Context(
             device: context.device,
             sampleCount: context.sampleCount,
-            colorPixelFormat: context.colorPixelFormat,
-            depthPixelFormat: context.depthPixelFormat,
-            stencilPixelFormat: context.stencilPixelFormat,
+            colorPixelFormat: colorPixelFormat,
+            depthPixelFormat: depthPixelFormat,
+            stencilPixelFormat: stencilPixelFormat,
             vertexAmplificationCount: context.vertexAmplificationCount,
             maxBuffersInFlight: context.maxBuffersInFlight,
             renderingMode: mode,
@@ -2410,11 +2454,11 @@ open class RenderEncoder {
     // MARK: - Color Textures
 
     private func setupColorTexture(arrayLength: Int) {
-        guard updateColorTexture, context.colorPixelFormat != .invalid, size.width > 1, size.height > 1 else { return }
+        guard updateColorTexture, colorPixelFormat != .invalid, size.width > 1, size.height > 1 else { return }
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(
-                pixelFormat: context.colorPixelFormat,
+                pixelFormat: colorPixelFormat,
                 width: Int(size.width),
                 height: Int(size.height),
                 mipmapped: false
@@ -2433,7 +2477,7 @@ open class RenderEncoder {
 
     private func setupColorMultisampleTexture(arrayLength: Int) {
         guard updateColorMultisampleTexture,
-              context.colorPixelFormat != .invalid,
+              colorPixelFormat != .invalid,
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0
@@ -2441,7 +2485,7 @@ open class RenderEncoder {
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(
-                pixelFormat: context.colorPixelFormat,
+                pixelFormat: colorPixelFormat,
                 width: Int(size.width),
                 height: Int(size.height),
                 mipmapped: false
@@ -2462,14 +2506,14 @@ open class RenderEncoder {
 
     private func setupDepthTexture(arrayLength: Int) {
         guard updateDepthTexture,
-              context.depthPixelFormat != .invalid,
+              depthPixelFormat != .invalid,
               size.width > 0,
               size.height > 0
         else { return }
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(
-                pixelFormat: context.depthPixelFormat,
+                pixelFormat: depthPixelFormat,
                 width: Int(size.width),
                 height: Int(size.height),
                 mipmapped: false
@@ -2488,7 +2532,7 @@ open class RenderEncoder {
 
     private func setupDepthMultisampleTexture(arrayLength: Int) {
         guard updateDepthMultisampleTexture,
-              context.depthPixelFormat != .invalid,
+              depthPixelFormat != .invalid,
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0
@@ -2496,7 +2540,7 @@ open class RenderEncoder {
 
         let descriptor = MTLTextureDescriptor
             .texture2DDescriptor(
-                pixelFormat: context.depthPixelFormat,
+                pixelFormat: depthPixelFormat,
                 width: Int(size.width),
                 height: Int(size.height),
                 mipmapped: false
@@ -2517,13 +2561,13 @@ open class RenderEncoder {
 
     private func setupStencilTexture(arrayLength: Int) {
         guard updateStencilTexture,
-              context.stencilPixelFormat != .invalid,
+              stencilPixelFormat != .invalid,
               size.width > 1,
               size.height > 1
         else { return }
 
         let descriptor = MTLTextureDescriptor()
-        descriptor.pixelFormat = context.stencilPixelFormat
+        descriptor.pixelFormat = stencilPixelFormat
         descriptor.width = Int(size.width)
         descriptor.height = Int(size.height)
         descriptor.sampleCount = 1
@@ -2540,13 +2584,13 @@ open class RenderEncoder {
 
     private func setupStencilMultisampleTexture(arrayLength: Int) {
         guard updateStencilMultisampleTexture,
-              context.stencilPixelFormat != .invalid,
+              stencilPixelFormat != .invalid,
               context.sampleCount > 1,
               size.width > 0,
               size.height > 0 else { return }
 
         let descriptor = MTLTextureDescriptor()
-        descriptor.pixelFormat = context.stencilPixelFormat
+        descriptor.pixelFormat = stencilPixelFormat
         descriptor.width = Int(size.width)
         descriptor.height = Int(size.height)
         descriptor.sampleCount = context.sampleCount
@@ -2847,7 +2891,7 @@ private final class AlphaOitResources {
         let tileDescriptor = MTLTileRenderPipelineDescriptor()
         tileDescriptor.label = "\(renderer.label) Alpha OIT Tile Init"
         tileDescriptor.tileFunction = tileFunction
-        tileDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
+        tileDescriptor.colorAttachments[0].pixelFormat = renderer.colorPixelFormat
         tileDescriptor.threadgroupSizeMatchesTileSize = true
         let tilePipeline = try renderer.context.device.makeRenderPipelineState(
             tileDescriptor: tileDescriptor,
@@ -2859,9 +2903,9 @@ private final class AlphaOitResources {
         blendDescriptor.label = "\(renderer.label) Alpha OIT Blend"
         blendDescriptor.vertexFunction = blendVertex
         blendDescriptor.fragmentFunction = blendFragment
-        blendDescriptor.colorAttachments[0].pixelFormat = renderer.context.colorPixelFormat
-        blendDescriptor.depthAttachmentPixelFormat = renderer.context.depthPixelFormat
-        blendDescriptor.stencilAttachmentPixelFormat = renderer.context.stencilPixelFormat
+        blendDescriptor.colorAttachments[0].pixelFormat = renderer.colorPixelFormat
+        blendDescriptor.depthAttachmentPixelFormat = renderer.depthPixelFormat
+        blendDescriptor.stencilAttachmentPixelFormat = renderer.stencilPixelFormat
         let blendPipeline = try renderer.context.device.makeRenderPipelineState(descriptor: blendDescriptor)
 
         let depthDescriptor = MTLDepthStencilDescriptor()
