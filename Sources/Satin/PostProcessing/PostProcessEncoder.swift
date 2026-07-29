@@ -13,6 +13,7 @@ open class PostProcessEncoder {
     public var label = "Post" {
         didSet {
             renderer.label = label + " RenderEncoder"
+            postProcessRenderer.label = label + " PostProcessRenderEncoder"
             mesh.label = label + " Mesh"
             scene.label = label + " Scene"
         }
@@ -24,6 +25,7 @@ open class PostProcessEncoder {
     public let camera: OrthographicCamera
 
     public let renderer: RenderEncoder
+    public let postProcessRenderer: PostProcessRenderEncoder
 
     public init(
         label: String = "Post Processor",
@@ -65,6 +67,17 @@ open class PostProcessEncoder {
             stencilStoreAction: stencilStoreAction,
             frameBufferOnly: frameBufferOnly
         )
+        postProcessRenderer = PostProcessRenderEncoder(
+            label: label + " PostProcessRenderEncoder",
+            context: context,
+            colorPixelFormat: colorPixelFormat ?? context.colorPixelFormat,
+            depthPixelFormat: depthPixelFormat ?? context.depthPixelFormat,
+            stencilPixelFormat: stencilPixelFormat ?? context.stencilPixelFormat,
+            clearColor: clearColor,
+            colorLoadAction: colorLoadAction,
+            colorStoreAction: colorStoreAction,
+            frameBufferOnly: frameBufferOnly
+        )
 
         if let material {
             precondition(
@@ -78,29 +91,29 @@ open class PostProcessEncoder {
     }
 
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
-        renderer.draw(
+        postProcessRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
-            scene: scene,
+            mesh: mesh,
             camera: camera,
             renderTarget: renderTarget
         )
     }
 
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-        renderer.draw(
+        postProcessRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
-            scene: scene,
+            mesh: mesh,
             camera: camera
         )
     }
 
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = [], renderTarget: MTLTexture) {
-        renderer.draw(
+        postProcessRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
-            scene: scene,
+            mesh: mesh,
             cameras: [camera, camera],
             viewports: viewports,
             viewMappings: viewMappings,
@@ -109,10 +122,10 @@ open class PostProcessEncoder {
     }
 
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
-        renderer.draw(
+        postProcessRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
-            scene: scene,
+            mesh: mesh,
             cameras: [camera, camera],
             viewports: viewports,
             viewMappings: viewMappings
@@ -121,5 +134,6 @@ open class PostProcessEncoder {
 
     open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         renderer.resize(size)
+        postProcessRenderer.resize(size)
     }
 }

@@ -27,6 +27,7 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         self.session = session
         super.init(label: label, context: context, material: ARPostMaterial(context: context))
         renderer.colorLoadAction = .load
+        postProcessRenderer.colorLoadAction = .load
     }
 
     func update(commandBuffer: MTLCommandBuffer, renderPassDescriptor: MTLRenderPassDescriptor) {
