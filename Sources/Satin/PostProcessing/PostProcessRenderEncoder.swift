@@ -51,8 +51,14 @@ open class PostProcessRenderEncoder {
         let colorClearColor: MTLClearColor
         let depthTexture: MTLTexture?
         let depthResolveTexture: MTLTexture?
+        let depthLoadAction: MTLLoadAction
+        let depthStoreAction: MTLStoreAction
+        let depthClearDepth: Double
         let stencilTexture: MTLTexture?
         let stencilResolveTexture: MTLTexture?
+        let stencilLoadAction: MTLLoadAction
+        let stencilStoreAction: MTLStoreAction
+        let stencilClearStencil: UInt32
         let renderTargetWidth: Int
         let renderTargetHeight: Int
     }
@@ -268,8 +274,14 @@ open class PostProcessRenderEncoder {
             colorClearColor: colorAttachment.clearColor,
             depthTexture: renderPassDescriptor.depthAttachment.texture,
             depthResolveTexture: renderPassDescriptor.depthAttachment.resolveTexture,
+            depthLoadAction: renderPassDescriptor.depthAttachment.loadAction,
+            depthStoreAction: renderPassDescriptor.depthAttachment.storeAction,
+            depthClearDepth: renderPassDescriptor.depthAttachment.clearDepth,
             stencilTexture: renderPassDescriptor.stencilAttachment.texture,
             stencilResolveTexture: renderPassDescriptor.stencilAttachment.resolveTexture,
+            stencilLoadAction: renderPassDescriptor.stencilAttachment.loadAction,
+            stencilStoreAction: renderPassDescriptor.stencilAttachment.storeAction,
+            stencilClearStencil: renderPassDescriptor.stencilAttachment.clearStencil,
             renderTargetWidth: renderPassDescriptor.renderTargetWidth,
             renderTargetHeight: renderPassDescriptor.renderTargetHeight
         )
@@ -285,8 +297,14 @@ open class PostProcessRenderEncoder {
 
         renderPassDescriptor.depthAttachment.texture = state.depthTexture
         renderPassDescriptor.depthAttachment.resolveTexture = state.depthResolveTexture
+        renderPassDescriptor.depthAttachment.loadAction = state.depthLoadAction
+        renderPassDescriptor.depthAttachment.storeAction = state.depthStoreAction
+        renderPassDescriptor.depthAttachment.clearDepth = state.depthClearDepth
         renderPassDescriptor.stencilAttachment.texture = state.stencilTexture
         renderPassDescriptor.stencilAttachment.resolveTexture = state.stencilResolveTexture
+        renderPassDescriptor.stencilAttachment.loadAction = state.stencilLoadAction
+        renderPassDescriptor.stencilAttachment.storeAction = state.stencilStoreAction
+        renderPassDescriptor.stencilAttachment.clearStencil = state.stencilClearStencil
         renderPassDescriptor.renderTargetWidth = state.renderTargetWidth
         renderPassDescriptor.renderTargetHeight = state.renderTargetHeight
     }
