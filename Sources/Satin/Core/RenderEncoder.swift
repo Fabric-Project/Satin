@@ -683,7 +683,7 @@ open class RenderEncoder {
 
                 if inStencilResolveTexture == nil {
                     setupStencilTexture(arrayLength: arrayLength)
-                    renderPassDescriptor.depthAttachment.resolveTexture = stencilTexture
+                    renderPassDescriptor.stencilAttachment.resolveTexture = stencilTexture
                 }
 
             } else if inStencilTexture == nil {
