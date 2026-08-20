@@ -180,7 +180,7 @@ public final class MetalViewController: NSViewController {
         self.cleanup()
     }
 
-    func cleanup() {
+    public func cleanup() {
 #if DEBUG_VIEWS
         print("cleanup - MetalViewController: \(self.renderer.id)")
 #endif
