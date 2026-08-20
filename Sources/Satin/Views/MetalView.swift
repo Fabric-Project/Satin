@@ -124,8 +124,11 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         else {
 #if DEBUG_VIEW
             print("viewDidMoveToWindow - MetalView: \(delegate?.id) - NO WINDOW")
-            stopRenderLoop()
 #endif
+            // Leaving a window invalidates the display link and its
+            // willClose observer, so re-hosting in another window rebuilds
+            // both against that window in setupRenderLoop.
+            stopRenderLoop()
         }
     }
 
