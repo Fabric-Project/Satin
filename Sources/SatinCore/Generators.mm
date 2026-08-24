@@ -907,7 +907,7 @@ GeometryData generatePlaneGeometryData(
 
             simd_float3 position = simd_make_float3(xP, yP, 0.0);
             simd_float3 normal = simd_make_float3(0.0, 0.0, 1.0);
-            simd_float2 uv = simd_make_float2(xuv, yuv);
+            simd_float2 uv = simd_make_float2(xuv, 1.0 - yuv);
 
             bool flip = false;
             switch (plane) {
