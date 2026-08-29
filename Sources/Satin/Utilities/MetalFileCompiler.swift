@@ -71,7 +71,31 @@ public final class MetalFileCompiler {
         } catch {
             let pathComponents = fileURLResolved.pathComponents
 
-            if let index = pathComponents.lastIndex(of: "Satin"),
+            // Host roots are checked first: the framework keys below can
+            // collide with the host's own filesystem — an app under ~/Library
+            // resolves every include through a path containing "Library" —
+            // while a host root's directory name only comes from the include
+            // itself.
+            var hostRootMatch: (index: Int, rootURL: URL)?
+            for rootURL in shaderIncludeRootURLs {
+                if let index = pathComponents.lastIndex(of: rootURL.lastPathComponent) {
+                    hostRootMatch = (index, rootURL)
+                    break
+                }
+            }
+
+            if let (index, rootURL) = hostRootMatch {
+                var hostFileURL = rootURL
+                for i in (index + 1) ..< pathComponents.count {
+                    hostFileURL.appendPathComponent(pathComponents[i])
+                }
+
+                if !files.contains(hostFileURL) {
+                    content = try String(contentsOf: hostFileURL, encoding: .utf8)
+                    fileURLResolved = hostFileURL
+                    watchFile = true
+                }
+            } else if let index = pathComponents.lastIndex(of: "Satin"),
                var frameworkFileURL = getPipelinesSatinURL()
             {
                 for i in (index + 1) ..< pathComponents.count {

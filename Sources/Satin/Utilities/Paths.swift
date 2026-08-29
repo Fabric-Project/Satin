@@ -24,6 +24,12 @@ public func getPipelinesURL() -> URL? {
     return getResourceURL()?.appendingPathComponent("Pipelines")
 }
 
+/// Roots the compiler tries when an include's own path misses, each keyed
+/// by its directory name: `#include "lygia/…"` resolves against a root
+/// ending in `lygia`. Satin ships none of these trees; a host that bundles
+/// one appends its root here, once, before compiling.
+public nonisolated(unsafe) var shaderIncludeRootURLs: [URL] = []
+
 public func getPipelinesURL(_ path: String) -> URL? {
     return getPipelinesURL()?.appendingPathComponent(path)
 }
