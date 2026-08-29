@@ -26,6 +26,24 @@ open class PerspectiveCamera: Camera {
         }
     }
 
+    public var lensShiftX: Float = 0.0 {
+        didSet {
+            updateProjectionMatrix = true
+        }
+    }
+
+    public var lensShiftY: Float = 0.0 {
+        didSet {
+            updateProjectionMatrix = true
+        }
+    }
+
+    public var enableFrustumShift: Bool = false {
+        didSet {
+            updateProjectionMatrix = true
+        }
+    }
+
     override public var scale: simd_float3 {
         didSet {
             updateViewMatrix = true
@@ -50,7 +68,11 @@ open class PerspectiveCamera: Camera {
     override public var projectionMatrix: matrix_float4x4 {
         get {
             if updateProjectionMatrix {
-                _projectionMatrix = perspectiveMatrixf(fov, aspect, near, far)
+                if enableFrustumShift {
+                    _projectionMatrix = frustumShiftPerspectiveMatrixf(fov, aspect, near, far, lensShiftX, lensShiftY)
+                } else {
+                    _projectionMatrix = perspectiveMatrixf(fov, aspect, near, far)
+                }
                 updateProjectionMatrix = false
             }
             return _projectionMatrix
@@ -67,6 +89,11 @@ open class PerspectiveCamera: Camera {
             let sw = col3.z
             far = sw / sz
             near = sw / (1.0 + sz)
+
+            if enableFrustumShift {
+                lensShiftX = col2.x
+                lensShiftY = col2.y
+            }
         }
     }
 
@@ -103,6 +130,9 @@ open class PerspectiveCamera: Camera {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         fov = try values.decode(Float.self, forKey: .fov)
         aspect = try values.decode(Float.self, forKey: .aspect)
+        lensShiftX = try values.decodeIfPresent(Float.self, forKey: .lensShiftX) ?? 0.0
+        lensShiftY = try values.decodeIfPresent(Float.self, forKey: .lensShiftY) ?? 0.0
+        enableFrustumShift = try values.decodeIfPresent(Bool.self, forKey: .enableFrustumShift) ?? false
     }
 
     override open func encode(to encoder: Encoder) throws {
@@ -110,11 +140,17 @@ open class PerspectiveCamera: Camera {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(fov, forKey: .fov)
         try container.encode(aspect, forKey: .aspect)
+        try container.encode(lensShiftX, forKey: .lensShiftX)
+        try container.encode(lensShiftY, forKey: .lensShiftY)
+        try container.encode(enableFrustumShift, forKey: .enableFrustumShift)
     }
 
     private enum CodingKeys: String, CodingKey {
         case fov
         case aspect
+        case lensShiftX
+        case lensShiftY
+        case enableFrustumShift
     }
 
     override public func setFrom(object: Object, world: Bool = false) {
@@ -122,6 +158,9 @@ open class PerspectiveCamera: Camera {
         if let camera = object as? PerspectiveCamera {
             fov = camera.fov
             aspect = camera.aspect
+            lensShiftX = camera.lensShiftX
+            lensShiftY = camera.lensShiftY
+            enableFrustumShift = camera.enableFrustumShift
         }
     }
 
@@ -141,5 +180,18 @@ open class PerspectiveCamera: Camera {
         _projectionMatrix.columns.2.y = 0.0
         _projectionMatrix.columns.2.z = sz
         _projectionMatrix.columns.3.z = sw
+    }
+
+    // MARK: - Frustum Shift
+    public func setLensShift(_ x: Float, _ y: Float) {
+        lensShiftX = x
+        lensShiftY = y
+        enableFrustumShift = x != 0.0 || y != 0.0
+    }
+
+    public func resetLensShift() {
+        lensShiftX = 0.0
+        lensShiftY = 0.0
+        enableFrustumShift = false
     }
 }
