@@ -7,6 +7,7 @@
 
 #include <CoreText/CoreText.h>
 #include <algorithm>
+#include <cstring>
 #include <malloc/_malloc.h>
 #include <simd/simd.h>
 #include <iostream>
@@ -2630,6 +2631,493 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
 
     computeNormalsOfGeometryData(&geoData);
     return geoData;
+}
+
+// MARK: - Polyline
+
+// A perpendicular to `tangent`, oriented by `up`. Falls back to a secondary
+// reference axis when the segment runs parallel to `up` (the fixed-`up`
+// scheme's one degenerate case), so this never returns NaN.
+// `static` (rather than an anonymous namespace) keeps this internal without
+// tripping "C-linkage function returning a C++-only type" under this file's
+// wrapping extern "C" block.
+static simd_float3 polylineSideVector(simd_float3 tangent, simd_float3 up) {
+    simd_float3 reference = up;
+    if (fabsf(simd_dot(tangent, up)) > 0.999f) {
+        reference = fabsf(tangent.x) < 0.9f ? simd_make_float3(1.0f, 0.0f, 0.0f)
+                                             : simd_make_float3(0.0f, 1.0f, 0.0f);
+    }
+
+    simd_float3 side = simd_cross(reference, tangent);
+    float lengthSquared = simd_dot(side, side);
+    if (lengthSquared < 1e-12f) {
+        reference = fabsf(tangent.y) < 0.9f ? simd_make_float3(0.0f, 1.0f, 0.0f)
+                                             : simd_make_float3(0.0f, 0.0f, 1.0f);
+        side = simd_cross(reference, tangent);
+        lengthSquared = simd_dot(side, side);
+    }
+
+    return side / sqrtf(fmaxf(lengthSquared, 1e-12f));
+}
+
+// Collapses consecutive duplicate points (within epsilon); for closed
+// polylines also drops a trailing point that duplicates the first, since
+// wraparound already connects back to it. Colors ride along in lockstep —
+// pointColors may be shorter than pointCount (the last supplied color pads
+// the remainder) or null/empty (every point defaults to opaque white).
+static void polylineDedupeConsecutive(
+    const simd_float3 *points, int pointCount,
+    const simd_float4 *pointColors, int pointColorCount,
+    bool closed,
+    std::vector<simd_float3> &outPoints,
+    std::vector<simd_float4> &outColors) {
+    outPoints.clear();
+    outColors.clear();
+    if (pointCount <= 0) return;
+
+    auto colorAt = [&](int index) -> simd_float4 {
+        if (pointColors == nullptr || pointColorCount <= 0) {
+            return simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+        return pointColors[std::min(index, pointColorCount - 1)];
+    };
+
+    outPoints.reserve(pointCount);
+    outColors.reserve(pointCount);
+    outPoints.push_back(points[0]);
+    outColors.push_back(colorAt(0));
+
+    for (int i = 1; i < pointCount; i++) {
+        if (simd_length(points[i] - outPoints.back()) > 1e-6f) {
+            outPoints.push_back(points[i]);
+            outColors.push_back(colorAt(i));
+        }
+    }
+
+    if (closed && outPoints.size() > 1 && simd_length(outPoints.front() - outPoints.back()) <= 1e-6f) {
+        outPoints.pop_back();
+        outColors.pop_back();
+    }
+}
+
+struct PolylineRailPair {
+    uint32_t left = 0;
+    uint32_t right = 0;
+    bool valid = false;
+};
+
+struct PolylineJointResult {
+    PolylineRailPair endRail;
+    PolylineRailPair startRail;
+};
+
+// joinStyle: 0 = miter, 1 = bevel, 2 = round. capStyle: 0 = butt, 1 = square, 2 = round.
+// The join/cap/miter-limit/turn-direction-winding math is a faithful port of a
+// since-removed Fabric-side Swift prototype (validated against it via a differential
+// test before that Swift file was retired — see git history on
+// Fabric/Fabric/Nodes/Geometry/PolylineTessellator.swift for the original reference).
+// speedWidthAmount (0...1, 0 = disabled) is new here, with no Swift precedent: it
+// blends in a per-point width taper driven by local point spacing — a "faster" (more
+// widely spaced) stretch of the polyline scales toward speedWidthMinMultiplier, a
+// "slower" (tightly spaced) stretch toward speedWidthMaxMultiplier — a purely spatial
+// proxy for velocity, needing no timing data, for the common case of points sampled
+// once per frame at a roughly fixed rate. pointColors is likewise new, with no
+// per-vertex-color precedent: see polylineDedupeConsecutive for how it pads/defaults.
+PolylineGeometryData generatePolylineGeometryData(
+    const simd_float3 *rawPoints,
+    int rawPointCount,
+    bool closed,
+    float width,
+    int joinStyle,
+    int capStyle,
+    float miterLimit,
+    simd_float3 up,
+    int roundResolution,
+    float speedWidthAmount,
+    float speedWidthMinMultiplier,
+    float speedWidthMaxMultiplier,
+    const simd_float4 *rawPointColors,
+    int rawPointColorCount) {
+
+    std::vector<simd_float3> points;
+    std::vector<simd_float4> colors;
+    polylineDedupeConsecutive(rawPoints, rawPointCount, rawPointColors, rawPointColorCount, closed, points, colors);
+    const int n = (int)points.size();
+
+    if (n < 2 || width <= 0.0f) {
+        return createPolylineGeometryData();
+    }
+
+    const float halfWidth = width * 0.5f;
+    const int resolution = std::max(1, roundResolution);
+    const simd_float3 safeUp =
+        simd_length(up) > 1e-6f ? simd_normalize(up) : simd_make_float3(0.0f, 1.0f, 0.0f);
+    const float safeMiterLimit = std::max(1.0f, miterLimit);
+
+    // One side vector per segment; segment s runs from points[s] to points[(s+1)%n].
+    const int segmentCount = closed ? n : n - 1;
+    std::vector<simd_float3> tangents(segmentCount);
+    std::vector<simd_float3> sides(segmentCount);
+    std::vector<float> segmentLengths(segmentCount);
+    std::vector<float> cumulativeLength(n, 0.0f);
+
+    for (int s = 0; s < segmentCount; s++) {
+        const simd_float3 a = points[s];
+        const simd_float3 b = points[(s + 1) % n];
+        const simd_float3 delta = b - a;
+        const float segmentLength = simd_length(delta);
+        const simd_float3 tangent =
+            segmentLength > 1e-9f ? delta / segmentLength : simd_make_float3(1.0f, 0.0f, 0.0f);
+        tangents[s] = tangent;
+        sides[s] = polylineSideVector(tangent, safeUp);
+        segmentLengths[s] = segmentLength;
+
+        const int nextIndex = s + 1;
+        if (nextIndex < n) {
+            cumulativeLength[nextIndex] = cumulativeLength[s] + segmentLength;
+        }
+    }
+    const float totalLength = std::max(cumulativeLength.back(), 1e-6f);
+
+    // Per-point "speed" proxy: the average length of this point's adjacent
+    // segment(s) — larger spacing reads as faster motion, smaller as slower.
+    std::vector<float> vertexWidthMultiplier(n, 1.0f);
+    const float clampedSpeedAmount = std::clamp(speedWidthAmount, 0.0f, 1.0f);
+    if (clampedSpeedAmount > 0.0f) {
+        std::vector<float> pointSpeed(n, 0.0f);
+        for (int i = 0; i < n; i++) {
+            float sum = 0.0f;
+            int count = 0;
+            if (i > 0) {
+                sum += segmentLengths[i - 1];
+                count++;
+            } else if (closed) {
+                sum += segmentLengths[segmentCount - 1];
+                count++;
+            }
+            if (i < segmentCount) {
+                sum += segmentLengths[i];
+                count++;
+            }
+            pointSpeed[i] = count > 0 ? sum / (float)count : 0.0f;
+        }
+
+        float minSpeed = pointSpeed[0];
+        float maxSpeed = pointSpeed[0];
+        for (int i = 1; i < n; i++) {
+            minSpeed = std::min(minSpeed, pointSpeed[i]);
+            maxSpeed = std::max(maxSpeed, pointSpeed[i]);
+        }
+        const float speedRange = maxSpeed - minSpeed;
+
+        if (speedRange > 1e-6f) {
+            for (int i = 0; i < n; i++) {
+                const float normalizedSpeed = (pointSpeed[i] - minSpeed) / speedRange;
+                const float widthMultiplier =
+                    speedWidthMaxMultiplier +
+                    (speedWidthMinMultiplier - speedWidthMaxMultiplier) * normalizedSpeed;
+                vertexWidthMultiplier[i] = 1.0f + (widthMultiplier - 1.0f) * clampedSpeedAmount;
+            }
+        }
+    }
+
+    // Segment s always starts at point s, so "does point i have a next segment"
+    // reduces to "does segment i exist" — true for every i when closed
+    // (segmentCount == n, including the wraparound segment n-1 starting at the
+    // last point), false only for the open polyline's final point.
+    auto nextSegment = [&](int pointIndex) -> int { return pointIndex < segmentCount ? pointIndex : -1; };
+    auto prevSegment = [&](int pointIndex) -> int {
+        if (pointIndex == 0) return closed ? segmentCount - 1 : -1;
+        return pointIndex - 1;
+    };
+
+    std::vector<PolylineVertex> vertices;
+    std::vector<TriangleIndices> indices;
+    vertices.reserve(segmentCount * 2 + n * (resolution + 4));
+    indices.reserve(segmentCount * 2 + n * resolution);
+
+    auto addVertex = [&](simd_float3 position, simd_float3 normal, float u, float v, float side,
+                          float widthScale, float cornerType, simd_float3 core,
+                          simd_float3 neighbor, simd_float4 color) -> uint32_t {
+        PolylineVertex vertex;
+        vertex.position = position;
+        vertex.normal = normal;
+        vertex.uv = simd_make_float2(u, v);
+        vertex.custom0 = simd_make_float4(side, widthScale, cornerType, 0.0f);
+        vertex.custom1 = core;
+        vertex.custom2 = neighbor;
+        vertex.color = color;
+        vertices.push_back(vertex);
+        return (uint32_t)(vertices.size() - 1);
+    };
+
+    auto addTriangle = [&](uint32_t a, uint32_t b, uint32_t c) {
+        TriangleIndices tri;
+        tri.i0 = a;
+        tri.i1 = b;
+        tri.i2 = c;
+        indices.push_back(tri);
+    };
+
+    // Round join/cap fans are emitted on both sides of a turn, with winding
+    // flipped by `reversed` so both sides stay front-facing regardless of which
+    // way the polyline turns — L and R fillers share the same turn-direction
+    // sign, so one flip (computed once by the caller) covers both.
+    auto addFan = [&](uint32_t hub, simd_float3 from, simd_float3 to, simd_float3 hubNormal,
+                       simd_float3 center, float u, float vSign, float radius, float widthScale,
+                       simd_float4 color, uint32_t startBoundary, uint32_t endBoundary, bool reversed) {
+        uint32_t previous = startBoundary;
+        for (int step = 1; step < resolution; step++) {
+            const float t = (float)step / (float)resolution;
+            const simd_float3 dir = simd_normalize(from + (to - from) * t);
+            const uint32_t rim = addVertex(
+                center + radius * dir, hubNormal, u, 0.5f + 0.5f * vSign * t, 0.0f, widthScale, 2.0f,
+                center, center + dir, color);
+            if (reversed) {
+                addTriangle(hub, rim, previous);
+            } else {
+                addTriangle(hub, previous, rim);
+            }
+            previous = rim;
+        }
+        if (reversed) {
+            addTriangle(hub, endBoundary, previous);
+        } else {
+            addTriangle(hub, previous, endBoundary);
+        }
+    };
+
+    // Returns the rail pair that finishes the segment ending at point i, and
+    // the rail pair that starts the segment beginning at point i.
+    auto buildJoint = [&](int i) -> PolylineJointResult {
+        PolylineJointResult result;
+        const simd_float3 p = points[i];
+        const int prevSeg = prevSegment(i);
+        const int nextSeg = nextSegment(i);
+        const float u = cumulativeLength[i] / totalLength;
+        // This point's own (possibly speed-attenuated) half-width; widthScale in
+        // each addVertex call below stays relative to the *base* halfWidth so a
+        // companion shader's `pixelWidth` uniform composes correctly with the taper.
+        const float halfWidthAtI = halfWidth * vertexWidthMultiplier[i];
+        const float widthScaleAtI = vertexWidthMultiplier[i];
+        const simd_float4 colorAtI = colors[i];
+
+        // Open polyline start cap: no previous segment.
+        if (prevSeg < 0 && nextSeg >= 0) {
+            const simd_float3 side = sides[nextSeg];
+            const simd_float3 tangent = tangents[nextSeg];
+            const simd_float3 normal = simd_normalize(simd_cross(tangent, side));
+            const simd_float3 neighbor = points[(i + 1) % n];
+
+            if (capStyle == 0) { // butt
+                const uint32_t l = addVertex(
+                    p + halfWidthAtI * side, normal, u, 1.0f, 1.0f, widthScaleAtI, 3.0f, p, neighbor, colorAtI);
+                const uint32_t r = addVertex(
+                    p - halfWidthAtI * side, normal, u, 0.0f, -1.0f, widthScaleAtI, 3.0f, p, neighbor, colorAtI);
+                result.startRail = { l, r, true };
+                return result;
+            } else if (capStyle == 1) { // square
+                const simd_float3 extendedCore = p - halfWidthAtI * tangent;
+                const uint32_t l = addVertex(
+                    extendedCore + halfWidthAtI * side, normal, u, 1.0f, 1.0f, widthScaleAtI, 3.0f,
+                    extendedCore, p, colorAtI);
+                const uint32_t r = addVertex(
+                    extendedCore - halfWidthAtI * side, normal, u, 0.0f, -1.0f, widthScaleAtI, 3.0f,
+                    extendedCore, p, colorAtI);
+                result.startRail = { l, r, true };
+                return result;
+            } else { // round
+                const uint32_t hub = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 3.0f, p, p, colorAtI);
+                uint32_t previousRim = 0;
+                uint32_t firstRim = 0;
+                bool havePreviousRim = false;
+                for (int step = 0; step <= resolution; step++) {
+                    const float t = (float)step / (float)resolution;
+                    const float angle = (float)M_PI * t;
+                    const simd_float3 dir = side * cosf(angle) - tangent * sinf(angle);
+                    const uint32_t rim = addVertex(
+                        p + halfWidthAtI * dir, normal, u, t, 0.0f, widthScaleAtI, 3.0f, p, p + dir, colorAtI);
+                    if (havePreviousRim) { addTriangle(hub, previousRim, rim); }
+                    if (step == 0) { firstRim = rim; }
+                    previousRim = rim;
+                    havePreviousRim = true;
+                }
+                result.startRail = { firstRim, previousRim, true };
+                return result;
+            }
+        }
+
+        // Open polyline end cap: no next segment.
+        if (nextSeg < 0 && prevSeg >= 0) {
+            const simd_float3 side = sides[prevSeg];
+            const simd_float3 tangent = tangents[prevSeg];
+            const simd_float3 normal = simd_normalize(simd_cross(tangent, side));
+            const simd_float3 neighbor = points[i - 1];
+
+            if (capStyle == 0) { // butt
+                const uint32_t l = addVertex(
+                    p + halfWidthAtI * side, normal, u, 1.0f, 1.0f, widthScaleAtI, 3.0f, p, neighbor, colorAtI);
+                const uint32_t r = addVertex(
+                    p - halfWidthAtI * side, normal, u, 0.0f, -1.0f, widthScaleAtI, 3.0f, p, neighbor, colorAtI);
+                result.endRail = { l, r, true };
+                return result;
+            } else if (capStyle == 1) { // square
+                const simd_float3 extendedCore = p + halfWidthAtI * tangent;
+                const uint32_t l = addVertex(
+                    extendedCore + halfWidthAtI * side, normal, u, 1.0f, 1.0f, widthScaleAtI, 3.0f,
+                    extendedCore, p, colorAtI);
+                const uint32_t r = addVertex(
+                    extendedCore - halfWidthAtI * side, normal, u, 0.0f, -1.0f, widthScaleAtI, 3.0f,
+                    extendedCore, p, colorAtI);
+                result.endRail = { l, r, true };
+                return result;
+            } else { // round
+                const uint32_t hub = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 3.0f, p, p, colorAtI);
+                uint32_t previousRim = 0;
+                uint32_t firstRim = 0;
+                bool havePreviousRim = false;
+                for (int step = 0; step <= resolution; step++) {
+                    const float t = (float)step / (float)resolution;
+                    const float angle = (float)M_PI * t;
+                    const simd_float3 dir = side * cosf(angle) + tangent * sinf(angle);
+                    const uint32_t rim = addVertex(
+                        p + halfWidthAtI * dir, normal, u, t, 0.0f, widthScaleAtI, 3.0f, p, p + dir, colorAtI);
+                    // Sweeping via +tangent (vs. the start cap's -tangent) reverses this
+                    // fan's winding relative to `normal` — flip the triangle order to compensate.
+                    if (havePreviousRim) { addTriangle(hub, rim, previousRim); }
+                    if (step == 0) { firstRim = rim; }
+                    previousRim = rim;
+                    havePreviousRim = true;
+                }
+                result.endRail = { firstRim, previousRim, true };
+                return result;
+            }
+        }
+
+        // Interior joint (or every vertex, when closed): both segments exist.
+        if (prevSeg < 0 || nextSeg < 0) {
+            return result; // unreachable given the branches above; both invalid, no rails.
+        }
+
+        const simd_float3 sidePrev = sides[prevSeg];
+        const simd_float3 sideNext = sides[nextSeg];
+        const simd_float3 neighborPrev = points[i == 0 ? n - 1 : i - 1];
+        const simd_float3 neighborNext = points[(i + 1) % n];
+
+        // Straight-through fast path — avoid extra geometry when collinear.
+        if (simd_length(sideNext - sidePrev) < 1e-4f) {
+            const simd_float3 normal = simd_normalize(simd_cross(tangents[nextSeg], sideNext));
+            const uint32_t l = addVertex(
+                p + halfWidthAtI * sideNext, normal, u, 1.0f, 1.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
+            const uint32_t r = addVertex(
+                p - halfWidthAtI * sideNext, normal, u, 0.0f, -1.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
+            result.endRail = { l, r, true };
+            result.startRail = { l, r, true };
+            return result;
+        }
+
+        if (joinStyle == 0) { // miter
+            const simd_float3 miterDirRaw = sidePrev + sideNext;
+            const float miterLengthSquared = simd_dot(miterDirRaw, miterDirRaw);
+            if (miterLengthSquared > 1e-8f) {
+                const simd_float3 miterDir = miterDirRaw / sqrtf(miterLengthSquared);
+                const float cosHalfAngle = simd_dot(miterDir, sideNext);
+                if (cosHalfAngle > 1e-4f) {
+                    const float miterLength = halfWidthAtI / cosHalfAngle;
+                    if (miterLength / halfWidthAtI <= safeMiterLimit) {
+                        const simd_float3 normal = simd_normalize(
+                            simd_cross(tangents[nextSeg], sideNext) +
+                            simd_cross(tangents[prevSeg], sidePrev));
+                        // Relative to the *base* halfWidth (not halfWidthAtI, which the
+                        // per-point taper already folded in) so the shader's own
+                        // pixelWidth uniform still composes correctly with this scale.
+                        const float widthScale = widthScaleAtI / cosHalfAngle;
+                        const uint32_t l = addVertex(
+                            p + miterLength * miterDir, normal, u, 1.0f, 1.0f, widthScale, 1.0f, p,
+                            neighborNext, colorAtI);
+                        const uint32_t r = addVertex(
+                            p - miterLength * miterDir, normal, u, 0.0f, -1.0f, widthScale, 1.0f, p,
+                            neighborPrev, colorAtI);
+                        result.endRail = { l, r, true };
+                        result.startRail = { l, r, true };
+                        return result;
+                    }
+                }
+            }
+            // Miter limit exceeded or degenerate miter direction (near-180° turn) — fall back to bevel below.
+        }
+
+        // Bevel (or miter fallback, or round): distinct end/start rails plus filler geometry.
+        const simd_float3 normalPrev = simd_normalize(simd_cross(tangents[prevSeg], sidePrev));
+        const simd_float3 normalNext = simd_normalize(simd_cross(tangents[nextSeg], sideNext));
+
+        const uint32_t endL = addVertex(
+            p + halfWidthAtI * sidePrev, normalPrev, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborPrev, colorAtI);
+        const uint32_t endR = addVertex(
+            p - halfWidthAtI * sidePrev, normalPrev, u, 0.0f, -1.0f, widthScaleAtI, 2.0f, p, neighborPrev, colorAtI);
+        const uint32_t startL = addVertex(
+            p + halfWidthAtI * sideNext, normalNext, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
+        const uint32_t startR = addVertex(
+            p - halfWidthAtI * sideNext, normalNext, u, 0.0f, -1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
+
+        const simd_float3 hubNormal = simd_normalize(normalPrev + normalNext);
+        const uint32_t hub = addVertex(p, hubNormal, u, 0.5f, 0.0f, widthScaleAtI, 2.0f, p, p, colorAtI);
+
+        // cross(sidePrev, sideNext) has the same sign on both the L and R filler
+        // regardless of which way the polyline turns (L uses sidePrev/sideNext
+        // directly, R uses their negations, and cross(-a,-b) == cross(a,b)) — so
+        // a single turn-direction test, not a per-side one, tells us whether the
+        // "forward" winding below is front- or back-facing.
+        const bool turnReversed = simd_dot(simd_cross(sidePrev, sideNext), hubNormal) < 0.0f;
+
+        if (joinStyle == 2) { // round
+            addFan(hub, sidePrev, sideNext, hubNormal, p, u, 1.0f, halfWidthAtI, widthScaleAtI, colorAtI, endL, startL, turnReversed);
+            addFan(hub, -sidePrev, -sideNext, hubNormal, p, u, -1.0f, halfWidthAtI, widthScaleAtI, colorAtI, endR, startR, turnReversed);
+        } else if (turnReversed) {
+            addTriangle(hub, startL, endL);
+            addTriangle(hub, startR, endR);
+        } else {
+            addTriangle(hub, endL, startL);
+            addTriangle(hub, endR, startR);
+        }
+
+        result.endRail = { endL, endR, true };
+        result.startRail = { startL, startR, true };
+        return result;
+    };
+
+    std::vector<PolylineJointResult> joints;
+    joints.reserve(n);
+    for (int i = 0; i < n; i++) {
+        joints.push_back(buildJoint(i));
+    }
+
+    for (int s = 0; s < segmentCount; s++) {
+        const int iA = s;
+        const int iB = (s + 1) % n;
+        const PolylineRailPair &aStart = joints[iA].startRail;
+        const PolylineRailPair &bEnd = joints[iB].endRail;
+        if (!aStart.valid || !bEnd.valid) continue;
+
+        addTriangle(aStart.left, aStart.right, bEnd.right);
+        addTriangle(aStart.left, bEnd.right, bEnd.left);
+    }
+
+    PolylineGeometryData data = createPolylineGeometryData();
+
+    data.vertexCount = (int)vertices.size();
+    if (!vertices.empty()) {
+        data.vertexData = (PolylineVertex *)malloc(sizeof(PolylineVertex) * vertices.size());
+        memcpy(data.vertexData, vertices.data(), sizeof(PolylineVertex) * vertices.size());
+    }
+
+    data.indexCount = (int)indices.size(); // triangle count, matching GeometryData's convention
+    if (!indices.empty()) {
+        data.indexData = (TriangleIndices *)malloc(sizeof(TriangleIndices) * indices.size());
+        memcpy(data.indexData, indices.data(), sizeof(TriangleIndices) * indices.size());
+    }
+
+    return data;
 }
 
 #if defined(__cplusplus)
