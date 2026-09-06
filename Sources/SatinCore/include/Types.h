@@ -86,6 +86,29 @@ typedef struct GeometryData {
     TriangleIndices *indexData;
 } GeometryData;
 
+// Extends SatinVertex with the extra per-vertex channels a polyline ribbon's
+// vertex shader needs to recompute a camera-facing/resolution-independent
+// offset: custom0 = (side, widthScale, cornerType, reserved), custom1 = core
+// point, custom2 = neighbor point (see generatePolylineGeometryData). `color`
+// is the per-point vertex color (defaults to opaque white when the caller
+// supplies none), independent of that billboard bookkeeping.
+typedef struct PolylineVertex {
+    simd_float3 position;
+    simd_float3 normal;
+    simd_float2 uv;
+    simd_float4 custom0;
+    simd_float3 custom1;
+    simd_float3 custom2;
+    simd_float4 color;
+} PolylineVertex;
+
+typedef struct PolylineGeometryData {
+    int vertexCount;
+    PolylineVertex *vertexData;
+    int indexCount;
+    TriangleIndices *indexData;
+} PolylineGeometryData;
+
 typedef struct BVHNode {
     Bounds aabb;
     uint32_t leftFirst;
@@ -132,6 +155,9 @@ void freeTriangleData(TriangleData *data);
 
 GeometryData createGeometryData(void);
 void freeGeometryData(GeometryData *data);
+
+PolylineGeometryData createPolylineGeometryData(void);
+void freePolylineGeometryData(PolylineGeometryData *data);
 
 void copyVertexDataToGeometryData(SatinVertex *vertices, int count, GeometryData *destData);
 void copyTriangleDataToGeometryData(TriangleData *triData, GeometryData *destData);

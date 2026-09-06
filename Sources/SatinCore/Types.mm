@@ -84,6 +84,26 @@ void freeGeometryData(GeometryData *data) {
     }
 }
 
+PolylineGeometryData createPolylineGeometryData() {
+    return (PolylineGeometryData) {
+        .vertexCount = 0, .vertexData = NULL, .indexCount = 0, .indexData = NULL
+    };
+}
+
+void freePolylineGeometryData(PolylineGeometryData *data) {
+    if (data->vertexCount > 0 && data->vertexData != NULL) {
+        free(data->vertexData);
+        data->vertexCount = 0;
+        data->vertexData = NULL;
+    }
+
+    if (data->indexCount > 0 && data->indexData != NULL) {
+        free(data->indexData);
+        data->indexCount = 0;
+        data->indexData = NULL;
+    }
+}
+
 void combineVertexGeometryData(GeometryData *dest, GeometryData *src) {
     if (src->vertexCount > 0) {
         if (dest->vertexCount > 0) {
