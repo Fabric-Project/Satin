@@ -9,8 +9,11 @@
 import Foundation
 
 open class SourceMaterial: Material {
+    
+    private var shadersupportsAlphaOrderIndependentTransparency = false
+    
     override var supportsAlphaOrderIndependentTransparency: Bool {
-        source?.contains("SATIN_ALPHA_OIT_ENABLED") == true
+        self.shadersupportsAlphaOrderIndependentTransparency
     }
 
     public enum CodingKeys: String, CodingKey {
@@ -28,6 +31,7 @@ open class SourceMaterial: Material {
 
     public var source: String? {
         guard let shader = shader as? SourceShader else { return nil }
+                
         return shader.source
     }
 
@@ -57,6 +61,9 @@ open class SourceMaterial: Material {
         let shader = SourceShader(context: context, label: label, pipelineURL: pipelineURL)
         shader.live = live
         shader.blending = blending
+        
+        self.shadersupportsAlphaOrderIndependentTransparency = shader.source?.contains("SATIN_ALPHA_OIT_ENABLED") ?? false
+
         return shader
     }
 
