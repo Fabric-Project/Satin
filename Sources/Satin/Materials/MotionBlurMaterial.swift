@@ -33,6 +33,16 @@ public final class MotionBlurMaterial: Material {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom3) }
     }
 
+    /// Per tile, a pointer (UV) into `tileMaxTexture` at the mover whose trail covers it.
+    public unowned var neighborMaxTexture: MTLTexture? {
+        didSet { set(neighborMaxTexture, index: FragmentTextureIndex.Custom4) }
+    }
+
+    /// Longest velocity per tile, read through `neighborMaxTexture`.
+    public unowned var tileMaxTexture: MTLTexture? {
+        didSet { set(tileMaxTexture, index: FragmentTextureIndex.Custom5) }
+    }
+
     public var shutterAngle: Float {
         get { get("Shutter Angle", as: FloatParameter.self)?.value ?? Self.defaultShutterAngle }
         set {
@@ -51,6 +61,13 @@ public final class MotionBlurMaterial: Material {
     public var jitter: Float {
         get { get("Jitter", as: FloatParameter.self)?.value ?? 1.0 }
         set { set("Jitter", newValue) }
+    }
+
+    /// Longest blur in pixels: the reach of the jump-flood dilation. Set by
+    /// `MotionBlurPostProcessEncoder`.
+    public var maxBlurRadius: Float {
+        get { get("Max Blur Radius", as: FloatParameter.self)?.value ?? 144 }
+        set { set("Max Blur Radius", newValue) }
     }
 
     public var frame: Int32 {
@@ -91,12 +108,15 @@ public final class MotionBlurMaterial: Material {
         orderedParameters.append(IntParameter("Samples", get("Samples", as: IntParameter.self)?.value ?? 16, 1, 32))
         orderedParameters.append(FloatParameter("Jitter", get("Jitter", as: FloatParameter.self)?.value ?? 1.0, 0.0, 1.0, .slider))
         orderedParameters.append(IntParameter("Frame", get("Frame", as: IntParameter.self)?.value ?? 0))
+        orderedParameters.append(FloatParameter("Max Blur Radius", get("Max Blur Radius", as: FloatParameter.self)?.value ?? 144))
         parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
 
         set(colorTexture, index: FragmentTextureIndex.Custom0)
         set(velocityTexture, index: FragmentTextureIndex.Custom1)
         set(blueNoiseTexture, index: FragmentTextureIndex.Custom2)
         set(depthTexture, index: FragmentTextureIndex.Custom3)
+        set(neighborMaxTexture, index: FragmentTextureIndex.Custom4)
+        set(tileMaxTexture, index: FragmentTextureIndex.Custom5)
     }
 
     override public func updateUniforms() {

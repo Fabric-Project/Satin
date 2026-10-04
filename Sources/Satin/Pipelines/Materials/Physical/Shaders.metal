@@ -85,7 +85,20 @@ vertex CustomVertexData physicalVertex(
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
-    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * worldPosition;
+#if defined(HAS_CUSTOM10)
+    // Custom10 is VertexAttributeIndex.PreviousPosition: last frame's object-space position, for
+    // geometry deformed on the CPU, so its motion reaches the velocity output.
+    const float4 previousPosition = float4(in.custom10.xyz, 1.0);
+#else
+    const float4 previousPosition = position;
+#endif
+#if defined(INSTANCING)
+    // Previous instance matrices are not tracked, so instanced motion is camera motion only.
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * previousPosition;
+#else
+    // Last frame's model and view-projection, so object motion reaches the velocity output.
+    out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * previousPosition;
+#endif
 #endif
 
     return out;

@@ -277,6 +277,14 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
     }
 }
 
+public extension VertexAttributeIndex {
+    /// Last frame's object-space position, for geometry deformed on the CPU. Materials that
+    /// output velocity use it in place of the current position for the previous clip
+    /// position, so per-vertex motion shows up in motion blur. Reserves the Custom10 slot
+    /// (`HAS_CUSTOM10`, `in.custom10` in shaders); supply it as float3 or float4.
+    static let PreviousPosition: VertexAttributeIndex = .Custom10
+}
+
 public enum VertexTextureIndex: Int {
     case Custom0 = 0
     case Custom1 = 1
