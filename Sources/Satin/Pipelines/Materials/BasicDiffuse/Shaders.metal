@@ -116,10 +116,17 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
-#if INSTANCING
-    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * position;
+#if defined(HAS_CUSTOM10)
+    // Custom10 is VertexAttributeIndex.PreviousPosition: last frame's object-space position, for
+    // geometry deformed on the CPU, so its motion reaches the velocity output.
+    const float4 previousPosition = float4(in.custom10.xyz, 1.0);
 #else
-    out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * position;
+    const float4 previousPosition = position;
+#endif
+#if INSTANCING
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * previousPosition;
+#else
+    out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * previousPosition;
 #endif
 #endif
 
