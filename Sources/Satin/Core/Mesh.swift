@@ -49,7 +49,7 @@ open class Mesh: Renderable {
 
     override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
-              !geometry.vertexBuffers.isEmpty,
+              geometry.hasVertexBuffers,
               vertexUniforms[renderContext.id] != nil
         else { return false }
 
@@ -155,10 +155,22 @@ open class Mesh: Renderable {
         if geometry == nil {
             geometry = Geometry(context: context)
         }
+        // A geometry swapped in under an existing material (as Fabric's Mesh node does) must
+        // take effect now: its vertex layout (which carries any joint attributes) and skinning.
+        // The subscription below only sees later changes.
+        material?.vertexDescriptor = geometry.vertexDescriptor
+        material?.skinning = geometry.isSkinned
+        for submesh in submeshes {
+            submesh.material?.skinning = geometry.isSkinned
+        }
         geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
             guard let self = self else { return }
             self.updateBounds = true
             self.material?.vertexDescriptor = geo.vertexDescriptor
+            self.material?.skinning = geo.isSkinned
+            for submesh in self.submeshes {
+                submesh.material?.skinning = geo.isSkinned
+            }
         }
     }
 
@@ -172,6 +184,7 @@ open class Mesh: Renderable {
         guard let material else { return }
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
+        material.skinning = geometry.isSkinned
         material.setup()
         material.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
 

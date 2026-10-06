@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		1B01F15D2FAFB8ED00C88561 /* Object+Flatten.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */; };
 		1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2852F9692FB00DE68DE /* RenderLayer.swift */; };
+		1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */; };
+		1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */; };
+		1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */; };
 		1B62F68A2F95C93C007F29E9 /* SpotShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6892F95C93C007F29E9 /* SpotShadow.swift */; };
 		1B62F68B2F95C93C007F29E9 /* DirectionalShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */; };
 		1B62F68C2F95C93C007F29E9 /* PointShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B62F6882F95C93C007F29E9 /* PointShadow.swift */; };
@@ -17,9 +20,6 @@
 		1B7FEE162F98972D0075DA16 /* RenderingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE152F98972D0075DA16 /* RenderingMode.swift */; };
 		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006AA000006AA000006 /* MotionBlurMaterial.swift */; };
-		1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */; };
-		1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */; };
-		1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */; };
 		AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000008AA000008AA000008 /* RendererOutputs.swift */; };
 		E101A8542C07061D0055FABA /* Bezier.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEED2C06A24B00B5A6C8 /* Bezier.mm */; };
 		E101A8552C07061D0055FABA /* Bounds.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEE2C06A24B00B5A6C8 /* Bounds.mm */; };
@@ -137,7 +137,6 @@
 		E101A8EA2C070E8E0055FABA /* CircleGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */; };
 		E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */; };
 		E101A8EC2C070E8E0055FABA /* CylinderGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */; };
-		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
 		E101A8ED2C070E8E0055FABA /* ExtrudedRoundedRectGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */; };
 		E101A8EE2C070E8E0055FABA /* ExtrudedTextGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */; };
 		E101A8EF2C070E8E0055FABA /* IcoSphereGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */; };
@@ -277,6 +276,7 @@
 		F0B100012E06000100AAA004 /* SlugTextMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B100012E06000200AAA004 /* SlugTextMesh.swift */; };
 		F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B100012E06000200AAA005 /* SlugTextTests.swift */; };
 		F1A000012F00000100AAA001 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000022F00000100AAA001 /* Renderer.swift */; };
+		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -292,6 +292,9 @@
 /* Begin PBXFileReference section */
 		1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Object+Flatten.swift"; sourceTree = "<group>"; };
 		1B35E2852F9692FB00DE68DE /* RenderLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderLayer.swift; sourceTree = "<group>"; };
+		1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurJumpFloodMaterial.swift; sourceTree = "<group>"; };
+		1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurNeighborMaxMaterial.swift; sourceTree = "<group>"; };
+		1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurTileMaxMaterial.swift; sourceTree = "<group>"; };
 		1B62F6872F95C93C007F29E9 /* DirectionalShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectionalShadow.swift; sourceTree = "<group>"; };
 		1B62F6882F95C93C007F29E9 /* PointShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointShadow.swift; sourceTree = "<group>"; };
 		1B62F6892F95C93C007F29E9 /* SpotShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotShadow.swift; sourceTree = "<group>"; };
@@ -390,7 +393,6 @@
 		66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CircleGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConeGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CylinderGeometry.swift; sourceTree = "<group>"; };
-		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedRoundedRectGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedTextGeometry.swift; sourceTree = "<group>"; };
 		66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IcoSphereGeometry.swift; sourceTree = "<group>"; };
@@ -521,9 +523,6 @@
 		66D7DEF62C06A24B00B5A6C8 /* Triangulator.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Triangulator.mm; sourceTree = "<group>"; };
 		66D7DEF72C06A24B00B5A6C8 /* Types.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Types.mm; sourceTree = "<group>"; };
 		AA000006AA000006AA000006 /* MotionBlurMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MotionBlurMaterial.swift; sourceTree = "<group>"; };
-		1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurJumpFloodMaterial.swift; sourceTree = "<group>"; };
-		1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurNeighborMaxMaterial.swift; sourceTree = "<group>"; };
-		1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurTileMaxMaterial.swift; sourceTree = "<group>"; };
 		AA000008AA000008AA000008 /* RendererOutputs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RendererOutputs.swift; sourceTree = "<group>"; };
 		AC32791DA39C4460A06E9773 /* Textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Textures; path = Sources/Satin/Textures; sourceTree = "<group>"; };
 		E10A52D42C581CE300BB537A /* CodingUserInfoKey+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CodingUserInfoKey+Extensions.swift"; sourceTree = "<group>"; };
@@ -562,6 +561,7 @@
 		F0B100012E06000200AAA004 /* SlugTextMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextMesh.swift; sourceTree = "<group>"; };
 		F0B100012E06000200AAA005 /* SlugTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextTests.swift; sourceTree = "<group>"; };
 		F1A000022F00000100AAA001 /* Renderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
+		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1397,6 +1397,9 @@
 				E101A8B22C070E8E0055FABA /* ComputeShaderPipelineCache.swift in Sources */,
 				E101A8B32C070E8E0055FABA /* BufferComputeSystem.swift in Sources */,
 				E101A8B42C070E8E0055FABA /* ComputeSystem.swift in Sources */,
+				1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */,
+				1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */,
+				1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */,
 				E101A8B52C070E8E0055FABA /* TextureComputeSystem.swift in Sources */,
 				E101A8B62C070E8E0055FABA /* ComputeConstants.swift in Sources */,
 				E101A8B72C070E8E0055FABA /* FragmentConstants.swift in Sources */,
@@ -1501,9 +1504,6 @@
 				E101A90D2C070E8E0055FABA /* DepthMaterial.swift in Sources */,
 				E101A90E2C070E8E0055FABA /* MatCapMaterial.swift in Sources */,
 				AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */,
-				1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */,
-				1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */,
-				1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */,
 				E101A9102C070E8E0055FABA /* PhysicalMaterial.swift in Sources */,
 				E101A9122C070E8E0055FABA /* SkyboxMaterial.swift in Sources */,
 				E101A9132C070E8E0055FABA /* SourceMaterial.swift in Sources */,

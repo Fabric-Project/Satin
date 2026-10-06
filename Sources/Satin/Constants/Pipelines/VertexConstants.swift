@@ -30,7 +30,8 @@ public enum VertexBufferIndex: Int, CaseIterable, Codable {
     case JointWeights = 16
     case ShadingBasisU = 17
     case ShadingBasisV = 18
-    case SubdivisionStencil = 19
+    /// The joint palette of a skinned geometry (`JointPalette`).
+    case JointMatrices = 19
 
     case Custom0 = 20
     case Custom1 = 21
@@ -65,7 +66,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
     case JointWeights = 11
     case ShadingBasisU = 12
     case ShadingBasisV = 13
-    case SubdivisionStencil = 14
     case Custom0 = 15
     case Custom1 = 16
     case Custom2 = 17
@@ -83,7 +83,8 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
         String(describing: self).titleCase.replacingOccurrences(of: " ", with: "")
     }
 
-    public init(name: String) {
+    /// Nil for a name Satin does not render, such as ModelIO's subdivision stencil.
+    public init?(name: String) {
         switch name {
             case MDLVertexAttributePosition:
                 self = .Position
@@ -113,8 +114,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 self = .ShadingBasisU
             case MDLVertexAttributeShadingBasisV:
                 self = .ShadingBasisV
-            case MDLVertexAttributeSubdivisionStencil:
-                self = .SubdivisionStencil
             case "position":
                 self = .Position
             case "normal":
@@ -143,10 +142,8 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 self = .ShadingBasisU
             case "ShadingBasisV":
                 self = .ShadingBasisV
-            case "subdivisionStencil":
-                self = .SubdivisionStencil
             default:
-                fatalError("Unknown Vertex Attribute: \(name)")
+                return nil
         }
     }
 
@@ -180,8 +177,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 return MDLVertexAttributeShadingBasisU
             case .ShadingBasisV:
                 return MDLVertexAttributeShadingBasisV
-            case .SubdivisionStencil:
-                return MDLVertexAttributeSubdivisionStencil
             case .Custom0:
                 return "Invalid"
             case .Custom1:
@@ -247,8 +242,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 return .ShadingBasisU
             case .ShadingBasisV:
                 return .ShadingBasisV
-            case .SubdivisionStencil:
-                return .SubdivisionStencil
             case .Custom0:
                 return .Custom0
             case .Custom1:

@@ -145,6 +145,12 @@ open class Material: Codable {
         set { renderingConfiguration.instancing = newValue }
     }
 
+    /// Set by `Mesh` when its geometry carries a joint palette and joint attributes.
+    public var skinning: Bool {
+        get { renderingConfiguration.skinning }
+        set { renderingConfiguration.skinning = newValue }
+    }
+
     public var castShadow: Bool {
         get { renderingConfiguration.castShadow }
         set { renderingConfiguration.castShadow = newValue }
@@ -849,6 +855,7 @@ open class Material: Codable {
         clone.label = label
         clone.vertexDescriptor = vertexDescriptor
         clone.instancing = instancing
+        clone.skinning = skinning
         clone.lighting = lighting
         clone.lightCount = lightCount
 

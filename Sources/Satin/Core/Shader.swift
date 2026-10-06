@@ -216,6 +216,17 @@ open class Shader {
         }
     }
 
+    // MARK: - Skinning
+
+    public var skinning: Bool {
+        get {
+            renderingConfiguration.skinning
+        }
+        set {
+            renderingConfiguration.skinning = newValue
+        }
+    }
+
     // MARK: - Lighting
 
     public var lighting: Bool {

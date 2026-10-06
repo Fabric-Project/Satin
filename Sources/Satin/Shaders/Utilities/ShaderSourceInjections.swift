@@ -113,6 +113,14 @@ public func injectInstanceMatrixUniforms(source: inout String) {
     source = source.replacingOccurrences(of: "// inject instance matrix uniforms\n", with: InstanceMatrixUniformsSource.get() ?? "\n")
 }
 
+/// Adds the joint palette argument at the instancing marker, leaving the marker for
+/// `injectInstancingArgs`, so skinning and instancing combine. Run before it.
+public func injectSkinningArgs(source: inout String, skinning: Bool) {
+    guard skinning else { return }
+    let injection = "\tconstant SkinJoint *skinJoints [[buffer(VertexBufferJointMatrices)]],\n"
+    source = source.replacingOccurrences(of: "// inject instancing args\n", with: injection + "// inject instancing args\n")
+}
+
 public func injectInstancingArgs(source: inout String, instancing: Bool) {
     let injection =
         """

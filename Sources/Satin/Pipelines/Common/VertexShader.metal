@@ -7,17 +7,17 @@ vertex VertexData satinVertex(
 
 #if INSTANCING
     out.position = vertexUniforms[amp_id].viewProjectionMatrix *
-                   instanceUniforms[instanceID].modelMatrix * float4(in.position, 1.0);
+                   instanceUniforms[instanceID].modelMatrix * SATIN_SKIN_POSITION(in);
 
 #if HAS_NORMAL
-    out.normal = instanceUniforms[instanceID].normalMatrix * in.normal;
+    out.normal = instanceUniforms[instanceID].normalMatrix * SATIN_SKIN_NORMAL(in);
 #endif
 
 #else
-    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * float4(in.position, 1.0);
+    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 
 #if HAS_NORMAL
-    out.normal = vertexUniforms[amp_id].normalMatrix * in.normal;
+    out.normal = vertexUniforms[amp_id].normalMatrix * SATIN_SKIN_NORMAL(in);
 #endif
 
 #endif
