@@ -45,7 +45,7 @@ vertex CustomVertexData standardVertex(
     const float4x4 modelMatrix = vertexUniforms[amp_id].modelMatrix;
 #endif
 
-    const float4 position = float4(in.position, 1.0);
+    const float4 position = SATIN_SKIN_POSITION(in);
     const float4 worldPosition = modelMatrix * position;
 
     CustomVertexData out;
@@ -55,18 +55,18 @@ vertex CustomVertexData standardVertex(
     out.texcoord = in.texcoord;
 #endif
 
-    out.normal = normalMatrix * in.normal;
+    out.normal = normalMatrix * SATIN_SKIN_NORMAL(in);
 
 #if defined(HAS_COLOR)
     out.color = float4(in.color.rgb, 1.0);
 #endif
 
 #if defined(HAS_TANGENT)
-    out.tangent = normalMatrix * in.tangent;
+    out.tangent = normalMatrix * SATIN_SKIN_DIRECTION(in, in.tangent);
 #endif
 
 #if defined(HAS_BITANGENT)
-    out.bitangent = in.bitangent;
+    out.bitangent = SATIN_SKIN_DIRECTION(in, in.bitangent);
 #endif
 
     out.worldPosition = worldPosition.xyz;
@@ -78,13 +78,13 @@ vertex CustomVertexData standardVertex(
 #if defined(HAS_CUSTOM10)
     // Custom10 is VertexAttributeIndex.PreviousPosition: last frame's object-space position, for
     // geometry deformed on the CPU, so its motion reaches the velocity output.
-    const float4 previousPosition = float4(in.custom10.xyz, 1.0);
+    const float4 previousPosition = SATIN_PREVIOUS_SKIN_TRANSFORM(in, float4(in.custom10.xyz, 1.0));
 #else
-    const float4 previousPosition = position;
+    const float4 previousPosition = SATIN_PREVIOUS_SKIN_POSITION(in);
 #endif
 #if defined(INSTANCING)
-    // Previous instance matrices are not tracked, so instanced motion is camera motion only.
-    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * previousPosition;
+    // Each instance's last-frame matrix, so instance motion reaches the velocity output.
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * instanceUniforms[instanceID].previousModelMatrix * previousPosition;
 #else
     // Last frame's model and view-projection, so object motion reaches the velocity output.
     out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * previousPosition;

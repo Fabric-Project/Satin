@@ -64,7 +64,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         let primitiveType: MTLPrimitiveType
     }
 
-    private var minimumEncodesPerFrame: Int = 1
+    public private(set) var minimumEncodesPerFrame: Int = 1
     private var versionedSlotIndex: Int = -1
     private var latestVersionedSlotIndex: Int = -1
     private var versionedVertexBuffers: [VertexBufferIndex: VersionedVertexBuffer] = [:]
@@ -84,13 +84,14 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     }
 
     private var _vertexDescriptor = ValueCache<MTLVertexDescriptor>()
-    public var vertexDescriptor: MTLVertexDescriptor { _vertexDescriptor.get { generateVertexDescriptor() } }
+    open var vertexDescriptor: MTLVertexDescriptor { _vertexDescriptor.get { generateVertexDescriptor() } }
     public var tessellationDescriptor: TessellationDescriptor? { nil }
 
     public private(set) var vertexAttributes: [VertexAttributeIndex: VertexAttribute] = [:] {
         didSet {
-            _updateVertexBuffers = true
+            // Clear first: setting the flag tells meshes, which read the new layout at once.
             _vertexDescriptor.clear()
+            _updateVertexBuffers = true
         }
     }
     private var bufferAttributes: [VertexAttributeIndex: BufferAttribute] = [:]
@@ -99,7 +100,25 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     public let onUpdate = PassthroughSubject<Geometry, Never>()
 
     public var vertexCount: Int { vertexAttributes[.Position]?.count ?? 0 }
+
+    /// The pose of this geometry's joints. Together with `JointIndices` and `JointWeights`
+    /// attributes it makes the geometry skinned: any mesh drawing it, with any standard
+    /// material, moves its vertices by the palette on the GPU.
+    public var jointPalette: JointPalette? {
+        didSet {
+            // Meshes listen for this to switch their materials' skinning on or off.
+            if (jointPalette == nil) != (oldValue == nil) { onUpdate.send(self) }
+        }
+    }
+
+    /// Has a joint palette and the joint attributes it applies to.
+    open var isSkinned: Bool {
+        jointPalette != nil && vertexAttributes[.JointIndices] != nil && vertexAttributes[.JointWeights] != nil
+    }
     public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
+
+    /// Has vertex data on the GPU, so a mesh can draw it.
+    open var hasVertexBuffers: Bool { !vertexBuffers.isEmpty }
 
     private var _updateVertexBuffers = true {
         didSet {
@@ -185,6 +204,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         for (index, buffer) in vertexBuffers {
             renderEncoderState.setVertexBuffer(buffer, offset: vertexBufferOffsets[index, default: 0], index: index)
         }
+        if isSkinned, let jointPalette {
+            renderEncoderState.vertexJointPalette = jointPalette
+        }
     }
 
     open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
@@ -199,7 +221,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         selectedDrawState = nil
     }
 
-    public func selectRecentSlot(iteration: Int, count: Int) {
+    open func selectRecentSlot(iteration: Int, count: Int) {
+        jointPalette?.selectRecentSlot(iteration: iteration, count: count)
         guard usesVersionedDrawStates, latestVersionedSlotIndex >= 0 else { return }
         let sanitizedCount = max(1, count)
         let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
@@ -545,7 +568,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         return rayBoundsIntersect(ray, bounds)
     }
 
-    public func intersect(ray: Ray, intersections: inout [IntersectionResult]) {
+    open func intersect(ray: Ray, intersections: inout [IntersectionResult]) {
         bvh?.intersect(ray: ray, intersections: &intersections)
     }
 

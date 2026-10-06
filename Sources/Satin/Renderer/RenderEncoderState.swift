@@ -127,6 +127,18 @@ public final class RenderEncoderState {
         }
     }
 
+    public var vertexJointPalette: JointPalette? {
+        didSet {
+            if let vertexJointPalette {
+                setVertexBuffer(
+                    vertexJointPalette.buffer,
+                    offset: vertexJointPalette.offset,
+                    index: .JointMatrices
+                )
+            }
+        }
+    }
+
     public var fragmentMaterialUniforms: UniformBuffer? {
         didSet {
             if let fragmentMaterialUniforms {

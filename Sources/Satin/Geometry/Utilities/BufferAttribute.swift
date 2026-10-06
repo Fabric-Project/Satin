@@ -316,9 +316,24 @@ public final class Int4BufferAttribute: GenericBufferAttribute<simd_int4> {
                 Int32(simd_mix(Float(startValue.x), Float(endValue.x), time)),
                 Int32(simd_mix(Float(startValue.y), Float(endValue.y), time)),
                 Int32(simd_mix(Float(startValue.z), Float(endValue.z), time)),
-                Int32(simd_mix(Float(startValue.z), Float(endValue.z), time))
+                Int32(simd_mix(Float(startValue.w), Float(endValue.w), time))
             )
         )
+    }
+}
+
+/// Four 16-bit unsigned integers per vertex, as glTF stores skinning joint indices.
+public final class UShort4BufferAttribute: GenericBufferAttribute<simd_ushort4> {
+    override public var type: AttributeType { .ushort4 }
+    override public var components: Int { 4 }
+
+    override public func duplicate() -> BufferAttribute {
+        UShort4BufferAttribute(defaultValue: defaultValue, data: data)
+    }
+
+    // Indices cannot be blended, so a new vertex between two takes the nearer one's.
+    override public func interpolate(start: Int, end: Int, at time: Float) {
+        append(time < 0.5 ? data[start] : data[end])
     }
 }
 

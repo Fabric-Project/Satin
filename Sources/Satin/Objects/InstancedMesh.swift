@@ -64,6 +64,11 @@ public class InstancedMesh: Mesh {
     private var _updateInstanceMatrixBuffer = true
     private var instanceMatrixBuffer: InstanceMatrixUniformBuffer?
     private var minimumEncodesPerFrame = 1
+    /// The model matrices last uploaded, which become each instance's previous matrix.
+    private var uploadedModelMatrices: [simd_float4x4] = []
+    /// Instances moved in the last upload, so the next still frame must re-upload with
+    /// previous equal to current, or still instances would keep reporting motion.
+    private var instanceMotionNeedsSettling = false
 
     override public var material: Material? {
         didSet {
@@ -155,7 +160,11 @@ public class InstancedMesh: Mesh {
     override public func update() {
         if _updateInstanceMatricesUniforms { updateInstanceMatricesUniforms() }
         if _setupInstanceMatrixBuffer { setupInstanceBuffer() }
-        if _updateInstanceMatrixBuffer { updateInstanceBuffer() }
+        if _updateInstanceMatrixBuffer {
+            updateInstanceBuffer()
+        } else if instanceMotionNeedsSettling {
+            settleInstanceMotion()
+        }
         super.update()
     }
 
@@ -183,8 +192,27 @@ public class InstancedMesh: Mesh {
     }
 
     func updateInstanceBuffer() {
+        // What was uploaded last becomes each instance's previous matrix; new instances start still.
+        var moved = false
+        for index in instanceMatricesUniforms.indices {
+            let current = instanceMatricesUniforms[index].modelMatrix
+            let previous = index < uploadedModelMatrices.count ? uploadedModelMatrices[index] : current
+            instanceMatricesUniforms[index].previousModelMatrix = previous
+            if previous != current { moved = true }
+        }
         instanceMatrixBuffer?.update(data: instanceMatricesUniforms)
+        uploadedModelMatrices = instanceMatricesUniforms.map(\.modelMatrix)
+        instanceMotionNeedsSettling = moved
         _updateInstanceMatrixBuffer = false
+    }
+
+    /// The first frame without changes: previous catches up with current, so velocity is zero.
+    func settleInstanceMotion() {
+        for index in instanceMatricesUniforms.indices {
+            instanceMatricesUniforms[index].previousModelMatrix = instanceMatricesUniforms[index].modelMatrix
+        }
+        instanceMatrixBuffer?.update(data: instanceMatricesUniforms)
+        instanceMotionNeedsSettling = false
     }
 
     @inline(__always)

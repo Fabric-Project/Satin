@@ -24,9 +24,9 @@ vertex DepthVertexData depthVertex(
     constant DepthUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
 #if INSTANCING
     const float4 position = vertexUniforms[amp_id].viewMatrix *
-                            instanceUniforms[instanceID].modelMatrix * float4(v.position, 1.0);
+                            instanceUniforms[instanceID].modelMatrix * SATIN_SKIN_POSITION(v);
 #else
-    const float4 position = vertexUniforms[amp_id].modelViewMatrix * float4(v.position, 1.0);
+    const float4 position = vertexUniforms[amp_id].modelViewMatrix * SATIN_SKIN_POSITION(v);
 #endif
     const float z = position.z;
 

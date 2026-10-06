@@ -23,8 +23,8 @@ vertex MatCapVertexData matCapVertex(
     const float4x4 modelViewMatrix = vertexUniforms[amp_id].modelViewMatrix;
 #endif
 
-    const float4 screenSpaceNormal = modelViewMatrix * float4(in.normal, 0.0);
-    const float4 worldPosition = modelViewMatrix * float4(in.position, 1.0);
+    const float4 screenSpaceNormal = modelViewMatrix * float4(SATIN_SKIN_NORMAL(in), 0.0);
+    const float4 worldPosition = modelViewMatrix * SATIN_SKIN_POSITION(in);
     const float3 eye = normalize(worldPosition.xyz);
 
     MatCapVertexData out;

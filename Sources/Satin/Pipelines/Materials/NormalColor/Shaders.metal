@@ -19,11 +19,11 @@ vertex NormalColorVertexData normalColorVertex(
 
 #if INSTANCING
     out.position = vertexUniforms[amp_id].viewProjectionMatrix *
-                   instanceUniforms[instanceID].modelMatrix * float4(in.position, 1.0);
-    out.normal = instanceUniforms[instanceID].normalMatrix * in.normal;
+                   instanceUniforms[instanceID].modelMatrix * SATIN_SKIN_POSITION(in);
+    out.normal = instanceUniforms[instanceID].normalMatrix * SATIN_SKIN_NORMAL(in);
 #else
-    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * float4(in.position, 1.0);
-    out.normal = vertexUniforms[amp_id].normalMatrix * in.normal;
+    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
+    out.normal = vertexUniforms[amp_id].normalMatrix * SATIN_SKIN_NORMAL(in);
 #endif
 
     out.pointSize = uniforms.pointSize;

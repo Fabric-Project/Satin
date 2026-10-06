@@ -35,6 +35,9 @@ public struct RenderingConfiguration: Hashable {
     // Instancing
     var instancing: Bool = false
 
+    // Skinning: joint palette bound and joint attributes present
+    var skinning: Bool = false
+
     // Lighting
     var lighting: Bool = false
     var lightCount: Int = 0
@@ -54,6 +57,8 @@ public struct RenderingConfiguration: Hashable {
         hasher.combine(vertexDescriptor)
 
         hasher.combine(instancing)
+        // Only when on, so configurations without skinning hash exactly as before.
+        if skinning { hasher.combine(skinning) }
         hasher.combine(lighting)
         hasher.combine(lightCount)
 
@@ -80,6 +85,7 @@ public struct RenderingConfiguration: Hashable {
         }
 
         if instancing { results.append(ShaderDefine(key: "INSTANCING", value: NSString(string: "true"))) }
+        if skinning { results.append(ShaderDefine(key: "SKINNING", value: NSString(string: "true"))) }
         if lighting { results.append(ShaderDefine(key: "LIGHTING", value: NSString(string: "true"))) }
         if lightCount > 0 { results.append(ShaderDefine(key: "MAX_LIGHTS", value: NSNumber(value: lightCount))) }
         if receiveShadow { results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true"))) }
@@ -100,6 +106,7 @@ extension RenderingConfiguration: Equatable {
         lhs.blending == rhs.blending &&
             lhs.vertexDescriptor == rhs.vertexDescriptor &&
             lhs.instancing == rhs.instancing &&
+            lhs.skinning == rhs.skinning &&
             lhs.lighting == rhs.lighting &&
             lhs.lightCount == rhs.lightCount &&
             lhs.castShadow == rhs.castShadow &&
@@ -120,6 +127,7 @@ extension RenderingConfiguration: CustomStringConvertible {
         output += "\t\t \(blending.description)"
 
         output += "\t\t instancing: \(instancing)\n"
+        output += "\t\t skinning: \(skinning)\n"
         output += "\t\t lighting: \(lighting)\n"
         output += "\t\t lightCount: \(lightCount)\n"
         output += "\t\t castShadow: \(castShadow)\n"

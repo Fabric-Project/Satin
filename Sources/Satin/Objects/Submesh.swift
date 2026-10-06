@@ -78,6 +78,7 @@ open class Submesh {
         guard let material, let parent else { return }
         material.vertexDescriptor = parent.geometry.vertexDescriptor
         material.tessellationDescriptor = parent.geometry.tessellationDescriptor
+        material.skinning = parent.geometry.isSkinned
         material.setup()
     }
 

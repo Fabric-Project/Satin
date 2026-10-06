@@ -62,6 +62,7 @@ public struct ShaderConfiguration {
             pipelineURL: pipelineURL,
             vertexDescriptor: rendering.vertexDescriptor,
             instancing: rendering.instancing,
+            skinning: rendering.skinning,
             lighting: rendering.lighting,
             castShadow: rendering.castShadow,
             receiveShadow: rendering.receiveShadow,

@@ -95,58 +95,38 @@ public final class MetalFileCompiler {
                     fileURLResolved = hostFileURL
                     watchFile = true
                 }
-            } else if let index = pathComponents.lastIndex(of: "Satin"),
-               var frameworkFileURL = getPipelinesSatinURL()
-            {
-                for i in (index + 1) ..< pathComponents.count {
-                    frameworkFileURL.appendPathComponent(pathComponents[i])
-                }
-
-                if !files.contains(frameworkFileURL) {
-                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
-                    fileURLResolved = frameworkFileURL
-                    watchFile = true
-                }
-
-            } else if let index = pathComponents.lastIndex(of: "Chunks"),
-                      var frameworkFileURL = getPipelinesChunksURL()
-            {
-                for i in (index + 1) ..< pathComponents.count {
-                    frameworkFileURL.appendPathComponent(pathComponents[i])
-                }
-
-                if !files.contains(frameworkFileURL) {
-                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
-                    fileURLResolved = frameworkFileURL
-                    watchFile = true
-                }
-
-            } else if let index = pathComponents.lastIndex(of: "Library"),
-                      var frameworkFileURL = getPipelinesLibraryURL()
-            {
-                for i in (index + 1) ..< pathComponents.count {
-                    frameworkFileURL.appendPathComponent(pathComponents[i])
-                }
-
-                if !files.contains(frameworkFileURL) {
-                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
-                    fileURLResolved = frameworkFileURL
-                    watchFile = true
-                }
-            } else if let index = pathComponents.lastIndex(of: "Includes"),
-                      var frameworkFileURL = getPipelinesIncludesURL()
-            {
-                for i in (index + 1) ..< pathComponents.count {
-                    frameworkFileURL.appendPathComponent(pathComponents[i])
-                }
-
-                if !files.contains(frameworkFileURL) {
-                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
-                    fileURLResolved = frameworkFileURL
-                    watchFile = true
-                }
             } else {
-                throw MetalFileCompilerError.invalidFile(fileURLResolved)
+                // Framework folders: the one named nearest the file wins. A checkout or app
+                // path can contain "Satin" or "Library" further up (running tests from a
+                // checkout named Satin, say), and that must not shadow the include's own
+                // folder, as a fixed order of checks did.
+                let frameworkRoots: [(name: String, url: URL?)] = [
+                    ("Satin", getPipelinesSatinURL()),
+                    ("Chunks", getPipelinesChunksURL()),
+                    ("Library", getPipelinesLibraryURL()),
+                    ("Includes", getPipelinesIncludesURL()),
+                ]
+                var nearestRoot: (index: Int, rootURL: URL)?
+                for root in frameworkRoots {
+                    guard let rootURL = root.url, let index = pathComponents.lastIndex(of: root.name) else { continue }
+                    if index > (nearestRoot?.index ?? -1) {
+                        nearestRoot = (index, rootURL)
+                    }
+                }
+                guard let (index, rootURL) = nearestRoot else {
+                    throw MetalFileCompilerError.invalidFile(fileURLResolved)
+                }
+
+                var frameworkFileURL = rootURL
+                for i in (index + 1) ..< pathComponents.count {
+                    frameworkFileURL.appendPathComponent(pathComponents[i])
+                }
+
+                if !files.contains(frameworkFileURL) {
+                    content = try String(contentsOf: frameworkFileURL, encoding: .utf8)
+                    fileURLResolved = frameworkFileURL
+                    watchFile = true
+                }
             }
         }
 

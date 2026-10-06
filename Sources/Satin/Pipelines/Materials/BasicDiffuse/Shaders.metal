@@ -96,7 +96,7 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     ushort amp_id [[amplification_id]],
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
     constant BasicDiffuseUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
-    const float4 position = float4(in.position, 1.0);
+    const float4 position = SATIN_SKIN_POSITION(in);
 #if INSTANCING
     const float3x3 normalMatrix = instanceUniforms[instanceID].normalMatrix;
     const float4x4 modelMatrix = instanceUniforms[instanceID].modelMatrix;
@@ -105,7 +105,7 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     const float4x4 modelMatrix = vertexUniforms[amp_id].modelMatrix;
 #endif
     const float4 worldPosition = modelMatrix * position;
-    const float3 worldNormal = normalMatrix * in.normal;
+    const float3 worldNormal = normalMatrix * SATIN_SKIN_NORMAL(in);
 
     BasicDiffuseVertexData out;
     out.position = vertexUniforms[amp_id].viewProjectionMatrix * worldPosition;
@@ -119,12 +119,12 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 #if defined(HAS_CUSTOM10)
     // Custom10 is VertexAttributeIndex.PreviousPosition: last frame's object-space position, for
     // geometry deformed on the CPU, so its motion reaches the velocity output.
-    const float4 previousPosition = float4(in.custom10.xyz, 1.0);
+    const float4 previousPosition = SATIN_PREVIOUS_SKIN_TRANSFORM(in, float4(in.custom10.xyz, 1.0));
 #else
-    const float4 previousPosition = position;
+    const float4 previousPosition = SATIN_PREVIOUS_SKIN_POSITION(in);
 #endif
 #if INSTANCING
-    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * previousPosition;
+    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * instanceUniforms[instanceID].previousModelMatrix * previousPosition;
 #else
     out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * previousPosition;
 #endif

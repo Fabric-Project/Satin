@@ -18,9 +18,9 @@ vertex UVColorVertexData uvcolorVertex(
 
 #if INSTANCING
     out.position = vertexUniforms[amp_id].viewProjectionMatrix *
-                   instanceUniforms[instanceID].modelMatrix * float4(in.position, 1.0);
+                   instanceUniforms[instanceID].modelMatrix * SATIN_SKIN_POSITION(in);
 #else
-    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * float4(in.position, 1.0);
+    out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 #endif
 
     out.texcoord = in.texcoord;
