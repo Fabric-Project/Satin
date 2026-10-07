@@ -2174,7 +2174,9 @@ open class RenderEncoder {
                         material.projectorCount = 0
                     }
 
-                    if material.lighting, renderable.receiveShadow, !usesDeferredResolve {
+                    // A scene setting for every lit material: whether a mesh actually samples the
+                    // shadow maps is its own receiveShadow, stated per draw (see DrawLayout).
+                    if material.lighting, !usesDeferredResolve {
                         material.directShadowCount = directShadowCount
                         material.directShadowTextureCount = directShadowTextureCount
                     } else {

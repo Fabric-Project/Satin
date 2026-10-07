@@ -106,6 +106,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     /// material, moves its vertices by the palette on the GPU.
     public var jointPalette: JointPalette? {
         didSet {
+            // A palette attached after repeated encoding was prepared needs the same room.
+            if minimumEncodesPerFrame > 1 { jointPalette?.prepareForRepeatedEncoding(count: minimumEncodesPerFrame) }
             // Meshes listen for this to switch their materials' skinning on or off.
             if (jointPalette == nil) != (oldValue == nil) { onUpdate.send(self) }
         }
@@ -172,6 +174,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     private var _bounds: Bounds = createBounds()
     public var bounds: Bounds {
+        // A skinned geometry's bounds follow its pose.
+        if isSkinned, let jointPalette, jointPalette !== boundsPalette || jointPalette.poseVersion != boundsPoseVersion {
+            updateBounds = true
+        }
         if updateBounds {
             _bounds = computeBounds()
             updateBounds = false
@@ -209,8 +215,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         }
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
         let sanitizedCount = max(1, encodesPerFrame)
+        if sanitizedCount > 1 { jointPalette?.prepareForRepeatedEncoding(count: sanitizedCount) }
         guard sanitizedCount != minimumEncodesPerFrame else { return }
         minimumEncodesPerFrame = sanitizedCount
         versionedVertexBuffers.removeAll()
@@ -219,6 +227,12 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         versionedSlotIndex = -1
         latestVersionedSlotIndex = -1
         selectedDrawState = nil
+    }
+
+    /// After an iteration's update in repeated encoding: records what that iteration draws,
+    /// such as its joint palette pose.
+    open func captureRepeatedEncoding(iteration: Int, count: Int) {
+        jointPalette?.captureRepeatedEncoding(iteration: iteration, count: count)
     }
 
     open func selectRecentSlot(iteration: Int, count: Int) {
@@ -531,6 +545,11 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Bounds
 
     open func computeBounds() -> Bounds {
+        if let posedBVH = currentPosedBVH(), let node = posedBVH.getNode(index: 0) {
+            boundsPalette = jointPalette
+            boundsPoseVersion = jointPalette?.poseVersion ?? -1
+            return node.aabb
+        }
         if primitiveType == .triangle, let bvh = bvh, let node = bvh.getNode(index: 0) {
             return node.aabb
         }
@@ -568,8 +587,93 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         return rayBoundsIntersect(ray, bounds)
     }
 
+    /// Skinned geometry is hit where its pose draws it.
     open func intersect(ray: Ray, intersections: inout [IntersectionResult]) {
-        bvh?.intersect(ray: ray, intersections: &intersections)
+        if let posedBVH = currentPosedBVH() {
+            posedBVH.intersect(ray: ray, intersections: &intersections)
+        } else {
+            bvh?.intersect(ray: ray, intersections: &intersections)
+        }
+    }
+
+    // MARK: - Posed Bounds and Raycasts
+
+    /// The geometry whose vertex attributes a pose moves: this one, or a view's source.
+    open var skinningSource: Geometry { self }
+
+    private var posedBVH: BVH?
+    private weak var posedBVHPalette: JointPalette?
+    private var posedBVHPoseVersion = -1
+    private weak var boundsPalette: JointPalette?
+    private var boundsPoseVersion = -1
+
+    /// The triangles where the joint palette draws them, skinned on the CPU exactly as the
+    /// vertex shader does and rebuilt only when bounds or a raycast need them after the pose
+    /// changed. Nil unless skinned triangles with CPU-readable positions, joint indices
+    /// (UShort4) and weights (Float4).
+    func currentPosedBVH() -> BVH? {
+        guard isSkinned, primitiveType == .triangle, let jointPalette else { return nil }
+        if let posedBVH, posedBVHPalette === jointPalette, posedBVHPoseVersion == jointPalette.poseVersion {
+            return posedBVH
+        }
+        let source = skinningSource
+        guard let positions = Self.skinnedPositions(of: source, palette: jointPalette) else { return nil }
+        let vertexCount = positions.count / 3
+        let bvh = positions.withUnsafeBytes { bytes in
+            createBVHFromFloatData(bytes.baseAddress, 3, Int32(vertexCount), source.elementBuffer?.data,
+                                   Int32(source.indexCount), source.elementBuffer?.type == .uint32, false)
+        }
+        if let posedBVH { freeBVH(posedBVH) }
+        posedBVH = bvh
+        posedBVHPalette = jointPalette
+        posedBVHPoseVersion = jointPalette.poseVersion
+        return bvh
+    }
+
+    /// Each vertex's posed position, packed xyz: the weighted sum of its joints' current
+    /// matrices applied to its rest position, as `satinSkinMatrix` computes it.
+    private static func skinnedPositions(of geometry: Geometry, palette: JointPalette) -> [Float]? {
+        guard let jointIndices = geometry.getAttribute(.JointIndices) as? UShort4BufferAttribute,
+              let jointWeights = geometry.getAttribute(.JointWeights) as? Float4BufferAttribute,
+              let restPositions = restPositions(of: geometry)
+        else { return nil }
+        let joints = palette.joints
+        var posed = [Float]()
+        posed.reserveCapacity(restPositions.count * 3)
+        for vertexIndex in restPositions.indices {
+            let rest = simd_float4(restPositions[vertexIndex], 1)
+            var position = simd_float4.zero
+            if vertexIndex < jointIndices.data.count, vertexIndex < jointWeights.data.count {
+                let indices = jointIndices.data[vertexIndex]
+                let weights = jointWeights.data[vertexIndex]
+                for influence in 0..<4 where weights[influence] != 0 && Int(indices[influence]) < joints.count {
+                    position += weights[influence] * (joints[Int(indices[influence])].current * rest)
+                }
+            }
+            posed += [position.x, position.y, position.z]
+        }
+        return posed
+    }
+
+    /// Rest positions from a Float3 or Float4 buffer attribute or an interleaved one.
+    private static func restPositions(of geometry: Geometry) -> [simd_float3]? {
+        switch geometry.getAttribute(.Position) {
+        case let attribute as Float3BufferAttribute:
+            return attribute.data
+        case let attribute as Float4BufferAttribute:
+            return attribute.data.map { simd_make_float3($0) }
+        case let attribute as InterleavedBufferAttribute:
+            let buffer = attribute.parent
+            guard let data = buffer.data else { return nil }
+            return (0..<buffer.count).map { vertexIndex in
+                let vertex = data.advanced(by: vertexIndex * buffer.stride + attribute.offset)
+                return simd_float3(vertex.loadUnaligned(as: Float.self),
+                                   vertex.loadUnaligned(fromByteOffset: 4, as: Float.self),
+                                   vertex.loadUnaligned(fromByteOffset: 8, as: Float.self))
+            }
+        default:
+            return nil
+        }
     }
 
     // MARK: - Versioned Draw State
@@ -699,6 +803,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Deinit
 
     deinit {
+        if let posedBVH { freeBVH(posedBVH) }
         removeAttributes()
 
         vertexAttributes.removeAll()

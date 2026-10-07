@@ -98,6 +98,13 @@ open class Renderable : Object {
         fatalError("Subclasses must implement this method")
     }
 
+    // TODO(render-packets): Repeated encoding is a stopgap. Every resource (vertex and material
+    // uniforms, instance matrices, joint palettes, geometry draw states) rotates its own slots, and
+    // each assumes the caller's order: per repetition, update then capture; then draw everything.
+    // Replace it with an engine-style render packet: per frame and per repetition, prepare a packet
+    // holding exactly what one draw needs (pipeline, uniforms, instance and joint matrices with
+    // their previous values, buffers and offsets), then submit packets. Frame identity, per-draw
+    // motion history and in-flight safety then live in one place instead of in every resource.
     /// Prepares this renderable to be encoded `count` times in a single render pass.
     /// Expands all ring buffers (vertex uniforms, material uniforms, geometry) so that
     /// each encoding sees independent data. Call once before the iteration loop begins,

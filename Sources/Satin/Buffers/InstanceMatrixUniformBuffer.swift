@@ -17,6 +17,8 @@ public final class InstanceMatrixUniformBuffer {
     public private(set) var encodesPerFrame: Int
     public private(set) var totalSlotCount: Int
     private var latestUpdatedIndex: Int = 0
+    /// Repeated encoding: the slot each iteration's matrices were uploaded into this frame.
+    private var capturedSlots: [Int?] = []
 
     public init(
         device: MTLDevice,
@@ -63,11 +65,22 @@ public final class InstanceMatrixUniformBuffer {
         }
     }
 
-    public func selectRecentSlot(iteration: Int, count: Int) {
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
+    /// Records the latest upload as `iteration`'s, for `selectRecentSlot` to draw it.
+    public func captureLatestSlot(iteration: Int, count: Int) {
         let sanitizedCount = max(1, count)
-        let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
-        let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
-        index = (latestUpdatedIndex - distanceFromCurrent + totalSlotCount) % totalSlotCount
+        if capturedSlots.count != sanitizedCount { capturedSlots = Array(repeating: nil, count: sanitizedCount) }
+        guard capturedSlots.indices.contains(iteration) else { return }
+        capturedSlots[iteration] = latestUpdatedIndex
+    }
+
+    /// The slot `iteration` was captured into, or the latest upload when it was not captured.
+    public func selectRecentSlot(iteration: Int, count: Int) {
+        if capturedSlots.indices.contains(iteration), let capturedSlot = capturedSlots[iteration] {
+            index = capturedSlot
+        } else {
+            index = latestUpdatedIndex
+        }
         offset = alignedSize * index
     }
 

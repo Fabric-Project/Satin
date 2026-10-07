@@ -103,6 +103,8 @@ open class SourceShader: Shader {
             ShaderPipelineCache.invalidate(configuration: configuration)
         }
 
+        invalidateLayoutVariants()
+
         self.pipelines.removeAll()
         self.pipelineError = nil
         self.pipelineErrors.removeAll()

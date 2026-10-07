@@ -64,6 +64,7 @@
 		E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */; };
 		E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */; };
 		E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */; };
+		5A1E00000000000000000011 /* JointPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000001 /* JointPalette.swift */; };
 		E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */; };
 		E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */; };
 		E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */; };
@@ -99,6 +100,7 @@
 		E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD792C06A24B00B5A6C8 /* Geometry.swift */; };
 		E101A8C42C070E8E0055FABA /* Material.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7A2C06A24B00B5A6C8 /* Material.swift */; };
 		E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */; };
+		5A1E00000000000000000012 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000002 /* Skin.swift */; };
 		E101A8C62C070E8E0055FABA /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7C2C06A24B00B5A6C8 /* Object.swift */; };
 		E101A8C72C070E8E0055FABA /* RenderEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */; };
 		E101A8C82C070E8E0055FABA /* Shader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */; };
@@ -134,6 +136,7 @@
 		E101A8E62C070E8E0055FABA /* VertexAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA02C06A24B00B5A6C8 /* VertexAttribute.swift */; };
 		E101A8E72C070E8E0055FABA /* ArcGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA22C06A24B00B5A6C8 /* ArcGeometry.swift */; };
 		E101A8E82C070E8E0055FABA /* BoxGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA32C06A24B00B5A6C8 /* BoxGeometry.swift */; };
+		5A1E00000000000000000013 /* PosedGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000003 /* PosedGeometry.swift */; };
 		E101A8E92C070E8E0055FABA /* CapsuleGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA42C06A24B00B5A6C8 /* CapsuleGeometry.swift */; };
 		E101A8EA2C070E8E0055FABA /* CircleGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */; };
 		E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */; };
@@ -320,6 +323,7 @@
 		66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPostProcessEncoder.swift; sourceTree = "<group>"; };
 		66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARSessionPublisher.swift; sourceTree = "<group>"; };
 		66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InstanceMatrixUniformBuffer.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000001 /* JointPalette.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = JointPalette.swift; sourceTree = "<group>"; };
 		66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StructBuffer.swift; sourceTree = "<group>"; };
 		66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UniformBuffer.swift; sourceTree = "<group>"; };
 		66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VertexUniformBuffer.swift; sourceTree = "<group>"; };
@@ -355,6 +359,7 @@
 		66D7DD792C06A24B00B5A6C8 /* Geometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		66D7DD7A2C06A24B00B5A6C8 /* Material.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Material.swift; sourceTree = "<group>"; };
 		66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Mesh.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000002 /* Skin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Skin.swift; sourceTree = "<group>"; };
 		66D7DD7C2C06A24B00B5A6C8 /* Object.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
 		66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderEncoder.swift; sourceTree = "<group>"; };
 		66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Shader.swift; sourceTree = "<group>"; };
@@ -391,6 +396,7 @@
 		66D7DDA02C06A24B00B5A6C8 /* VertexAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VertexAttribute.swift; sourceTree = "<group>"; };
 		66D7DDA22C06A24B00B5A6C8 /* ArcGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ArcGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA32C06A24B00B5A6C8 /* BoxGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BoxGeometry.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000003 /* PosedGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PosedGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA42C06A24B00B5A6C8 /* CapsuleGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CapsuleGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CircleGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConeGeometry.swift; sourceTree = "<group>"; };
@@ -644,6 +650,7 @@
 			isa = PBXGroup;
 			children = (
 				66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */,
+				5A1E00000000000000000001 /* JointPalette.swift */,
 				66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */,
 				66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */,
 				66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */,
@@ -749,6 +756,7 @@
 				66D7DD792C06A24B00B5A6C8 /* Geometry.swift */,
 				66D7DD7A2C06A24B00B5A6C8 /* Material.swift */,
 				66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */,
+				5A1E00000000000000000002 /* Skin.swift */,
 				66D7DD7C2C06A24B00B5A6C8 /* Object.swift */,
 				66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */,
 				66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */,
@@ -822,6 +830,7 @@
 				E10D919B2CBF8FB400107EE9 /* UVDiskGeometry.swift */,
 				66D7DDA22C06A24B00B5A6C8 /* ArcGeometry.swift */,
 				66D7DDA32C06A24B00B5A6C8 /* BoxGeometry.swift */,
+				5A1E00000000000000000003 /* PosedGeometry.swift */,
 				66D7DDA42C06A24B00B5A6C8 /* CapsuleGeometry.swift */,
 				66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */,
 				66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */,
@@ -1378,6 +1387,7 @@
 				E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */,
 				E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */,
 				E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */,
+				5A1E00000000000000000011 /* JointPalette.swift in Sources */,
 				E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */,
 				E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */,
 				E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */,
@@ -1424,6 +1434,7 @@
 				E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */,
 				E101A8C42C070E8E0055FABA /* Material.swift in Sources */,
 				E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */,
+				5A1E00000000000000000012 /* Skin.swift in Sources */,
 				E101A8C62C070E8E0055FABA /* Object.swift in Sources */,
 				E101A8C72C070E8E0055FABA /* RenderEncoder.swift in Sources */,
 				E101A8C82C070E8E0055FABA /* Shader.swift in Sources */,
@@ -1462,6 +1473,7 @@
 				E101A8E62C070E8E0055FABA /* VertexAttribute.swift in Sources */,
 				E101A8E72C070E8E0055FABA /* ArcGeometry.swift in Sources */,
 				E101A8E82C070E8E0055FABA /* BoxGeometry.swift in Sources */,
+				5A1E00000000000000000013 /* PosedGeometry.swift in Sources */,
 				E101A8E92C070E8E0055FABA /* CapsuleGeometry.swift in Sources */,
 				E101A8EA2C070E8E0055FABA /* CircleGeometry.swift in Sources */,
 				E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */,
