@@ -303,7 +303,7 @@ public final class SlugTextGeometry: Geometry {
 
         let attributedText = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0)
         CFAttributedStringReplaceString(attributedText, CFRangeMake(0, 0), text as CFString)
-        CFAttributedStringSetAttributes(attributedText, CFRangeMake(0, text.count), attributes as CFDictionary, false)
+        CFAttributedStringSetAttributes(attributedText, CFRangeMake(0, text.utf16.count), attributes as CFDictionary, false)
 
         let alignment = UnsafeMutablePointer<CTTextAlignment>.allocate(capacity: 1)
         alignment.pointee = textAlignment
@@ -327,7 +327,7 @@ public final class SlugTextGeometry: Geometry {
         let style = CTParagraphStyleCreate(settings, settings.count)
         CFAttributedStringSetAttribute(
             attributedText,
-            CFRangeMake(0, text.count),
+            CFRangeMake(0, text.utf16.count),
             kCTParagraphStyleAttributeName,
             style
         )
@@ -348,7 +348,7 @@ public final class SlugTextGeometry: Geometry {
         }
         return CTFramesetterSuggestFrameSizeWithConstraints(
             frameSetter,
-            CFRangeMake(0, text.count),
+            CFRangeMake(0, text.utf16.count),
             nil,
             bounds,
             nil
@@ -364,7 +364,7 @@ public final class SlugTextGeometry: Geometry {
             height: textBounds.height <= 0.0 ? suggestFrameSize.height : textBounds.height
         )
         framePath.addRect(constraints)
-        return CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, text.count), framePath, nil)
+        return CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, text.utf16.count), framePath, nil)
     }
 
     private func getLines(_ frame: CTFrame) -> [CTLine] {
