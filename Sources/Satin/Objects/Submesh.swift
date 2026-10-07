@@ -78,18 +78,20 @@ open class Submesh {
         guard let material, let parent else { return }
         material.vertexDescriptor = parent.geometry.vertexDescriptor
         material.tessellationDescriptor = parent.geometry.tessellationDescriptor
-        material.skinning = parent.geometry.isSkinned
         material.setup()
     }
 
     open func setupGeometry() {}
 
     open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
+        // The material may be shared with meshes of another layout: pick the pipeline for ours.
+        renderEncoderState.drawLayout = parent?.drawLayout
         material?.bind(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,
             shadow: shadow
         )
+        renderEncoderState.drawLayout = nil
         geometry.draw(
             renderEncoderState: renderEncoderState,
             instanceCount: instanceCount,

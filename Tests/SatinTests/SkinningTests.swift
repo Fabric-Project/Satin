@@ -161,6 +161,153 @@ final class SkinningTests: XCTestCase {
         XCTAssertTrue(hasContent(frames[1], inColumnsFrom: 0.75), "The swapped-in geometry must render skinned")
     }
 
+    func testSharedMaterialDrawsSkinnedAndUnskinnedMeshesEachCorrectly() throws {
+        let leftOfFrame = CGRect(x: 0.12, y: 0.05, width: 0.26, height: 0.9)
+        // Either mesh may be the last to configure the shared material.
+        for skinnedFirst in [true, false] {
+            let image = try VisualTestHarness.render(size: [160, 160]) { renderer, camera in
+                let context = renderer.context
+                let material = BasicColorMaterial(context: context)
+                // The skinned bar's upper half moves right; the plain bar stands to the left.
+                let skinned = Mesh(context: context, label: "Skinned", geometry: makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)]), material: material)
+                let plain = Mesh(context: context, label: "Plain", geometry: makeBarGeometry(context: context, withJoints: false), material: material)
+                plain.position.x = -1
+                let meshes = skinnedFirst ? [skinned, plain] : [plain, skinned]
+                for mesh in meshes { mesh.cullMode = .none }
+                return (scene: Object(context: context, label: "Scene", meshes), camera: camera)
+            }
+            VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "skinned upper half, right", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)
+            VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "plain bar, left", normalizedRect: leftOfFrame), minimumChangedPixelRatio: 0.03)
+        }
+    }
+
+    func testLiveReloadRecompilesASharedMaterialsVariants() throws {
+        let shaderURL = try temporaryProbeShader(skinnedFragment: "return buildColorFragmentOutput(half4(1, 0, 0, 1) SATIN_ALPHA_OIT_FORWARD_ARGS);")
+        var material: SourceMaterial?
+        let frames = try renderVelocityFrames(frameCount: 2) { context in
+            let probe = SourceMaterial(context: context, pipelineURL: shaderURL)
+            probe.label = "Probe"
+            material = probe
+            return probeScene(context: context, material: probe)
+        } beforeFrame: { frame in
+            guard frame == 1 else { return }
+            // The skinned variant's code changes from red to green, then the shader reloads.
+            try? probeShaderSource(skinnedFragment: "return buildColorFragmentOutput(half4(0, 1, 0, 1) SATIN_ALPHA_OIT_FORWARD_ARGS);")
+                .write(to: shaderURL, atomically: true, encoding: .utf8)
+            (material?.shader as? SourceShader)?.reloadFromSource()
+        }
+        XCTAssertGreaterThan(pixelCount(frames[0], red: true, inColumnsFrom: 0.62), 50, "The skinned bar draws red before the reload")
+        XCTAssertGreaterThan(pixelCount(frames[1], red: false, inColumnsFrom: 0.62), 50, "and green after it: its variant recompiled")
+    }
+
+    func testVariantOnlyResourcesAreBound() throws {
+        // Only the skinned variant samples a texture: the plain mesh's pipeline never uses it.
+        let shaderURL = try temporaryProbeShader(skinnedFragment: "constexpr sampler probeSampler; return buildColorFragmentOutput(half4(probeTexture.sample(probeSampler, float2(0.5))) SATIN_ALPHA_OIT_FORWARD_ARGS);",
+                                                 skinnedArguments: "texture2d<float> probeTexture [[texture(FragmentTextureCustom0)]],")
+        let frames = try renderVelocityFrames(frameCount: 1) { context in
+            let probe = SourceMaterial(context: context, pipelineURL: shaderURL)
+            probe.label = "Probe"
+            probe.set(greenTexture(device: context.device), index: FragmentTextureIndex.Custom0)
+            return probeScene(context: context, material: probe)
+        } beforeFrame: { _ in }
+        XCTAssertGreaterThan(pixelCount(frames[0], red: false, inColumnsFrom: 0.62), 50, "The skinned bar samples the bound texture")
+    }
+
+    func testBoundsAndRaycastsFollowThePose() throws {
+        let context = try headlessContext()
+        let geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)])
+        // The upper half moved right by 1: bounds reach x = 1.2.
+        XCTAssertEqual(geometry.bounds.max.x, 1.2, accuracy: 1e-4)
+        XCTAssertEqual(geometry.bounds.min.x, -0.2, accuracy: 1e-4)
+        XCTAssertTrue(hits(geometry, x: 1.1, y: 0.6), "The upper half is hit where it is drawn")
+        XCTAssertFalse(hits(geometry, x: 0.1, y: 0.6), "Not where it rests")
+        XCTAssertTrue(hits(geometry, x: 0.1, y: -0.4), "The lower half did not move")
+
+        // A new pose updates both.
+        geometry.jointPalette?.update(matrices: [matrix_identity_float4x4, matrix_identity_float4x4])
+        XCTAssertEqual(geometry.bounds.max.x, 0.2, accuracy: 1e-4)
+        XCTAssertTrue(hits(geometry, x: 0.1, y: 0.6))
+    }
+
+    func testPosedViewIsBoundedByItsOwnPose() throws {
+        let context = try headlessContext()
+        let source = makeBarGeometry(context: context, withJoints: true)
+        let palette = JointPalette(device: context.device, jointCount: 2)
+        palette.reset(matrices: [matrix_identity_float4x4, translation(x: -1.0)])
+        let view = PosedGeometry(source: source, jointPalette: palette)
+        XCTAssertEqual(view.bounds.min.x, -1.2, accuracy: 1e-4)
+        XCTAssertEqual(source.bounds.min.x, -0.2, accuracy: 1e-4, "The source rests")
+        XCTAssertTrue(hits(view, x: -0.9, y: 0.6))
+        XCTAssertFalse(hits(source, x: -0.9, y: 0.6))
+    }
+
+    func testMeshBoundsFollowAPoseChange() throws {
+        let context = try headlessContext()
+        let geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, matrix_identity_float4x4])
+        let mesh = Mesh(context: context, label: "Bar", geometry: geometry, material: nil)
+        mesh.update()
+        XCTAssertEqual(mesh.bounds.max.x, 0.2, accuracy: 1e-4)
+        geometry.jointPalette?.update(matrices: [matrix_identity_float4x4, translation(x: 2.0)])
+        mesh.update()
+        XCTAssertEqual(mesh.bounds.max.x, 2.2, accuracy: 1e-4)
+    }
+
+    func testSharedMaterialsKeepEachMeshsShadowSettings() throws {
+        let alone = try renderShadowScene(withOffscreenSharers: false)
+        let unshadowed = try renderShadowScene(withOffscreenSharers: false, barCastsShadow: false)
+        XCTAssertGreaterThan(differingPixelRatio(alone, unshadowed), 0.005, "The bar casts a visible shadow")
+        // Offscreen meshes sharing the caster's and the floor's materials, with casting and
+        // receiving turned off, must not change what the visible meshes draw.
+        let shared = try renderShadowScene(withOffscreenSharers: true)
+        XCTAssertEqual(alone.pixels, shared.pixels)
+    }
+
+    func testSharedMaterialDrawsInstancedAndPlainMeshesEachCorrectly() throws {
+        let leftOfFrame = CGRect(x: 0.12, y: 0.05, width: 0.26, height: 0.9)
+        // Either mesh may be the last to configure the shared material.
+        for instancedFirst in [true, false] {
+            let image = try VisualTestHarness.render(size: [160, 160]) { renderer, camera in
+                let context = renderer.context
+                let material = BasicColorMaterial(context: context)
+                // Two instances to the right; the plain bar stands to the left.
+                let instanced = InstancedMesh(context: context, geometry: makeBarGeometry(context: context, withJoints: false), material: material, count: 2)
+                instanced.setMatrixAt(index: 0, matrix: translation(x: 1.0))
+                instanced.setMatrixAt(index: 1, matrix: translation(x: 1.3))
+                let plain = Mesh(context: context, label: "Plain", geometry: makeBarGeometry(context: context, withJoints: false), material: material)
+                plain.position.x = -1
+                let meshes: [Mesh] = instancedFirst ? [instanced, plain] : [plain, instanced]
+                for mesh in meshes { mesh.cullMode = .none }
+                return (scene: Object(context: context, label: "Scene", meshes), camera: camera)
+            }
+            VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "instances, right", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)
+            VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "plain bar, left", normalizedRect: leftOfFrame), minimumChangedPixelRatio: 0.03)
+        }
+    }
+
+    func testSubmeshesSkinAfterTheGeometryIsSwappedToASkinnedOne() throws {
+        // The bar has 8 rows of 2 triangles, unindexed: 48 vertices.
+        let indices = UnsafeMutablePointer<UInt32>.allocate(capacity: 48)
+        for index in 0..<48 { indices[index] = UInt32(index) }
+        defer { indices.deallocate() }
+        var submeshMaterial: Material?
+        let image = try VisualTestHarness.render(size: [160, 160]) { renderer, camera in
+            let context = renderer.context
+            let mesh = Mesh(context: context, label: "Bar", geometry: makeBarGeometry(context: context, withJoints: false),
+                            material: BasicColorMaterial(context: context))
+            let material = BasicColorMaterial(context: context)
+            submeshMaterial = material
+            mesh.addSubmesh(Submesh(parent: mesh, elementBuffer: ElementBuffer(type: .uint32, data: indices, count: 48, source: nil), material: material))
+            // Swapped afterwards, as Fabric's Mesh node does.
+            mesh.geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)])
+            mesh.cullMode = .none
+            return (scene: Object(context: context, label: "Scene", [mesh]), camera: camera)
+        }
+        XCTAssertEqual(submeshMaterial?.skinning, false, "Meshes never write per-mesh settings into a material; each draw states them")
+        XCTAssertEqual(submeshMaterial?.vertexDescriptor.attributes[VertexAttributeIndex.JointIndices.rawValue].format, .ushort4,
+                       "The submesh's material takes the new layout as its default")
+        VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "right of bar", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)
+    }
+
     // MARK: - Posed Views
 
     func testPosedViewWithIdentityPaletteMatchesSource() throws {
@@ -223,6 +370,134 @@ final class SkinningTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// A plain bar on the left and a skinned bar whose upper half moved right, sharing one
+    /// material: the plain bar sets the material's own configuration, so the skinned bar draws
+    /// with a layout variant.
+    private func probeScene(context: Context, material: Material) -> Object {
+        let plain = Mesh(context: context, label: "Plain", geometry: makeBarGeometry(context: context, withJoints: false), material: material)
+        plain.position.x = -1
+        let skinned = Mesh(context: context, label: "Skinned", geometry: makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)]), material: material)
+        for mesh in [plain, skinned] { mesh.cullMode = .none }
+        return Object(context: context, label: "Scene", [skinned, plain])
+    }
+
+    /// A probe shader in a temporary file: blue for plain meshes; `skinnedFragment` for skinned.
+    private func temporaryProbeShader(skinnedFragment: String, skinnedArguments: String = "") throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SatinProbe-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("Shaders.metal")
+        try probeShaderSource(skinnedFragment: skinnedFragment, skinnedArguments: skinnedArguments).write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func probeShaderSource(skinnedFragment: String, skinnedArguments: String = "") -> String {
+        let fragmentOutput = getPipelinesURL()!.appendingPathComponent("Includes/FragmentOutput.metal").path
+        return """
+        #include "\(fragmentOutput)"
+
+        typedef struct {
+            float4 position [[position]];
+        } ProbeVertexData;
+
+        vertex ProbeVertexData probeVertex(
+            Vertex in [[stage_in]],
+            // inject instancing args
+            ushort amp_id [[amplification_id]],
+            constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
+            ProbeVertexData out;
+            out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
+            return out;
+        }
+
+        fragment FragmentOutput probeFragment(
+        #if SKINNING
+            \(skinnedArguments)
+        #endif
+            ProbeVertexData in [[stage_in]]
+            SATIN_ALPHA_OIT_FRAGMENT_DATA) {
+        #if SKINNING
+            \(skinnedFragment)
+        #else
+            return buildColorFragmentOutput(half4(0, 0, 1, 1) SATIN_ALPHA_OIT_FORWARD_ARGS);
+        #endif
+        }
+        """
+    }
+
+    private func greenTexture(device: MTLDevice) -> MTLTexture? {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        let texture = device.makeTexture(descriptor: descriptor)
+        let green: [UInt8] = [0, 255, 0, 255]
+        texture?.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: green, bytesPerRow: 4)
+        return texture
+    }
+
+    /// Pixels in the columns from `fraction` rightwards that are pure red (`red`) or pure green
+    /// (not `red`), in a two-channel half-float frame from `renderVelocityFrames`.
+    private func pixelCount(_ values: [UInt16], red: Bool, inColumnsFrom fraction: Double, size: Int = 160) -> Int {
+        let one: UInt16 = 0x3C00
+        var count = 0
+        for row in 0..<size {
+            for column in Int(Double(size) * fraction)..<size {
+                let pixel = (row * size + column) * 2
+                let (r, g) = (values[pixel], values[pixel + 1])
+                if red ? (r == one && g == 0) : (r == 0 && g == one) { count += 1 }
+            }
+        }
+        return count
+    }
+
+    private func headlessContext() throws -> Context {
+        Context(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()), sampleCount: 1, colorPixelFormat: .bgra8Unorm)
+    }
+
+    /// Whether a ray straight down -z through (x, y) hits the geometry. Probe triangle interiors:
+    /// the bar's row edges and diagonals sit on y = k/4 and x = 0.
+    private func hits(_ geometry: Geometry, x: Float, y: Float) -> Bool {
+        var intersections: [IntersectionResult] = []
+        geometry.intersect(ray: Ray(origin: simd_float3(x, y, 5), direction: simd_float3(0, 0, -1)), intersections: &intersections)
+        return !intersections.isEmpty
+    }
+
+    /// A shadow-casting bar over a shadow-receiving floor. With sharers, two meshes far off
+    /// screen share the bar's and the floor's materials, with casting and receiving switched
+    /// on and then off.
+    private func renderShadowScene(withOffscreenSharers: Bool, barCastsShadow: Bool = true) throws -> RGBAImage {
+        try VisualTestHarness.render(size: [160, 160]) { renderer, camera in
+            let context = renderer.context
+            let barMaterial = BasicDiffuseMaterial(context: context, color: simd_float4(0.9, 0.9, 0.9, 1.0), blending: .disabled, hardness: 0.2)
+            let floorMaterial = BasicDiffuseMaterial(context: context, color: simd_float4(0.6, 0.6, 0.65, 1.0), blending: .disabled, hardness: 0.2)
+            let bar = Mesh(context: context, label: "Bar", geometry: makeBarGeometry(context: context, withJoints: false), material: barMaterial)
+            bar.castShadow = barCastsShadow
+            bar.cullMode = .none
+            let floor = Mesh(context: context, label: "Floor", geometry: PlaneGeometry(context: context, size: 6.0, orientation: .zx), material: floorMaterial)
+            floor.position.y = -1.05
+            floor.receiveShadow = true
+            let light = DirectionalLight(context: context, color: simd_float3(repeating: 1.0), intensity: 1.5)
+            light.position = [1.5, 3.0, 2.5]
+            light.lookAt(target: .zero, up: Satin.worldUpDirection)
+            light.castShadow = true
+            light.shadow.resolution = (width: 512, height: 512)
+            if let shadowCamera = light.shadow.camera as? OrthographicCamera {
+                shadowCamera.update(left: -3.0, right: 3.0, bottom: -3.0, top: 3.0)
+            }
+            var objects: [Object] = [bar, floor, light]
+            if withOffscreenSharers {
+                let nonCaster = Mesh(context: context, label: "Non-caster", geometry: makeBarGeometry(context: context, withJoints: false), material: barMaterial)
+                nonCaster.castShadow = true
+                nonCaster.castShadow = false
+                nonCaster.position.x = 100
+                let nonReceiver = Mesh(context: context, label: "Non-receiver", geometry: PlaneGeometry(context: context, size: 1.0, orientation: .zx), material: floorMaterial)
+                nonReceiver.receiveShadow = true
+                nonReceiver.receiveShadow = false
+                nonReceiver.position.x = 100
+                objects += [nonCaster, nonReceiver]
+            }
+            return (scene: Object(context: context, label: "Scene", objects), camera: camera)
+        }
+    }
 
     /// The bar drawn once per pose, each by its own mesh through its own `PosedGeometry` of one
     /// shared source. `inspect` receives the source and the views.

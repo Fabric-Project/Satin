@@ -10,8 +10,10 @@ import Metal
 /// skinned geometry can be posed several ways at once without copying its vertices. The
 /// source's own palette, if any, is left alone.
 ///
-/// The view owns no attributes: its vertex layout, buffers, draw call, bounds and ray hits
-/// are the source's, in the rest pose. Changes to the source reach meshes drawing the view.
+/// The view owns no attributes: its vertex layout, buffers and draw call are the source's.
+/// When skinned, its bounds and ray hits follow this view's pose (the source's vertices
+/// skinned on the CPU, only when asked for after the pose changed); otherwise they are the
+/// source's. Changes to the source reach meshes drawing the view.
 ///
 /// Updating the view updates the source, so a source drawn by several views (or by its own
 /// mesh as well) is updated more than once a frame. That is harmless unless its data
@@ -57,9 +59,17 @@ open class PosedGeometry: Geometry {
         source.encode(commandBuffer)
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     override open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
         // Never lower what another mesh drawing the source asked for.
         source.setMinimumEncodesPerFrame(max(encodesPerFrame, source.minimumEncodesPerFrame))
+        // This view's own palette.
+        super.setMinimumEncodesPerFrame(encodesPerFrame)
+    }
+
+    override open func captureRepeatedEncoding(iteration: Int, count: Int) {
+        source.captureRepeatedEncoding(iteration: iteration, count: count)
+        super.captureRepeatedEncoding(iteration: iteration, count: count)
     }
 
     override open func selectRecentSlot(iteration: Int, count: Int) {
@@ -79,11 +89,19 @@ open class PosedGeometry: Geometry {
         source.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart)
     }
 
+    /// The source's vertices, moved by this view's palette.
+    override open var skinningSource: Geometry { source }
+
+    /// Posed when skinned (see `Geometry.computeBounds`), otherwise the source's.
     override open func computeBounds() -> Bounds {
-        source.bounds
+        isSkinned ? super.computeBounds() : source.bounds
     }
 
     override open func intersect(ray: Ray, intersections: inout [IntersectionResult]) {
-        source.intersect(ray: ray, intersections: &intersections)
+        if isSkinned {
+            super.intersect(ray: ray, intersections: &intersections)
+        } else {
+            source.intersect(ray: ray, intersections: &intersections)
+        }
     }
 }

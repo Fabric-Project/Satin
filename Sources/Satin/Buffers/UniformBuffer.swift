@@ -53,6 +53,7 @@ public final class UniformBuffer {
         (buffer.contents() + offset).copyMemory(from: parameters.data, byteCount: parameters.size)
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     public func selectRecentSlot(iteration: Int, count: Int) {
         guard latestUpdatedIndex >= 0 else { return }
         let sanitizedCount = max(1, count)

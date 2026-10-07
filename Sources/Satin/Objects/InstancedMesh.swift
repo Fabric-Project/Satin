@@ -62,22 +62,25 @@ public class InstancedMesh: Mesh {
     private var _updateInstanceMatricesUniforms = true
     private var _setupInstanceMatrixBuffer = true
     private var _updateInstanceMatrixBuffer = true
-    private var instanceMatrixBuffer: InstanceMatrixUniformBuffer?
+    /// The instances' matrices on the GPU, read-only outside.
+    public private(set) var instanceMatrixBuffer: InstanceMatrixUniformBuffer?
     private var minimumEncodesPerFrame = 1
+    /// Drawn by repeated encoding, even once per frame: uploads then happen on change and on
+    /// capture, so the buffer needs room for both in every frame in flight.
+    private var preparedForRepeatedEncoding = false
     /// The model matrices last uploaded, which become each instance's previous matrix.
     private var uploadedModelMatrices: [simd_float4x4] = []
     /// Instances moved in the last upload, so the next still frame must re-upload with
     /// previous equal to current, or still instances would keep reporting motion.
     private var instanceMotionNeedsSettling = false
+    /// Repeated encoding: each iteration's model matrices, which become its previous ones next
+    /// frame, so velocity is per iteration rather than between iterations.
+    private var iterationModelMatrices: [[simd_float4x4]?] = []
 
-    override public var material: Material? {
-        didSet {
-            material?.instancing = true
-        }
-    }
+    /// Draws with instancing, whatever else shares its material.
+    override public var isInstanced: Bool { true }
 
     public init(context: Context, label: String = "Instanced Mesh", geometry: Geometry, material: Material?, count: Int) {
-        material?.instancing = true
 
         instanceMatricesUniforms = .init(repeating: InstanceMatrixUniforms(modelMatrix: matrix_identity_float4x4, normalMatrix: matrix_identity_float3x3), count: count)
 
@@ -141,11 +144,31 @@ public class InstancedMesh: Mesh {
         setupInstanceBuffer()
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     override public func prepareForRepeatedEncoding(count: Int) {
         super.prepareForRepeatedEncoding(count: count)
         minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
+        preparedForRepeatedEncoding = true
         guard instanceCount > 0 else { return }
         setupInstanceBuffer()
+    }
+
+    /// Uploads this iteration's matrices into their own slot, with the matrices the same
+    /// iteration had last frame as previous.
+    override public func captureRepeatedEncodingState(iteration: Int, count: Int) {
+        super.captureRepeatedEncodingState(iteration: iteration, count: count)
+        let sanitizedCount = max(1, count)
+        if iterationModelMatrices.count != sanitizedCount { iterationModelMatrices = Array(repeating: nil, count: sanitizedCount) }
+        guard let instanceMatrixBuffer, iterationModelMatrices.indices.contains(iteration) else { return }
+        let currents = instanceMatricesUniforms.map(\.modelMatrix)
+        let previous = iterationModelMatrices[iteration] ?? currents
+        var captured = instanceMatricesUniforms
+        for index in captured.indices {
+            captured[index].previousModelMatrix = index < previous.count ? previous[index] : currents[index]
+        }
+        instanceMatrixBuffer.update(data: captured)
+        instanceMatrixBuffer.captureLatestSlot(iteration: iteration, count: count)
+        iterationModelMatrices[iteration] = currents
     }
 
     override public func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
@@ -185,7 +208,8 @@ public class InstancedMesh: Mesh {
             device: context.device,
             count: instanceCount,
             maxBuffersInFlight: context.maxBuffersInFlight,
-            encodesPerFrame: minimumEncodesPerFrame
+            // Repeated encoding uploads up to twice per iteration: on change and on capture.
+            encodesPerFrame: preparedForRepeatedEncoding ? 2 * minimumEncodesPerFrame + 1 : 1
         )
         _setupInstanceMatrixBuffer = false
         _updateInstanceMatrixBuffer = true
