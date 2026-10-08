@@ -113,10 +113,15 @@ open class SourceShader: Shader {
         invalidateLayoutVariants()
 
         self.pipelines.removeAll()
+        // The reflection describes the source being replaced, and setupPipeline
+        // only assigns it while it is nil, so a reload that leaves it in place
+        // keeps reporting the old source's buffer and texture bindings.
+        self.pipelineReflection = nil
         self.pipelineError = nil
         self.pipelineErrors.removeAll()
 
         self.shadowPipelines.removeAll()
+        self.shadowPipelineReflection = nil
         self.shadowPipelineError = nil
         self.shadowPipelineErrors.removeAll()
 
