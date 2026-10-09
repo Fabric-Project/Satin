@@ -21,6 +21,106 @@ public enum GeometryMutability {
     case dynamicData
 }
 
+/// How a geometry divides into rigid pieces: the pieces of a cut, glyphs of text, islands of a mesh.
+/// A piece may contain pieces (a word holds glyphs; a piece of a first cut holds the pieces of a
+/// second), stored flat as in glTF and USD skeletons: piece `i` is index `i` in every array, and
+/// each piece names its parent.
+///
+/// Contract with the geometry that carries it:
+/// - Every vertex belongs to exactly one lowest-level piece and carries that piece's index as its
+///   joint (JointIndices x, JointWeights 1). A pose is then one matrix per piece, a model-space
+///   delta from rest; a parent's matrix composes into its children's.
+/// - Vertices are laid out depth-first, so each piece's range covers its whole subtree: a parent
+///   spans its children, and a lowest-level piece spans its own vertices.
+/// - Everything is in the geometry's local space and units.
+///
+/// Built once by whatever makes the pieces and cached on the geometry; new pieces are a new value.
+/// The initializer checks every invariant, so a value that exists is well formed.
+public struct GeometryPieces: Equatable {
+    /// What `sizes` measures: closed pieces have volume; open ones, such as flat text, area.
+    public enum SizeMeasure: Equatable {
+        case volume
+        case area
+    }
+
+    /// One piece, read across the arrays.
+    public struct Piece: Equatable {
+        public let center: simd_float3
+        public let size: Float
+        public let parentIndex: Int
+        public let vertexRange: Range<Int>
+    }
+
+    public enum ValidationError: Error, Equatable {
+        /// The arrays do not all have one entry per piece.
+        case mismatchedCounts
+        /// A parent index is out of range or not before its child.
+        case parentNotBeforeChild(piece: Int)
+        /// A piece's vertices are not inside its parent's.
+        case rangeOutsideParent(piece: Int)
+        /// Siblings' vertices overlap or are out of order.
+        case siblingsOverlap(piece: Int)
+        /// A size is negative or not finite.
+        case invalidSize(piece: Int)
+        /// A parent's size is not the sum of its children's.
+        case parentSizeMismatch(piece: Int)
+    }
+
+    /// Each piece's parent in these same arrays, or -1 for a top-level piece. Parents come
+    /// before their children.
+    public let parentIndices: [Int]
+    /// Each piece's pivot at rest.
+    public let centers: [simd_float3]
+    /// Each piece's volume or area (see `sizeMeasure`); a parent's is the sum of its children's.
+    public let sizes: [Float]
+    public let sizeMeasure: SizeMeasure
+    /// Each piece's vertices, covering its whole subtree.
+    public let vertexRanges: [Range<Int>]
+
+    public var count: Int { parentIndices.count }
+
+    public subscript(index: Int) -> Piece {
+        Piece(center: centers[index], size: sizes[index], parentIndex: parentIndices[index], vertexRange: vertexRanges[index])
+    }
+
+    public init(parentIndices: [Int], centers: [simd_float3], sizes: [Float], sizeMeasure: SizeMeasure, vertexRanges: [Range<Int>]) throws {
+        let count = parentIndices.count
+        guard centers.count == count, sizes.count == count, vertexRanges.count == count else { throw ValidationError.mismatchedCounts }
+
+        var childSizeSums = [Float](repeating: 0, count: count)
+        var hasChildren = [Bool](repeating: false, count: count)
+        // The end of the last sibling seen under each parent (top level keyed by -1).
+        var lastSiblingEnd: [Int: Int] = [:]
+        for piece in 0..<count {
+            let size = sizes[piece]
+            guard size.isFinite, size >= 0 else { throw ValidationError.invalidSize(piece: piece) }
+            let parent = parentIndices[piece]
+            guard parent == -1 || (parent >= 0 && parent < piece) else { throw ValidationError.parentNotBeforeChild(piece: piece) }
+            let range = vertexRanges[piece]
+            if parent >= 0 {
+                let parentRange = vertexRanges[parent]
+                guard range.lowerBound >= parentRange.lowerBound, range.upperBound <= parentRange.upperBound else {
+                    throw ValidationError.rangeOutsideParent(piece: piece)
+                }
+                childSizeSums[parent] += size
+                hasChildren[parent] = true
+            }
+            if let previousEnd = lastSiblingEnd[parent], range.lowerBound < previousEnd { throw ValidationError.siblingsOverlap(piece: piece) }
+            lastSiblingEnd[parent] = range.upperBound
+        }
+        for piece in 0..<count where hasChildren[piece] {
+            let tolerance = max(abs(sizes[piece]), abs(childSizeSums[piece])) * 1e-4 + 1e-12
+            guard abs(sizes[piece] - childSizeSums[piece]) <= tolerance else { throw ValidationError.parentSizeMismatch(piece: piece) }
+        }
+
+        self.parentIndices = parentIndices
+        self.centers = centers
+        self.sizes = sizes
+        self.sizeMeasure = sizeMeasure
+        self.vertexRanges = vertexRanges
+    }
+}
+
 open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
     public var id: String = UUID().uuidString
 
@@ -112,6 +212,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             if (jointPalette == nil) != (oldValue == nil) { onUpdate.send(self) }
         }
     }
+
+    /// How this geometry divides into rigid pieces; nil for ordinary geometry. Whoever sets it
+    /// also gives the vertices their piece indices as joints (see `GeometryPieces`).
+    open var pieces: GeometryPieces?
 
     /// Has a joint palette and the joint attributes it applies to.
     open var isSkinned: Bool {
