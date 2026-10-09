@@ -92,6 +92,12 @@ open class PosedGeometry: Geometry {
     /// The source's vertices, moved by this view's palette.
     override open var skinningSource: Geometry { source }
 
+    /// The source's pieces: a posed view says what it poses.
+    override open var pieces: GeometryPieces? {
+        get { source.pieces }
+        set { source.pieces = newValue }
+    }
+
     /// Posed when skinned (see `Geometry.computeBounds`), otherwise the source's.
     override open func computeBounds() -> Bounds {
         isSkinned ? super.computeBounds() : source.bounds
