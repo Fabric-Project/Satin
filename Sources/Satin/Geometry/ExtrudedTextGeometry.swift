@@ -30,12 +30,13 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
         super.init(context: context, text: text, fontName: fontName, fontSize: fontSize, bounds: bounds, pivot: pivot, textAlignment: textAlignment, verticalAlignment: verticalAlignment, kern: kern, lineSpacing: lineSpacing)
     }
 
-    override func addGlyphGeometryData(_ gData: inout GeometryData, _ charOffset: Int, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
+    override func addGlyphGeometryData(_ gData: inout GeometryData, _ charIndex: String.Index, _ font: CTFont, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
         guard let framePivot = framePivot, let verticalOffset = verticalOffset else { return }
 
         addGlyphGeometryData(
             &gData,
-            charOffset,
+            charIndex,
+            font,
             glyph,
             glyphPosition,
             origin,
@@ -46,17 +47,16 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
 
     override func addGlyphGeometryData(
         _ gData: inout GeometryData,
-        _ charOffset: Int,
+        _ charIndex: String.Index,
+        _ font: CTFont,
         _ glyph: CGGlyph,
         _ glyphPosition: CGPoint,
         _ origin: CGPoint,
         framePivot: CGPoint,
         verticalOffset: CGFloat
     ) {
-        let charIndex = text.index(text.startIndex, offsetBy: Int(charOffset))
-        let char = text[charIndex]
-        characterPaths[char] = []
-        let cacheKey = glyphCacheKey(for: glyph)
+        let cacheKey = glyphCacheKey(for: glyph, in: font)
+        var glyphPaths: [Polyline2D] = []
 
         // front face character data
         var cData = GeometryData(vertexCount: 0, vertexData: nil, indexCount: 0, indexData: nil)
@@ -73,54 +73,31 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
             cData = cacheData
             bData = cacheReverseData
             sData = cacheExtrudeData
-            characterPaths[char] = charPaths
+            glyphPaths = charPaths
         }
-        else if let glyphPath = CTFontCreatePathForGlyph(ctFont, glyph, nil) {
-            
-            let glyphPaths = getPolylines(glyphPath, angleLimit, fontSize / 10.0)
-
-            var _paths: [UnsafeMutablePointer<simd_float2>?] = []
-            var _lengths: [Int32] = []
-            for i in 0 ..< glyphPaths.count {
-                let path = glyphPaths[i]
-                _paths.append(path.data)
-                _lengths.append(path.count)
-            }
-
-            var triData = createTriangleData()
-            if triangulate(&_paths, &_lengths, Int32(_lengths.count), &triData) == 0 {
-                let glyphBounds = glyphPath.boundingBox
-                let bounds = simd_float4(Float(glyphBounds.minX),
-                                         Float(glyphBounds.minY),
-                                         Float(glyphBounds.maxX),
-                                         Float(glyphBounds.maxY))
-                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData, bounds)
-                copyTriangleDataToGeometryData(&triData, &cData)
-                freeTriangleData(&triData)
-            }
-            else {
-                print("TRIANGULATION FOR \(char) FAILED!")
-            }
+        else if let outline = makeGlyphOutline(font, glyph) {
+            glyphPaths = outline.polylines
+            cData = makeFaceGeometryData(outline, font, text[charIndex])
 
             copyGeometryData(&bData, &cData)
             reverseFacesOfGeometryData(&bData)
             geometryReverseCache[cacheKey] = bData
 
-            if extrudePaths(&_paths, &_lengths, Int32(glyphPaths.count), &sData) == 0 {
+            var (contourPoints, contourLengths) = contourBuffers(glyphPaths)
+            if extrudePaths(&contourPoints, &contourLengths, Int32(contourLengths.count), &sData) == 0 {
                 computeNormalsOfGeometryData(&sData)
             }
             else {
-                print("PATH EXTRUSION FOR \(char) FAILED!")
+                print("PATH EXTRUSION FOR \(text[charIndex]) FAILED!")
             }
 
             geometryCache[cacheKey] = cData
             geometryExtrudeCache[cacheKey] = sData
-            characterPaths[char] = glyphPaths
             characterPathsCache[cacheKey] = glyphPaths
         }
 
         let glyphOffset = simd_make_float2(Float(glyphPosition.x + origin.x - framePivot.x), Float(glyphPosition.y + origin.y - framePivot.y - verticalOffset))
-        characterOffsets[charIndex] = glyphOffset
+        recordCharacterGlyph(glyphPaths, at: glyphOffset, for: charIndex)
 
         combineAndOffsetGeometryData(&gData, &cData, simd_make_float3(glyphOffset, distance * 0.5))
         combineAndOffsetGeometryData(&gData, &bData, simd_make_float3(glyphOffset, -distance * 0.5))

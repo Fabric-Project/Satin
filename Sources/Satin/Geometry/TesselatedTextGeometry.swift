@@ -18,8 +18,8 @@ extension CTTextAlignment: @retroactive Codable {}
 
 struct TesselatedTextGlyphCacheKey: Hashable {
     let glyph: CGGlyph
-    let fontName: String
-    let fontSize: Float
+    // Variation instances of a font share a PostScript name, so the font itself, size included, identifies the glyph
+    let font: CTFont
     let angleLimit: Float
     let distanceLimit: Float
 }
@@ -39,7 +39,10 @@ private struct TesselatedTextLayoutCacheKey: Hashable {
 }
 
 private struct TesselatedTextGlyphLayout {
-    let charOffset: Int
+    // UTF-16 offset of the first character the glyph draws
+    let stringOffset: Int
+    // Differs from the geometry's font where CoreText substituted a fallback, such as for SF Symbols in Helvetica
+    let font: CTFont
     let glyph: CGGlyph
     let glyphPosition: CGPoint
     let origin: CGPoint
@@ -319,8 +322,12 @@ public class TesselatedTextGeometry: SatinGeometry {
     private var layoutCacheOrder: [TesselatedTextLayoutCacheKey] = []
     private let layoutCacheLimit = 64
 
+    // A Character drawn as several glyphs, such as Devanagari "कि", holds all of their outlines, offset from its first glyph
     public var characterPaths: [Character: [Polyline2D]] = [:]
+    // The position of the first glyph CoreText draws for each Character that has one
     public var characterOffsets: [String.Index: simd_float2] = [:]
+    // Outlines of a Character's later glyphs, translated into its first glyph's frame and owned here, not by characterPathsCache
+    private var clusterPolylines: [Polyline2D] = []
 
     public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0.0) {
         self.text = text
@@ -347,14 +354,18 @@ public class TesselatedTextGeometry: SatinGeometry {
         }
 
         characterPaths.removeAll(keepingCapacity: true)
+        freePolylines(&clusterPolylines)
+        clusterPolylines.removeAll(keepingCapacity: true)
         characterOffsets.removeAll(keepingCapacity: true)
         characterOffsets.reserveCapacity(text.count)
 
         let layoutData = textLayoutData()
-        for glyphLayout in layoutData.glyphs {
+        let characterIndices = characterIndicesByUTF16Offset()
+        for glyphLayout in layoutData.glyphs where characterIndices.indices.contains(glyphLayout.stringOffset) {
             addGlyphGeometryData(
                 &gData,
-                glyphLayout.charOffset,
+                characterIndices[glyphLayout.stringOffset],
+                glyphLayout.font,
                 glyphLayout.glyph,
                 glyphLayout.glyphPosition,
                 glyphLayout.origin,
@@ -366,12 +377,23 @@ public class TesselatedTextGeometry: SatinGeometry {
         return gData
     }
 
-    func addGlyphGeometryData(_ gData: inout GeometryData, _ charOffset: Int, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
+    // For each UTF-16 offset (CoreText's unit for string positions), the index of the Character containing it
+    func characterIndicesByUTF16Offset() -> [String.Index] {
+        var characterIndices: [String.Index] = []
+        characterIndices.reserveCapacity(text.utf16.count)
+        for characterIndex in text.indices {
+            characterIndices.append(contentsOf: repeatElement(characterIndex, count: text[characterIndex].utf16.count))
+        }
+        return characterIndices
+    }
+
+    func addGlyphGeometryData(_ gData: inout GeometryData, _ charIndex: String.Index, _ font: CTFont, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
         guard let framePivot = framePivot, let verticalOffset = verticalOffset else { return }
 
         addGlyphGeometryData(
             &gData,
-            charOffset,
+            charIndex,
+            font,
             glyph,
             glyphPosition,
             origin,
@@ -382,124 +404,236 @@ public class TesselatedTextGeometry: SatinGeometry {
 
     func addGlyphGeometryData(
         _ gData: inout GeometryData,
-        _ charOffset: Int,
+        _ charIndex: String.Index,
+        _ font: CTFont,
         _ glyph: CGGlyph,
         _ glyphPosition: CGPoint,
         _ origin: CGPoint,
         framePivot: CGPoint,
         verticalOffset: CGFloat
     ) {
-        let charIndex = text.index(text.startIndex, offsetBy: Int(charOffset))
-        let char = text[charIndex]
-        characterPaths[char] = []
-
         var cData = createGeometryData()
-        let cacheKey = glyphCacheKey(for: glyph)
+        let cacheKey = glyphCacheKey(for: glyph, in: font)
+        var glyphPaths: [Polyline2D] = []
 
         if let cacheData = geometryCache[cacheKey], let charPaths = characterPathsCache[cacheKey] {
             cData = cacheData
-            characterPaths[char] = charPaths
-        } else if let glyphPath = CTFontCreatePathForGlyph(ctFont, glyph, nil) {
-            let glyphPaths = getPolylines(glyphPath, angleLimit, fontSize / 10.0)
-
-            var _paths: [UnsafeMutablePointer<simd_float2>?] = []
-            var _lengths: [Int32] = []
-            for i in 0 ..< glyphPaths.count {
-                let path = glyphPaths[i]
-                _paths.append(path.data)
-                _lengths.append(path.count)
-            }
-
-            var triData = createTriangleData()
-            if triangulate(&_paths, &_lengths, Int32(_lengths.count), &triData) == 0 {
-                let glyphBounds = glyphPath.boundingBoxOfPath
-                let bounds = simd_float4(Float(glyphBounds.minX),
-                                         Float(glyphBounds.minY),
-                                         Float(glyphBounds.maxX),
-                                         Float(glyphBounds.maxY))
-                createGeometryDataFromPaths(&_paths, &_lengths, Int32(_lengths.count), &cData, bounds)
-                copyTriangleDataToGeometryData(&triData, &cData)
-                freeTriangleData(&triData)
-            } else {
-                print("⚠️ Triangulation FAILED: '\(char)' font=\(fontName) contours=\(_lengths.count)")
-
-                func cross(_ a: simd_float2, _ b: simd_float2, _ c: simd_float2) -> Float {
-                    (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
-                }
-
-                func onSeg(_ p: simd_float2, _ a: simd_float2, _ b: simd_float2, eps: Float = 1e-5) -> Bool {
-                    if abs(cross(a, b, p)) > eps { return false }
-                    return p.x >= min(a.x, b.x) - eps && p.x <= max(a.x, b.x) + eps &&
-                           p.y >= min(a.y, b.y) - eps && p.y <= max(a.y, b.y) + eps
-                }
-
-                func segHit(_ a1: simd_float2, _ a2: simd_float2, _ b1: simd_float2, _ b2: simd_float2, eps: Float = 1e-5) -> Bool {
-                    let d1 = cross(a1, a2, b1)
-                    let d2 = cross(a1, a2, b2)
-                    let d3 = cross(b1, b2, a1)
-                    let d4 = cross(b1, b2, a2)
-
-                    if ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
-                       ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps)) {
-                        return true
-                    }
-
-                    return (abs(d1) <= eps && onSeg(b1, a1, a2, eps: eps)) ||
-                           (abs(d2) <= eps && onSeg(b2, a1, a2, eps: eps)) ||
-                           (abs(d3) <= eps && onSeg(a1, b1, b2, eps: eps)) ||
-                           (abs(d4) <= eps && onSeg(a2, b1, b2, eps: eps))
-                }
-
-                for (i, len) in _lengths.enumerated() {
-                    guard let pts = _paths[i] else { continue }
-                    let n = Int(len)
-
-                    var colinear = 0
-                    for j in 0 ..< n {
-                        let a = pts[(j + n - 1) % n]
-                        let b = pts[j]
-                        let c = pts[(j + 1) % n]
-                        if abs(cross(a, b, c)) < 1e-5 { colinear += 1 }
-                    }
-
-                    var hits: [String] = []
-                    outer: for a in 0 ..< n {
-                        let a0 = pts[a]
-                        let a1 = pts[(a + 1) % n]
-                        for b in (a + 1) ..< n {
-                            if b == a || b == (a + 1) % n || (b + 1) % n == a { continue }
-                            if a == 0 && b == n - 1 { continue }
-                            let b0 = pts[b]
-                            let b1 = pts[(b + 1) % n]
-                            if segHit(a0, a1, b0, b1) {
-                                hits.append("\(a)-\(b)")
-                                if hits.count == 8 { break outer }
-                            }
-                        }
-                    }
-
-                    print("   contour[\(i)]: colinearTriples=\(colinear) selfIntersections=\(hits.count) sample=\(hits)")
-                }
-            }
-
+            glyphPaths = charPaths
+        } else if let outline = makeGlyphOutline(font, glyph) {
+            glyphPaths = outline.polylines
+            cData = makeFaceGeometryData(outline, font, text[charIndex])
             geometryCache[cacheKey] = cData
-            characterPaths[char] = glyphPaths
             characterPathsCache[cacheKey] = glyphPaths
         }
 
         let glyphOffset = simd_make_float2(Float(glyphPosition.x + origin.x - framePivot.x), Float(glyphPosition.y + origin.y - framePivot.y - verticalOffset))
-        characterOffsets[charIndex] = glyphOffset
+        recordCharacterGlyph(glyphPaths, at: glyphOffset, for: charIndex)
         combineAndOffsetGeometryData(&gData, &cData, simd_make_float3(glyphOffset, 0.0))
     }
 
-    func glyphCacheKey(for glyph: CGGlyph) -> TesselatedTextGlyphCacheKey {
+    func recordCharacterGlyph(_ glyphPaths: [Polyline2D], at glyphOffset: simd_float2, for charIndex: String.Index) {
+        let character = text[charIndex]
+        guard let characterOffset = characterOffsets[charIndex] else {
+            characterOffsets[charIndex] = glyphOffset
+            characterPaths[character] = glyphPaths
+            return
+        }
+
+        let translation = glyphOffset - characterOffset
+        for glyphPath in glyphPaths {
+            var translatedPath = createEmptyPolyline2D()
+            for pointIndex in 0 ..< Int(glyphPath.count) {
+                addPointToPolyline2D(glyphPath.data[pointIndex] + translation, &translatedPath)
+            }
+            clusterPolylines.append(translatedPath)
+            characterPaths[character, default: []].append(translatedPath)
+        }
+    }
+
+    // The outline's front face, which takes ownership of its triangles
+    func makeFaceGeometryData(_ outline: GlyphOutline, _ font: CTFont, _ character: Character) -> GeometryData {
+        var faceData = createGeometryData()
+        var (contourPoints, contourLengths) = contourBuffers(outline.polylines)
+
+        if var triangles = outline.triangles {
+            let glyphBounds = outline.path.boundingBoxOfPath
+            let bounds = simd_float4(Float(glyphBounds.minX),
+                                     Float(glyphBounds.minY),
+                                     Float(glyphBounds.maxX),
+                                     Float(glyphBounds.maxY))
+            createGeometryDataFromPaths(&contourPoints, &contourLengths, Int32(contourLengths.count), &faceData, bounds)
+            copyTriangleDataToGeometryData(&triangles, &faceData)
+            freeTriangleData(&triangles)
+        } else {
+            printTriangulationFailure(character, font, contourPoints, contourLengths)
+        }
+
+        return faceData
+    }
+
+    func contourBuffers(_ polylines: [Polyline2D]) -> (points: [UnsafeMutablePointer<simd_float2>?], lengths: [Int32]) {
+        (polylines.map { $0.data }, polylines.map { $0.count })
+    }
+
+    private func printTriangulationFailure(_ char: Character, _ font: CTFont, _ _paths: [UnsafeMutablePointer<simd_float2>?], _ _lengths: [Int32]) {
+        print("⚠️ Triangulation FAILED: '\(char)' font=\(CTFontCopyPostScriptName(font)) contours=\(_lengths.count)")
+        func cross(_ a: simd_float2, _ b: simd_float2, _ c: simd_float2) -> Float {
+            (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)
+        }
+
+        func onSeg(_ p: simd_float2, _ a: simd_float2, _ b: simd_float2, eps: Float = 1e-5) -> Bool {
+            if abs(cross(a, b, p)) > eps { return false }
+            return p.x >= min(a.x, b.x) - eps && p.x <= max(a.x, b.x) + eps &&
+                   p.y >= min(a.y, b.y) - eps && p.y <= max(a.y, b.y) + eps
+        }
+
+        func segHit(_ a1: simd_float2, _ a2: simd_float2, _ b1: simd_float2, _ b2: simd_float2, eps: Float = 1e-5) -> Bool {
+            let d1 = cross(a1, a2, b1)
+            let d2 = cross(a1, a2, b2)
+            let d3 = cross(b1, b2, a1)
+            let d4 = cross(b1, b2, a2)
+
+            if ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) &&
+               ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps)) {
+                return true
+            }
+
+            return (abs(d1) <= eps && onSeg(b1, a1, a2, eps: eps)) ||
+                   (abs(d2) <= eps && onSeg(b2, a1, a2, eps: eps)) ||
+                   (abs(d3) <= eps && onSeg(a1, b1, b2, eps: eps)) ||
+                   (abs(d4) <= eps && onSeg(a2, b1, b2, eps: eps))
+        }
+
+        for (i, len) in _lengths.enumerated() {
+            guard let pts = _paths[i] else { continue }
+            let n = Int(len)
+
+            var colinear = 0
+            for j in 0 ..< n {
+                let a = pts[(j + n - 1) % n]
+                let b = pts[j]
+                let c = pts[(j + 1) % n]
+                if abs(cross(a, b, c)) < 1e-5 { colinear += 1 }
+            }
+
+            var hits: [String] = []
+            outer: for a in 0 ..< n {
+                let a0 = pts[a]
+                let a1 = pts[(a + 1) % n]
+                for b in (a + 1) ..< n {
+                    if b == a || b == (a + 1) % n || (b + 1) % n == a { continue }
+                    if a == 0 && b == n - 1 { continue }
+                    let b0 = pts[b]
+                    let b1 = pts[(b + 1) % n]
+                    if segHit(a0, a1, b0, b1) {
+                        hits.append("\(a)-\(b)")
+                        if hits.count == 8 { break outer }
+                    }
+                }
+            }
+
+            print("   contour[\(i)]: colinearTriples=\(colinear) selfIntersections=\(hits.count) sample=\(hits)")
+        }
+    }
+
+    func glyphCacheKey(for glyph: CGGlyph, in font: CTFont) -> TesselatedTextGlyphCacheKey {
         TesselatedTextGlyphCacheKey(
             glyph: glyph,
-            fontName: fontName,
-            fontSize: fontSize,
+            font: font,
             angleLimit: angleLimit,
             distanceLimit: fontSize / 10.0
         )
+    }
+
+    struct GlyphOutline {
+        // The outline the polylines came from
+        let path: CGPath
+        let polylines: [Polyline2D]
+        // Nil when the polylines could not be triangulated
+        let triangles: TriangleData?
+    }
+
+    // Overlapping or self-intersecting contours, common in variable fonts such as SF Pro, triangulate with
+    // the wrong fill or not at all, and merging them fixes that. Merging also re-splits curves in ways that
+    // can defeat the triangulator, so the merged outline is used only where the original one falls short.
+    func makeGlyphOutline(_ font: CTFont, _ glyph: CGGlyph) -> GlyphOutline? {
+        guard let originalPath = CTFontCreatePathForGlyph(font, glyph, nil) else { return nil }
+        let distanceLimit = fontSize / 10.0
+
+        let original = triangulateOutline(originalPath, getPolylines(originalPath, angleLimit, distanceLimit))
+        let mergedPath = originalPath.normalized(using: .winding)
+        var mergedPolylines = getPolylines(mergedPath, angleLimit, distanceLimit)
+
+        // Merged contours wind consistently, so their signed area is the filled area.
+        let filledArea = abs(signedArea(of: mergedPolylines))
+        let originalError = original.triangles.map { abs(area(of: $0, over: original.polylines) - filledArea) }
+        if let originalError, originalError <= filledArea * 0.02 {
+            freePolylines(&mergedPolylines)
+            return original
+        }
+
+        let merged = triangulateOutline(mergedPath, mergedPolylines)
+        guard let mergedTriangles = merged.triangles,
+              originalError.map({ abs(area(of: mergedTriangles, over: merged.polylines) - filledArea) < $0 }) ?? true
+        else {
+            freeGlyphOutline(merged)
+            return original
+        }
+
+        freeGlyphOutline(original)
+        return merged
+    }
+
+    func triangulateOutline(_ path: CGPath, _ polylines: [Polyline2D]) -> GlyphOutline {
+        var (contourPoints, contourLengths) = contourBuffers(polylines)
+        var triangles = createTriangleData()
+        if triangulate(&contourPoints, &contourLengths, Int32(contourLengths.count), &triangles) == 0 {
+            return GlyphOutline(path: path, polylines: polylines, triangles: triangles)
+        }
+        freeTriangleData(&triangles)
+        return GlyphOutline(path: path, polylines: polylines, triangles: nil)
+    }
+
+    func freeGlyphOutline(_ outline: GlyphOutline) {
+        var polylines = outline.polylines
+        freePolylines(&polylines)
+        if var triangles = outline.triangles {
+            freeTriangleData(&triangles)
+        }
+    }
+
+    func freePolylines(_ polylines: inout [Polyline2D]) {
+        for index in polylines.indices {
+            freePolyline2D(&polylines[index])
+        }
+    }
+
+    private func signedArea(of polylines: [Polyline2D]) -> Float {
+        var doubledArea: Float = 0
+        for polyline in polylines {
+            let pointCount = Int(polyline.count)
+            for pointIndex in 0 ..< pointCount {
+                let point = polyline.data[pointIndex], nextPoint = polyline.data[(pointIndex + 1) % pointCount]
+                doubledArea += point.x * nextPoint.y - nextPoint.x * point.y
+            }
+        }
+        return doubledArea * 0.5
+    }
+
+    // Triangle indices address the polylines' points in order.
+    private func area(of triangles: TriangleData, over polylines: [Polyline2D]) -> Float {
+        var points: [simd_float2] = []
+        points.reserveCapacity(polylines.reduce(0) { $0 + Int($1.count) })
+        for polyline in polylines {
+            points.append(contentsOf: UnsafeBufferPointer(start: polyline.data, count: Int(polyline.count)))
+        }
+        var doubledArea: Float = 0
+        for triangleIndex in 0 ..< Int(triangles.count) {
+            let triangle = triangles.indices[triangleIndex]
+            let first = points[Int(triangle.i0)], second = points[Int(triangle.i1)], third = points[Int(triangle.i2)]
+            doubledArea += abs((second.x - first.x) * (third.y - first.y) - (third.x - first.x) * (second.y - first.y))
+        }
+        return doubledArea * 0.5
     }
 
     private func textLayoutData() -> TesselatedTextLayoutData {
@@ -521,7 +655,6 @@ public class TesselatedTextGeometry: SatinGeometry {
         var glyphLayouts: [TesselatedTextGlyphLayout] = []
         glyphLayouts.reserveCapacity(text.count)
 
-        var charOffset = 0
         for (lineIndex, line) in lines.enumerated() {
             let origin = origins[lineIndex]
             let runs: [CTRun] = CTLineGetGlyphRuns(line) as! [CTRun]
@@ -529,6 +662,10 @@ public class TesselatedTextGeometry: SatinGeometry {
                 let glyphCount = CTRunGetGlyphCount(run)
                 var glyphPositions = [CGPoint](repeating: .zero, count: glyphCount)
                 var glyphs = [CGGlyph](repeating: 0, count: glyphCount)
+                var stringIndices = [CFIndex](repeating: 0, count: glyphCount)
+                CTRunGetStringIndices(run, CFRangeMake(0, 0), &stringIndices)
+                let runAttributes = CTRunGetAttributes(run) as NSDictionary
+                let runFont = runAttributes[kCTFontAttributeName].map { $0 as! CTFont } ?? ctFont
 
                 glyphPositions.withUnsafeMutableBufferPointer { positionBuffer in
                     glyphs.withUnsafeMutableBufferPointer { glyphBuffer in
@@ -542,13 +679,13 @@ public class TesselatedTextGeometry: SatinGeometry {
                         for glyphIndex in 0 ..< glyphCount {
                             glyphLayouts.append(
                                 TesselatedTextGlyphLayout(
-                                    charOffset: charOffset,
+                                    stringOffset: stringIndices[glyphIndex],
+                                    font: runFont,
                                     glyph: glyphBaseAddress[glyphIndex],
                                     glyphPosition: positionBaseAddress[glyphIndex],
                                     origin: origin
                                 )
                             )
-                            charOffset += 1
                         }
                     }
                 }
@@ -702,7 +839,7 @@ public class TesselatedTextGeometry: SatinGeometry {
 
         let attributedText = CFAttributedStringCreateMutable(kCFAllocatorDefault, 0)
         CFAttributedStringReplaceString(attributedText, CFRangeMake(0, 0), text as CFString)
-        CFAttributedStringSetAttributes(attributedText, CFRangeMake(0, text.count), attributes as CFDictionary, false)
+        CFAttributedStringSetAttributes(attributedText, CFRangeMake(0, text.utf16.count), attributes as CFDictionary, false)
 
         // Paragraph Attributes
         var alignment = textAlignment
@@ -718,7 +855,7 @@ public class TesselatedTextGeometry: SatinGeometry {
                 let style = settings.withUnsafeBufferPointer {
                     CTParagraphStyleCreate($0.baseAddress, settings.count)
                 }
-                CFAttributedStringSetAttribute(attributedText, CFRangeMake(0, text.count), kCTParagraphStyleAttributeName, style)
+                CFAttributedStringSetAttribute(attributedText, CFRangeMake(0, text.utf16.count), kCTParagraphStyleAttributeName, style)
             }
         }
 
@@ -739,7 +876,7 @@ public class TesselatedTextGeometry: SatinGeometry {
         if bnds.height <= 0 {
             bnds.height = CGFloat.greatestFiniteMagnitude
         }
-        return CTFramesetterSuggestFrameSizeWithConstraints(frameSetter, CFRangeMake(0, text.count), nil, bnds, nil)
+        return CTFramesetterSuggestFrameSizeWithConstraints(frameSetter, CFRangeMake(0, text.utf16.count), nil, bnds, nil)
     }
 
     func getFrame() -> CTFrame? {
@@ -749,7 +886,7 @@ public class TesselatedTextGeometry: SatinGeometry {
         let constraints = CGRect(x: 0.0, y: 0.0, width: textBounds.width <= 0.0 ? suggestFrameSize.width : textBounds.width, height: textBounds.height <= 0.0 ? suggestFrameSize.height : textBounds.height)
         framePath.addRect(constraints)
 
-        return CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, text.count), framePath, nil)
+        return CTFramesetterCreateFrame(frameSetter, CFRangeMake(0, text.utf16.count), framePath, nil)
     }
 
     func getLines() -> [CTLine] {
@@ -773,10 +910,10 @@ public class TesselatedTextGeometry: SatinGeometry {
 
     func clearCharacterPaths() {
         characterPaths = [:]
-        for (_, paths) in characterPathsCache {
-            for var path in paths {
-                freePolyline2D(&path)
-            }
+        freePolylines(&clusterPolylines)
+        clusterPolylines = []
+        for var (_, paths) in characterPathsCache {
+            freePolylines(&paths)
         }
         characterPathsCache = [:]
     }
