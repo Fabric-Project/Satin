@@ -64,16 +64,17 @@ open class Mesh: Renderable {
               vertexUniforms[renderContext.id] != nil
         else { return false }
 
+        let layout = drawLayout
         if submeshes.isEmpty,
            let material = material,
            materialMatchesCurrentPass(material, shadow: shadow),
-           material.getPipeline(renderContext: renderContext, shadow: shadow, layout: drawLayout) != nil
+           material.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
         {
             return true
         } else if submeshes.contains(where: {
             $0.visible &&
                 materialMatchesCurrentPass($0.material, shadow: shadow) &&
-                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow, layout: drawLayout) != nil
+                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
         }) {
             return true
         } else {
@@ -228,10 +229,8 @@ open class Mesh: Renderable {
 
     override open func captureRepeatedEncodingState(iteration: Int, count: Int) {
         super.captureRepeatedEncodingState(iteration: iteration, count: count)
+        // Submesh geometries hold only indices: no palette to capture.
         geometry.captureRepeatedEncoding(iteration: iteration, count: count)
-        for submesh in submeshes {
-            submesh.geometry.captureRepeatedEncoding(iteration: iteration, count: count)
-        }
     }
 
     override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
@@ -357,13 +356,12 @@ open class Mesh: Renderable {
             }
         } else if materialMatchesCurrentPass(material, shadow: shadow) {
             // The material may be shared with meshes of another layout: pick the pipeline for ours.
-            renderEncoderState.drawLayout = drawLayout
             material?.bind(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
-                shadow: shadow
+                shadow: shadow,
+                layout: drawLayout
             )
-            renderEncoderState.drawLayout = nil
             geometry.draw(
                 renderEncoderState: renderEncoderState,
                 instanceCount: instanceCount

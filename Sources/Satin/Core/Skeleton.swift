@@ -122,7 +122,8 @@ public final class Skeleton: TimeDriven {
             device: device,
             mesh: mesh,
             skeletonJointIndices: skeletonJointIndices,
-            inverseBindMatrices: skeletonJointIndices.map { $0 >= 0 ? bindTransforms[$0].inverse * geometryBindTransform : geometryBindTransform }
+            inverseBindMatrices: skeletonJointIndices.map { $0 >= 0 ? bindTransforms[$0].inverse * geometryBindTransform : geometryBindTransform },
+            geometryBindTransform: geometryBindTransform
         )
         binding.pose(jointTransforms: jointTransforms, skeletonWorld: anchor?.worldMatrix ?? matrix_identity_float4x4)
         bindings.append(binding)

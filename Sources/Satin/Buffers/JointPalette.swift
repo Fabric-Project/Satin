@@ -42,10 +42,12 @@ public final class JointPalette {
     private var latestUpdatedIndex = 0
 
     /// Repeated encoding: the slot each iteration's pose was captured into this frame, and
-    /// each iteration's current matrices, which become its previous ones next frame.
+    /// each iteration's current matrices, which become its previous ones next frame: flat,
+    /// iteration × jointCount, filled in place so capturing allocates nothing.
     private var repeatedCount = 0
     private var capturedSlots: [Int?] = []
-    private var iterationHistory: [[simd_float4x4]?] = []
+    private var iterationHistory: [simd_float4x4] = []
+    private var iterationHasHistory: [Bool] = []
     /// Changes whenever the pose does: for posed bounds and raycasts to know when to rebuild,
     /// and for a second capture of an unchanged iteration to be recognised.
     public private(set) var poseVersion = 0
@@ -53,12 +55,16 @@ public final class JointPalette {
     /// was captured at. Several meshes drawing one palette each capture it every iteration;
     /// only the first capture of a pose in a frame may move its history on.
     private var capturedSinceDraw: [Int: Int] = [:]
+    /// The latest update may have moved the pose, and whether that pose has been drawn: once it
+    /// has, and nothing updates it again, previous catches up with current (`settleMotion`).
+    private var motionNeedsSettling = false
+    private var motionDrawn = false
 
     public init(device: MTLDevice, jointCount: Int, maxBuffersInFlight: Int = Satin.maxBuffersInFlight, encodesPerFrame: Int = 1) {
         self.device = device
         self.jointCount = max(jointCount, 1)
         self.maxBuffersInFlight = max(1, maxBuffersInFlight)
-        totalSlotCount = Self.slotCount(maxBuffersInFlight: self.maxBuffersInFlight, encodesPerFrame: encodesPerFrame)
+        totalSlotCount = Self.slotCount(maxBuffersInFlight: self.maxBuffersInFlight, encodesPerFrame: max(1, encodesPerFrame))
         joints = Array(repeating: SkinJoint(current: matrix_identity_float4x4, previous: matrix_identity_float4x4), count: self.jointCount)
         buffer = Self.makeBuffer(device: device, jointCount: self.jointCount, slotCount: totalSlotCount)
         upload()
@@ -70,6 +76,8 @@ public final class JointPalette {
             joints[jointIndex].previous = joints[jointIndex].current
             joints[jointIndex].current = jointIndex < matrices.count ? matrices[jointIndex] : matrix_identity_float4x4
         }
+        motionNeedsSettling = true
+        motionDrawn = false
         upload()
     }
 
@@ -79,7 +87,26 @@ public final class JointPalette {
             let matrix = jointIndex < matrices.count ? matrices[jointIndex] : matrix_identity_float4x4
             joints[jointIndex] = SkinJoint(current: matrix, previous: matrix)
         }
+        motionNeedsSettling = false
         upload()
+    }
+
+    /// Records that the latest pose was bound for drawing.
+    func markDrawn() {
+        motionDrawn = true
+    }
+
+    /// Before a frame's drawing: when a moving pose has been drawn and nothing updated it
+    /// since, last frame's matrices catch up with this frame's, so a held pose draws no
+    /// velocity. The pose itself is unchanged, so `poseVersion` stays.
+    func settleMotion() {
+        guard motionNeedsSettling, motionDrawn else { return }
+        for jointIndex in joints.indices {
+            joints[jointIndex].previous = joints[jointIndex].current
+        }
+        advanceSlot()
+        write(joints)
+        motionNeedsSettling = false
     }
 
     // MARK: - Repeated Encoding
@@ -92,7 +119,8 @@ public final class JointPalette {
         if sanitizedCount != repeatedCount {
             repeatedCount = sanitizedCount
             capturedSlots = Array(repeating: nil, count: sanitizedCount)
-            iterationHistory = Array(repeating: nil, count: sanitizedCount)
+            iterationHistory = Array(repeating: matrix_identity_float4x4, count: sanitizedCount * jointCount)
+            iterationHasHistory = Array(repeating: false, count: sanitizedCount)
         }
         let wantedSlotCount = Self.slotCount(maxBuffersInFlight: maxBuffersInFlight, encodesPerFrame: 2 * sanitizedCount + 1)
         guard wantedSlotCount > totalSlotCount else { return }
@@ -110,13 +138,17 @@ public final class JointPalette {
         // Already captured this frame with this pose (by another mesh drawing this palette).
         if capturedSinceDraw[iteration] == poseVersion, capturedSlots[iteration] != nil { return }
         capturedSinceDraw[iteration] = poseVersion
-        let currents = joints.map(\.current)
-        let previous = iterationHistory[iteration] ?? currents
-        let captured = zip(currents, previous).map { SkinJoint(current: $0, previous: $1) }
         advanceSlot()
-        write(captured)
+        let slot = buffer.contents().advanced(by: offset).bindMemory(to: SkinJoint.self, capacity: jointCount)
+        let historyStart = iteration * jointCount
+        let hasHistory = iterationHasHistory[iteration]
+        for jointIndex in 0 ..< jointCount {
+            let current = joints[jointIndex].current
+            slot[jointIndex] = SkinJoint(current: current, previous: hasHistory ? iterationHistory[historyStart + jointIndex] : current)
+            iterationHistory[historyStart + jointIndex] = current
+        }
+        iterationHasHistory[iteration] = true
         capturedSlots[iteration] = index
-        iterationHistory[iteration] = currents
     }
 
     /// The slot `iteration`'s pose was captured into, or the latest upload when it was not
@@ -154,7 +186,7 @@ public final class JointPalette {
     }
 
     private static func slotCount(maxBuffersInFlight: Int, encodesPerFrame: Int) -> Int {
-        max(1, maxBuffersInFlight) * max(1, encodesPerFrame)
+        maxBuffersInFlight * encodesPerFrame
     }
 
     private static func makeBuffer(device: MTLDevice, jointCount: Int, slotCount: Int) -> MTLBuffer {

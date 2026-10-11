@@ -491,24 +491,13 @@ public class TesselatedTextGeometry: SatinGeometry {
             }
         }
 
-        guard pieceGeneration != .none, !pieceRecords.isEmpty, pieceRecords.count <= Int(UInt16.max) + 1 else {
-            pieces = nil
-            removeAttribute(.JointIndices)
-            removeAttribute(.JointWeights)
+        guard pieceGeneration != .none, !pieceRecords.isEmpty else {
+            setPieces(nil)
             return
         }
 
-        var jointIndices = [simd_ushort4](repeating: .zero, count: Int(geometryData.vertexCount))
-        for (pieceIndex, record) in pieceRecords.enumerated() {
-            for vertex in record.vertices {
-                jointIndices[vertex] = simd_ushort4(UInt16(pieceIndex), 0, 0, 0)
-            }
-        }
-        addAttribute(UShort4BufferAttribute(defaultValue: .zero, data: jointIndices), for: .JointIndices)
-        addAttribute(Float4BufferAttribute(defaultValue: simd_float4(1, 0, 0, 0),
-                                           data: Array(repeating: simd_float4(1, 0, 0, 0), count: jointIndices.count)), for: .JointWeights)
-
-        pieces = try? GeometryPieces(
+        // Too many pieces for UShort joints: the text draws whole.
+        setPieces(try? GeometryPieces(
             parentIndices: Array(repeating: -1, count: pieceRecords.count),
             centers: pieceRecords.map { record in
                 let boundsCenter = (record.bounds.min + record.bounds.max) * 0.5
@@ -518,7 +507,7 @@ public class TesselatedTextGeometry: SatinGeometry {
             sizes: pieceRecords.map { pieceSize(faceArea: $0.faceArea) },
             sizeMeasure: pieceSizeMeasure,
             vertexRanges: pieceRecords.map(\.vertices)
-        )
+        ))
     }
 
     /// For each Character of the text, the index of the unit it belongs to under

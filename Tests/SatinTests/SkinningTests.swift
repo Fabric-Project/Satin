@@ -142,6 +142,24 @@ final class SkinningTests: XCTestCase {
         XCTAssertFalse(frames[3].contains { $0 & 0x7FFF != 0 }, "Velocity returns to zero once the instance stops")
     }
 
+    func testPoseMotionReachesVelocityAndSettles() throws {
+        var jointPalette: JointPalette?
+        let frames = try renderVelocityFrames(frameCount: 4) { context in
+            let geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, matrix_identity_float4x4])
+            jointPalette = geometry.jointPalette
+            let mesh = Mesh(context: context, label: "Bar", geometry: geometry, material: VelocityMaterial(context: context))
+            mesh.cullMode = .none
+            return Object(context: context, label: "Scene", [mesh])
+        } beforeFrame: { frame in
+            // Frame 2 moves the bar's second joint; frame 3 holds the pose without updating it.
+            if frame == 2 { jointPalette?.update(matrices: [matrix_identity_float4x4, translation(x: 0.5)]) }
+        }
+        // The sign bit is masked: the shader negates y, so zero velocity can read as -0.
+        XCTAssertFalse(frames[1].contains { $0 & 0x7FFF != 0 }, "A still pose under a still camera writes zero velocity")
+        XCTAssertTrue(frames[2].contains { $0 & 0x7FFF != 0 }, "A moved pose writes velocity")
+        XCTAssertFalse(frames[3].contains { $0 & 0x7FFF != 0 }, "Velocity returns to zero once the pose is held")
+    }
+
     func testSwappingInSkinnedGeometryUnderExistingMaterialSkins() throws {
         // Fabric's Mesh node keeps its material and swaps geometry when its input changes.
         var mesh: Mesh?
@@ -302,7 +320,6 @@ final class SkinningTests: XCTestCase {
             mesh.cullMode = .none
             return (scene: Object(context: context, label: "Scene", [mesh]), camera: camera)
         }
-        XCTAssertEqual(submeshMaterial?.skinning, false, "Meshes never write per-mesh settings into a material; each draw states them")
         XCTAssertEqual(submeshMaterial?.vertexDescriptor.attributes[VertexAttributeIndex.JointIndices.rawValue].format, .ushort4,
                        "The submesh's material takes the new layout as its default")
         VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "right of bar", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)

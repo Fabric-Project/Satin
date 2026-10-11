@@ -79,8 +79,9 @@ final class SkeletalAnimationTests: XCTestCase {
         let bindPoses = [translation(0, 1, 0), translation(0, 2, 0) * rotation(.pi / 4, axis: [0, 0, 1])]
         var matrices: [simd_float4x4] = []
         SkeletonBinding.computeJointMatrices(&matrices, jointTransforms: bindPoses, skeletonJointIndices: [0, 1],
-                                             inverseBindMatrices: bindPoses.map(\.inverse), skeletonToGeometry: matrix_identity_float4x4)
-        XCTAssertEqual(matrices.count, 2)
+                                             inverseBindMatrices: bindPoses.map(\.inverse), geometryBindTransform: matrix_identity_float4x4,
+                                             skeletonToGeometry: matrix_identity_float4x4)
+        XCTAssertEqual(matrices.count, 3, "Two joints, then the rest joint")
         for matrix in matrices { assertEqual(matrix, matrix_identity_float4x4) }
     }
 
@@ -154,6 +155,23 @@ final class SkeletalAnimationTests: XCTestCase {
         mesh.position = [0, 5, 0]
         skeleton.commitPose()
         assertEqual(drawn(), simd_float3(10.5, 0, 0), "The mesh's own move does not carry skinned geometry")
+    }
+
+    func testUnweightedAndUnnamedJointsStayWithTheBoundSkin() throws {
+        // At rest, a weighted vertex lands at skeletonWorld × geometryBind × p; vertices on a
+        // joint the skeleton does not name, or on the rest joint, must land there too.
+        let context = try makeContext()
+        let anchor = Object(context: context, label: "Anchor")
+        let skeleton = Skeleton(jointPaths: ["Joint"], restTransforms: [], bindTransforms: [], anchor: anchor)
+        let binding = skeleton.bind(device: context.device, mesh: nil, jointPaths: ["Joint", "Missing"],
+                                    geometryBindTransform: translation(0, 3, 0))
+        anchor.position = [10, 0, 0]
+        skeleton.commitPose()
+
+        let point = simd_float4(1, 0, 0, 1)
+        assertEqual(simd_make_float3(binding.palette.joints[0].current * point), simd_float3(11, 3, 0))
+        assertEqual(simd_make_float3(binding.palette.joints[1].current * point), simd_float3(11, 3, 0), "Unnamed joint")
+        assertEqual(simd_make_float3(binding.palette.joints[binding.restJointIndex].current * point), simd_float3(11, 3, 0), "Rest joint")
     }
 
     // MARK: - Loading

@@ -8,8 +8,7 @@ import MetalKit
 import Satin
 
 /// Plays a USD skeletal animation: `loadAnimatedAsset` returns the model and its animation,
-/// whose `setTime` poses every skinned mesh on the GPU. Apple's chameleon: 84 joints, five
-/// skinned meshes, up to 12 influences per vertex. Staged like the PBR Point Shadows example:
+/// whose `setTime` poses every skinned mesh on the GPU. Staged like the PBR Point Shadows example:
 /// a cyclorama and two shadow-casting point lights.
 final class SkeletalAnimationRenderer: BaseRenderer {
     override var modelsURL: URL { sharedAssetsURL.appendingPathComponent("Models") }
@@ -58,7 +57,7 @@ final class SkeletalAnimationRenderer: BaseRenderer {
         
 //        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("chameleon_anim_mtl_variant.usdz"), context: defaultContext, textureLoader: textureLoader)
         let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("CC0_カブトムシ__赤_Japanese_Rhinoceros_Beetle_Red.usdz"), context: defaultContext, textureLoader: textureLoader)
-      animation = loaded.animation
+        animation = loaded.animation
         for mesh in loaded.root.getChildren().compactMap({ $0 as? Mesh }) {
             mesh.castShadow = true
             mesh.receiveShadow = true

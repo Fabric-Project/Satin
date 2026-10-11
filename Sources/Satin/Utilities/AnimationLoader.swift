@@ -134,8 +134,8 @@ func loadObjectAnimation(animatedObjects: [(object: Object, mdlObject: MDLObject
 
 /// Each vertex's joint influences in the layout Satin skins with: the four strongest of
 /// however many the file gives, renormalized, as UShort4 indices and Float4 weights. Indices
-/// may be any integer format; weights must be float. Vertices no listed joint moves stay at
-/// rest, through the binding's rest joint (`SkeletonBinding.restJointIndex`).
+/// may be any integer format; weights must be float. Vertices no listed joint moves stay where
+/// they were bound, through the binding's rest joint (`SkeletonBinding.restJointIndex`).
 func loadJointInfluences(mdlMesh: MDLMesh, geometry: Geometry) {
     guard let indexData = mdlMesh.vertexAttributeData(forAttributeNamed: MDLVertexAttributeJointIndices),
           let weightData = mdlMesh.vertexAttributeData(forAttributeNamed: MDLVertexAttributeJointWeights),
@@ -184,7 +184,7 @@ func loadJointInfluences(mdlMesh: MDLMesh, geometry: Geometry) {
 /// The four strongest positive influences on joints `0 ..< jointCount`, strongest first, with
 /// weights renormalized to sum to one; earlier influences win ties. Indices outside the joints
 /// are dropped, since the GPU would read past the palette. A vertex left with no weight goes
-/// to the rest joint, index `jointCount`, and stays at rest.
+/// to the rest joint, index `jointCount`, and stays where it was bound.
 func strongestJointInfluences(indices: [Int], weights: [Float], jointCount: Int) -> (indices: simd_ushort4, weights: simd_float4) {
     let restJointIndex = UInt16(clamping: jointCount)
     var strongestIndices = simd_ushort4.zero

@@ -226,8 +226,8 @@ open class StandardMaterial: Material {
         StandardShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
-    override open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow)
+    override open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
+        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow, layout: layout)
         if !shadow {
             for (type, texture) in maps {
                 renderEncoderState.setFragmentPBRTexture(texture, type: type)

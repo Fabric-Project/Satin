@@ -16,23 +16,15 @@ typedef struct {
 #if defined(SKINNING) && defined(HAS_JOINTINDICES) && defined(HAS_JOINTWEIGHTS)
 #define SATIN_SKINNED 1
 
-static inline float4x4 satinSkinMatrix(Vertex in, constant SkinJoint *joints) {
+// This frame's skin matrix, or last frame's when `previous`; inlined with a constant, so the
+// choice costs nothing.
+static inline float4x4 satinSkinMatrix(Vertex in, constant SkinJoint *joints, bool previous) {
     const uint4 indices = uint4(in.jointIndices);
     const float4 weights = float4(in.jointWeights);
-    return weights.x * joints[indices.x].current +
-           weights.y * joints[indices.y].current +
-           weights.z * joints[indices.z].current +
-           weights.w * joints[indices.w].current;
-}
-
-// Only materials that write velocity call this.
-__attribute__((unused)) static inline float4x4 satinPreviousSkinMatrix(Vertex in, constant SkinJoint *joints) {
-    const uint4 indices = uint4(in.jointIndices);
-    const float4 weights = float4(in.jointWeights);
-    return weights.x * joints[indices.x].previous +
-           weights.y * joints[indices.y].previous +
-           weights.z * joints[indices.z].previous +
-           weights.w * joints[indices.w].previous;
+    return weights.x * (previous ? joints[indices.x].previous : joints[indices.x].current) +
+           weights.y * (previous ? joints[indices.y].previous : joints[indices.y].current) +
+           weights.z * (previous ? joints[indices.z].previous : joints[indices.z].current) +
+           weights.w * (previous ? joints[indices.w].previous : joints[indices.w].current);
 }
 
 // The upper 3x3 of a skin matrix, for normals and tangents: exact for rigid and uniformly
@@ -46,10 +38,10 @@ static inline float3x3 satinSkinNormalMatrix(float4x4 skin) {
 // exactly the expressions they replace, so unskinned shaders compile to the same code.
 // `v` is the stage_in vertex; skinned builds read the injected `skinJoints` argument.
 #if SATIN_SKINNED
-#define SATIN_SKIN_POSITION(v) (satinSkinMatrix(v, skinJoints) * float4(v.position, 1.0))
-#define SATIN_PREVIOUS_SKIN_POSITION(v) (satinPreviousSkinMatrix(v, skinJoints) * float4(v.position, 1.0))
-#define SATIN_SKIN_DIRECTION(v, direction) (satinSkinNormalMatrix(satinSkinMatrix(v, skinJoints)) * (direction))
-#define SATIN_PREVIOUS_SKIN_TRANSFORM(v, position) (satinPreviousSkinMatrix(v, skinJoints) * (position))
+#define SATIN_SKIN_POSITION(v) (satinSkinMatrix(v, skinJoints, false) * float4(v.position, 1.0))
+#define SATIN_PREVIOUS_SKIN_POSITION(v) (satinSkinMatrix(v, skinJoints, true) * float4(v.position, 1.0))
+#define SATIN_SKIN_DIRECTION(v, direction) (satinSkinNormalMatrix(satinSkinMatrix(v, skinJoints, false)) * (direction))
+#define SATIN_PREVIOUS_SKIN_TRANSFORM(v, position) (satinSkinMatrix(v, skinJoints, true) * (position))
 #else
 #define SATIN_SKIN_POSITION(v) float4(v.position, 1.0)
 #define SATIN_PREVIOUS_SKIN_POSITION(v) float4(v.position, 1.0)
@@ -57,3 +49,18 @@ static inline float3x3 satinSkinNormalMatrix(float4x4 skin) {
 #define SATIN_PREVIOUS_SKIN_TRANSFORM(v, position) (position)
 #endif
 #define SATIN_SKIN_NORMAL(v) SATIN_SKIN_DIRECTION(v, v.normal)
+
+// Where `v` was last frame, in object space then clip space, for velocity. Custom10 is
+// VertexAttributeIndex.PreviousPosition: last frame's position for geometry deformed on the CPU.
+// Each instance uses its own last-frame matrix. The clip-space form reads the vertex function's
+// `vertexUniforms` and `amp_id`, and when instancing `instanceUniforms` and `instanceID`.
+#if defined(HAS_CUSTOM10)
+#define SATIN_PREVIOUS_POSITION(v) SATIN_PREVIOUS_SKIN_TRANSFORM(v, float4(v.custom10.xyz, 1.0))
+#else
+#define SATIN_PREVIOUS_POSITION(v) SATIN_PREVIOUS_SKIN_POSITION(v)
+#endif
+#if defined(INSTANCING)
+#define SATIN_PREVIOUS_CLIP_POSITION(v) (vertexUniforms[amp_id].previousViewProjectionMatrix * instanceUniforms[instanceID].previousModelMatrix * SATIN_PREVIOUS_POSITION(v))
+#else
+#define SATIN_PREVIOUS_CLIP_POSITION(v) (vertexUniforms[amp_id].previousModelViewProjectionMatrix * SATIN_PREVIOUS_POSITION(v))
+#endif

@@ -74,8 +74,10 @@ public class InstancedMesh: Mesh {
     /// previous equal to current, or still instances would keep reporting motion.
     private var instanceMotionNeedsSettling = false
     /// Repeated encoding: each iteration's model matrices, which become its previous ones next
-    /// frame, so velocity is per iteration rather than between iterations.
-    private var iterationModelMatrices: [[simd_float4x4]?] = []
+    /// frame, so velocity is per iteration rather than between iterations. Flat, iteration ×
+    /// instance, filled in place so capturing allocates nothing.
+    private var iterationModelMatrices: [simd_float4x4] = []
+    private var iterationHasModelMatrices: [Bool] = []
 
     /// Draws with instancing, whatever else shares its material.
     override public var isInstanced: Bool { true }
@@ -158,17 +160,24 @@ public class InstancedMesh: Mesh {
     override public func captureRepeatedEncodingState(iteration: Int, count: Int) {
         super.captureRepeatedEncodingState(iteration: iteration, count: count)
         let sanitizedCount = max(1, count)
-        if iterationModelMatrices.count != sanitizedCount { iterationModelMatrices = Array(repeating: nil, count: sanitizedCount) }
-        guard let instanceMatrixBuffer, iterationModelMatrices.indices.contains(iteration) else { return }
-        let currents = instanceMatricesUniforms.map(\.modelMatrix)
-        let previous = iterationModelMatrices[iteration] ?? currents
-        var captured = instanceMatricesUniforms
-        for index in captured.indices {
-            captured[index].previousModelMatrix = index < previous.count ? previous[index] : currents[index]
+        let instances = instanceMatricesUniforms.count
+        // A new iteration count or instance count starts every iteration still.
+        if iterationHasModelMatrices.count != sanitizedCount || iterationModelMatrices.count != sanitizedCount * instances {
+            iterationModelMatrices = Array(repeating: matrix_identity_float4x4, count: sanitizedCount * instances)
+            iterationHasModelMatrices = Array(repeating: false, count: sanitizedCount)
         }
-        instanceMatrixBuffer.update(data: captured)
+        guard let instanceMatrixBuffer, iterationHasModelMatrices.indices.contains(iteration) else { return }
+        // previousModelMatrix is rewritten before every upload, so it can carry this capture's.
+        let historyStart = iteration * instances
+        let hasHistory = iterationHasModelMatrices[iteration]
+        for index in instanceMatricesUniforms.indices {
+            let current = instanceMatricesUniforms[index].modelMatrix
+            instanceMatricesUniforms[index].previousModelMatrix = hasHistory ? iterationModelMatrices[historyStart + index] : current
+            iterationModelMatrices[historyStart + index] = current
+        }
+        iterationHasModelMatrices[iteration] = true
+        instanceMatrixBuffer.update(data: instanceMatricesUniforms)
         instanceMatrixBuffer.captureLatestSlot(iteration: iteration, count: count)
-        iterationModelMatrices[iteration] = currents
     }
 
     override public func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
@@ -223,9 +232,13 @@ public class InstancedMesh: Mesh {
             let previous = index < uploadedModelMatrices.count ? uploadedModelMatrices[index] : current
             instanceMatricesUniforms[index].previousModelMatrix = previous
             if previous != current { moved = true }
+            // Kept in place: becomes the previous matrix at the next upload.
+            if index < uploadedModelMatrices.count { uploadedModelMatrices[index] = current } else { uploadedModelMatrices.append(current) }
+        }
+        if uploadedModelMatrices.count > instanceMatricesUniforms.count {
+            uploadedModelMatrices.removeLast(uploadedModelMatrices.count - instanceMatricesUniforms.count)
         }
         instanceMatrixBuffer?.update(data: instanceMatricesUniforms)
-        uploadedModelMatrices = instanceMatricesUniforms.map(\.modelMatrix)
         instanceMotionNeedsSettling = moved
         _updateInstanceMatrixBuffer = false
     }

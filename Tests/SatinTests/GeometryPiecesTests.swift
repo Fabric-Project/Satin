@@ -20,6 +20,7 @@ final class GeometryPiecesTests: XCTestCase {
         XCTAssertEqual(glyph.parentIndex, 0)
         XCTAssertEqual(glyph.vertexRange, 6 ..< 12)
         XCTAssertEqual(pieces.sizeMeasure, .area)
+        XCTAssertEqual(pieces.lowestLevelIndices, [1, 2, 4], "The two words hold the three glyphs vertices belong to")
     }
 
     func testEveryInvariantIsEnforced() {
@@ -33,16 +34,53 @@ final class GeometryPiecesTests: XCTestCase {
         }
         XCTAssertThrowsError(try make(sizes: [3, 1, -2, 5, 5])) { XCTAssertEqual($0 as? GeometryPieces.ValidationError, .invalidSize(piece: 2)) }
         XCTAssertThrowsError(try make(sizes: [4, 1, 2, 5, 5])) { XCTAssertEqual($0 as? GeometryPieces.ValidationError, .parentSizeMismatch(piece: 0)) }
+        let tooMany = Int(UInt16.max) + 2
+        XCTAssertThrowsError(try GeometryPieces(parentIndices: Array(repeating: -1, count: tooMany), centers: Array(repeating: .zero, count: tooMany),
+                                                sizes: Array(repeating: 0, count: tooMany), sizeMeasure: .area,
+                                                vertexRanges: Array(repeating: 0 ..< 0, count: tooMany))) {
+            XCTAssertEqual($0 as? GeometryPieces.ValidationError, .tooManyPieces)
+        }
+    }
+
+    func testSettingPiecesGivesEachVertexItsLowestLevelPiece() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let geometry = makeGeometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
+        try geometry.setPieces(make())
+        let jointIndices = try XCTUnwrap(geometry.getAttribute(.JointIndices) as? UShort4BufferAttribute).data.map(\.x)
+        XCTAssertEqual(jointIndices, Array(repeating: 1, count: 6) + Array(repeating: 2, count: 6) + Array(repeating: 4, count: 6))
+        XCTAssertEqual(try XCTUnwrap(geometry.getAttribute(.JointWeights) as? Float4BufferAttribute).data, Array(repeating: simd_float4(1, 0, 0, 0), count: 18))
+
+        geometry.setPieces(nil)
+        XCTAssertNil(geometry.pieces)
+        XCTAssertFalse(geometry.hasAttribute(.JointIndices))
+        XCTAssertFalse(geometry.hasAttribute(.JointWeights))
+    }
+
+    func testAPaletteWithFewerJointsThanPiecesDoesNotSkin() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let geometry = makeGeometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
+        try geometry.setPieces(make())
+        geometry.jointPalette = JointPalette(device: device, jointCount: 4)
+        XCTAssertFalse(geometry.isSkinned, "Piece 4's vertices would read past a four-joint palette")
+        geometry.jointPalette = JointPalette(device: device, jointCount: 5)
+        XCTAssertTrue(geometry.isSkinned)
     }
 
     func testPosedViewReportsItsSourcesParts() throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
-        let source = Geometry(context: context)
-        source.pieces = try make()
+        let source = makeGeometry(context: context)
+        try source.setPieces(make())
         let view = PosedGeometry(source: source)
         XCTAssertEqual(view.pieces, source.pieces)
         XCTAssertNil(Geometry(context: context).pieces, "Ordinary geometry has no pieces")
+    }
+
+    /// The 18 vertices `vertexRanges` covers.
+    private func makeGeometry(context: Context) -> Geometry {
+        let geometry = Geometry(context: context)
+        geometry.addAttribute(Float3BufferAttribute(defaultValue: .zero, data: Array(repeating: .zero, count: 18)), for: .Position)
+        return geometry
     }
 
     private func make(parentIndices: [Int]? = nil, centers: [simd_float3]? = nil, sizes: [Float]? = nil,

@@ -89,15 +89,13 @@ open class Shader {
         let instancing: Bool
         let castShadow: Bool
         let receiveShadow: Bool
-        /// By identity: cheap per draw. Geometry keeps one descriptor until its attributes change.
-        let vertexDescriptor: ObjectIdentifier
+        /// By value, as `ShaderPipelineCache` keys it: geometries with the same layout share a variant.
+        let vertexDescriptor: MTLVertexDescriptor
     }
     private var layoutPipelines: [LayoutPipelineKey: MTLRenderPipelineState] = [:]
     private var layoutPipelineFailures: Set<LayoutPipelineKey> = []
     /// What each variant was compiled from, so a live reload can drop its cached libraries.
     private var layoutConfigurations: [LayoutPipelineKey: ShaderConfiguration] = [:]
-    /// Keeps each keyed descriptor alive, so its identity is never reused while cached.
-    private var layoutDescriptors: [LayoutPipelineKey: MTLVertexDescriptor] = [:]
     private var layoutReflections: [LayoutPipelineKey: MTLRenderPipelineReflection] = [:]
     public internal(set) var shadowPipelineReflection: MTLRenderPipelineReflection?
 
@@ -241,17 +239,6 @@ open class Shader {
         }
     }
 
-    // MARK: - Skinning
-
-    public var skinning: Bool {
-        get {
-            renderingConfiguration.skinning
-        }
-        set {
-            renderingConfiguration.skinning = newValue
-        }
-    }
-
     // MARK: - Lighting
 
     public var lighting: Bool {
@@ -389,11 +376,7 @@ open class Shader {
                 shadowPipelineReflection = nil
                 shadowPipelineError = nil
                 shadowPipelineErrors.removeAll()
-                layoutPipelines.removeAll()
-                layoutPipelineFailures.removeAll()
-                layoutConfigurations.removeAll()
-                layoutReflections.removeAll()
-                layoutDescriptors.removeAll()
+                clearLayoutVariants()
             }
         }
     }
@@ -581,33 +564,36 @@ open class Shader {
     /// The pipeline for drawing a mesh with `layout`: the shader's own when every setting
     /// matches its configuration, otherwise a variant compiled for them.
     open func getPipeline(renderContext: Context, shadow: Bool, layout: DrawLayout?) -> MTLRenderPipelineState? {
-        guard let layout,
-              layout.skinning != renderingConfiguration.skinning
-              || layout.instancing != renderingConfiguration.instancing
-              || layout.castShadow != renderingConfiguration.castShadow
-              || layout.receiveShadow != renderingConfiguration.receiveShadow
-              || layout.vertexDescriptor !== renderingConfiguration.vertexDescriptor
-        else { return getPipeline(renderContext: renderContext, shadow: shadow) }
+        guard let layout else { return getPipeline(renderContext: renderContext, shadow: shadow) }
         // Only casters have a shadow pipeline.
         if shadow, !layout.castShadow { return nil }
+        // Casting changes only the shadow pipeline and receiving only the color one, so each pass
+        // keeps the shader's own setting for the other and shares its pipeline across both kinds of mesh.
+        let castShadow = shadow ? layout.castShadow : renderingConfiguration.castShadow
+        let receiveShadow = shadow ? renderingConfiguration.receiveShadow : layout.receiveShadow
+        guard layout.skinning != renderingConfiguration.skinning
+              || layout.instancing != renderingConfiguration.instancing
+              || castShadow != renderingConfiguration.castShadow
+              || receiveShadow != renderingConfiguration.receiveShadow
+              || layout.vertexDescriptor != renderingConfiguration.vertexDescriptor
+        else { return getPipeline(renderContext: renderContext, shadow: shadow) }
 
         let key = LayoutPipelineKey(contextID: renderContext.id, shadow: shadow, skinning: layout.skinning,
-                                    instancing: layout.instancing, castShadow: layout.castShadow, receiveShadow: layout.receiveShadow,
-                                    vertexDescriptor: ObjectIdentifier(layout.vertexDescriptor))
+                                    instancing: layout.instancing, castShadow: castShadow, receiveShadow: receiveShadow,
+                                    vertexDescriptor: layout.vertexDescriptor)
         if let pipeline = layoutPipelines[key] { return pipeline }
         guard !layoutPipelineFailures.contains(key) else { return nil }
 
         var variantConfiguration = getConfiguration(renderContext: renderContext)
         variantConfiguration.rendering.skinning = layout.skinning
         variantConfiguration.rendering.instancing = layout.instancing
-        variantConfiguration.rendering.castShadow = layout.castShadow
-        variantConfiguration.rendering.receiveShadow = layout.receiveShadow
+        variantConfiguration.rendering.castShadow = castShadow
+        variantConfiguration.rendering.receiveShadow = receiveShadow
         variantConfiguration.rendering.vertexDescriptor = layout.vertexDescriptor
         let savedConfiguration = configuration
         configuration = variantConfiguration
         defer { configuration = savedConfiguration }
         layoutConfigurations[key] = variantConfiguration
-        layoutDescriptors[key] = layout.vertexDescriptor
         do {
             let pipeline: MTLRenderPipelineState?
             var reflection: MTLRenderPipelineReflection?
@@ -617,14 +603,8 @@ open class Shader {
                 (pipeline, reflection) = try makePipeline()
             }
             guard let pipeline else { return nil }
-            // Bounded: every distinct layout ever drawn would otherwise stay cached. Bindings
-            // already added for dropped variants stay; binding an unused resource is harmless.
-            if layoutPipelines.count >= 32 {
-                layoutPipelines.removeAll()
-                layoutReflections.removeAll()
-                layoutDescriptors.removeAll()
-                layoutDescriptors[key] = layout.vertexDescriptor
-            }
+            // Unbounded, as ShaderPipelineCache is: keyed by value, entries grow only with the
+            // distinct layouts this shader is drawn with, not with geometries.
             layoutPipelines[key] = pipeline
             if let reflection {
                 layoutReflections[key] = reflection
@@ -646,11 +626,14 @@ open class Shader {
             ShaderLibraryCache.invalidateLibrary(configuration: configuration.getLibraryConfiguration())
             ShaderPipelineCache.invalidate(configuration: configuration)
         }
+        clearLayoutVariants()
+    }
+
+    private func clearLayoutVariants() {
         layoutPipelines.removeAll()
         layoutPipelineFailures.removeAll()
         layoutConfigurations.removeAll()
         layoutReflections.removeAll()
-        layoutDescriptors.removeAll()
     }
 
     func updatePipeline() {

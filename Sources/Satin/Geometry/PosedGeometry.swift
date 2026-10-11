@@ -45,13 +45,9 @@ open class PosedGeometry: Geometry {
 
     override open var hasVertexBuffers: Bool { source.hasVertexBuffers }
 
-    /// Skinned by this view's palette when the source has the joint attributes it applies to.
-    override open var isSkinned: Bool {
-        jointPalette != nil && source.hasAttribute(.JointIndices) && source.hasAttribute(.JointWeights)
-    }
-
     override open func update() {
         source.update()
+        jointPalette?.settleMotion()
         updatePose()
     }
 
@@ -82,6 +78,7 @@ open class PosedGeometry: Geometry {
         // Replaces any palette the source bound.
         if isSkinned, let jointPalette {
             renderEncoderState.vertexJointPalette = jointPalette
+            jointPalette.markDrawn()
         }
     }
 
@@ -93,9 +90,11 @@ open class PosedGeometry: Geometry {
     override open var skinningSource: Geometry { source }
 
     /// The source's pieces: a posed view says what it poses.
-    override open var pieces: GeometryPieces? {
-        get { source.pieces }
-        set { source.pieces = newValue }
+    override open var pieces: GeometryPieces? { source.pieces }
+
+    /// The view owns no attributes: the pieces and their joints are the source's.
+    override open func setPieces(_ pieces: GeometryPieces?) {
+        source.setPieces(pieces)
     }
 
     /// Posed when skinned (see `Geometry.computeBounds`), otherwise the source's.

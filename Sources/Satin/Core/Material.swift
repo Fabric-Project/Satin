@@ -145,12 +145,6 @@ open class Material: Codable {
         set { renderingConfiguration.instancing = newValue }
     }
 
-    /// Set by `Mesh` when its geometry carries a joint palette and joint attributes.
-    public var skinning: Bool {
-        get { renderingConfiguration.skinning }
-        set { renderingConfiguration.skinning = newValue }
-    }
-
     public var castShadow: Bool {
         get { renderingConfiguration.castShadow }
         set { renderingConfiguration.castShadow = newValue }
@@ -517,8 +511,9 @@ open class Material: Codable {
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}
 
-    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: renderEncoderState.drawLayout) else { return }
+    /// `layout`: what the mesh being drawn needs from the pipeline (see `DrawLayout`); nil uses this material's own.
+    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
+        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) else { return }
         renderEncoderState.pipeline = pipeline
     }
 
@@ -605,7 +600,7 @@ open class Material: Codable {
         }
     }
 
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
         bindUniforms(renderEncoderState: renderEncoderState, shadow: shadow)
         bindDepthStates(
             renderContext: renderContext,
@@ -617,7 +612,8 @@ open class Material: Codable {
         bindPipeline(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,
-            shadow: shadow
+            shadow: shadow,
+            layout: layout
         )
         onBind?(renderEncoderState.renderEncoder)
     }
@@ -862,7 +858,6 @@ open class Material: Codable {
         clone.label = label
         clone.vertexDescriptor = vertexDescriptor
         clone.instancing = instancing
-        clone.skinning = skinning
         clone.lighting = lighting
         clone.lightCount = lightCount
 

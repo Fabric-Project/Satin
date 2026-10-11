@@ -331,7 +331,9 @@ public final class UShort4BufferAttribute: GenericBufferAttribute<simd_ushort4> 
         UShort4BufferAttribute(defaultValue: defaultValue, data: data)
     }
 
-    // Indices cannot be blended, so a new vertex between two takes the nearer one's.
+    // Indices cannot be blended, so a new vertex between two takes the nearer one's. As joint
+    // indices, its JointWeights must then be the nearer vertex's too: a blend of two vertices'
+    // weights does not belong to either one's indices.
     override public func interpolate(start: Int, end: Int, at time: Float) {
         append(time < 0.5 ? data[start] : data[end])
     }

@@ -34,8 +34,10 @@ public enum GeometryMutability {
 ///   spans its children, and a lowest-level piece spans its own vertices.
 /// - Everything is in the geometry's local space and units.
 ///
-/// Built once by whatever makes the pieces and cached on the geometry; new pieces are a new value.
-/// The initializer checks every invariant, so a value that exists is well formed.
+/// Built once by whatever makes the pieces and given to the geometry with `Geometry.setPieces(_:)`,
+/// which writes the joints; new pieces are a new value.
+/// The initializer checks the hierarchy, sizes and piece count; `Geometry.setPieces(_:)` checks
+/// that the ranges fit the geometry. Neither checks that every vertex belongs to a piece.
 public struct GeometryPieces: Equatable {
     /// What `sizes` measures: closed pieces have volume; open ones, such as flat text, area.
     public enum SizeMeasure: Equatable {
@@ -64,6 +66,8 @@ public struct GeometryPieces: Equatable {
         case invalidSize(piece: Int)
         /// A parent's size is not the sum of its children's.
         case parentSizeMismatch(piece: Int)
+        /// More pieces than UShort joint indices can name.
+        case tooManyPieces
     }
 
     /// Each piece's parent in these same arrays, or -1 for a top-level piece. Parents come
@@ -79,6 +83,13 @@ public struct GeometryPieces: Equatable {
 
     public var count: Int { parentIndices.count }
 
+    /// The pieces no piece names as its parent, in order: the ones vertices belong to.
+    public var lowestLevelIndices: [Int] {
+        var hasChildren = [Bool](repeating: false, count: count)
+        for parentIndex in parentIndices where parentIndex >= 0 { hasChildren[parentIndex] = true }
+        return parentIndices.indices.filter { !hasChildren[$0] }
+    }
+
     public subscript(index: Int) -> Piece {
         Piece(center: centers[index], size: sizes[index], parentIndex: parentIndices[index], vertexRange: vertexRanges[index])
     }
@@ -86,6 +97,7 @@ public struct GeometryPieces: Equatable {
     public init(parentIndices: [Int], centers: [simd_float3], sizes: [Float], sizeMeasure: SizeMeasure, vertexRanges: [Range<Int>]) throws {
         let count = parentIndices.count
         guard centers.count == count, sizes.count == count, vertexRanges.count == count else { throw ValidationError.mismatchedCounts }
+        guard count <= Int(UInt16.max) + 1 else { throw ValidationError.tooManyPieces }
 
         var childSizeSums = [Float](repeating: 0, count: count)
         var hasChildren = [Bool](repeating: false, count: count)
@@ -208,18 +220,46 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         didSet {
             // A palette attached after repeated encoding was prepared needs the same room.
             if minimumEncodesPerFrame > 1 { jointPalette?.prepareForRepeatedEncoding(count: minimumEncodesPerFrame) }
-            // Meshes listen for this to switch their materials' skinning on or off.
+            // Gaining or losing a palette changes how the geometry draws and its bounds.
             if (jointPalette == nil) != (oldValue == nil) { onUpdate.send(self) }
         }
     }
 
-    /// How this geometry divides into rigid pieces; nil for ordinary geometry. Whoever sets it
-    /// also gives the vertices their piece indices as joints (see `GeometryPieces`).
-    open var pieces: GeometryPieces?
+    /// How this geometry divides into rigid pieces; nil for ordinary geometry. Set with `setPieces(_:)`.
+    open var pieces: GeometryPieces? { storedPieces }
+    private var storedPieces: GeometryPieces?
 
-    /// Has a joint palette and the joint attributes it applies to.
+    /// Divides the geometry into `pieces` and gives each vertex its lowest-level piece's index as
+    /// its joint (see `GeometryPieces`), so a palette with a matrix per piece moves each on its
+    /// own. Set after the positions; nil removes the pieces and their joints.
+    open func setPieces(_ pieces: GeometryPieces?) {
+        storedPieces = pieces
+        guard let pieces else {
+            removeAttribute(.JointIndices)
+            removeAttribute(.JointWeights)
+            return
+        }
+        precondition(pieces.vertexRanges.allSatisfy { $0.lowerBound >= 0 && $0.upperBound <= vertexCount },
+                     "Piece vertex ranges must lie within the geometry's \(vertexCount) vertices")
+        var jointIndices = [simd_ushort4](repeating: .zero, count: vertexCount)
+        // Parents come before their children and span them, so a child's index overwrites its parent's.
+        for (pieceIndex, vertexRange) in pieces.vertexRanges.enumerated() {
+            let joint = simd_ushort4(UInt16(pieceIndex), 0, 0, 0)
+            for vertex in vertexRange { jointIndices[vertex] = joint }
+        }
+        addAttribute(UShort4BufferAttribute(defaultValue: .zero, data: jointIndices), for: .JointIndices)
+        addAttribute(Float4BufferAttribute(defaultValue: simd_float4(1, 0, 0, 0),
+                                           data: Array(repeating: simd_float4(1, 0, 0, 0), count: vertexCount)), for: .JointWeights)
+    }
+
+    /// Has a joint palette and the joint attributes it applies to, with a joint for every piece:
+    /// a palette with fewer would be read past its end.
     open var isSkinned: Bool {
-        jointPalette != nil && vertexAttributes[.JointIndices] != nil && vertexAttributes[.JointWeights] != nil
+        guard let jointPalette,
+              skinningSource.hasAttribute(.JointIndices),
+              skinningSource.hasAttribute(.JointWeights)
+        else { return false }
+        return jointPalette.jointCount >= pieces?.count ?? 0
     }
     public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
 
@@ -307,6 +347,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     open func update() {
         updateBuffers()
+        jointPalette?.settleMotion()
     }
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}
@@ -319,6 +360,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         }
         if isSkinned, let jointPalette {
             renderEncoderState.vertexJointPalette = jointPalette
+            jointPalette.markDrawn()
         }
     }
 
@@ -652,10 +694,13 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Bounds
 
     open func computeBounds() -> Bounds {
-        if isSkinned, let jointPalette, let jointRestBounds = skinningSource.jointRestBounds() {
+        if isSkinned, let jointPalette {
+            // Recorded even when the pose cannot be bounded, so `bounds` does not recompute on every read.
             boundsPalette = jointPalette
             boundsPoseVersion = jointPalette.poseVersion
-            return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)
+            if let jointRestBounds = skinningSource.jointRestBounds() {
+                return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)
+            }
         }
         if primitiveType == .triangle, let bvh = bvh, let node = bvh.getNode(index: 0) {
             return node.aabb
@@ -775,26 +820,30 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     }
 
     /// Each vertex's posed position, packed xyz: the weighted sum of its joints' current
-    /// matrices applied to its rest position, as `satinSkinMatrix` computes it.
+    /// matrices applied to its rest position, as `satinSkinMatrix` in Skinning.metal computes it.
     private static func skinnedPositions(of geometry: Geometry, palette: JointPalette) -> [Float]? {
         guard let jointIndices = geometry.getAttribute(.JointIndices) as? UShort4BufferAttribute,
               let jointWeights = geometry.getAttribute(.JointWeights) as? Float4BufferAttribute,
               let restPositions = restPositions(of: geometry)
         else { return nil }
         let joints = palette.joints
+        let indexData = jointIndices.data
+        let weightData = jointWeights.data
         var posed = [Float]()
         posed.reserveCapacity(restPositions.count * 3)
         for vertexIndex in restPositions.indices {
             let rest = simd_float4(restPositions[vertexIndex], 1)
             var position = simd_float4.zero
-            if vertexIndex < jointIndices.data.count, vertexIndex < jointWeights.data.count {
-                let indices = jointIndices.data[vertexIndex]
-                let weights = jointWeights.data[vertexIndex]
+            if vertexIndex < indexData.count, vertexIndex < weightData.count {
+                let indices = indexData[vertexIndex]
+                let weights = weightData[vertexIndex]
                 for influence in 0..<4 where weights[influence] != 0 && Int(indices[influence]) < joints.count {
                     position += weights[influence] * (joints[Int(indices[influence])].current * rest)
                 }
             }
-            posed += [position.x, position.y, position.z]
+            posed.append(position.x)
+            posed.append(position.y)
+            posed.append(position.z)
         }
         return posed
     }

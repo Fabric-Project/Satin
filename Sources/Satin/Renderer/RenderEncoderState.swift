@@ -127,10 +127,6 @@ public final class RenderEncoderState {
         }
     }
 
-    /// The layout of the mesh about to be drawn, set by the mesh around its material's bind so
-    /// the material picks a pipeline matching that mesh. Nil outside such a bind.
-    public var drawLayout: DrawLayout?
-
     public var vertexJointPalette: JointPalette? {
         didSet {
             if let vertexJointPalette {
