@@ -99,7 +99,13 @@
 		E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD792C06A24B00B5A6C8 /* Geometry.swift */; };
 		E101A8C42C070E8E0055FABA /* Material.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7A2C06A24B00B5A6C8 /* Material.swift */; };
 		E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */; };
-		5A1E00000000000000000012 /* Skin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000002 /* Skin.swift */; };
+		5A1E00000000000000000014 /* TransformAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000004 /* TransformAnimation.swift */; };
+		5A1E00000000000000000015 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000005 /* Skeleton.swift */; };
+		5A1E0000000000000000001B /* AssetAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000B /* AssetAnimation.swift */; };
+		5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000A /* ObjectAnimation.swift */; };
+		5A1E00000000000000000019 /* TimeDriven.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000009 /* TimeDriven.swift */; };
+		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
+		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
 		E101A8C62C070E8E0055FABA /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7C2C06A24B00B5A6C8 /* Object.swift */; };
 		E101A8C72C070E8E0055FABA /* RenderEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */; };
 		E101A8C82C070E8E0055FABA /* Shader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */; };
@@ -357,7 +363,13 @@
 		66D7DD792C06A24B00B5A6C8 /* Geometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		66D7DD7A2C06A24B00B5A6C8 /* Material.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Material.swift; sourceTree = "<group>"; };
 		66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Mesh.swift; sourceTree = "<group>"; };
-		5A1E00000000000000000002 /* Skin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Skin.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000004 /* TransformAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TransformAnimation.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000005 /* Skeleton.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000000B /* AssetAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AssetAnimation.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000000A /* ObjectAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ObjectAnimation.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000009 /* TimeDriven.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimeDriven.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
 		66D7DD7C2C06A24B00B5A6C8 /* Object.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
 		66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderEncoder.swift; sourceTree = "<group>"; };
 		66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Shader.swift; sourceTree = "<group>"; };
@@ -754,7 +766,12 @@
 				66D7DD792C06A24B00B5A6C8 /* Geometry.swift */,
 				66D7DD7A2C06A24B00B5A6C8 /* Material.swift */,
 				66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */,
-				5A1E00000000000000000002 /* Skin.swift */,
+				5A1E00000000000000000004 /* TransformAnimation.swift */,
+				5A1E00000000000000000005 /* Skeleton.swift */,
+				5A1E0000000000000000000B /* AssetAnimation.swift */,
+				5A1E0000000000000000000A /* ObjectAnimation.swift */,
+				5A1E00000000000000000009 /* TimeDriven.swift */,
+				5A1E00000000000000000006 /* SkeletonBinding.swift */,
 				66D7DD7C2C06A24B00B5A6C8 /* Object.swift */,
 				66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */,
 				66D7DD7E2C06A24B00B5A6C8 /* Shader.swift */,
@@ -1019,6 +1036,7 @@
 				66D7DECB2C06A24B00B5A6C8 /* FileWatcher.swift */,
 				66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */,
 				66D7DECD2C06A24B00B5A6C8 /* Loader.swift */,
+				5A1E00000000000000000007 /* AnimationLoader.swift */,
 				66D7DECE2C06A24B00B5A6C8 /* MetalFileCompiler.swift */,
 				66D7DECF2C06A24B00B5A6C8 /* MetalSourceCompiler.swift */,
 				66D7DED02C06A24B00B5A6C8 /* Paths.swift */,
@@ -1430,7 +1448,13 @@
 				E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */,
 				E101A8C42C070E8E0055FABA /* Material.swift in Sources */,
 				E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */,
-				5A1E00000000000000000012 /* Skin.swift in Sources */,
+				5A1E00000000000000000014 /* TransformAnimation.swift in Sources */,
+				5A1E00000000000000000015 /* Skeleton.swift in Sources */,
+				5A1E0000000000000000001B /* AssetAnimation.swift in Sources */,
+				5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */,
+				5A1E00000000000000000019 /* TimeDriven.swift in Sources */,
+				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
+				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,
 				E101A8C62C070E8E0055FABA /* Object.swift in Sources */,
 				E101A8C72C070E8E0055FABA /* RenderEncoder.swift in Sources */,
 				E101A8C82C070E8E0055FABA /* Shader.swift in Sources */,

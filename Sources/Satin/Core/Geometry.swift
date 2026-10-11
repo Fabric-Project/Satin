@@ -231,6 +231,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             if _updateVertexBuffers {
                 updateBounds = true
                 updateBVH = true
+                // Both are built from the vertices: rebuilt when next needed.
+                jointRestBoundsCache = nil
+                posedBVHPalette = nil
                 onUpdate.send(self)
             }
         }
@@ -649,10 +652,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Bounds
 
     open func computeBounds() -> Bounds {
-        if let posedBVH = currentPosedBVH(), let node = posedBVH.getNode(index: 0) {
+        if isSkinned, let jointPalette, let jointRestBounds = skinningSource.jointRestBounds() {
             boundsPalette = jointPalette
-            boundsPoseVersion = jointPalette?.poseVersion ?? -1
-            return node.aabb
+            boundsPoseVersion = jointPalette.poseVersion
+            return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)
         }
         if primitiveType == .triangle, let bvh = bvh, let node = bvh.getNode(index: 0) {
             return node.aabb
@@ -710,10 +713,47 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     private var posedBVHPoseVersion = -1
     private weak var boundsPalette: JointPalette?
     private var boundsPoseVersion = -1
+    private var jointRestBoundsCache: [Bounds]?
+
+    /// Each joint's box around the rest positions of the vertices it moves, indexed like the
+    /// palette; empty for joints that move none. Built once from the vertices. Nil without
+    /// CPU-readable positions, joint indices (UShort4) and weights (Float4).
+    func jointRestBounds() -> [Bounds]? {
+        if let jointRestBoundsCache { return jointRestBoundsCache }
+        guard let jointIndices = getAttribute(.JointIndices) as? UShort4BufferAttribute,
+              let jointWeights = getAttribute(.JointWeights) as? Float4BufferAttribute,
+              let restPositions = Self.restPositions(of: self)
+        else { return nil }
+        var boxes: [Bounds] = []
+        for vertexIndex in restPositions.indices where vertexIndex < jointIndices.data.count && vertexIndex < jointWeights.data.count {
+            let indices = jointIndices.data[vertexIndex]
+            let weights = jointWeights.data[vertexIndex]
+            for influence in 0 ..< 4 where weights[influence] != 0 {
+                let jointIndex = Int(indices[influence])
+                if jointIndex >= boxes.count {
+                    boxes += Array(repeating: createBounds(), count: jointIndex + 1 - boxes.count)
+                }
+                boxes[jointIndex] = expandBounds(boxes[jointIndex], restPositions[vertexIndex])
+            }
+        }
+        jointRestBoundsCache = boxes
+        return boxes
+    }
+
+    /// Encloses every posed vertex without skinning one. A skinned vertex is its joints'
+    /// matrices applied to it, averaged by weights that sum to one, so it lies among those
+    /// joints' moved rest boxes; the bounds are the union of every joint's moved box. Looser
+    /// than the posed vertices' own bounds where joints turn, never smaller.
+    static func posedBounds(jointRestBounds: [Bounds], palette: JointPalette) -> Bounds {
+        var bounds = createBounds()
+        for (jointIndex, box) in jointRestBounds.enumerated() where jointIndex < palette.joints.count && box.min.x <= box.max.x {
+            bounds = mergeBounds(bounds, transformBounds(box, palette.joints[jointIndex].current))
+        }
+        return bounds
+    }
 
     /// The triangles where the joint palette draws them, skinned on the CPU exactly as the
-    /// vertex shader does and rebuilt only when bounds or a raycast need them after the pose
-    /// changed. Nil unless skinned triangles with CPU-readable positions, joint indices
+    /// vertex shader does and rebuilt only when a raycast needs them after the pose changed. Nil unless skinned triangles with CPU-readable positions, joint indices
     /// (UShort4) and weights (Float4).
     func currentPosedBVH() -> BVH? {
         guard isSkinned, primitiveType == .triangle, let jointPalette else { return nil }
@@ -764,6 +804,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         switch geometry.getAttribute(.Position) {
         case let attribute as Float3BufferAttribute:
             return attribute.data
+        case let attribute as PackedFloat3BufferAttribute:
+            return attribute.data.map { simd_float3($0.x, $0.y, $0.z) }
         case let attribute as Float4BufferAttribute:
             return attribute.data.map { simd_make_float3($0) }
         case let attribute as InterleavedBufferAttribute:

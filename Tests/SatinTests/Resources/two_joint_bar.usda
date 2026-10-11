@@ -1,0 +1,58 @@
+#usda 1.0
+(
+    defaultPrim = "Bar"
+    startTimeCode = 0
+    endTimeCode = 1
+    timeCodesPerSecond = 1
+    upAxis = "Y"
+    metersPerUnit = 1
+)
+
+# A two-joint bar with answers worked out by hand (SkeletalAnimationTests):
+# Elbow sits 1 above Root and turns 90° about z between t = 0 and t = 1.
+# The mesh and the animation list the joints in the reverse of the skeleton's order,
+# so loading must remap both by path.
+def SkelRoot "Bar"
+{
+    def Skeleton "Skeleton" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        uniform token[] joints = ["Root", "Root/Elbow"]
+        uniform matrix4d[] bindTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 1, 0, 1) )]
+        uniform matrix4d[] restTransforms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) ), ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 1, 0, 1) )]
+        rel skel:animationSource = </Bar/Skeleton/Animation>
+
+        def SkelAnimation "Animation"
+        {
+            uniform token[] joints = ["Root/Elbow", "Root"]
+            float3[] translations = [(0, 1, 0), (0, 0, 0)]
+            quatf[] rotations.timeSamples = {
+                0: [(1, 0, 0, 0), (1, 0, 0, 0)],
+                1: [(0.70710677, 0, 0, 0.70710677), (1, 0, 0, 0)],
+            }
+            half3[] scales = [(1, 1, 1), (1, 1, 1)]
+        }
+    }
+
+    def Mesh "Strip" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3, 3]
+        int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+        point3f[] points = [(0.5, 0, 0), (0.5, 2, 0), (0.5, 1, 0), (3, 2, 0)]
+        uniform token[] skel:joints = ["Root/Elbow", "Root"]
+        # Vertex 0 follows Root, vertex 1 Elbow, vertex 2 half of each; vertex 3 has no weight.
+        int[] primvars:skel:jointIndices = [1, 0, 0, 1, 0, 1, 0, 1] (
+            elementSize = 2
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 0, 1, 0, 0.5, 0.5, 0, 0] (
+            elementSize = 2
+            interpolation = "vertex"
+        )
+        matrix4d primvars:skel:geomBindTransform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+        rel skel:skeleton = </Bar/Skeleton>
+    }
+}

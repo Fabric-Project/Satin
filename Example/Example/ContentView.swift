@@ -159,11 +159,11 @@ struct ContentView: View {
                 title: "Shadows",
                 items: [
                     ExampleItem(id: "directional-shadow", title: "Directional Shadow", systemImage: "light.overhead.left") { DirectionalShadowRendererView() },
-                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "pointer.arrow.rays") { PointShadowRendererView() },
+                    ExampleItem(id: "point-shadow", title: "Point Shadows", systemImage: "smallcircle.filled.circle") { PointShadowRendererView() },
                     ExampleItem(id: "spot-shadow", title: "Spot Shadows", systemImage: "lamp.desk") { SpotShadowRendererView() },
                     ExampleItem(id: "projector", title: "Projector", systemImage: "videoprojector") { ProjectorRendererView() },
-                    ExampleItem(id: "contact-shadow", title: "Custom Contact Shadow", systemImage: "app.shadow") { ContactShadowRendererView() },
-                    ExampleItem(id: "projected-shadow", title: "Custom Projected Shadow", systemImage: "app.shadow") { ProjectedShadowRendererView() }
+                    ExampleItem(id: "contact-shadow", title: "Custom Contact Shadow", systemImage: "circle.square") { ContactShadowRendererView() },
+                    ExampleItem(id: "projected-shadow", title: "Custom Projected Shadow", systemImage: "circlebadge.2") { ProjectedShadowRendererView() }
                 ]
             )
         )
@@ -208,7 +208,8 @@ struct ContentView: View {
                     ExampleItem(id: "pbr-customization", title: "PBR Customization", systemImage: "gear") { PBRCustomizationRendererView() },
                     ExampleItem(id: "pbr-physical-material", title: "PBR Physical Point Shadows", systemImage: "party.popper") { PBREnhancedRendererView() },
                     ExampleItem(id: "pbr-standard-material", title: "PBR Standard Material", systemImage: "flame") { PBRStandardMaterialRendererView() },
-                    ExampleItem(id: "pbr-submeshes", title: "PBR Submeshes", systemImage: "soccerball") { PBRSubmeshRendererView() }
+                    ExampleItem(id: "pbr-submeshes", title: "PBR Submeshes", systemImage: "soccerball") { PBRSubmeshRendererView() },
+                    ExampleItem(id: "skeletal-animation", title: "Skeletal Animation", systemImage: "figure.walk") { SkeletalAnimationRendererView() }
                 ]
             )
         )
