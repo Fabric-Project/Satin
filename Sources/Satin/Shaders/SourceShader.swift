@@ -26,6 +26,11 @@ open class SourceShader: Shader {
         return nil
     }
 
+    /// Whether the shader opts into alpha OIT by defining `SATIN_ALPHA_OIT_ENABLED` (see
+    /// AlphaOIT.metal). Read from its source once, and again on every live reload, so drawing
+    /// never searches the source.
+    public private(set) var definesAlphaOrderIndependentTransparency = false
+
     public var live = false {
         didSet {
             if live {
@@ -62,6 +67,7 @@ open class SourceShader: Shader {
     public required init(configuration: ShaderConfiguration) {
         super.init(configuration: configuration)
         setupShaderCompiler()
+        readAlphaOrderIndependentTransparency()
     }
 
     public convenience init(context: Context, configuration: ShaderConfiguration) {
@@ -90,6 +96,7 @@ open class SourceShader: Shader {
 
     public func reloadFromSource() {
         ShaderSourceCache.removeSource(url: self.pipelineURL)
+        readAlphaOrderIndependentTransparency()
 
         for configuration in configurations.values {
             ShaderLibrarySourceCache.invalidateLibrarySource(
@@ -123,5 +130,10 @@ open class SourceShader: Shader {
         print("Updating Shader: \(self.label) at: \(self.pipelineURL.path)")
 
         self.update()
+    }
+
+    /// The `#define`, not the bare name, which AlphaOIT.metal's own comments mention.
+    private func readAlphaOrderIndependentTransparency() {
+        definesAlphaOrderIndependentTransparency = (try? ShaderSourceCache.getSource(url: pipelineURL))?.contains("#define SATIN_ALPHA_OIT_ENABLED") ?? false
     }
 }

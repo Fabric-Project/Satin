@@ -10,7 +10,7 @@ import Foundation
 
 open class SourceMaterial: Material {
     override var supportsAlphaOrderIndependentTransparency: Bool {
-        source?.contains("SATIN_ALPHA_OIT_ENABLED") == true
+        (shader as? SourceShader)?.definesAlphaOrderIndependentTransparency ?? false
     }
 
     public enum CodingKeys: String, CodingKey {
