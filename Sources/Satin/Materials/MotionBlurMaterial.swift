@@ -63,8 +63,7 @@ public final class MotionBlurMaterial: Material {
         set { set("Jitter", newValue) }
     }
 
-    /// Longest blur in pixels: the reach of the jump-flood dilation. Set by
-    /// `MotionBlurPostProcessEncoder`.
+    /// Longest blur in pixels. Set by `MotionBlurPostProcessEncoder` (see its `maxBlurRadius`).
     public var maxBlurRadius: Float {
         get { get("Max Blur Radius", as: FloatParameter.self)?.value ?? 144 }
         set { set("Max Blur Radius", newValue) }

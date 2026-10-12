@@ -13,9 +13,12 @@ public final class MotionBlurTileMaxMaterial: Material {
         didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
     }
 
+    /// The tile size `MotionBlurPostProcessEncoder` dilates with.
+    public static let defaultTileSize = 16
+
     /// Velocity texels per tile along each axis.
     public var tileSize: Int {
-        get { get("Tile Size", as: IntParameter.self)?.value ?? 32 }
+        get { get("Tile Size", as: IntParameter.self)?.value ?? Self.defaultTileSize }
         set { set("Tile Size", newValue) }
     }
 
@@ -32,7 +35,7 @@ public final class MotionBlurTileMaxMaterial: Material {
     private func configure() {
         blending = .disabled
         let orderedParameters = ParameterGroup()
-        orderedParameters.append(IntParameter("Tile Size", get("Tile Size", as: IntParameter.self)?.value ?? 32))
+        orderedParameters.append(IntParameter("Tile Size", get("Tile Size", as: IntParameter.self)?.value ?? Self.defaultTileSize))
         parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
         set(velocityTexture, index: FragmentTextureIndex.Custom0)
         set(depthTexture, index: FragmentTextureIndex.Custom1)
