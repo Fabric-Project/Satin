@@ -674,6 +674,18 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
                 false
             )
         }
+        // The model loader's 12-byte-stride positions.
+        else if let positionBufferAttribute = positionAttribute as? PackedFloat3BufferAttribute {
+            return createBVHFromFloatData(
+                &positionBufferAttribute.data,
+                Int32(positionBufferAttribute.stride/MemoryLayout<Float>.size),
+                Int32(positionBufferAttribute.count),
+                elementBuffer?.data,
+                Int32(indexCount),
+                elementBuffer?.type == .uint32,
+                false
+            )
+        }
         else if let interleavedBufferAttribute = positionAttribute as? InterleavedBufferAttribute {
             let interleavedBuffer = interleavedBufferAttribute.parent
             return createBVHFromFloatData(
@@ -714,6 +726,13 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
                 )
             }
             else if let positionBufferAttribute = positionAttribute as? Float3BufferAttribute {
+                return computeBoundsFromFloatData(
+                    &positionBufferAttribute.data,
+                    Int32(positionBufferAttribute.stride/MemoryLayout<Float>.size),
+                    Int32(positionBufferAttribute.count)
+                )
+            }
+            else if let positionBufferAttribute = positionAttribute as? PackedFloat3BufferAttribute {
                 return computeBoundsFromFloatData(
                     &positionBufferAttribute.data,
                     Int32(positionBufferAttribute.stride/MemoryLayout<Float>.size),

@@ -53,10 +53,10 @@ final class SkeletalAnimationRenderer: BaseRenderer {
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")) {
             scene.setEnvironment(texture: hdr)
         }
-        scene.environmentIntensity = 0.02
+        scene.environmentIntensity = 0.3
         
 //        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("chameleon_anim_mtl_variant.usdz"), context: defaultContext, textureLoader: textureLoader)
-        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("CC0_カブトムシ__赤_Japanese_Rhinoceros_Beetle_Red.usdz"), context: defaultContext, textureLoader: textureLoader)
+        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("Black_Honey_-_Robotic_Arm.usdz"), context: defaultContext, textureLoader: textureLoader)
         animation = loaded.animation
         for mesh in loaded.root.getChildren().compactMap({ $0 as? Mesh }) {
             mesh.castShadow = true
@@ -83,7 +83,7 @@ final class SkeletalAnimationRenderer: BaseRenderer {
     func setupLights() {
         let positions: [simd_float3] = [[5.0, 5.0, 9.0], [-5.0, 5.0, 9.0]]
         let colors: [simd_float3] = [[1.0, 0.86, 0.72], [0.55, 0.75, 1.0]]
-        let intensities: [Float] = [100.0, 100.0]
+        let intensities: [Float] = [200.0, 200.0]
 
         for index in positions.indices {
             let light = PointLight(context: defaultContext, color: colors[index], intensity: intensities[index], radius: 120)
