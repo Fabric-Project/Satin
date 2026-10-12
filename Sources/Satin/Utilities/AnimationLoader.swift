@@ -106,16 +106,22 @@ func loadJointAnimation(_ packed: MDLPackedJointAnimation, startTime: Double?, s
 func loadObjectAnimation(animatedObjects: [(object: Object, mdlObject: MDLObject)], asset: MDLAsset,
                          startTime: Double?, startPoseOnly: Bool) -> ObjectAnimation? {
     guard !animatedObjects.isEmpty else { return nil }
-    var keyTimes = Set(animatedObjects.flatMap { $0.mdlObject.transform?.keyTimes.map(\.doubleValue) ?? [] })
-    if asset.frameInterval > 0, asset.endTime > asset.startTime {
-        let frameCount = Int(((asset.endTime - asset.startTime) / asset.frameInterval).rounded())
-        for frame in 0 ... frameCount {
-            keyTimes.insert(asset.startTime + Double(frame) * asset.frameInterval)
+    let hasFrames = asset.frameInterval > 0 && asset.endTime > asset.startTime
+    let sortedKeyTimes: [Double]
+    if startPoseOnly {
+        // The earliest key or frame, without building the whole timeline.
+        let earliestKey = animatedObjects.compactMap { $0.mdlObject.transform?.keyTimes.map(\.doubleValue).min() }.min()
+        let earliest = hasFrames ? min(earliestKey ?? asset.startTime, asset.startTime) : earliestKey
+        sortedKeyTimes = (startTime ?? earliest).map { [$0] } ?? []
+    } else {
+        var keyTimes = Set(animatedObjects.flatMap { $0.mdlObject.transform?.keyTimes.map(\.doubleValue) ?? [] })
+        if hasFrames {
+            let frameCount = Int(((asset.endTime - asset.startTime) / asset.frameInterval).rounded())
+            for frame in 0 ... frameCount {
+                keyTimes.insert(asset.startTime + Double(frame) * asset.frameInterval)
+            }
         }
-    }
-    var sortedKeyTimes = keyTimes.sorted()
-    if startPoseOnly, let start = startTime ?? sortedKeyTimes.first {
-        sortedKeyTimes = [start]
+        sortedKeyTimes = keyTimes.sorted()
     }
 
     // Key-major, as `TransformAnimation.Channel` stores values.

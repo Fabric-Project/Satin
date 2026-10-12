@@ -157,6 +157,19 @@ final class SkeletalAnimationTests: XCTestCase {
         assertEqual(drawn(), simd_float3(10.5, 0, 0), "The mesh's own move does not carry skinned geometry")
     }
 
+    func testMirroredObjectAnimationKeepsItsHandedness() throws {
+        let context = try makeContext()
+        let object = Object(context: context, label: "Mirrored")
+        let animation = TransformAnimation(
+            paths: ["Mirrored"],
+            translations: .empty,
+            rotations: .empty,
+            scales: .init(keyTimes: [0], values: [[-1, 2, 0.5]], targetCount: 1)
+        )
+        ObjectAnimation(objects: [object], animation: animation).setTime(0)
+        XCTAssertEqual(object.localMatrix.determinant, -1, accuracy: 1e-5, "A mirrored key must draw mirrored")
+    }
+
     func testUnweightedAndUnnamedJointsStayWithTheBoundSkin() throws {
         // At rest, a weighted vertex lands at skeletonWorld × geometryBind × p; vertices on a
         // joint the skeleton does not name, or on the rest joint, must land there too.
