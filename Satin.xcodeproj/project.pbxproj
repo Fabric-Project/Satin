@@ -17,6 +17,9 @@
 		1B7FEE162F98972D0075DA16 /* RenderingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B7FEE152F98972D0075DA16 /* RenderingMode.swift */; };
 		906F65B5767E42CCA53CED24 /* Textures in Resources */ = {isa = PBXBuildFile; fileRef = AC32791DA39C4460A06E9773 /* Textures */; };
 		AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000006AA000006AA000006 /* MotionBlurMaterial.swift */; };
+		1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */; };
+		1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */; };
+		1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */; };
 		AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000008AA000008AA000008 /* RendererOutputs.swift */; };
 		E101A8542C07061D0055FABA /* Bezier.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEED2C06A24B00B5A6C8 /* Bezier.mm */; };
 		E101A8552C07061D0055FABA /* Bounds.mm in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEEE2C06A24B00B5A6C8 /* Bounds.mm */; };
@@ -518,6 +521,9 @@
 		66D7DEF62C06A24B00B5A6C8 /* Triangulator.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Triangulator.mm; sourceTree = "<group>"; };
 		66D7DEF72C06A24B00B5A6C8 /* Types.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Types.mm; sourceTree = "<group>"; };
 		AA000006AA000006AA000006 /* MotionBlurMaterial.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MotionBlurMaterial.swift; sourceTree = "<group>"; };
+		1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurJumpFloodMaterial.swift; sourceTree = "<group>"; };
+		1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurNeighborMaxMaterial.swift; sourceTree = "<group>"; };
+		1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurTileMaxMaterial.swift; sourceTree = "<group>"; };
 		AA000008AA000008AA000008 /* RendererOutputs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RendererOutputs.swift; sourceTree = "<group>"; };
 		AC32791DA39C4460A06E9773 /* Textures */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Textures; path = Sources/Satin/Textures; sourceTree = "<group>"; };
 		E10A52D42C581CE300BB537A /* CodingUserInfoKey+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CodingUserInfoKey+Extensions.swift"; sourceTree = "<group>"; };
@@ -870,6 +876,9 @@
 				66D7DDCA2C06A24B00B5A6C8 /* DepthMaterial.swift */,
 				66D7DDCB2C06A24B00B5A6C8 /* MatCapMaterial.swift */,
 				AA000006AA000006AA000006 /* MotionBlurMaterial.swift */,
+				1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */,
+				1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */,
+				1B3E0D5B3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift */,
 				66D7DDCD2C06A24B00B5A6C8 /* PhysicalMaterial.swift */,
 				66D7DDCF2C06A24B00B5A6C8 /* SkyboxMaterial.swift */,
 				66D7DDD02C06A24B00B5A6C8 /* SourceMaterial.swift */,
@@ -1492,6 +1501,9 @@
 				E101A90D2C070E8E0055FABA /* DepthMaterial.swift in Sources */,
 				E101A90E2C070E8E0055FABA /* MatCapMaterial.swift in Sources */,
 				AA000005AA000005AA000005 /* MotionBlurMaterial.swift in Sources */,
+				1B3E0D5D3072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift in Sources */,
+				1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */,
+				1B3E0D5F3072EF1700E444F4 /* MotionBlurTileMaxMaterial.swift in Sources */,
 				E101A9102C070E8E0055FABA /* PhysicalMaterial.swift in Sources */,
 				E101A9122C070E8E0055FABA /* SkyboxMaterial.swift in Sources */,
 				E101A9132C070E8E0055FABA /* SourceMaterial.swift in Sources */,
