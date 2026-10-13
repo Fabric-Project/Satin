@@ -126,7 +126,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
         tweens.append(tween.onTween { [value] (progress: Double) in
-            value.pointee = simd_mix(from, to, Float(progress))
+            value.pointee = .lerp(from, to, Float(progress))
         })
         return tween
     }
@@ -144,7 +144,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
         tweens.append(tween.onTween { [weak object] (progress: Double) in
-            object?.position = simd_mix(from, to, simd_float3(repeating: Float(progress)))
+            object?.position = .lerp(from, to, Float(progress))
         })
         return tween
     }
@@ -157,7 +157,7 @@ public final class Tweener: Sendable {
                 from = object?.position ?? from
             }
             .onTween { [weak object] (progress: Double) in
-                object?.position = simd_mix(from, to, simd_float3(repeating: Float(progress)))
+                object?.position = .lerp(from, to, Float(progress))
             }
         tweens.append(tween)
         return tween
@@ -168,7 +168,7 @@ public final class Tweener: Sendable {
         let tween = Tween(duration: duration)
         tweens.append(
             tween.onTween { [weak object] (progress: Double) in
-                object?.scale = simd_mix(from, to, simd_float3(repeating: Float(progress)))
+                object?.scale = .lerp(from, to, Float(progress))
             }
         )
         return tween
@@ -182,7 +182,7 @@ public final class Tweener: Sendable {
                 from = object?.scale ?? from
             }
             .onTween { [weak object] (progress: Double) in
-                object?.scale = simd_mix(from, to, simd_float3(repeating: Float(progress)))
+                object?.scale = .lerp(from, to, Float(progress))
             }
         tweens.append(tween)
         return tween
@@ -192,7 +192,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
         tweens.append(tween.onTween { [weak object] (value: Double) in
-            object?.orientation = simd_slerp(from, to, Float(value))
+            object?.orientation = .lerp(from, to, Float(value))
         })
         return tween
     }
@@ -205,7 +205,7 @@ public final class Tweener: Sendable {
                 from = object?.orientation ?? from
             }
             .onTween { [weak object] (value: Double) in
-                object?.orientation = simd_slerp(from, to, Float(value))
+                object?.orientation = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -215,7 +215,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, Float(value))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -229,7 +229,7 @@ public final class Tweener: Sendable {
                 from = parameter?.value ?? from
             }
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, Float(value))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -263,7 +263,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float2(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -277,7 +277,7 @@ public final class Tweener: Sendable {
                 from = parameter?.value ?? from
             }
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float2(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -287,7 +287,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float3(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -301,7 +301,7 @@ public final class Tweener: Sendable {
                 from = parameter?.value ?? from
             }
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float3(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -311,7 +311,7 @@ public final class Tweener: Sendable {
         setupDisplayLink()
         let tween = Tween(duration: duration)
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float4(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween
@@ -325,7 +325,7 @@ public final class Tweener: Sendable {
                 from = parameter?.value ?? from
             }
             .onTween { [weak parameter] (value: Double) in
-                parameter?.value = simd_mix(from, to, simd_float4(repeating: Float(value)))
+                parameter?.value = .lerp(from, to, Float(value))
             }
         tweens.append(tween)
         return tween

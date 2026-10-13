@@ -32,21 +32,21 @@ final class SkeletalAnimationTests: XCTestCase {
             scales: .empty
         )
         XCTAssertEqual(animation.timeRange, 0 ... 1)
-        let fallback = TransformComponents(scale: [3, 3, 3])
+        let fallback = simd_float4x4(scale: [3, 3, 3]).decomposed
         let transform = animation.transform(of: 0, in: animation.sample(at: 0.5), fallback: fallback)
-        let expected = TransformComponents(translation: [1, 2, 3], rotation: simd_quatf(angle: .pi / 4, axis: [0, 0, 1]), scale: [3, 3, 3]).matrix
+        let expected = simd_float4x4(translation: [1, 2, 3], rotation: simd_quatf(angle: .pi / 4, axis: [0, 0, 1]), scale: [3, 3, 3])
         assertEqual(transform, expected)
     }
 
-    func testComponentsRoundTripAMatrix() {
-        let components = TransformComponents(translation: [1, -2, 3], rotation: simd_quatf(angle: 0.7, axis: simd_normalize([1, 2, 3])), scale: [2, 0.5, 1.5])
-        assertEqual(TransformComponents(matrix: components.matrix).matrix, components.matrix)
+    func testDecompositionRoundTripsAMatrix() {
+        let matrix = simd_float4x4(translation: [1, -2, 3], rotation: simd_quatf(angle: 0.7, axis: simd_normalize([1, 2, 3])), scale: [2, 0.5, 1.5])
+        assertEqual(recomposed(matrix), matrix)
     }
 
-    func testComponentsKeepAMirroredMatrixMirrored() {
-        let mirrored = TransformComponents(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.4, axis: [0, 1, 0]), scale: [1, -2, 1]).matrix
+    func testDecompositionKeepsAMirroredMatrixMirrored() {
+        let mirrored = simd_float4x4(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.4, axis: [0, 1, 0]), scale: [1, -2, 1])
         XCTAssertLessThan(simd_determinant(mirrored), 0)
-        let roundTrip = TransformComponents(matrix: mirrored).matrix
+        let roundTrip = recomposed(mirrored)
         XCTAssertLessThan(simd_determinant(roundTrip), 0, "Handedness survives")
         assertEqual(roundTrip, mirrored)
     }

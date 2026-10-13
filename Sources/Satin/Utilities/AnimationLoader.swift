@@ -125,15 +125,15 @@ func loadObjectAnimation(animatedObjects: [(object: Object, mdlObject: MDLObject
     }
 
     // Key-major, as `TransformAnimation.Channel` stores values.
-    let components = sortedKeyTimes.flatMap { time in
-        animatedObjects.map { TransformComponents(matrix: $0.mdlObject.transform?.localTransform?(atTime: time) ?? matrix_identity_float4x4) }
+    let decompositions = sortedKeyTimes.flatMap { time in
+        animatedObjects.map { ($0.mdlObject.transform?.localTransform?(atTime: time) ?? matrix_identity_float4x4).decomposed }
     }
     let targetCount = animatedObjects.count
     let animation = TransformAnimation(
         paths: animatedObjects.map(\.mdlObject.path),
-        translations: .init(keyTimes: sortedKeyTimes, values: components.map(\.translation), targetCount: targetCount),
-        rotations: .init(keyTimes: sortedKeyTimes, values: components.map(\.rotation), targetCount: targetCount),
-        scales: .init(keyTimes: sortedKeyTimes, values: components.map(\.scale), targetCount: targetCount)
+        translations: .init(keyTimes: sortedKeyTimes, values: decompositions.map { $0.translation }, targetCount: targetCount),
+        rotations: .init(keyTimes: sortedKeyTimes, values: decompositions.map { $0.rotation }, targetCount: targetCount),
+        scales: .init(keyTimes: sortedKeyTimes, values: decompositions.map { $0.scale }, targetCount: targetCount)
     )
     return ObjectAnimation(objects: animatedObjects.map(\.object), animation: animation)
 }

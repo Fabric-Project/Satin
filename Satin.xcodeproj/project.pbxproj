@@ -47,6 +47,7 @@
 		E101A88E2C070D270055FABA /* Triangulator.h in Headers */ = {isa = PBXBuildFile; fileRef = 66D7DEEA2C06A24B00B5A6C8 /* Triangulator.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		E101A88F2C070D270055FABA /* Types.h in Headers */ = {isa = PBXBuildFile; fileRef = 66D7DEEB2C06A24B00B5A6C8 /* Types.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		E101A8922C070E8E0055FABA /* Easing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */; };
+		E1A7C0012EAD10000000A001 /* Lerpable.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A7C0012EAD10000000A002 /* Lerpable.swift */; };
 		E101A8932C070E8E0055FABA /* Easings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */; };
 		E101A8942C070E8E0055FABA /* Tween.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD3F2C06A24B00B5A6C8 /* Tween.swift */; };
 		E101A8952C070E8E0055FABA /* Tweener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD402C06A24B00B5A6C8 /* Tweener.swift */; };
@@ -311,6 +312,7 @@
 		1BB12B462E025B3F0075C276 /* module.modulemap */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.module-map"; path = module.modulemap; sourceTree = "<group>"; };
 		66D7DD332C06A23000B5A6C8 /* Satin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Satin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easing.swift; sourceTree = "<group>"; };
+		E1A7C0012EAD10000000A002 /* Lerpable.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Lerpable.swift; sourceTree = "<group>"; };
 		66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Easings.swift; sourceTree = "<group>"; };
 		66D7DD3F2C06A24B00B5A6C8 /* Tween.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Tween.swift; sourceTree = "<group>"; };
 		66D7DD402C06A24B00B5A6C8 /* Tweener.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Tweener.swift; sourceTree = "<group>"; };
@@ -630,6 +632,7 @@
 			isa = PBXGroup;
 			children = (
 				66D7DD3D2C06A24B00B5A6C8 /* Easing.swift */,
+				E1A7C0012EAD10000000A002 /* Lerpable.swift */,
 				66D7DD3E2C06A24B00B5A6C8 /* Easings.swift */,
 				66D7DD3F2C06A24B00B5A6C8 /* Tween.swift */,
 				66D7DD402C06A24B00B5A6C8 /* Tweener.swift */,
@@ -1385,6 +1388,7 @@
 				E101A95C2C070EA00055FABA /* SatinMetalView.swift in Sources */,
 				E101A8832C0709940055FABA /* Bounds+Extensions.swift in Sources */,
 				E101A8922C070E8E0055FABA /* Easing.swift in Sources */,
+				E1A7C0012EAD10000000A001 /* Lerpable.swift in Sources */,
 				E101A8932C070E8E0055FABA /* Easings.swift in Sources */,
 				E101A8942C070E8E0055FABA /* Tween.swift in Sources */,
 				1B62F68E2F95C9F3007F29E9 /* ShadowConstants.swift in Sources */,
