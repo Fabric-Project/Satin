@@ -26,18 +26,36 @@ public enum PolylineCapStyle: Int32 {
     case round = 2
 }
 
-/// A triangulated ribbon mesh tessellated from an ordered polyline, with
-/// joins (miter/bevel/round) and caps (butt/square/round), and an optional
-/// per-point width taper driven by local point spacing (`speedWidthAmount`
-/// in `update(...)`) — widely-spaced ("fast") stretches scale toward
-/// `speedWidthMinMultiplier`, tightly-spaced ("slow") stretches toward
-/// `speedWidthMaxMultiplier`. Beyond the usual Position/Normal/Texcoord, each
-/// vertex carries `.Custom0` (side, width scale *relative to the base half-width
-/// passed to `update`, already folding in any speed taper*, corner type,
-/// reserved), `.Custom1` (core point), `.Custom2` (neighbor point) — a
-/// companion shader can use these to recompute a camera-facing/
-/// resolution-independent offset (honoring the taper) instead of trusting
-/// Position outright.
+/// How a polyline is drawn as a ribbon: its width, the shape of its joins and caps, and
+/// the plane it lies in (perpendicular to `up`).
+public struct PolylineStyle: Equatable {
+    public var width: Float
+    public var join: PolylineJoinStyle
+    /// Ignored when the polyline is closed.
+    public var cap: PolylineCapStyle
+    /// How far a miter may reach, in half-widths, before the join falls back to a bevel.
+    public var miterLimit: Float
+    /// Segments in each round join's fan and each round cap's half circle.
+    public var roundResolution: Int
+    public var up: simd_float3
+
+    public init(width: Float = 0.1, join: PolylineJoinStyle = .miter, cap: PolylineCapStyle = .butt,
+                miterLimit: Float = 4, roundResolution: Int = 8, up: simd_float3 = [0, 0, 1]) {
+        self.width = width
+        self.join = join
+        self.cap = cap
+        self.miterLimit = miterLimit
+        self.roundResolution = roundResolution
+        self.up = up
+    }
+}
+
+/// A triangulated ribbon mesh tessellated from an ordered polyline, with joins
+/// (miter/bevel/round), caps (butt/square/round), and optional per-point width scales
+/// and colors. Beyond the usual Position/Normal/Texcoord/Color, each vertex carries
+/// `.Custom0` (side, width scale relative to `style.width`, corner type, reserved),
+/// `.Custom1` (core point) and `.Custom2` (neighbor point), so a shader can rebuild a
+/// camera-facing offset instead of trusting Position outright.
 ///
 /// Tessellation runs in SatinCore (`generatePolylineGeometryData`) for
 /// performance, straight into C-allocated memory this geometry owns. The vertex
@@ -64,39 +82,37 @@ public final class PolylineGeometry: Geometry {
         freePolylineGeometryData(&geometryData)
     }
 
+    /// Rebuilds the ribbon through `points`. `widthScales` multiplies `style.width` per point
+    /// and `colors` colors each point; either may be shorter than `points` (its last value
+    /// repeats) or nil (1 and opaque white).
     public func update(
         points: ContiguousArray<simd_float3>,
         closed: Bool,
-        width: Float,
-        joinStyle: PolylineJoinStyle,
-        capStyle: PolylineCapStyle,
-        miterLimit: Float,
-        up: simd_float3,
-        roundResolution: Int,
-        speedWidthAmount: Float = 0,
-        speedWidthMinMultiplier: Float = 0.25,
-        speedWidthMaxMultiplier: Float = 1.0,
-        pointColors: ContiguousArray<simd_float4>? = nil
+        style: PolylineStyle,
+        widthScales: ContiguousArray<Float>? = nil,
+        colors: ContiguousArray<simd_float4>? = nil
     ) {
-        let colors = pointColors ?? []
+        let widthScales = widthScales ?? []
+        let colors = colors ?? []
         let newGeometryData = points.withUnsafeBufferPointer { pointsBuffer in
-            colors.withUnsafeBufferPointer { colorsBuffer in
-                generatePolylineGeometryData(
-                    pointsBuffer.baseAddress,
-                    Int32(pointsBuffer.count),
-                    closed,
-                    width,
-                    joinStyle.rawValue,
-                    capStyle.rawValue,
-                    miterLimit,
-                    up,
-                    Int32(roundResolution),
-                    speedWidthAmount,
-                    speedWidthMinMultiplier,
-                    speedWidthMaxMultiplier,
-                    colorsBuffer.baseAddress,
-                    Int32(colorsBuffer.count)
-                )
+            widthScales.withUnsafeBufferPointer { widthScalesBuffer in
+                colors.withUnsafeBufferPointer { colorsBuffer in
+                    generatePolylineGeometryData(
+                        pointsBuffer.baseAddress,
+                        Int32(pointsBuffer.count),
+                        closed,
+                        style.width,
+                        style.join.rawValue,
+                        style.cap.rawValue,
+                        style.miterLimit,
+                        style.up,
+                        Int32(style.roundResolution),
+                        widthScalesBuffer.baseAddress,
+                        Int32(widthScalesBuffer.count),
+                        colorsBuffer.baseAddress,
+                        Int32(colorsBuffer.count)
+                    )
+                }
             }
         }
 

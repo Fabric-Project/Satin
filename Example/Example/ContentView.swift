@@ -125,6 +125,7 @@ struct ContentView: View {
                     ExampleItem(id: "obj-loading", title: "Obj Loading", systemImage: "arrow.down.doc") { LoadObjRendererView() },
                     ExampleItem(id: "octasphere", title: "Octasphere", systemImage: "globe") { OctasphereRendererView() },
                     ExampleItem(id: "uv-disk", title: "UV Disk", systemImage: "hexagon.fill") { DiskRendererView() },
+                    ExampleItem(id: "polylines", title: "Polylines", systemImage: "scribble") { PolylineRendererView() },
                     ExampleItem(id: "export-geometry", title: "Export Geometry", systemImage: "square.and.arrow.up") { ExportGeometryRendererView() }
                 ]
             )

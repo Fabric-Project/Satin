@@ -112,6 +112,8 @@
 		E1365B942B7010D6008C0033 /* MultipleViewportRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1365B932B7010D6008C0033 /* MultipleViewportRenderer.swift */; };
 		E1365B962B70113B008C0033 /* MultipleViewportRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1365B952B70113B008C0033 /* MultipleViewportRendererView.swift */; };
 		E13B2C022CBF997200888E66 /* DiskRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E13B2BFF2CBF996E00888E66 /* DiskRenderer.swift */; };
+		5A1E0000000000000000A002 /* PolylineRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000A001 /* PolylineRenderer.swift */; };
+		5A1E0000000000000000A004 /* PolylineRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000A003 /* PolylineRendererView.swift */; };
 		E13B2C042CBF99E600888E66 /* DiskRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E13B2C032CBF99E000888E66 /* DiskRendererView.swift */; };
 		E152371F29CBA22B00D96D46 /* BaseRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E152371E29CBA22B00D96D46 /* BaseRenderer.swift */; };
 		E152372829CBDF4E00D96D46 /* ObjectShadowRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E152372729CBDF4E00D96D46 /* ObjectShadowRenderer.swift */; };
@@ -262,6 +264,8 @@
 		E13687292900BEEC00FFF43F /* InstancedMeshRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstancedMeshRendererView.swift; sourceTree = "<group>"; };
 		E13B2BFF2CBF996E00888E66 /* DiskRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskRenderer.swift; sourceTree = "<group>"; };
 		E13B2C032CBF99E000888E66 /* DiskRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskRendererView.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000A001 /* PolylineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineRenderer.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000A003 /* PolylineRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolylineRendererView.swift; sourceTree = "<group>"; };
 		E144FA2D24D0D5550072D456 /* CameraControllerRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraControllerRenderer.swift; sourceTree = "<group>"; };
 		E14C122C29E5D618009D3C8C /* ARPeopleOcclusionRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ARPeopleOcclusionRendererView.swift; sourceTree = "<group>"; };
 		E14C122E29E5D67A009D3C8C /* ARPeopleOcclusionRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPeopleOcclusionRenderer.swift; sourceTree = "<group>"; };
@@ -628,6 +632,7 @@
 				F5A100012F20000200AAA002 /* ParametricSurfacesRendererView.swift */,
 				E131C07E2CDFDD3600FDBF8A /* PoissonRendererView.swift */,
 				E13B2C032CBF99E000888E66 /* DiskRendererView.swift */,
+				5A1E0000000000000000A003 /* PolylineRendererView.swift */,
 				E1E767C728A6D41B005D75AB /* ExportGeometryRendererView.swift */,
 				E1E767ED28A6EC44005D75AB /* LoadObjRendererView.swift */,
 				E11325D128AEB0770049CACC /* SuperShapesRendererView.swift */,
@@ -772,6 +777,7 @@
 				F5A100012F20000200AAA001 /* ParametricSurfacesRenderer.swift */,
 				E131C07A2CDFDCAA00FDBF8A /* PoissonRenderer.swift */,
 				E13B2BFF2CBF996E00888E66 /* DiskRenderer.swift */,
+				5A1E0000000000000000A001 /* PolylineRenderer.swift */,
 				E11325CC28AEADAA0049CACC /* SuperShapesRenderer.swift */,
 				E17B2FD7247A4E8900BD2BF9 /* LoadObjRenderer.swift */,
 				E180FD7127E13A85002D6DF5 /* OctasphereRenderer.swift */,
@@ -1170,6 +1176,7 @@
 				E1D43BB12C65855A0063E2C9 /* ParameterGroupHeaderViewController.swift in Sources */,
 				E103E1362B603F9A0017588F /* InstancingRendererView.swift in Sources */,
 				E13B2C042CBF99E600888E66 /* DiskRendererView.swift in Sources */,
+				5A1E0000000000000000A004 /* PolylineRendererView.swift in Sources */,
 				F5A100012F20000100AAA001 /* ParametricSurfacesRenderer.swift in Sources */,
 				E1365B962B70113B008C0033 /* MultipleViewportRendererView.swift in Sources */,
 				E103E14F2B60400E0017588F /* PostProcessingRenderer.swift in Sources */,
@@ -1245,6 +1252,7 @@
 				E1F22D1D29BD71FA0011CEAB /* Timing.swift in Sources */,
 				E103E10A2B603DBD0017588F /* ARLidarMeshRenderer.swift in Sources */,
 				E13B2C022CBF997200888E66 /* DiskRenderer.swift in Sources */,
+				5A1E0000000000000000A002 /* PolylineRenderer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

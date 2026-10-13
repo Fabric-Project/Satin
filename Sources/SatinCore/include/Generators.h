@@ -132,15 +132,12 @@ GeometryData
 generateRoundedBoxGeometryData(float width, float height, float depth, float radius, int res);
 
 // joinStyle: 0 = miter, 1 = bevel, 2 = round. capStyle: 0 = butt, 1 = square, 2 = round
-// (capStyle is ignored when closed). speedWidthAmount (0...1, 0 = disabled) blends in
-// a per-point width taper driven by local point spacing, between
-// speedWidthMinMultiplier (widely-spaced/"fast" points) and speedWidthMaxMultiplier
-// (tightly-spaced/"slow" points). pointColors is optional per-point vertex color
-// (pass NULL/0 to default every vertex to opaque white); indexed against the
-// caller's original, pre-dedupe point array — colors are carried along when
-// consecutive duplicate points are collapsed, and the last supplied color pads
-// out any points beyond pointColorCount. Caller owns the result and must
-// release it via freePolylineGeometryData.
+// (capStyle is ignored when closed). pointWidthScales (multiples of width) and
+// pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
+// indexed against the caller's original, pre-dedupe point array, carried along when
+// consecutive duplicate points are collapsed, and its last value pads out any points
+// beyond its count. Caller owns the result and must release it via
+// freePolylineGeometryData.
 PolylineGeometryData generatePolylineGeometryData(
     const simd_float3 *points,
     int pointCount,
@@ -151,9 +148,8 @@ PolylineGeometryData generatePolylineGeometryData(
     float miterLimit,
     simd_float3 up,
     int roundResolution,
-    float speedWidthAmount,
-    float speedWidthMinMultiplier,
-    float speedWidthMaxMultiplier,
+    const float *pointWidthScales,
+    int pointWidthScaleCount,
     const simd_float4 *pointColors,
     int pointColorCount);
 
