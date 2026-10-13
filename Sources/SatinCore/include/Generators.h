@@ -131,6 +131,29 @@ GeometryData generateTubeGeometryData(
 GeometryData
 generateRoundedBoxGeometryData(float width, float height, float depth, float radius, int res);
 
+// joinStyle: 0 = miter, 1 = bevel, 2 = round. capStyle: 0 = butt, 1 = square, 2 = round
+// (capStyle is ignored when closed). pointWidthScales (multiples of width) and
+// pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
+// indexed against the caller's original, pre-dedupe point array, carried along when
+// consecutive duplicate points are collapsed, and its last value pads out any points
+// beyond its count. Writes into `result`, reusing its storage and growing it only when needed;
+// the caller owns it and releases it with freePolylineGeometryData.
+void generatePolylineGeometryData(
+    PolylineGeometryData *result,
+    const simd_float3 *points,
+    int pointCount,
+    bool closed,
+    float width,
+    int joinStyle,
+    int capStyle,
+    float miterLimit,
+    simd_float3 up,
+    int roundResolution,
+    const float *pointWidthScales,
+    int pointWidthScaleCount,
+    const simd_float4 *pointColors,
+    int pointColorCount);
+
 #if defined(__cplusplus)
 }
 #endif

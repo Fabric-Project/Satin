@@ -68,7 +68,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     private var versionedSlotIndex: Int = -1
     private var latestVersionedSlotIndex: Int = -1
     private var versionedVertexBuffers: [VertexBufferIndex: VersionedVertexBuffer] = [:]
-    private var vertexBufferOffsets: [VertexBufferIndex: Int] = [:]
+    /// Where each vertex buffer's data starts: nonzero when it lives in a slot of a versioned ring.
+    public private(set) var vertexBufferOffsets: [VertexBufferIndex: Int] = [:]
     private var versionedIndexBuffer: VersionedIndexBuffer?
     private var indexBufferOffset = 0
     private var drawStates: [Int: DrawState] = [:]
@@ -551,8 +552,10 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Versioned Draw State
 
+    /// Repeated encoding, and geometry whose data changes from frame to frame, upload into a ring
+    /// of buffers with a slot per encode in flight, instead of making a new buffer each time.
     private var usesVersionedDrawStates: Bool {
-        minimumEncodesPerFrame > 1
+        minimumEncodesPerFrame > 1 || mutability == .dynamicData
     }
 
     private var requiredVersionedSlotCount: Int {
@@ -620,7 +623,14 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             versionedVertexBuffers[bufferIndex] = versionedBuffer
         }
 
-        let offset = versionedBuffer.alignedStride * versionedSlotIndex
+        // Never into the slot holding the data on screen: data that stayed unchanged for a while
+        // leaves that slot under the frames still in flight. Any other slot is free.
+        var slot = versionedSlotIndex
+        if vertexBuffers[bufferIndex] === versionedBuffer.buffer,
+           vertexBufferOffsets[bufferIndex] == versionedBuffer.alignedStride * slot {
+            slot = (slot + 1) % versionedBuffer.slotCount
+        }
+        let offset = versionedBuffer.alignedStride * slot
         memcpy(versionedBuffer.buffer.contents().advanced(by: offset), source, length)
 
         vertexBuffers[bufferIndex] = versionedBuffer.buffer
@@ -665,7 +675,12 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             versionedIndexBuffer = versionedBuffer
         }
 
-        let offset = versionedBuffer.alignedStride * versionedSlotIndex
+        // Never into the slot holding the indices on screen (see uploadVersionedVertexBuffer).
+        var slot = versionedSlotIndex
+        if indexBuffer === versionedBuffer.buffer, indexBufferOffset == versionedBuffer.alignedStride * slot {
+            slot = (slot + 1) % versionedBuffer.slotCount
+        }
+        let offset = versionedBuffer.alignedStride * slot
         memcpy(versionedBuffer.buffer.contents().advanced(by: offset), source, elementBuffer.length)
 
         indexBuffer = versionedBuffer.buffer
