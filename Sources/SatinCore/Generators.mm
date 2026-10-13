@@ -2721,7 +2721,8 @@ struct PolylineJointResult {
 // Fabric/Fabric/Nodes/Geometry/PolylineTessellator.swift for the original reference).
 // Per-point width scales (multiples of `width`) and colors are optional: see
 // polylineDedupeConsecutive for how they pad and default.
-PolylineGeometryData generatePolylineGeometryData(
+void generatePolylineGeometryData(
+    PolylineGeometryData *result,
     const simd_float3 *rawPoints,
     int rawPointCount,
     bool closed,
@@ -2736,6 +2737,10 @@ PolylineGeometryData generatePolylineGeometryData(
     const simd_float4 *rawPointColors,
     int rawPointColorCount) {
 
+    PolylineGeometryData &data = *result;
+    data.vertexCount = 0;
+    data.indexCount = 0;
+
     std::vector<simd_float3> points;
     std::vector<float> widthScales;
     std::vector<simd_float4> colors;
@@ -2744,7 +2749,7 @@ PolylineGeometryData generatePolylineGeometryData(
     const int n = (int)points.size();
 
     if (n < 2 || width <= 0.0f) {
-        return createPolylineGeometryData();
+        return;
     }
 
     const float halfWidth = width * 0.5f;
@@ -2791,17 +2796,25 @@ PolylineGeometryData generatePolylineGeometryData(
     // Written straight into the result, sized for the most any point can emit with these
     // styles: a round join's fallback emits 2 * resolution + 3 vertices and 2 * resolution
     // triangles, a bevel's 5 and 2, a round cap resolution + 2 and resolution, a butt or square
-    // cap 2 and none. Plus two triangles per segment and a closed seam's two vertices. Shrunk
-    // to fit at the end.
-    PolylineGeometryData data = createPolylineGeometryData();
+    // cap 2 and none. Plus two triangles per segment and a closed seam's two vertices. The
+    // storage is kept between updates and grows only when this needs more; its old contents are
+    // overwritten, so it is replaced rather than reallocated, which would copy them.
     const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 5;
     const int joinTriangles = joinStyle == 2 ? 2 * resolution : 2;
     const int capVertices = capStyle == 2 ? resolution + 2 : 2;
     const int capTriangles = capStyle == 2 ? resolution : 0;
     const int vertexCapacity = n * std::max(joinVertices, capVertices) + 2;
     const int triangleCapacity = n * std::max(joinTriangles, capTriangles) + segmentCount * 2;
-    data.vertexData = (PolylineVertex *)malloc(sizeof(PolylineVertex) * vertexCapacity);
-    data.indexData = (TriangleIndices *)malloc(sizeof(TriangleIndices) * triangleCapacity);
+    if (data.vertexCapacity < vertexCapacity) {
+        free(data.vertexData);
+        data.vertexData = (PolylineVertex *)malloc(sizeof(PolylineVertex) * vertexCapacity);
+        data.vertexCapacity = vertexCapacity;
+    }
+    if (data.indexCapacity < triangleCapacity) {
+        free(data.indexData);
+        data.indexData = (TriangleIndices *)malloc(sizeof(TriangleIndices) * triangleCapacity);
+        data.indexCapacity = triangleCapacity;
+    }
 
     auto addVertex = [&](simd_float3 position, simd_float3 normal, float u, float v, float side,
                           float widthScale, float cornerType, simd_float3 core,
@@ -3092,11 +3105,6 @@ PolylineGeometryData generatePolylineGeometryData(
         addTriangle(aStart.left, aStart.right, bEnd.right);
         addTriangle(aStart.left, bEnd.right, bEnd.left);
     }
-
-    // Shrinking reallocs stay in place, so this releases the slack without copying.
-    data.vertexData = (PolylineVertex *)realloc(data.vertexData, sizeof(PolylineVertex) * data.vertexCount);
-    data.indexData = (TriangleIndices *)realloc(data.indexData, sizeof(TriangleIndices) * data.indexCount);
-    return data;
 }
 
 #if defined(__cplusplus)

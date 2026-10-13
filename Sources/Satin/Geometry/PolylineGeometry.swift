@@ -57,10 +57,10 @@ public struct PolylineStyle: Equatable {
 /// `.Custom1` (core point) and `.Custom2` (neighbor point), so a shader can rebuild a
 /// camera-facing offset instead of trusting Position outright.
 ///
-/// Tessellation runs in SatinCore (`generatePolylineGeometryData`) for
-/// performance, straight into C-allocated memory this geometry owns. The vertex
-/// and index buffers, and their attributes, are made once; each update hands
-/// them the new memory and frees the old, without a Swift array copy.
+/// Tessellation runs in SatinCore (`generatePolylineGeometryData`) for performance, straight
+/// into C-allocated memory this geometry owns and reuses, growing it only when a polyline needs
+/// more. The vertex and index buffers, and their attributes, are made once. As dynamic data, its
+/// uploads reuse a ring of Metal buffers, one slot per frame in flight, instead of new ones.
 public final class PolylineGeometry: Geometry {
     private var geometryData: PolylineGeometryData = createPolylineGeometryData()
     private let ribbonVertexBuffer = InterleavedBuffer(index: .Vertices, data: nil, stride: MemoryLayout<PolylineVertex>.stride, count: 0, source: nil)
@@ -68,6 +68,7 @@ public final class PolylineGeometry: Geometry {
 
     public init(context: Context) {
         super.init(context: context, primitiveType: .triangle, windingOrder: .counterClockwise)
+        mutability = .dynamicData
         addAttribute(Float3InterleavedBufferAttribute(parent: ribbonVertexBuffer, offset: MemoryLayout<PolylineVertex>.offset(of: \.position)!), for: .Position)
         addAttribute(Float3InterleavedBufferAttribute(parent: ribbonVertexBuffer, offset: MemoryLayout<PolylineVertex>.offset(of: \.normal)!), for: .Normal)
         addAttribute(Float2InterleavedBufferAttribute(parent: ribbonVertexBuffer, offset: MemoryLayout<PolylineVertex>.offset(of: \.uv)!), for: .Texcoord)
@@ -94,10 +95,11 @@ public final class PolylineGeometry: Geometry {
     ) {
         let widthScales = widthScales ?? []
         let colors = colors ?? []
-        let newGeometryData = points.withUnsafeBufferPointer { pointsBuffer in
+        points.withUnsafeBufferPointer { pointsBuffer in
             widthScales.withUnsafeBufferPointer { widthScalesBuffer in
                 colors.withUnsafeBufferPointer { colorsBuffer in
                     generatePolylineGeometryData(
+                        &geometryData,
                         pointsBuffer.baseAddress,
                         Int32(pointsBuffer.count),
                         closed,
@@ -116,11 +118,9 @@ public final class PolylineGeometry: Geometry {
             }
         }
 
-        // The buffers point at the new memory before the old is freed.
-        ribbonVertexBuffer.updateData(data: UnsafeMutableRawPointer(newGeometryData.vertexData), stride: MemoryLayout<PolylineVertex>.stride,
-                                count: Int(newGeometryData.vertexCount), source: nil)
-        ribbonIndexBuffer.updateData(data: UnsafeMutableRawPointer(newGeometryData.indexData), count: Int(newGeometryData.indexCount) * 3, source: nil)
-        freePolylineGeometryData(&geometryData)
-        geometryData = newGeometryData
+        // The storage moves only when it grows; the buffers copy from it at upload either way.
+        ribbonVertexBuffer.updateData(data: UnsafeMutableRawPointer(geometryData.vertexData), stride: MemoryLayout<PolylineVertex>.stride,
+                                      count: Int(geometryData.vertexCount), source: nil)
+        ribbonIndexBuffer.updateData(data: UnsafeMutableRawPointer(geometryData.indexData), count: Int(geometryData.indexCount) * 3, source: nil)
     }
 }

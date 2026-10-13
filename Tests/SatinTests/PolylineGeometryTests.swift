@@ -70,6 +70,38 @@ final class PolylineGeometryTests: XCTestCase {
         }
     }
 
+    func testUpdatesReuseTheirMemoryAndBuffers() throws {
+        let geometry = try makeGeometry()
+        let style = PolylineStyle(width: 0.2, join: .round, cap: .round)
+        geometry.update(points: zigzag, closed: false, style: style)
+        geometry.update()
+        let tessellated = try XCTUnwrap((geometry.getAttribute(.Position) as? InterleavedBufferAttribute)?.parent.data)
+        let vertexBuffer = try XCTUnwrap(geometry.vertexBuffers[.Vertices])
+        let indexBuffer = try XCTUnwrap(geometry.indexBuffer)
+        for frame in 0 ..< 5 {
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            XCTAssertEqual((geometry.getAttribute(.Position) as? InterleavedBufferAttribute)?.parent.data, tessellated, "frame \(frame)")
+            XCTAssertTrue(geometry.vertexBuffers[.Vertices] === vertexBuffer, "frame \(frame)")
+            XCTAssertTrue(geometry.indexBuffer === indexBuffer, "frame \(frame)")
+        }
+    }
+
+    func testAnUpdateAfterUnchangedFramesLeavesTheSlotOnScreenAlone() throws {
+        // Frames still in flight read the slot on screen; whatever the gap, a new upload goes elsewhere.
+        let geometry = try makeGeometry()
+        let style = PolylineStyle(width: 0.2)
+        for unchangedFrames in 0 ..< 6 {
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            let onScreen = geometry.vertexBufferOffsets[.Vertices]
+            for _ in 0 ..< unchangedFrames { geometry.update() }
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            XCTAssertNotEqual(geometry.vertexBufferOffsets[.Vertices], onScreen, "after \(unchangedFrames) unchanged frames")
+        }
+    }
+
     func testAReversalCoversBeyondItsTipOnceAndFacesForward() throws {
         // Out to (1, 0) and straight back, 0.2 wide: the round join is a semicircle past x = 1.
         let geometry = try makeGeometry()
