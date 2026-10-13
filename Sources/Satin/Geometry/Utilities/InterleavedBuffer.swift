@@ -55,7 +55,7 @@ public class InterleavedBuffer: Equatable {
         self.stepFunction = stepFunction
     }
 
-    public func updateData(data: UnsafeMutableRawPointer, stride: Int, count: Int, source: Any?) {
+    public func updateData(data: UnsafeMutableRawPointer?, stride: Int, count: Int, source: Any?) {
         self.stride = stride
         self.count = count
         self.source = source

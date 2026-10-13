@@ -138,6 +138,7 @@
 		E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */; };
 		E101A8EC2C070E8E0055FABA /* CylinderGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */; };
 		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
+		5A1E00000000000000000018 /* PolylineGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000008 /* PolylineGeometry.swift */; };
 		E101A8ED2C070E8E0055FABA /* ExtrudedRoundedRectGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */; };
 		E101A8EE2C070E8E0055FABA /* ExtrudedTextGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */; };
 		E101A8EF2C070E8E0055FABA /* IcoSphereGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */; };
@@ -391,6 +392,7 @@
 		66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConeGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CylinderGeometry.swift; sourceTree = "<group>"; };
 		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000008 /* PolylineGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PolylineGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedRoundedRectGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedTextGeometry.swift; sourceTree = "<group>"; };
 		66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IcoSphereGeometry.swift; sourceTree = "<group>"; };
@@ -825,6 +827,7 @@
 				66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */,
 				66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */,
 				F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */,
+				5A1E00000000000000000008 /* PolylineGeometry.swift */,
 				66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */,
 				66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */,
 				66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */,
@@ -1460,6 +1463,7 @@
 				E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */,
 				E101A8EC2C070E8E0055FABA /* CylinderGeometry.swift in Sources */,
 				F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */,
+				5A1E00000000000000000018 /* PolylineGeometry.swift in Sources */,
 				E101A8ED2C070E8E0055FABA /* ExtrudedRoundedRectGeometry.swift in Sources */,
 				E101A8EE2C070E8E0055FABA /* ExtrudedTextGeometry.swift in Sources */,
 				E101A8EF2C070E8E0055FABA /* IcoSphereGeometry.swift in Sources */,
