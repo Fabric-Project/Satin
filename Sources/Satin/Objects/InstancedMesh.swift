@@ -71,6 +71,11 @@ public class InstancedMesh: Mesh {
         }
     }
 
+    override public func addSubmesh(_ submesh: Submesh) {
+        submesh.material?.instancing = true
+        super.addSubmesh(submesh)
+    }
+
     public init(context: Context, label: String = "Instanced Mesh", geometry: Geometry, material: Material?, count: Int) {
         material?.instancing = true
 

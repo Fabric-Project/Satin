@@ -26,4 +26,20 @@ class SubmeshTests: XCTestCase {
 
         XCTAssertNotNil(material.depthStencilState)
     }
+
+    /// An instanced mesh draws each submesh once per instance, which its
+    /// material only places when built for instancing, as the mesh's own is.
+    func testInstancedMeshSubmeshMaterialIsInstanced() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { return }
+
+        let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float)
+        let geometry = BoxGeometry(context: context)
+        let mesh = InstancedMesh(context: context, geometry: geometry, material: nil, count: 2)
+        let elementBuffer = try XCTUnwrap(geometry.elementBuffer)
+        let material = BasicColorMaterial(context: context)
+
+        mesh.addSubmesh(Submesh(parent: mesh, elementBuffer: elementBuffer, material: material))
+
+        XCTAssertTrue(material.instancing)
+    }
 }
