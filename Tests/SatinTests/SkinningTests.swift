@@ -325,6 +325,36 @@ final class SkinningTests: XCTestCase {
         VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "right of bar", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)
     }
 
+    func testSubmeshMaterialsAreSetUpWhenAdded() throws {
+        // As the loader builds a multi-material mesh: one submesh per material, none on the mesh.
+        // Drawn after a single-material mesh, a submesh material without a depth-stencil state
+        // would hand Metal a nil one and crash.
+        let indices = UnsafeMutablePointer<UInt32>.allocate(capacity: 48)
+        for index in 0..<48 { indices[index] = UInt32(index) }
+        defer { indices.deallocate() }
+        var submeshMaterials: [Material] = []
+        let image = try VisualTestHarness.render(size: [160, 160]) { renderer, camera in
+            let context = renderer.context
+            let plain = Mesh(context: context, label: "Plain", geometry: makeBarGeometry(context: context, withJoints: false),
+                             material: BasicColorMaterial(context: context))
+            let multiMaterial = Mesh(context: context, label: "Two Materials", geometry: makeBarGeometry(context: context, withJoints: false), material: nil)
+            for halfIndex in 0 ..< 2 {
+                let material = BasicColorMaterial(context: context)
+                submeshMaterials.append(material)
+                multiMaterial.addSubmesh(Submesh(parent: multiMaterial, elementBuffer: ElementBuffer(type: .uint32, data: indices.advanced(by: halfIndex * 24), count: 24, source: nil),
+                                                 material: material))
+            }
+            plain.cullMode = .none
+            multiMaterial.cullMode = .none
+            multiMaterial.position = [1, 0, 0]
+            return (scene: Object(context: context, label: "Scene", [plain, multiMaterial]), camera: camera)
+        }
+        for material in submeshMaterials {
+            XCTAssertNotNil(material.depthStencilState, "Adding a submesh sets up its material")
+        }
+        VisualTestHarness.assertContainsVisibleContent(image, in: ImageRegion(name: "right of bar", normalizedRect: rightOfBar), minimumChangedPixelRatio: 0.03)
+    }
+
     // MARK: - Posed Views
 
     func testPosedViewWithIdentityPaletteMatchesSource() throws {

@@ -397,6 +397,9 @@ open class Mesh: Renderable {
         assert(submesh.context == context, "Submesh context mismatch")
         submesh.parent = self
         submeshes.append(submesh)
+        // Its material needs its depth-stencil state and shader before the first draw; nothing
+        // else sets a submesh up.
+        submesh.setup()
     }
 
     // MARK: - Comoute Bounds
