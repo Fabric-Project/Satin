@@ -136,9 +136,10 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
 // pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
 // indexed against the caller's original, pre-dedupe point array, carried along when
 // consecutive duplicate points are collapsed, and its last value pads out any points
-// beyond its count. Caller owns the result and must release it via
-// freePolylineGeometryData.
-PolylineGeometryData generatePolylineGeometryData(
+// beyond its count. Writes into `result`, reusing its storage and growing it only when needed;
+// the caller owns it and releases it with freePolylineGeometryData.
+void generatePolylineGeometryData(
+    PolylineGeometryData *result,
     const simd_float3 *points,
     int pointCount,
     bool closed,

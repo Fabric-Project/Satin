@@ -70,6 +70,37 @@ final class PolylineGeometryTests: XCTestCase {
         }
     }
 
+    func testUpdatesReuseTheirMemory() throws {
+        let geometry = try makeGeometry()
+        let style = PolylineStyle(width: 0.2, join: .round, cap: .round)
+        geometry.update(points: zigzag, closed: false, style: style)
+        geometry.update()
+        let tessellated = try XCTUnwrap((geometry.getAttribute(.Position) as? InterleavedBufferAttribute)?.parent.data)
+        for frame in 0 ..< 5 {
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            XCTAssertEqual((geometry.getAttribute(.Position) as? InterleavedBufferAttribute)?.parent.data, tessellated, "frame \(frame)")
+        }
+    }
+
+    func testAnUpdateAfterUnchangedFramesLeavesTheBuffersOnScreenAlone() throws {
+        // Frames still in flight read the buffers on screen; whatever the gap, a new upload goes elsewhere.
+        let geometry = try makeGeometry()
+        let style = PolylineStyle(width: 0.2)
+        for unchangedFrames in 0 ..< 6 {
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            let vertexBufferOnScreen = try XCTUnwrap(geometry.vertexBuffers[.Vertices])
+            let indexBufferOnScreen = try XCTUnwrap(geometry.indexBuffer)
+            for _ in 0 ..< unchangedFrames { geometry.update() }
+            XCTAssertTrue(geometry.vertexBuffers[.Vertices] === vertexBufferOnScreen, "unchanged after \(unchangedFrames) frames")
+            geometry.update(points: zigzag, closed: false, style: style)
+            geometry.update()
+            XCTAssertFalse(geometry.vertexBuffers[.Vertices] === vertexBufferOnScreen, "after \(unchangedFrames) unchanged frames")
+            XCTAssertFalse(geometry.indexBuffer === indexBufferOnScreen, "after \(unchangedFrames) unchanged frames")
+        }
+    }
+
     func testAReversalCoversBeyondItsTipOnceAndFacesForward() throws {
         // Out to (1, 0) and straight back, 0.2 wide: the round join is a semicircle past x = 1.
         let geometry = try makeGeometry()

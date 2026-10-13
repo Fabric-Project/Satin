@@ -102,11 +102,15 @@ typedef struct PolylineVertex {
     simd_float4 color;
 } PolylineVertex;
 
+// Reused across updates: generatePolylineGeometryData overwrites it, growing the storage only
+// when a polyline needs more than the capacity it has.
 typedef struct PolylineGeometryData {
     int vertexCount;
     PolylineVertex *vertexData;
     int indexCount;
     TriangleIndices *indexData;
+    int vertexCapacity;
+    int indexCapacity;
 } PolylineGeometryData;
 
 typedef struct BVHNode {
