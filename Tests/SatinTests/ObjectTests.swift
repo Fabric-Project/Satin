@@ -168,4 +168,35 @@ final class ObjectTests: XCTestCase {
             )
         )
     }
+
+    func testMirroredWorldTransformKeepsItsHandedness() throws {
+        guard let context = makeContext() else { return }
+        let parent = Object(context: context)
+        // Equal magnitudes, so the rotated child has no shear to lose.
+        parent.scale = [2, -2, 2]
+        let child = Object(context: context)
+        child.orientation = simd_quatf(angle: 0.6, axis: simd_normalize([1, 2, 3]))
+        parent.add(child)
+
+        XCTAssertLessThan(child.worldScale.x, 0, "Mirroring shows as a negative x scale")
+        XCTAssertEqual(simd_length(child.worldOrientation.vector), 1, accuracy: 1e-5)
+        let rebuilt = simd_float4x4(translation: child.worldPosition, rotation: child.worldOrientation, scale: child.worldScale)
+        for column in 0 ..< 4 {
+            XCTAssertEqual(simd_distance(rebuilt[column], child.worldMatrix[column]), 0, accuracy: 1e-5, "column \(column)")
+        }
+    }
+
+    func testZeroWorldScaleKeepsAUnitOrientation() throws {
+        guard let context = makeContext() else { return }
+        let parent = Object(context: context)
+        let turn = simd_quatf(angle: 0.6, axis: [0, 0, 1])
+        parent.orientation = turn
+        let child = Object(context: context)
+        child.scale = [0, 1, 1]
+        parent.add(child)
+
+        XCTAssertEqual(child.worldScale.x, 0)
+        XCTAssertEqual(simd_length(child.worldOrientation.vector), 1, accuracy: 1e-5, "No division by the zero scale")
+        XCTAssertEqual(simd_distance(child.worldOrientation.act([1, 0, 0]), turn.act([1, 0, 0])), 0, accuracy: 1e-5, "The collapsed axis keeps the parent's direction")
+    }
 }

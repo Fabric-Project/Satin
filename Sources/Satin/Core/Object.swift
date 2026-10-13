@@ -91,17 +91,8 @@ open class Object: Codable {
     var _worldOrientation = ValueCache<simd_quatf>()
     public var worldOrientation: simd_quatf {
         get {
-            _worldOrientation.get {
-                let ws = worldScale
-                let wm = worldMatrix
-                let c0 = wm.columns.0
-                let c1 = wm.columns.1
-                let c2 = wm.columns.2
-                let x = simd_make_float3(c0.x, c0.y, c0.z) / ws.x
-                let y = simd_make_float3(c1.x, c1.y, c1.z) / ws.y
-                let z = simd_make_float3(c2.x, c2.y, c2.z) / ws.z
-                return simd_quatf(simd_float3x3(columns: (x, y, z)))
-            }
+            // Keeps a mirrored world matrix's rotation a rotation; see `worldScale`.
+            _worldOrientation.get { worldMatrix.decomposed.rotation }
         }
         set {
             if let parent = parent {
@@ -132,13 +123,8 @@ open class Object: Codable {
     var _worldScale = ValueCache<simd_float3>()
     public var worldScale: simd_float3 {
         get {
-            _worldScale.get {
-                let wm = worldMatrix
-                let sx = wm.columns.0
-                let sy = wm.columns.1
-                let sz = wm.columns.2
-                return simd_make_float3(length(sx), length(sy), length(sz))
-            }
+            // A mirrored world matrix keeps its handedness as a negative x scale.
+            _worldScale.get { worldMatrix.decomposed.scale }
         }
         set {
             if let parent = parent {
