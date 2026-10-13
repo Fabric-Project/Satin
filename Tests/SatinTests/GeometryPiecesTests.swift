@@ -56,6 +56,17 @@ final class GeometryPiecesTests: XCTestCase {
         XCTAssertFalse(geometry.hasAttribute(.JointWeights))
     }
 
+    func testRegroupingKeepsTheWeightsItWrote() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let geometry = makeGeometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
+        try geometry.setPieces(make())
+        let weights = try XCTUnwrap(geometry.getAttribute(.JointWeights))
+        // Regrouped flat: three top-level pieces over the same 18 vertices.
+        try geometry.setPieces(make(parentIndices: [-1, -1, -1], centers: [.zero, .zero, .zero], sizes: [1, 2, 5],
+                                    vertexRanges: [0 ..< 6, 6 ..< 12, 12 ..< 18]))
+        XCTAssertTrue(geometry.getAttribute(.JointWeights) === weights, "Same vertices: the uniform weights stay")
+    }
+
     func testAPaletteWithFewerJointsThanPiecesDoesNotSkin() throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let geometry = makeGeometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))

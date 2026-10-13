@@ -66,11 +66,24 @@ final class TextPiecesTests: XCTestCase {
         XCTAssertNil(geometry.pieces)
         XCTAssertFalse(geometry.hasAttribute(.JointIndices))
 
-        // From none the pieces were never recorded, so the text regenerates once.
+        // Every glyph is recorded whatever the unit, so leaving none regroups in place too.
         geometry.pieceGeneration = .sentence
-        XCTAssertTrue(geometry._updateData)
-        geometry.update()
+        XCTAssertFalse(geometry._updateData, "Regrouped in place")
         XCTAssertEqual(geometry.pieces?.count, 1)
+        XCTAssertEqual(geometry.geometryData.vertexData, vertexData)
+        try assertJointsMatchPieces(geometry)
+    }
+
+    func testTextBuiltWithoutPiecesGainsThemWithoutRebuilding() throws {
+        let geometry = makeText(try makeContext(), "Hi you")
+        XCTAssertNil(geometry.pieces)
+        let vertexData = geometry.geometryData.vertexData
+
+        geometry.pieceGeneration = .word
+        XCTAssertFalse(geometry._updateData, "Regrouped in place")
+        XCTAssertEqual(geometry.pieces?.count, 2)
+        XCTAssertEqual(geometry.geometryData.vertexData, vertexData)
+        try assertJointsMatchPieces(geometry)
     }
 
     func testFlatTextMeasuresAreaAroundItsFace() throws {

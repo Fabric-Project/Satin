@@ -228,6 +228,8 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     /// How this geometry divides into rigid pieces; nil for ordinary geometry. Set with `setPieces(_:)`.
     open var pieces: GeometryPieces? { storedPieces }
     private var storedPieces: GeometryPieces?
+    /// The uniform weights `setPieces` last wrote, to recognise them when the pieces regroup.
+    private weak var pieceJointWeights: Float4BufferAttribute?
 
     /// Divides the geometry into `pieces` and gives each vertex its lowest-level piece's index as
     /// its joint (see `GeometryPieces`), so a palette with a matrix per piece moves each on its
@@ -248,8 +250,12 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
             for vertex in vertexRange { jointIndices[vertex] = joint }
         }
         addAttribute(UShort4BufferAttribute(defaultValue: .zero, data: jointIndices), for: .JointIndices)
-        addAttribute(Float4BufferAttribute(defaultValue: simd_float4(1, 0, 0, 0),
-                                           data: Array(repeating: simd_float4(1, 0, 0, 0), count: vertexCount)), for: .JointWeights)
+        // Every piece weighs (1, 0, 0, 0): regrouping the same vertices keeps the weights written last time.
+        if let pieceJointWeights, vertexAttributes[.JointWeights] === pieceJointWeights, pieceJointWeights.count == vertexCount { return }
+        let weights = Float4BufferAttribute(defaultValue: simd_float4(1, 0, 0, 0),
+                                            data: Array(repeating: simd_float4(1, 0, 0, 0), count: vertexCount))
+        addAttribute(weights, for: .JointWeights)
+        pieceJointWeights = weights
     }
 
     /// Has a joint palette and the joint attributes it applies to, with a joint for every piece:

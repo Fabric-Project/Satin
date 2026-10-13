@@ -48,10 +48,15 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
     /// How far off a mover's line a tile may sit and still be covered, relative to its motion.
     public var perpendicularTolerance: Float = 0.5
 
-    /// Longest blur in pixels: the first jump-flood step (9 tiles for 3 passes). The dilation
-    /// reaches (3^passes - 1) / 2 tiles (13), so every pixel a blur this long covers can find its mover.
+    /// Longest blur in pixels: as far as the dilation reaches, the sum of its pass steps
+    /// ((3^passes - 1) / 2 tiles: 13 for 3 passes, 208 pixels at 16-pixel tiles). Any pixel a blur
+    /// this long covers can still find its mover.
     public var maxBlurRadius: Float {
-        Float(Self.jumpFloodStep(pass: 0, passCount: Self.jumpFloodPassCount) * tileSize)
+        var reachInTiles = 0
+        for pass in 0 ..< Self.jumpFloodPassCount {
+            reachInTiles += Self.jumpFloodStep(pass: pass, passCount: Self.jumpFloodPassCount)
+        }
+        return Float(reachInTiles * tileSize)
     }
 
     private let tileMaxMaterial: MotionBlurTileMaxMaterial

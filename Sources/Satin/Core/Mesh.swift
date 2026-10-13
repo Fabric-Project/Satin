@@ -256,11 +256,19 @@ open class Mesh: Renderable {
     }
 
     open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
-        guard let shader = material?.shader else { return }
-        if shader.vertexWantsVertexUniforms {
+        // Every material this mesh draws with, its own and its submeshes': a mesh whose materials
+        // are all on its submeshes still has to place them.
+        var vertexWantsVertexUniforms = false
+        var fragmentWantsVertexUniforms = false
+        for material in materials {
+            guard let shader = material.shader else { continue }
+            vertexWantsVertexUniforms = vertexWantsVertexUniforms || shader.vertexWantsVertexUniforms
+            fragmentWantsVertexUniforms = fragmentWantsVertexUniforms || shader.fragmentWantsVertexUniforms
+        }
+        if vertexWantsVertexUniforms {
             renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext.id]
         }
-        if shader.fragmentWantsVertexUniforms {
+        if fragmentWantsVertexUniforms {
             renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext.id]
         }
     }

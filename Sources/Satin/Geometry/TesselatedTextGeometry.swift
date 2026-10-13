@@ -87,16 +87,11 @@ public class TesselatedTextGeometry: SatinGeometry {
         case character = 3
     }
 
-    /// How the text divides into pieces. Switching from `.none` regenerates the geometry once;
-    /// switching between units regroups the pieces without rebuilding the vertices.
+    /// How the text divides into pieces. Every glyph is recorded as the geometry is built, so
+    /// switching, to or from `.none` too, regroups the pieces without rebuilding the vertices.
     public var pieceGeneration: PieceGeneration = .none {
         didSet {
-            if pieceGeneration == oldValue { return }
-            if oldValue == .none {
-                _updateData = true
-            } else {
-                updatePieces()
-            }
+            if pieceGeneration != oldValue { updatePieces() }
         }
     }
 
@@ -417,10 +412,8 @@ public class TesselatedTextGeometry: SatinGeometry {
                 framePivot: layoutData.framePivot,
                 verticalOffset: layoutData.verticalOffset
             )
-            if pieceGeneration != .none {
-                recordPiece(of: gData, character: characterIndex, vertices: firstVertex ..< Int(gData.vertexCount),
-                            triangles: firstTriangle ..< Int(gData.indexCount))
-            }
+            recordPiece(of: gData, character: characterIndex, vertices: firstVertex ..< Int(gData.vertexCount),
+                        triangles: firstTriangle ..< Int(gData.indexCount))
         }
 
         return gData
@@ -474,12 +467,20 @@ public class TesselatedTextGeometry: SatinGeometry {
     /// vertices carry its index as their joint, so a joint palette can move each on its own;
     /// without one, nothing draws differently.
     private func updatePieces() {
-        let unitOfCharacter = pieceGeneration == .none ? [:] : pieceUnitIndices()
+        guard pieceGeneration != .none else {
+            setPieces(nil)
+            return
+        }
+        // A Character is its own unit, so only words and sentences need the map.
+        let unitOfCharacter = pieceGeneration == .character ? [:] : pieceUnitIndices()
         var pieceRecords: [TesselatedTextPieceRecord] = []
         var pieceUnits: [Int] = []
         for record in self.pieceRecords {
             let unit = unitOfCharacter[record.character]
-            if var last = pieceRecords.last, let unit, pieceUnits.last == unit, last.vertices.upperBound == record.vertices.lowerBound {
+            let sameUnit = pieceGeneration == .character
+                ? pieceRecords.last?.character == record.character
+                : unit != nil && pieceUnits.last == unit
+            if var last = pieceRecords.last, sameUnit, last.vertices.upperBound == record.vertices.lowerBound {
                 last.vertices = last.vertices.lowerBound ..< record.vertices.upperBound
                 last.faceArea += record.faceArea
                 last.faceMoment += record.faceMoment
@@ -491,7 +492,7 @@ public class TesselatedTextGeometry: SatinGeometry {
             }
         }
 
-        guard pieceGeneration != .none, !pieceRecords.isEmpty else {
+        guard !pieceRecords.isEmpty else {
             setPieces(nil)
             return
         }
@@ -510,17 +511,13 @@ public class TesselatedTextGeometry: SatinGeometry {
         ))
     }
 
-    /// For each Character of the text, the index of the unit it belongs to under
+    /// For each Character of the text, the index of the word or sentence it belongs to under
     /// `pieceGeneration`; nil for a Character in no unit, which is then a piece of its own.
     private func pieceUnitIndices() -> [String.Index: Int] {
         var unitOfCharacter: [String.Index: Int] = [:]
         switch pieceGeneration {
-        case .none:
+        case .none, .character:
             break
-        case .character:
-            for (unit, characterIndex) in text.indices.enumerated() {
-                unitOfCharacter[characterIndex] = unit
-            }
         case .word, .sentence:
             var unit = 0
             text.enumerateSubstrings(in: text.startIndex ..< text.endIndex, options: pieceGeneration == .word ? .byWords : .bySentences) { _, range, _, _ in
