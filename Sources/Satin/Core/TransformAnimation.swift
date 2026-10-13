@@ -99,13 +99,13 @@ public struct TransformAnimation {
     public func transform(of target: Int, in sample: Sample, fallback: TransformComponents) -> simd_float4x4 {
         var components = fallback
         if let keys = sample.translationKeys, target < translations.targetCount {
-            components.translation = simd_mix(translations.lowerValue(of: target, at: keys), translations.upperValue(of: target, at: keys), simd_float3(repeating: keys.fraction))
+            components.translation = .lerp(translations.lowerValue(of: target, at: keys), translations.upperValue(of: target, at: keys), keys.fraction)
         }
         if let keys = sample.rotationKeys, target < rotations.targetCount {
-            components.rotation = simd_slerp(rotations.lowerValue(of: target, at: keys), rotations.upperValue(of: target, at: keys), keys.fraction)
+            components.rotation = .lerp(rotations.lowerValue(of: target, at: keys), rotations.upperValue(of: target, at: keys), keys.fraction)
         }
         if let keys = sample.scaleKeys, target < scales.targetCount {
-            components.scale = simd_mix(scales.lowerValue(of: target, at: keys), scales.upperValue(of: target, at: keys), simd_float3(repeating: keys.fraction))
+            components.scale = .lerp(scales.lowerValue(of: target, at: keys), scales.upperValue(of: target, at: keys), keys.fraction)
         }
         return components.matrix
     }
@@ -125,22 +125,62 @@ public struct TransformComponents: Equatable {
     }
 
     /// Decomposes a matrix without shear; a sheared matrix loses its shear. A mirrored matrix
-    /// (negative determinant) keeps its handedness as a negative x scale.
+    /// (negative determinant) keeps its handedness as a negative x scale. An axis scaled to zero
+    /// keeps its zero scale and takes a direction square to the others, so the rotation stays
+    /// a rotation.
     public init(matrix: simd_float4x4) {
         var xAxis = simd_make_float3(matrix.columns.0)
-        let yAxis = simd_make_float3(matrix.columns.1)
-        let zAxis = simd_make_float3(matrix.columns.2)
+        var yAxis = simd_make_float3(matrix.columns.1)
+        var zAxis = simd_make_float3(matrix.columns.2)
         var scale = simd_float3(simd_length(xAxis), simd_length(yAxis), simd_length(zAxis))
         if simd_dot(simd_cross(xAxis, yAxis), zAxis) < 0 {
             scale.x = -scale.x
             xAxis = -xAxis
         }
-        let safeScale = simd_max(simd_abs(scale), simd_float3(repeating: .leastNormalMagnitude))
+
+        // Shorter than a millionth of the longest axis: no direction left to keep.
+        let collapsedLength = max(simd_reduce_max(simd_abs(scale)) * 1e-6, .leastNormalMagnitude)
+        let xCollapsed = abs(scale.x) <= collapsedLength
+        let yCollapsed = abs(scale.y) <= collapsedLength
+        let zCollapsed = abs(scale.z) <= collapsedLength
+        if !xCollapsed { xAxis /= abs(scale.x) }
+        if !yCollapsed { yAxis /= abs(scale.y) }
+        if !zCollapsed { zAxis /= abs(scale.z) }
+        switch (xCollapsed, yCollapsed, zCollapsed) {
+        case (false, false, false):
+            break
+        case (true, false, false):
+            xAxis = simd_normalize(simd_cross(yAxis, zAxis))
+        case (false, true, false):
+            yAxis = simd_normalize(simd_cross(zAxis, xAxis))
+        case (false, false, true):
+            zAxis = simd_normalize(simd_cross(xAxis, yAxis))
+        case (false, true, true):
+            yAxis = Self.perpendicular(to: xAxis)
+            zAxis = simd_cross(xAxis, yAxis)
+        case (true, false, true):
+            zAxis = Self.perpendicular(to: yAxis)
+            xAxis = simd_cross(yAxis, zAxis)
+        case (true, true, false):
+            xAxis = Self.perpendicular(to: zAxis)
+            yAxis = simd_cross(zAxis, xAxis)
+        case (true, true, true):
+            xAxis = [1, 0, 0]
+            yAxis = [0, 1, 0]
+            zAxis = [0, 0, 1]
+        }
+
         self.init(
             translation: simd_make_float3(matrix.columns.3),
-            rotation: simd_quatf(simd_float3x3(xAxis / safeScale.x, yAxis / safeScale.y, zAxis / safeScale.z)),
+            rotation: simd_quatf(simd_float3x3(xAxis, yAxis, zAxis)),
             scale: scale
         )
+    }
+
+    /// A unit vector square to `axis`.
+    private static func perpendicular(to axis: simd_float3) -> simd_float3 {
+        let reference: simd_float3 = abs(axis.x) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+        return simd_normalize(simd_cross(axis, reference))
     }
 
     public var matrix: simd_float4x4 {
