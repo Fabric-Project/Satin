@@ -55,8 +55,7 @@ final class SkeletalAnimationRenderer: BaseRenderer {
         }
         scene.environmentIntensity = 0.3
         
-//        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("chameleon_anim_mtl_variant.usdz"), context: defaultContext, textureLoader: textureLoader)
-        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("Black_Honey_-_Robotic_Arm.usdz"), context: defaultContext, textureLoader: textureLoader)
+        let loaded = loadAnimatedAsset(url: modelsURL.appendingPathComponent("Magical_gyroscope.usdz"), context: defaultContext, textureLoader: textureLoader)
         animation = loaded.animation
         for mesh in loaded.root.getChildren().compactMap({ $0 as? Mesh }) {
             mesh.castShadow = true
