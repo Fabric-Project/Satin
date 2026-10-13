@@ -166,8 +166,8 @@ public final class DeferredLightingMaterial: Material {
         pbrShader.tonemapping = tonemapping
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow)
+    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
+        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow, layout: layout)
         if !shadow {
             for (type, texture) in maps {
                 renderEncoderState.setFragmentPBRTexture(texture, type: type)

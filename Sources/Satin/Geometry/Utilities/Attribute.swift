@@ -17,6 +17,7 @@ public enum AttributeType: String, Codable {
     case int2
     case int3
     case int4
+    case ushort4
     case float
     case float2
     case float3
@@ -42,6 +43,8 @@ public enum AttributeType: String, Codable {
                 return .int3
             case .int4:
                 return .int4
+            case .ushort4:
+                return .ushort4
             case .float:
                 return .float
             case .float2:
@@ -77,6 +80,8 @@ public enum AttributeType: String, Codable {
                 return Int3BufferAttribute.self
             case .int4:
                 return Int4BufferAttribute.self
+            case .ushort4:
+                return UShort4BufferAttribute.self
             case .bool:
                 return BoolBufferAttribute.self
             case .uint16:

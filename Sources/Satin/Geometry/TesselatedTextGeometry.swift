@@ -55,11 +55,44 @@ private struct TesselatedTextLayoutData {
     let verticalOffset: CGFloat
 }
 
+/// One drawn glyph's share of its Character's piece, recorded while the text's geometry is generated.
+private struct TesselatedTextPieceRecord {
+    let character: String.Index
+    var vertices: Range<Int>
+    /// The area of the Character's front face: its glyphs' triangles in their frontmost plane.
+    var faceArea: Float
+    /// The front face's centroid times its area, summed over its triangles.
+    var faceMoment: simd_float2
+    var bounds: Bounds
+}
+
 public class TesselatedTextGeometry: SatinGeometry {
     public enum VerticalAlignment: Int, Codable {
         case top = 0
         case center = 1
         case bottom = 2
+    }
+
+    /// How the text divides into pieces (see `pieces`).
+    public enum PieceGeneration: Int, Codable {
+        /// No pieces: the geometry carries no joint attributes, exactly as without this option.
+        case none = 0
+        /// Each sentence, as `String.enumerateSubstrings(options: .bySentences)` finds them.
+        case sentence = 1
+        /// Each word, as `String.enumerateSubstrings(options: .byWords)` finds them, so text
+        /// without spaces, such as Japanese, still divides; punctuation outside a word joins the
+        /// word it touches.
+        case word = 2
+        /// Each Character, as Swift counts them: "é" and "कि" are one each.
+        case character = 3
+    }
+
+    /// How the text divides into pieces. Every glyph is recorded as the geometry is built, so
+    /// switching, to or from `.none` too, regroups the pieces without rebuilding the vertices.
+    public var pieceGeneration: PieceGeneration = .none {
+        didSet {
+            if pieceGeneration != oldValue { updatePieces() }
+        }
     }
 
     public var verticalAlignment: VerticalAlignment = .center {
@@ -328,9 +361,12 @@ public class TesselatedTextGeometry: SatinGeometry {
     public var characterOffsets: [String.Index: simd_float2] = [:]
     // Outlines of a Character's later glyphs, translated into its first glyph's frame and owned here, not by characterPathsCache
     private var clusterPolylines: [Polyline2D] = []
+    // Each drawn glyph's vertices and front face, in drawing order, grouped into pieces by pieceGeneration
+    private var pieceRecords: [TesselatedTextPieceRecord] = []
 
-    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0.0) {
+    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0.0, pieceGeneration: PieceGeneration = .none) {
         self.text = text
+        self.pieceGeneration = pieceGeneration
         self.fontName = fontName
         self.fontSize = fontSize
         textBounds = bounds
@@ -358,13 +394,17 @@ public class TesselatedTextGeometry: SatinGeometry {
         clusterPolylines.removeAll(keepingCapacity: true)
         characterOffsets.removeAll(keepingCapacity: true)
         characterOffsets.reserveCapacity(text.count)
+        pieceRecords.removeAll(keepingCapacity: true)
 
         let layoutData = textLayoutData()
         let characterIndices = characterIndicesByUTF16Offset()
         for glyphLayout in layoutData.glyphs where characterIndices.indices.contains(glyphLayout.stringOffset) {
+            let characterIndex = characterIndices[glyphLayout.stringOffset]
+            let firstVertex = Int(gData.vertexCount)
+            let firstTriangle = Int(gData.indexCount)
             addGlyphGeometryData(
                 &gData,
-                characterIndices[glyphLayout.stringOffset],
+                characterIndex,
                 glyphLayout.font,
                 glyphLayout.glyph,
                 glyphLayout.glyphPosition,
@@ -372,9 +412,150 @@ public class TesselatedTextGeometry: SatinGeometry {
                 framePivot: layoutData.framePivot,
                 verticalOffset: layoutData.verticalOffset
             )
+            recordPiece(of: gData, character: characterIndex, vertices: firstVertex ..< Int(gData.vertexCount),
+                        triangles: firstTriangle ..< Int(gData.indexCount))
         }
 
         return gData
+    }
+
+    override public func updateData() {
+        super.updateData()
+        updatePieces()
+    }
+
+    // MARK: - Pieces
+
+    /// What a piece's size measures: flat text has area.
+    var pieceSizeMeasure: GeometryPieces.SizeMeasure { .area }
+
+    /// A piece's size from the area of its front face.
+    func pieceSize(faceArea: Float) -> Float { faceArea }
+
+    /// Records a glyph's vertices and front face. The front face is the glyph's triangles in its
+    /// frontmost plane: the whole glyph for flat text, the front cap for extruded. A Character
+    /// drawn as several glyphs, such as "कि", has a record per glyph, joined by `updatePieces`.
+    private func recordPiece(of data: GeometryData, character: String.Index, vertices: Range<Int>, triangles: Range<Int>) {
+        guard !vertices.isEmpty, let vertexData = data.vertexData, let indexData = data.indexData else { return }
+        var bounds = createBounds()
+        for vertex in vertices {
+            bounds = expandBounds(bounds, vertexData[vertex].position)
+        }
+        let planeTolerance = max(abs(bounds.max.z), 1) * 1e-5
+        var faceArea: Float = 0
+        var faceMoment = simd_float2.zero
+        for triangle in triangles {
+            let indices = indexData[triangle]
+            let first = vertexData[Int(indices.i0)].position
+            let second = vertexData[Int(indices.i1)].position
+            let third = vertexData[Int(indices.i2)].position
+            guard abs(first.z - bounds.max.z) <= planeTolerance, abs(second.z - bounds.max.z) <= planeTolerance,
+                  abs(third.z - bounds.max.z) <= planeTolerance
+            else { continue }
+            let area = abs(simd_cross(second - first, third - first).z) * 0.5
+            faceArea += area
+            faceMoment += area * simd_make_float2(first + second + third) / 3
+        }
+
+        pieceRecords.append(TesselatedTextPieceRecord(character: character, vertices: vertices, faceArea: faceArea,
+                                                      faceMoment: faceMoment, bounds: bounds))
+    }
+
+    /// The drawn text divided by `pieceGeneration`, one level deep, in drawing order: each piece is a
+    /// run of consecutive drawn Characters in one unit, centered on its face's centroid. A unit
+    /// drawn in separate runs, as bidirectional text can be, is a piece per run. Each piece's
+    /// vertices carry its index as their joint, so a joint palette can move each on its own;
+    /// without one, nothing draws differently.
+    private func updatePieces() {
+        guard pieceGeneration != .none else {
+            setPieces(nil)
+            return
+        }
+        // A Character is its own unit, so only words and sentences need the map.
+        let unitOfCharacter = pieceGeneration == .character ? [:] : pieceUnitIndices()
+        var pieceRecords: [TesselatedTextPieceRecord] = []
+        var pieceUnits: [Int] = []
+        for record in self.pieceRecords {
+            let unit = unitOfCharacter[record.character]
+            let sameUnit = pieceGeneration == .character
+                ? pieceRecords.last?.character == record.character
+                : unit != nil && pieceUnits.last == unit
+            if var last = pieceRecords.last, sameUnit, last.vertices.upperBound == record.vertices.lowerBound {
+                last.vertices = last.vertices.lowerBound ..< record.vertices.upperBound
+                last.faceArea += record.faceArea
+                last.faceMoment += record.faceMoment
+                last.bounds = mergeBounds(last.bounds, record.bounds)
+                pieceRecords[pieceRecords.count - 1] = last
+            } else {
+                pieceRecords.append(record)
+                pieceUnits.append(unit ?? -1)
+            }
+        }
+
+        guard !pieceRecords.isEmpty else {
+            setPieces(nil)
+            return
+        }
+
+        // Too many pieces for UShort joints: the text draws whole.
+        setPieces(try? GeometryPieces(
+            parentIndices: Array(repeating: -1, count: pieceRecords.count),
+            centers: pieceRecords.map { record in
+                let boundsCenter = (record.bounds.min + record.bounds.max) * 0.5
+                let faceCenter = record.faceArea > 0 ? record.faceMoment / record.faceArea : simd_make_float2(boundsCenter)
+                return simd_float3(faceCenter, boundsCenter.z)
+            },
+            sizes: pieceRecords.map { pieceSize(faceArea: $0.faceArea) },
+            sizeMeasure: pieceSizeMeasure,
+            vertexRanges: pieceRecords.map(\.vertices)
+        ))
+    }
+
+    /// For each Character of the text, the index of the word or sentence it belongs to under
+    /// `pieceGeneration`; nil for a Character in no unit, which is then a piece of its own.
+    private func pieceUnitIndices() -> [String.Index: Int] {
+        var unitOfCharacter: [String.Index: Int] = [:]
+        switch pieceGeneration {
+        case .none, .character:
+            break
+        case .word, .sentence:
+            var unit = 0
+            text.enumerateSubstrings(in: text.startIndex ..< text.endIndex, options: pieceGeneration == .word ? .byWords : .bySentences) { _, range, _, _ in
+                for characterIndex in self.text[range].indices {
+                    unitOfCharacter[characterIndex] = unit
+                }
+                unit += 1
+            }
+            if pieceGeneration == .word {
+                attachPunctuationToWords(&unitOfCharacter)
+            }
+        }
+        return unitOfCharacter
+    }
+
+    /// Gives a Character outside every word, such as punctuation, the word it touches: the one
+    /// before it, else the one after; whitespace separates.
+    private func attachPunctuationToWords(_ unitOfCharacter: inout [String.Index: Int]) {
+        var previousUnit: Int?
+        for characterIndex in text.indices {
+            if text[characterIndex].isWhitespace {
+                previousUnit = nil
+            } else if let unit = unitOfCharacter[characterIndex] {
+                previousUnit = unit
+            } else if let previousUnit {
+                unitOfCharacter[characterIndex] = previousUnit
+            }
+        }
+        var nextUnit: Int?
+        for characterIndex in text.indices.reversed() {
+            if text[characterIndex].isWhitespace {
+                nextUnit = nil
+            } else if let unit = unitOfCharacter[characterIndex] {
+                nextUnit = unit
+            } else if let nextUnit {
+                unitOfCharacter[characterIndex] = nextUnit
+            }
+        }
     }
 
     // For each UTF-16 offset (CoreText's unit for string positions), the index of the Character containing it

@@ -75,6 +75,8 @@
 		E103E1372B603FC50017588F /* PBRCustomizationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */; };
 		E103E1382B603FC50017588F /* PBREnhancedRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1EB6DE729690C5B0029E4FC /* PBREnhancedRenderer.swift */; };
 		E103E1392B603FC50017588F /* PBRSubmeshRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */; };
+		5A1E00000000000000000112 /* SkeletalAnimationRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000102 /* SkeletalAnimationRendererView.swift */; };
+		5A1E00000000000000000111 /* SkeletalAnimationRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000101 /* SkeletalAnimationRenderer.swift */; };
 		E103E13A2B603FC50017588F /* PBRStandardMaterialRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1FC980C29D501D600A70BB5 /* PBRStandardMaterialRenderer.swift */; };
 		E103E13B2B603FC50017588F /* PBRRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E168FC76248ECCA2004B8407 /* PBRRenderer.swift */; };
 		E103E13C2B603FCA0017588F /* PBRStandardMaterialRendererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A1EDA291EFB1D00A71453 /* PBRStandardMaterialRendererView.swift */; };
@@ -276,6 +278,8 @@
 		E1707F6E29BAB0A000A934A0 /* DirectionalShadowRendererView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DirectionalShadowRendererView.swift; sourceTree = "<group>"; };
 		E1707F7029BAB0B100A934A0 /* DirectionalShadowRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DirectionalShadowRenderer.swift; sourceTree = "<group>"; };
 		E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRSubmeshRenderer.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000102 /* SkeletalAnimationRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletalAnimationRendererView.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000101 /* SkeletalAnimationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletalAnimationRenderer.swift; sourceTree = "<group>"; };
 		E1707F7529BBB01D00A934A0 /* PBRSubmeshRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PBRSubmeshRendererView.swift; sourceTree = "<group>"; };
 		E172B49129720A1C00341985 /* OcclusionRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcclusionRenderer.swift; sourceTree = "<group>"; };
 		E172B49329720A6A00341985 /* OcclusionRendererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcclusionRendererView.swift; sourceTree = "<group>"; };
@@ -582,6 +586,7 @@
 			isa = PBXGroup;
 			children = (
 				E1707F7529BBB01D00A934A0 /* PBRSubmeshRendererView.swift */,
+				5A1E00000000000000000102 /* SkeletalAnimationRendererView.swift */,
 				E10DC32329DCC5DE00FF2A98 /* PBRCustomizationRendererView.swift */,
 				E1EB6DE929690DD90029E4FC /* PBREnhancedRendererView.swift */,
 				A1B2C3D72E7F000100000001 /* PBRMRTRendererView.swift */,
@@ -803,6 +808,7 @@
 			isa = PBXGroup;
 			children = (
 				E1707F7329BBAFE100A934A0 /* PBRSubmeshRenderer.swift */,
+				5A1E00000000000000000101 /* SkeletalAnimationRenderer.swift */,
 				E10DC32129DCC4C100FF2A98 /* PBRCustomizationRenderer.swift */,
 				E1EB6DE729690C5B0029E4FC /* PBREnhancedRenderer.swift */,
 				A1B2C3D62E7F000100000001 /* PBRMRTRenderer.swift */,
@@ -1071,6 +1077,7 @@
 				E11325D028AEAEB50049CACC /* SuperShapeGenerator.c in Sources */,
 				E103E1482B6040010017588F /* BufferGeometryRendererView.swift in Sources */,
 				E103E13D2B603FCA0017588F /* PBRSubmeshRendererView.swift in Sources */,
+				5A1E00000000000000000112 /* SkeletalAnimationRendererView.swift in Sources */,
 				E103E12F2B603ED30017588F /* LoadObjRenderer.swift in Sources */,
 				E1903C0F2B6046B4004AB175 /* ARPlaneRendererView.swift in Sources */,
 				E103E0DC2B5F41570017588F /* Renderer3D.swift in Sources */,
@@ -1194,6 +1201,7 @@
 				E1D43BBE2C65855A0063E2C9 /* ColorPickerViewController.swift in Sources */,
 				E103E1472B6040010017588F /* AudioInputRendererView.swift in Sources */,
 				E103E1392B603FC50017588F /* PBRSubmeshRenderer.swift in Sources */,
+				5A1E00000000000000000111 /* SkeletalAnimationRenderer.swift in Sources */,
 				E103E1332B603F940017588F /* VertexAttributesRenderer.swift in Sources */,
 				E1D43BC92C65855A0063E2C9 /* DropDownViewController.swift in Sources */,
 				E103E1102B603DE30017588F /* SDFTextRenderer.swift in Sources */,

@@ -84,10 +84,12 @@ open class Submesh {
     open func setupGeometry() {}
 
     open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
+        // The material may be shared with meshes of another layout: pick the pipeline for ours.
         material?.bind(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,
-            shadow: shadow
+            shadow: shadow,
+            layout: parent?.drawLayout
         )
         geometry.draw(
             renderEncoderState: renderEncoderState,

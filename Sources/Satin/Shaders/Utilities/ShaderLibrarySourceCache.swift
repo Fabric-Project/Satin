@@ -71,6 +71,11 @@ public final class ShaderLibrarySourceCache: Sendable {
             )
         }
 
+        injectSkinningArgs(
+            source: &source,
+            skinning: configuration.skinning
+        )
+
         injectInstancingArgs(
             source: &source,
             instancing: configuration.instancing

@@ -25,9 +25,9 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
     var geometryExtrudeCache: [TesselatedTextGlyphCacheKey: GeometryData] = [:]
     var geometryReverseCache: [TesselatedTextGlyphCacheKey: GeometryData] = [:]
 
-    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, distance: Float = 1.0, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0) {
+    public init(context: Context, text: String, fontName: String = "Helvetica", fontSize: Float, distance: Float = 1.0, bounds: CGSize = .zero, pivot: simd_float2 = .zero, textAlignment: CTTextAlignment = .natural, verticalAlignment: VerticalAlignment = .center, kern: Float = 0.0, lineSpacing: Float = 0, pieceGeneration: PieceGeneration = .none) {
         self.distance = distance
-        super.init(context: context, text: text, fontName: fontName, fontSize: fontSize, bounds: bounds, pivot: pivot, textAlignment: textAlignment, verticalAlignment: verticalAlignment, kern: kern, lineSpacing: lineSpacing)
+        super.init(context: context, text: text, fontName: fontName, fontSize: fontSize, bounds: bounds, pivot: pivot, textAlignment: textAlignment, verticalAlignment: verticalAlignment, kern: kern, lineSpacing: lineSpacing, pieceGeneration: pieceGeneration)
     }
 
     override func addGlyphGeometryData(_ gData: inout GeometryData, _ charIndex: String.Index, _ font: CTFont, _ glyph: CGGlyph, _ glyphPosition: CGPoint, _ origin: CGPoint) {
@@ -103,6 +103,11 @@ public final class ExtrudedTextGeometry: TesselatedTextGeometry {
         combineAndOffsetGeometryData(&gData, &bData, simd_make_float3(glyphOffset, -distance * 0.5))
         combineAndScaleAndOffsetGeometryData(&gData, &sData, simd_make_float3(1.0, 1.0, distance * 0.5), simd_make_float3(glyphOffset, 0.0))
     }
+
+    /// Extruded text is solid: each piece's size is its volume.
+    override var pieceSizeMeasure: GeometryPieces.SizeMeasure { .volume }
+
+    override func pieceSize(faceArea: Float) -> Float { faceArea * abs(distance) }
 
     override func clearGeometryCache() {
         super.clearGeometryCache()

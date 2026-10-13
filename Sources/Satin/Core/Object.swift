@@ -166,15 +166,11 @@ open class Object: Codable {
             }
         }
         set {
-            position = simd_make_float3(newValue.columns.3)
-            let sx = newValue.columns.0
-            let sy = newValue.columns.1
-            let sz = newValue.columns.2
-            scale = simd_make_float3(simd_length(sx), simd_length(sy), simd_length(sz))
-            let rx = simd_make_float3(sx) / scale.x
-            let ry = simd_make_float3(sy) / scale.y
-            let rz = simd_make_float3(sz) / scale.z
-            orientation = simd_quatf(simd_float3x3(rx, ry, rz))
+            // Keeps a mirrored matrix mirrored, as a negative x scale.
+            let components = TransformComponents(matrix: newValue)
+            position = components.translation
+            scale = components.scale
+            orientation = components.rotation
         }
     }
 

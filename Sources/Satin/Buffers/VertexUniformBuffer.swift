@@ -57,6 +57,7 @@ public final class VertexUniformBuffer {
         self.buffer.label = "Vertex Uniforms"
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     public func prepareForRepeatedEncoding(count: Int) {
         let count = max(1, count)
         if count > 1 {

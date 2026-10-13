@@ -14,29 +14,31 @@ import simd
 import SatinCore
 #endif
 
-open class Mesh: Renderable {
+/// What a draw needs from a material's pipeline that belongs to the mesh, not the material:
+/// the geometry's vertex layout, whether it is skinned, whether the mesh is instanced, and
+/// whether it casts and receives shadows.
+///
+/// Contract: a mesh states these at every draw, and the material compiles a pipeline variant
+/// for each combination it is drawn with. Meshes never write them into a material, so one
+/// material can be shared by any meshes. A material's own vertex layout is only a default:
+/// the pipeline compiled first, and the one used by draws that state no layout.
+public struct DrawLayout {
+    public let vertexDescriptor: MTLVertexDescriptor
+    public let skinning: Bool
+    public let instancing: Bool
+    public let castShadow: Bool
+    public let receiveShadow: Bool
 
-    override public var receiveShadow: Bool {
-        didSet {
-            if receiveShadow != oldValue {
-                material?.receiveShadow = receiveShadow
-                for submesh in submeshes {
-                    submesh.material?.receiveShadow = receiveShadow
-                }
-            }
-        }
+    public init(vertexDescriptor: MTLVertexDescriptor, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
+        self.vertexDescriptor = vertexDescriptor
+        self.skinning = skinning
+        self.instancing = instancing
+        self.castShadow = castShadow
+        self.receiveShadow = receiveShadow
     }
-  
-    override public var castShadow:Bool {
-        didSet {
-            if castShadow != oldValue {
-                material?.castShadow = castShadow
-                for submesh in submeshes {
-                    submesh.material?.castShadow = castShadow
-                }
-            }
-        }
-    }
+}
+
+open class Mesh: Renderable {
 
     override public var windingOrder: MTLWinding {
         get {
@@ -47,22 +49,32 @@ open class Mesh: Renderable {
         }
     }
 
+    /// Whether this mesh draws instances; InstancedMesh overrides it.
+    open var isInstanced: Bool { false }
+
+    /// What this mesh's draws need from a material's pipeline; see `DrawLayout`.
+    public var drawLayout: DrawLayout {
+        DrawLayout(vertexDescriptor: geometry.vertexDescriptor, skinning: geometry.isSkinned, instancing: isInstanced,
+                   castShadow: castShadow, receiveShadow: receiveShadow)
+    }
+
     override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
-              !geometry.vertexBuffers.isEmpty,
+              geometry.hasVertexBuffers,
               vertexUniforms[renderContext.id] != nil
         else { return false }
 
+        let layout = drawLayout
         if submeshes.isEmpty,
            let material = material,
            materialMatchesCurrentPass(material, shadow: shadow),
-           material.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+           material.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
         {
             return true
         } else if submeshes.contains(where: {
             $0.visible &&
                 materialMatchesCurrentPass($0.material, shadow: shadow) &&
-                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow) != nil
+                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
         }) {
             return true
         } else {
@@ -97,6 +109,8 @@ open class Mesh: Renderable {
     }
 
     var geometrySubscription: AnyCancellable?
+    private weak var boundsJointPalette: JointPalette?
+    private var boundsPoseVersion = -1
     private var minimumEncodesPerFrame = 1
 
     public internal(set) var submeshes: [Submesh] = []
@@ -155,10 +169,24 @@ open class Mesh: Renderable {
         if geometry == nil {
             geometry = Geometry(context: context)
         }
+        // A geometry swapped in under an existing material (as Fabric's Mesh node does) must
+        // take effect now as the materials' default vertex layout.
+        // The subscription below only sees later changes.
+        configureMaterials(for: geometry)
         geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
             guard let self = self else { return }
             self.updateBounds = true
-            self.material?.vertexDescriptor = geo.vertexDescriptor
+            self.configureMaterials(for: geo)
+        }
+    }
+
+    /// Gives this mesh's material and every submesh's material the geometry's vertex layout as
+    /// their default, so the pipeline they compile first is the one this mesh draws with.
+    /// Correctness never depends on it: every draw states its own `DrawLayout`.
+    private func configureMaterials(for geometry: Geometry) {
+        material?.vertexDescriptor = geometry.vertexDescriptor
+        for submesh in submeshes {
+            submesh.material?.vertexDescriptor = geometry.vertexDescriptor
         }
     }
 
@@ -180,6 +208,7 @@ open class Mesh: Renderable {
 
     // MARK: - Repeated Encoding
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     override open func prepareForRepeatedEncoding(count: Int) {
         super.prepareForRepeatedEncoding(count: count)
         minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
@@ -196,6 +225,12 @@ open class Mesh: Renderable {
 
         // Geometry records one draw state per encode and uploads changed buffers into versioned slots.
         geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
+    }
+
+    override open func captureRepeatedEncodingState(iteration: Int, count: Int) {
+        super.captureRepeatedEncodingState(iteration: iteration, count: count)
+        // Submesh geometries hold only indices: no palette to capture.
+        geometry.captureRepeatedEncoding(iteration: iteration, count: count)
     }
 
     override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
@@ -221,11 +256,19 @@ open class Mesh: Renderable {
     }
 
     open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
-        guard let shader = material?.shader else { return }
-        if shader.vertexWantsVertexUniforms {
+        // Every material this mesh draws with, its own and its submeshes': a mesh whose materials
+        // are all on its submeshes still has to place them.
+        var vertexWantsVertexUniforms = false
+        var fragmentWantsVertexUniforms = false
+        for material in materials {
+            guard let shader = material.shader else { continue }
+            vertexWantsVertexUniforms = vertexWantsVertexUniforms || shader.vertexWantsVertexUniforms
+            fragmentWantsVertexUniforms = fragmentWantsVertexUniforms || shader.fragmentWantsVertexUniforms
+        }
+        if vertexWantsVertexUniforms {
             renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext.id]
         }
-        if shader.fragmentWantsVertexUniforms {
+        if fragmentWantsVertexUniforms {
             renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext.id]
         }
     }
@@ -238,6 +281,13 @@ open class Mesh: Renderable {
 
     override open func update() {
         geometry.update()
+        // A pose change moves a skinned mesh's bounds without any geometry update.
+        if geometry.isSkinned, let jointPalette = geometry.jointPalette,
+           jointPalette !== boundsJointPalette || jointPalette.poseVersion != boundsPoseVersion {
+            boundsJointPalette = jointPalette
+            boundsPoseVersion = jointPalette.poseVersion
+            updateBounds = true
+        }
         material?.update()
         for submesh in submeshes {
             submesh.update()
@@ -313,10 +363,12 @@ open class Mesh: Renderable {
                 )
             }
         } else if materialMatchesCurrentPass(material, shadow: shadow) {
+            // The material may be shared with meshes of another layout: pick the pipeline for ours.
             material?.bind(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
-                shadow: shadow
+                shadow: shadow,
+                layout: drawLayout
             )
             geometry.draw(
                 renderEncoderState: renderEncoderState,
@@ -353,6 +405,9 @@ open class Mesh: Renderable {
         assert(submesh.context == context, "Submesh context mismatch")
         submesh.parent = self
         submeshes.append(submesh)
+        // Its material needs its depth-stencil state and shader before the first draw; nothing
+        // else sets a submesh up.
+        submesh.setup()
     }
 
     // MARK: - Comoute Bounds

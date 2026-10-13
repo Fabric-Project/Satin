@@ -3,6 +3,21 @@ import Satin
 import XCTest
 
 final class GeometryCoverageTests: XCTestCase {
+    /// The model loader stores 12-byte-stride positions as PackedFloat3; their bounds and
+    /// ray hits must come from those positions, not an empty box.
+    func testPackedFloat3PositionsAreBoundedAndHit() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let geometry = Geometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
+        let positions = [MTLPackedFloat3Make(-1, -2, 0), MTLPackedFloat3Make(3, -2, 0), MTLPackedFloat3Make(-1, 4, 0)]
+        geometry.addAttribute(PackedFloat3BufferAttribute(defaultValue: MTLPackedFloat3Make(0, 0, 0), data: positions), for: .Position)
+
+        XCTAssertEqual(geometry.bounds.min, simd_float3(-1, -2, 0))
+        XCTAssertEqual(geometry.bounds.max, simd_float3(3, 4, 0))
+        var intersections: [IntersectionResult] = []
+        geometry.intersect(ray: Ray(origin: [0, 0, 5], direction: [0, 0, -1]), intersections: &intersections)
+        XCTAssertFalse(intersections.isEmpty, "The triangle is hit")
+    }
+
     func testArcGeometry() throws {
         try assertFlatGeometry(
             reference: "geometry-arc",

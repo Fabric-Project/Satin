@@ -1,5 +1,5 @@
 //
-//  USDZLoader.swift
+//  Loader.swift
 //  Satin
 //
 //  Created by Reza Ali on 4/3/23.
@@ -14,32 +14,56 @@ import ModelIO
 import SatinCore
 #endif
 
-public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> Object? {
-    let asset = MDLAsset(url: url)
+/// A loaded model with everything in it that moves over time.
+public struct LoadedAsset {
+    /// The model's hierarchy, as the file lays it out.
+    public let root: Object
+    /// Its skeletons and animated objects on one clock; nil when nothing in it moves.
+    public let animation: AssetAnimation?
+}
 
+/// Loads a model with its hierarchy and animation: skinned meshes bound to their skeletons,
+/// and animated objects. Posed at the start of its animation.
+public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> LoadedAsset {
+    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false)
+}
+
+/// Loads a model as its meshes, each placed by its world transform, posed at the start of its
+/// animation. Only that pose is read from the animation.
+public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> Object? {
+    Object.flatten(loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: true).root)
+}
+
+/// What one pass over an asset's objects collects for skinning and animation.
+struct AssetLoadRecord {
+    var skinnedMeshes: [(mesh: Mesh, mdlMesh: MDLMesh)] = []
+    var animatedObjects: [(object: Object, mdlObject: MDLObject)] = []
+    /// The object standing for each skeleton prim, by its ModelIO object: where that
+    /// skeleton's space sits in the scene.
+    var skeletonAnchors: [ObjectIdentifier: Object] = [:]
+}
+
+/// The model's hierarchy and animation, posed at its start. `startPoseOnly` reads just that
+/// pose, for a model that will not be animated.
+func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool) -> LoadedAsset {
+    let asset = MDLAsset(url: url)
     if textureLoader != nil { asset.loadTextures() }
 
-    let fileName = url.lastPathComponent.replacingOccurrences(of: url.pathExtension, with: "")
-    let container = Object(context: context, label: fileName)
+    let root = Object(context: context, label: url.deletingPathExtension().lastPathComponent)
+    var record = AssetLoadRecord()
+    loadAssetChildren(parent: root, children: (0 ..< asset.count).map { asset.object(at: $0) }, context: context,
+                      textureLoader: textureLoader, record: &record)
 
-    for i in 0 ..< asset.count {
-        let mdlObject = asset.object(at: i)
-        var stnObject: Object
-        if let mdlMesh = mdlObject as? MDLMesh {
-            stnObject = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
-        }
-        else {
-            stnObject = Object(context: context, label: mdlObject.name)
-        }
-        container.add(stnObject)
-
-        if let transform = mdlObject.transform {
-            stnObject.localMatrix = transform.matrix
-        }
-        loadAssetChildren(parent: stnObject, children: mdlObject.children.objects, context: context, textureLoader: textureLoader)
+    let assetTimeRange = asset.endTime > asset.startTime ? asset.startTime ... asset.endTime : nil
+    // Objects first: skeletons bind where their anchors and meshes sit at the start.
+    let objectAnimation = loadObjectAnimation(animatedObjects: record.animatedObjects, asset: asset,
+                                              startTime: assetTimeRange?.lowerBound, startPoseOnly: startPoseOnly)
+    if let objectAnimation, let start = assetTimeRange?.lowerBound ?? objectAnimation.timeRange?.lowerBound {
+        objectAnimation.setTime(start)
     }
-
-    return Object.flatten(container)
+    let skeletons = bindSkeletons(record: record, device: context.device, startTime: assetTimeRange?.lowerBound, startPoseOnly: startPoseOnly)
+    guard !skeletons.isEmpty || objectAnimation != nil else { return LoadedAsset(root: root, animation: nil) }
+    return LoadedAsset(root: root, animation: AssetAnimation(skeletons: skeletons, objectAnimation: objectAnimation, timeRange: assetTimeRange))
 }
 
 func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?) -> Mesh {
@@ -63,28 +87,37 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
             if bufferInterleaved[bufferIndex] != nil {
                 bufferInterleaved[bufferIndex] = true
                 bufferIndexMap[bufferIndex] = .Vertices
-                bufferIndexAttributes[bufferIndex] = bufferIndexAttributes[bufferIndex]! + [attribute]
+                bufferIndexAttributes[bufferIndex, default: []].append(attribute)
             }
             else {
                 bufferInterleaved[bufferIndex] = false
-                bufferIndexMap[bufferIndex] = VertexAttributeIndex(name: attribute.name).bufferIndex
+                // Nil for attributes Satin does not render; their buffers are skipped below.
+                bufferIndexMap[bufferIndex] = VertexAttributeIndex(name: attribute.name)?.bufferIndex
                 bufferIndexAttributes[bufferIndex] = [attribute]
             }
         }
     }
 
-    for (bufferIndex, vertexBuffer) in mdlMesh.vertexBuffers.enumerated() {
-        let count = mdlMesh.vertexCount
+    let count = mdlMesh.vertexCount
+    for (bufferIndex, vertexBuffer) in mdlMesh.vertexBuffers.enumerated() where count > 0 {
+        guard let index = bufferIndexMap[bufferIndex],
+              let interleaved = bufferInterleaved[bufferIndex],
+              let attributes = bufferIndexAttributes[bufferIndex]
+        else { continue }
         let stride = vertexBuffer.length / count
         let bytes = vertexBuffer.map().bytes
-        let index = bufferIndexMap[bufferIndex]!
 
-        if bufferInterleaved[bufferIndex]! {
+        if interleaved {
             let parent = InterleavedBuffer(index: index, data: bytes, stride: stride, count: count, source: vertexBuffer)
 
-            for attribute in bufferIndexAttributes[bufferIndex]! {
+            for attribute in attributes {
                 let offset = attribute.offset
-                let attributeIndex = VertexAttributeIndex(name: attribute.name)
+                guard let attributeIndex = VertexAttributeIndex(name: attribute.name) else {
+                    print("Vertex attribute not supported: \(attribute.name)")
+                    continue
+                }
+                // Loaded by `loadJointInfluences`, in the layout Satin skins with.
+                if attributeIndex == .JointIndices || attributeIndex == .JointWeights { continue }
                 switch attribute.format {
                     case .float4:
                         geometry.addAttribute(
@@ -120,40 +153,46 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
             }
         }
         else {
-            for attribute in bufferIndexAttributes[bufferIndex]! {
+            for attribute in attributes {
+                guard let attributeIndex = VertexAttributeIndex(name: attribute.name) else {
+                    print("Vertex attribute not supported: \(attribute.name)")
+                    continue
+                }
+                // Loaded by `loadJointInfluences`, in the layout Satin skins with.
+                if attributeIndex == .JointIndices || attributeIndex == .JointWeights { continue }
                 switch attribute.format {
                     case .float4:
                         let ptr = bytes.bindMemory(to: simd_float4.self, capacity: count)
                         let data = Array(UnsafeBufferPointer(start: ptr, count: count))
                         geometry.addAttribute(
-                            Float4BufferAttribute(defaultValue: .one, data: data), for: VertexAttributeIndex(name: attribute.name)
+                            Float4BufferAttribute(defaultValue: .one, data: data), for: attributeIndex
                         )
                     case .float3:
                         if stride == MemoryLayout<MTLPackedFloat3>.stride {
                             let ptr = bytes.bindMemory(to: MTLPackedFloat3.self, capacity: count)
                             let data = Array(UnsafeBufferPointer(start: ptr, count: count))
                             geometry.addAttribute(
-                                PackedFloat3BufferAttribute(defaultValue: MTLPackedFloat3Make(0, 0, 0), data: data), for: VertexAttributeIndex(name: attribute.name)
+                                PackedFloat3BufferAttribute(defaultValue: MTLPackedFloat3Make(0, 0, 0), data: data), for: attributeIndex
                             )
                         }
                         else if stride == MemoryLayout<simd_float3>.stride {
                             let ptr = bytes.bindMemory(to: simd_float3.self, capacity: count)
                             let data = Array(UnsafeBufferPointer(start: ptr, count: count))
                             geometry.addAttribute(
-                                Float3BufferAttribute(defaultValue: .zero, data: data), for: VertexAttributeIndex(name: attribute.name)
+                                Float3BufferAttribute(defaultValue: .zero, data: data), for: attributeIndex
                             )
                         }
                     case .float2:
                         let ptr = bytes.bindMemory(to: simd_float2.self, capacity: count)
                         let data = Array(UnsafeBufferPointer(start: ptr, count: count))
                         geometry.addAttribute(
-                            Float2BufferAttribute(defaultValue: .zero, data: data), for: VertexAttributeIndex(name: attribute.name)
+                            Float2BufferAttribute(defaultValue: .zero, data: data), for: attributeIndex
                         )
                     case .float:
                         let ptr = bytes.bindMemory(to: Float.self, capacity: count)
                         let data = Array(UnsafeBufferPointer(start: ptr, count: count))
                         geometry.addAttribute(
-                            FloatBufferAttribute(defaultValue: .zero, data: data), for: VertexAttributeIndex(name: attribute.name)
+                            FloatBufferAttribute(defaultValue: .zero, data: data), for: attributeIndex
                         )
                     default:
                         print("Format not supported: \(attribute.name), \(attribute.format)")
@@ -161,6 +200,8 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
             }
         }
     }
+
+    loadJointInfluences(mdlMesh: mdlMesh, geometry: geometry)
 
     if let submeshes = mdlMesh.submeshes {
         if submeshes.count > 1 {
@@ -219,20 +260,25 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
     return stnMesh
 }
 
-func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, textureLoader: MTKTextureLoader?) {
+func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, textureLoader: MTKTextureLoader?,
+                       record: inout AssetLoadRecord) {
     for child in children {
-        var stnObject: Object
+        let object: Object
         if let mdlMesh = child as? MDLMesh {
-            stnObject = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
+            let mesh = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
+            if mdlMesh.skeletonBinding != nil { record.skinnedMeshes.append((mesh, mdlMesh)) }
+            object = mesh
         }
         else {
-            stnObject = Object(context: context, label: child.name)
+            object = Object(context: context, label: child.name)
+            if child is MDLSkeleton { record.skeletonAnchors[ObjectIdentifier(child)] = object }
         }
 
         if let transform = child.transform {
-            stnObject.localMatrix = transform.matrix
+            object.localMatrix = transform.matrix
+            if transform.keyTimes.count > 1 { record.animatedObjects.append((object, child)) }
         }
-        parent.add(stnObject)
-        loadAssetChildren(parent: stnObject, children: child.children.objects, context: context, textureLoader: textureLoader)
+        parent.add(object)
+        loadAssetChildren(parent: object, children: child.children.objects, context: context, textureLoader: textureLoader, record: &record)
     }
 }

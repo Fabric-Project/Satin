@@ -65,7 +65,7 @@ public final class MotionBlurMaterial: Material {
 
     /// Longest blur in pixels. Set by `MotionBlurPostProcessEncoder` (see its `maxBlurRadius`).
     public var maxBlurRadius: Float {
-        get { get("Max Blur Radius", as: FloatParameter.self)?.value ?? 144 }
+        get { get("Max Blur Radius", as: FloatParameter.self)?.value ?? 208 }
         set { set("Max Blur Radius", newValue) }
     }
 
@@ -107,7 +107,7 @@ public final class MotionBlurMaterial: Material {
         orderedParameters.append(IntParameter("Samples", get("Samples", as: IntParameter.self)?.value ?? 16, 1, 32))
         orderedParameters.append(FloatParameter("Jitter", get("Jitter", as: FloatParameter.self)?.value ?? 1.0, 0.0, 1.0, .slider))
         orderedParameters.append(IntParameter("Frame", get("Frame", as: IntParameter.self)?.value ?? 0))
-        orderedParameters.append(FloatParameter("Max Blur Radius", get("Max Blur Radius", as: FloatParameter.self)?.value ?? 144))
+        orderedParameters.append(FloatParameter("Max Blur Radius", get("Max Blur Radius", as: FloatParameter.self)?.value ?? 208))
         parameters.setFrom(orderedParameters, setValues: true, setOptions: true, setControls: true)
 
         set(colorTexture, index: FragmentTextureIndex.Custom0)

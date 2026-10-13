@@ -22,6 +22,9 @@ public struct ShaderLibraryConfiguration {
     // Instancing
     var instancing: Bool
 
+    // Skinning
+    var skinning: Bool
+
     // Lighting
     var lighting: Bool
 
@@ -44,6 +47,7 @@ extension ShaderLibraryConfiguration: Equatable {
             lhs.pipelineURL == rhs.pipelineURL &&
             lhs.vertexDescriptor == rhs.vertexDescriptor &&
             lhs.instancing == rhs.instancing &&
+            lhs.skinning == rhs.skinning &&
             lhs.lighting == rhs.lighting &&
             lhs.castShadow == rhs.castShadow &&
             lhs.receiveShadow == rhs.receiveShadow &&
@@ -65,6 +69,7 @@ extension ShaderLibraryConfiguration: Hashable {
 
         hasher.combine(vertexDescriptor)
         hasher.combine(instancing)
+        if skinning { hasher.combine(skinning) }
         hasher.combine(lighting)
 
         hasher.combine(castShadow)

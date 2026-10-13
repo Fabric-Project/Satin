@@ -18,7 +18,7 @@ vertex BasicPointCustomVertexData basicPointVertex(
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]],
     constant BasicPointUniforms &uniforms [[buffer(VertexBufferMaterialUniforms)]]) {
 
-    const float4 position = float4(in.position, 1.0);
+    const float4 position = SATIN_SKIN_POSITION(in);
 
     BasicPointCustomVertexData out;
 #if INSTANCING

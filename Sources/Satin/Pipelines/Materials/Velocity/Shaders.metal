@@ -6,25 +6,17 @@ typedef struct {
 
 vertex VelocityVertexData velocityVertex(
     Vertex in [[stage_in]],
+    // inject instancing args
     ushort amp_id [[amplification_id]],
     constant VertexUniforms *vertexUniforms [[buffer(VertexBufferVertexUniforms)]]) {
     VelocityVertexData out;
-#if defined(HAS_CUSTOM10)
-    // Custom10 is VertexAttributeIndex.PreviousPosition: last frame's object-space position, for
-    // geometry deformed on the CPU, so its motion reaches the velocity output.
-    const float4 previousPosition = float4(in.custom10.xyz, 1.0);
-#else
-    const float4 previousPosition = float4(in.position, 1.0);
-#endif
-
 #if INSTANCING
     const float4x4 modelMatrix = instanceUniforms[instanceID].modelMatrix;
-    out.currentClipPos = vertexUniforms[amp_id].viewProjectionMatrix * modelMatrix * float4(in.position, 1.0);
-    out.previousClipPos = vertexUniforms[amp_id].previousViewProjectionMatrix * modelMatrix * previousPosition;
+    out.currentClipPos = vertexUniforms[amp_id].viewProjectionMatrix * modelMatrix * SATIN_SKIN_POSITION(in);
 #else
-    out.currentClipPos = vertexUniforms[amp_id].modelViewProjectionMatrix * float4(in.position, 1.0);
-    out.previousClipPos = vertexUniforms[amp_id].previousModelViewProjectionMatrix * previousPosition;
+    out.currentClipPos = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 #endif
+    out.previousClipPos = SATIN_PREVIOUS_CLIP_POSITION(in);
 
     out.position = out.currentClipPos;
     return out;

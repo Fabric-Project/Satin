@@ -472,6 +472,7 @@ open class Material: Codable {
         uniformsNeedsUpdate = false
     }
 
+    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
     /// Ensures material uniforms have enough slots for repeated encodes before GPU completion.
     public func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
         minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, encodesPerFrame))
@@ -510,8 +511,9 @@ open class Material: Codable {
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}
 
-    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow) else { return }
+    /// `layout`: what the mesh being drawn needs from the pipeline (see `DrawLayout`); nil uses this material's own.
+    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
+        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) else { return }
         renderEncoderState.pipeline = pipeline
     }
 
@@ -598,7 +600,7 @@ open class Material: Codable {
         }
     }
 
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
         bindUniforms(renderEncoderState: renderEncoderState, shadow: shadow)
         bindDepthStates(
             renderContext: renderContext,
@@ -610,13 +612,20 @@ open class Material: Codable {
         bindPipeline(
             renderContext: renderContext,
             renderEncoderState: renderEncoderState,
-            shadow: shadow
+            shadow: shadow,
+            layout: layout
         )
         onBind?(renderEncoderState.renderEncoder)
     }
 
     public func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
         shader?.getPipeline(renderContext: renderContext, shadow: shadow)
+    }
+
+    /// The pipeline for drawing a mesh with `layout`, which may differ from this material's own
+    /// when the material is shared by meshes with different layouts, skinning or instancing.
+    public func getPipeline(renderContext: Context, shadow: Bool, layout: DrawLayout?) -> MTLRenderPipelineState? {
+        shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout)
     }
 
     public func set(_ buffer: MTLBuffer?, index: VertexBufferIndex) {
