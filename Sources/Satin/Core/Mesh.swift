@@ -353,6 +353,8 @@ open class Mesh: Renderable {
         assert(submesh.context == context, "Submesh context mismatch")
         submesh.parent = self
         submeshes.append(submesh)
+        // The mesh's own setup ran at init, before any submesh was added.
+        submesh.setup()
     }
 
     // MARK: - Comoute Bounds
