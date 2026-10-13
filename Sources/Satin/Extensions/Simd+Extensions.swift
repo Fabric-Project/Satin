@@ -84,6 +84,68 @@ extension simd_float4x4: @retroactive Codable {
 }
 
 public extension simd_float4x4 {
+    /// Composes scale first, then rotation, then translation, as USD composes a joint's transform.
+    init(translation: simd_float3 = .zero, rotation: simd_quatf = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1), scale: simd_float3 = .one) {
+        self.init(simd_normalize(rotation))
+        columns.0 *= scale.x
+        columns.1 *= scale.y
+        columns.2 *= scale.z
+        columns.3 = simd_float4(translation, 1)
+    }
+
+    /// A transform as translation, rotation and scale, as `init(translation:rotation:scale:)` composes it.
+    typealias Decomposition = (translation: simd_float3, rotation: simd_quatf, scale: simd_float3)
+
+    /// Splits into translation, rotation and scale; shear is not kept. A mirrored matrix (negative
+    /// determinant) keeps its handedness as a negative x scale. An axis scaled to zero keeps its
+    /// zero scale and takes a direction square to the others, so the rotation stays a rotation.
+    var decomposed: Decomposition {
+        var xAxis = simd_make_float3(columns.0)
+        var yAxis = simd_make_float3(columns.1)
+        var zAxis = simd_make_float3(columns.2)
+        var scale = simd_float3(simd_length(xAxis), simd_length(yAxis), simd_length(zAxis))
+        if simd_dot(simd_cross(xAxis, yAxis), zAxis) < 0 { scale.x = -scale.x }
+        let translation = simd_make_float3(columns.3)
+
+        // Shorter than a millionth of the longest axis: no direction left to keep.
+        let collapsedLength = max(simd_reduce_max(simd_abs(scale)) * 1e-6, .leastNormalMagnitude)
+        let xCollapsed = abs(scale.x) <= collapsedLength
+        let yCollapsed = abs(scale.y) <= collapsedLength
+        let zCollapsed = abs(scale.z) <= collapsedLength
+        // Dividing by the signed scale also turns a mirrored x axis back.
+        if !xCollapsed { xAxis /= scale.x }
+        if !yCollapsed { yAxis /= scale.y }
+        if !zCollapsed { zAxis /= scale.z }
+        switch (xCollapsed, yCollapsed, zCollapsed) {
+        case (false, false, false):
+            break
+        case (true, false, false):
+            xAxis = simd_normalize(simd_cross(yAxis, zAxis))
+        case (false, true, false):
+            yAxis = simd_normalize(simd_cross(zAxis, xAxis))
+        case (false, false, true):
+            zAxis = simd_normalize(simd_cross(xAxis, yAxis))
+        case (false, true, true):
+            yAxis = Self.perpendicular(to: xAxis)
+            zAxis = simd_cross(xAxis, yAxis)
+        case (true, false, true):
+            zAxis = Self.perpendicular(to: yAxis)
+            xAxis = simd_cross(yAxis, zAxis)
+        case (true, true, false):
+            xAxis = Self.perpendicular(to: zAxis)
+            yAxis = simd_cross(zAxis, xAxis)
+        case (true, true, true):
+            return (translation, simd_quatf(ix: 0, iy: 0, iz: 0, r: 1), scale)
+        }
+        return (translation, simd_quatf(simd_float3x3(xAxis, yAxis, zAxis)), scale)
+    }
+
+    /// A unit vector square to `axis`.
+    private static func perpendicular(to axis: simd_float3) -> simd_float3 {
+        let reference: simd_float3 = abs(axis.x) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+        return simd_normalize(simd_cross(axis, reference))
+    }
+
     init(textureTransform transform: simd_float3x3) {
         self.init(
             simd_float4(transform.columns.0.x, transform.columns.0.y, 0.0, 0.0),

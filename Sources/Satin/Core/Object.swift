@@ -167,10 +167,10 @@ open class Object: Codable {
         }
         set {
             // Keeps a mirrored matrix mirrored, as a negative x scale.
-            let components = TransformComponents(matrix: newValue)
-            position = components.translation
-            scale = components.scale
-            orientation = components.rotation
+            let decomposition = newValue.decomposed
+            position = decomposition.translation
+            scale = decomposition.scale
+            orientation = decomposition.rotation
         }
     }
 

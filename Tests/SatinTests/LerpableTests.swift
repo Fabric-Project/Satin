@@ -39,15 +39,15 @@ final class LerpableTests: XCTestCase {
     // MARK: - Matrices
 
     func testMatricesMeetTheirEnds() {
-        let start = TransformComponents(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.3, axis: [0, 1, 0]), scale: [1, 2, 3]).matrix
-        let end = TransformComponents(translation: [-1, 0, 5], rotation: simd_quatf(angle: 1.2, axis: [1, 0, 0]), scale: [3, 1, 2]).matrix
+        let start = simd_float4x4(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.3, axis: [0, 1, 0]), scale: [1, 2, 3])
+        let end = simd_float4x4(translation: [-1, 0, 5], rotation: simd_quatf(angle: 1.2, axis: [1, 0, 0]), scale: [3, 1, 2])
         assertEqual(simd_float4x4.lerp(start, end, 0), start)
         assertEqual(simd_float4x4.lerp(start, end, 1), end)
     }
 
     func testMatricesHalfwayBetweenRotationsStayRigid() {
         let start = matrix_identity_float4x4
-        let end = TransformComponents(rotation: simd_quatf(angle: .pi / 2, axis: [0, 0, 1])).matrix
+        let end = simd_float4x4(rotation: simd_quatf(angle: .pi / 2, axis: [0, 0, 1]))
         let halfway = simd_float4x4.lerp(start, end, 0.5)
         // Mixing the columns would shrink both axes to ~0.707 here.
         assertOrthonormal(halfway)
@@ -58,15 +58,15 @@ final class LerpableTests: XCTestCase {
     }
 
     func testMatricesInterpolateTranslationAndScale() {
-        let start = TransformComponents(translation: [0, 0, 0], scale: [1, 1, 1]).matrix
-        let end = TransformComponents(translation: [2, 4, 6], scale: [3, 5, 7]).matrix
-        assertEqual(simd_float4x4.lerp(start, end, 0.5), TransformComponents(translation: [1, 2, 3], scale: [2, 3, 4]).matrix)
+        let start = simd_float4x4(translation: [0, 0, 0], scale: [1, 1, 1])
+        let end = simd_float4x4(translation: [2, 4, 6], scale: [3, 5, 7])
+        assertEqual(simd_float4x4.lerp(start, end, 0.5), simd_float4x4(translation: [1, 2, 3], scale: [2, 3, 4]))
     }
 
     func testMirroredMatricesStayMirrored() {
         let mirror = simd_float4x4(diagonal: [-1, 1, 1, 1])
         let start = mirror
-        let end = TransformComponents(rotation: simd_quatf(angle: .pi / 2, axis: [0, 1, 0])).matrix * mirror
+        let end = simd_float4x4(rotation: simd_quatf(angle: .pi / 2, axis: [0, 1, 0])) * mirror
         for t: Float in [0, 0.25, 0.5, 0.75, 1] {
             XCTAssertEqual(simd_float4x4.lerp(start, end, t).determinant, -1, accuracy: accuracy, "t = \(t)")
         }
@@ -76,29 +76,26 @@ final class LerpableTests: XCTestCase {
     // MARK: - Decomposition
 
     func testMirroredMatricesRoundTrip() {
-        let matrix = TransformComponents(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.7, axis: simd_normalize([1, 1, 0])), scale: [-2, 3, 4]).matrix
-        let components = TransformComponents(matrix: matrix)
-        XCTAssertLessThan(components.scale.x, 0)
-        assertEqual(components.matrix, matrix)
+        let matrix = simd_float4x4(translation: [1, 2, 3], rotation: simd_quatf(angle: 0.7, axis: simd_normalize([1, 1, 0])), scale: [-2, 3, 4])
+        XCTAssertLessThan(matrix.decomposed.scale.x, 0)
+        assertEqual(recomposed(matrix), matrix)
     }
 
     func testCollapsedAxesKeepAUnitRotationAndRoundTrip() {
         let rotation = simd_quatf(angle: 0.7, axis: simd_normalize([1, 2, 3]))
         let scales: [simd_float3] = [[0, 2, 3], [2, 0, 3], [2, 3, 0], [0, 0, 3], [0, 2, 0], [2, 0, 0], [0, 0, 0]]
         for scale in scales {
-            let matrix = TransformComponents(translation: [1, 2, 3], rotation: rotation, scale: scale).matrix
-            let components = TransformComponents(matrix: matrix)
-            XCTAssertEqual(simd_length(components.rotation.vector), 1, accuracy: accuracy, "scale \(scale)")
-            assertOrthonormal(simd_float4x4(components.rotation))
-            assertEqual(components.matrix, matrix, "scale \(scale)")
+            let matrix = simd_float4x4(translation: [1, 2, 3], rotation: rotation, scale: scale)
+            XCTAssertEqual(simd_length(matrix.decomposed.rotation.vector), 1, accuracy: accuracy, "scale \(scale)")
+            assertOrthonormal(simd_float4x4(matrix.decomposed.rotation))
+            assertEqual(recomposed(matrix), matrix, "scale \(scale)")
         }
     }
 
     func testCollapsedAxesKeepTheirDirectionsOnTheOtherAxes() {
         let rotation = simd_quatf(angle: 0.7, axis: simd_normalize([1, 2, 3]))
-        let matrix = TransformComponents(rotation: rotation, scale: [0, 2, 3]).matrix
-        let components = TransformComponents(matrix: matrix)
-        let rebuilt = simd_float3x3(components.rotation)
+        let matrix = simd_float4x4(rotation: rotation, scale: [0, 2, 3])
+        let rebuilt = simd_float3x3(matrix.decomposed.rotation)
         let original = simd_float3x3(rotation)
         for column in 0 ..< 3 {
             XCTAssertEqual(simd_distance(rebuilt[column], original[column]), 0, accuracy: accuracy, "column \(column)")

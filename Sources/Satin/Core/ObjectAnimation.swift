@@ -12,12 +12,12 @@ public final class ObjectAnimation: TimeDriven {
     public let objects: [Object]
     public let animation: TransformAnimation
 
-    private let initialComponents: [TransformComponents]
+    private let initialDecompositions: [simd_float4x4.Decomposition]
 
     public init(objects: [Object], animation: TransformAnimation) {
         self.objects = objects
         self.animation = animation
-        initialComponents = objects.map { TransformComponents(matrix: $0.localMatrix) }
+        initialDecompositions = objects.map(\.localMatrix.decomposed)
     }
 
     public var timeRange: ClosedRange<Double>? { animation.timeRange }
@@ -25,7 +25,7 @@ public final class ObjectAnimation: TimeDriven {
     public func setTime(_ time: Double) {
         let sample = animation.sample(at: time)
         for (objectIndex, object) in objects.enumerated() {
-            object.localMatrix = animation.transform(of: objectIndex, in: sample, fallback: initialComponents[objectIndex])
+            object.localMatrix = animation.transform(of: objectIndex, in: sample, fallback: initialDecompositions[objectIndex])
         }
     }
 }

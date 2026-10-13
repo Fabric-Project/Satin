@@ -41,8 +41,8 @@ public final class Skeleton: TimeDriven {
 
     /// For each joint, its index among the animation's targets; nil when the animation does not drive it.
     private let animationTargetIndices: [Int?]
-    /// Each joint's rest transform as components, for channels the animation does not key.
-    private let restComponents: [TransformComponents]
+    /// Each joint's rest transform decomposed, for channels the animation does not key.
+    private let restDecompositions: [simd_float4x4.Decomposition]
 
     /// `restTransforms` and `bindTransforms` hold one matrix per joint, in `jointPaths` order;
     /// missing entries are identity. The skeleton starts at rest.
@@ -65,7 +65,7 @@ public final class Skeleton: TimeDriven {
 
         let targetIndexByPath = Self.indexByPath(animation?.paths ?? [])
         animationTargetIndices = jointPaths.map { targetIndexByPath[$0] }
-        restComponents = self.restTransforms.map(TransformComponents.init(matrix:))
+        restDecompositions = self.restTransforms.map(\.decomposed)
 
         localTransforms = self.restTransforms
         jointTransforms = self.restTransforms
@@ -88,7 +88,7 @@ public final class Skeleton: TimeDriven {
         let sample = animation.sample(at: time)
         for jointIndex in jointPaths.indices {
             guard let targetIndex = animationTargetIndices[jointIndex] else { continue }
-            localTransforms[jointIndex] = animation.transform(of: targetIndex, in: sample, fallback: restComponents[jointIndex])
+            localTransforms[jointIndex] = animation.transform(of: targetIndex, in: sample, fallback: restDecompositions[jointIndex])
         }
     }
 

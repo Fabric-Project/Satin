@@ -50,16 +50,16 @@ extension simd_quatf: Lerpable {
 }
 
 extension simd_float4x4: Lerpable {
-    /// As translation, rotation and scale (`TransformComponents`): translation and scale mix and
-    /// rotation slerps, so the matrices in between stay rigid instead of skewing, and a mirrored
-    /// pair stays mirrored. Shear and projection are not kept; `simd_mix` the columns for those.
+    /// As translation, rotation and scale: translation and scale mix and rotation slerps, so the
+    /// matrices in between stay rigid instead of skewing, and a mirrored pair stays mirrored.
+    /// Shear and projection are not kept; `simd_mix` the columns for those.
     public static func lerp(_ from: simd_float4x4, _ to: simd_float4x4, _ t: Float) -> simd_float4x4 {
-        let start = TransformComponents(matrix: from)
-        let end = TransformComponents(matrix: to)
-        return TransformComponents(
+        let start = from.decomposed
+        let end = to.decomposed
+        return simd_float4x4(
             translation: .lerp(start.translation, end.translation, t),
             rotation: .lerp(start.rotation, end.rotation, t),
             scale: .lerp(start.scale, end.scale, t)
-        ).matrix
+        )
     }
 }
