@@ -30,9 +30,6 @@ public final class Skeleton: TimeDriven {
     public let bindTransforms: [simd_float4x4]
     public let animation: TransformAnimation?
     public private(set) var bindings: [SkeletonBinding] = []
-    /// Where skeleton space sits in the scene: skinned geometry follows it, whatever its own
-    /// mesh's transform, as UsdSkel defines. Nil: skeleton space is world space.
-    public weak var anchor: Object?
 
     /// The staged pose: each joint's transform relative to its parent.
     public private(set) var localTransforms: [simd_float4x4]
@@ -47,8 +44,7 @@ public final class Skeleton: TimeDriven {
     /// `restTransforms` and `bindTransforms` hold one matrix per joint, in `jointPaths` order;
     /// missing entries are identity. The skeleton starts at rest.
     public init(jointPaths: [String], restTransforms: [simd_float4x4], bindTransforms: [simd_float4x4],
-                animation: TransformAnimation? = nil, anchor: Object? = nil) {
-        self.anchor = anchor
+                animation: TransformAnimation? = nil) {
         self.jointPaths = jointPaths
         self.restTransforms = jointPaths.indices.map { $0 < restTransforms.count ? restTransforms[$0] : matrix_identity_float4x4 }
         self.bindTransforms = jointPaths.indices.map { $0 < bindTransforms.count ? bindTransforms[$0] : matrix_identity_float4x4 }
@@ -100,32 +96,30 @@ public final class Skeleton: TimeDriven {
         }
     }
 
-    /// Composes the staged pose and updates every binding's palette, reading where the anchor
-    /// and each mesh sit now. Once per frame: the outgoing pose becomes last frame's.
+    /// Composes the staged pose and updates every binding's palette. Once per frame: the
+    /// outgoing pose becomes last frame's.
     public func commitPose() {
         composeJointTransforms()
-        let skeletonWorld = anchor?.worldMatrix ?? matrix_identity_float4x4
         for binding in bindings {
-            binding.pose(jointTransforms: jointTransforms, skeletonWorld: skeletonWorld)
+            binding.pose(jointTransforms: jointTransforms)
         }
     }
 
     /// Binds a geometry whose joint indices refer to `jointPaths` (nil: this skeleton's own
-    /// order), drawn by `mesh`. `geometryBindTransform` places the geometry's rest points in
-    /// skeleton space at bind time. The binding is posed now, with the last committed pose;
-    /// give its palette to the geometry.
-    public func bind(device: MTLDevice, mesh: Object?, jointPaths geometryJointPaths: [String]?,
+    /// order). `geometryBindTransform` places the geometry's rest points in skeleton space at
+    /// bind time. The binding is posed now, with the last committed pose; give its palette to
+    /// the geometry, and draw it with meshes placed where the skeleton sits (skeleton space).
+    public func bind(device: MTLDevice, jointPaths geometryJointPaths: [String]?,
                      geometryBindTransform: simd_float4x4) -> SkeletonBinding {
         let jointIndexByPath = Self.indexByPath(jointPaths)
         let skeletonJointIndices = geometryJointPaths.map { $0.map { jointIndexByPath[$0] ?? -1 } } ?? Array(jointPaths.indices)
         let binding = SkeletonBinding(
             device: device,
-            mesh: mesh,
             skeletonJointIndices: skeletonJointIndices,
             inverseBindMatrices: skeletonJointIndices.map { $0 >= 0 ? bindTransforms[$0].inverse * geometryBindTransform : geometryBindTransform },
             geometryBindTransform: geometryBindTransform
         )
-        binding.pose(jointTransforms: jointTransforms, skeletonWorld: anchor?.worldMatrix ?? matrix_identity_float4x4)
+        binding.pose(jointTransforms: jointTransforms)
         bindings.append(binding)
         return binding
     }

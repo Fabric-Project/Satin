@@ -34,14 +34,17 @@ extension MDLObject {
 }
 
 /// Binds each skinned mesh to its skeleton, making one `Skeleton` per skeleton and animation
-/// in the asset, anchored where its skeleton prim sits and posed at `startTime` (or its own
-/// animation's start) before binding, so palettes start still. `startPoseOnly` reads just that
-/// pose of each animation.
+/// in the asset, posed at `startTime` (or its own animation's start) before binding, so
+/// palettes start still. `startPoseOnly` reads just that pose of each animation.
+///
+/// Palettes are in skeleton space, so each skinned mesh moves to where its skeleton prim sits,
+/// with no transform of its own (UsdSkel ignores it); a skeleton the hierarchy does not hold
+/// sits at `root`. Moving the model, or anything holding the skeleton, moves the skin.
 ///
 /// As UsdSkel resolves it, a mesh's animation is the one its own binding names, else its
 /// skeleton's: files place `skel:animationSource` on either. Meshes sharing a skeleton but not
 /// an animation get separate `Skeleton`s.
-func bindSkeletons(record: AssetLoadRecord, device: MTLDevice, startTime: Double?, startPoseOnly: Bool) -> [Skeleton] {
+func bindSkeletons(record: AssetLoadRecord, root: Object, device: MTLDevice, startTime: Double?, startPoseOnly: Bool) -> [Skeleton] {
     var loaded: [(source: MDLSkeleton, animation: MDLPackedJointAnimation?, skeleton: Skeleton)] = []
 
     for (mesh, mdlMesh) in record.skinnedMeshes {
@@ -51,29 +54,31 @@ func bindSkeletons(record: AssetLoadRecord, device: MTLDevice, startTime: Double
         if let existing = loaded.first(where: { $0.source === mdlSkeleton && $0.animation === animation }) {
             skeleton = existing.skeleton
         } else {
-            skeleton = loadSkeleton(mdlSkeleton, animation: animation, anchor: record.skeletonAnchors[ObjectIdentifier(mdlSkeleton)],
-                                    startTime: startTime, startPoseOnly: startPoseOnly)
+            skeleton = loadSkeleton(mdlSkeleton, animation: animation, startTime: startTime, startPoseOnly: startPoseOnly)
             if let start = startTime ?? skeleton.timeRange?.lowerBound { skeleton.setTime(start) }
             loaded.append((mdlSkeleton, animation, skeleton))
         }
         let skeletonBinding = skeleton.bind(
             device: device,
-            mesh: mesh,
             jointPaths: binding.jointPaths,
             geometryBindTransform: floatMatrix(binding.geometryBindTransform)
         )
         mesh.geometry.jointPalette = skeletonBinding.palette
+
+        let skeletonSpace = record.skeletonAnchors[ObjectIdentifier(mdlSkeleton)] ?? root
+        mesh.removeFromParent()
+        skeletonSpace.add(mesh)
+        mesh.localMatrix = matrix_identity_float4x4
     }
     return loaded.map(\.skeleton)
 }
 
-func loadSkeleton(_ mdlSkeleton: MDLSkeleton, animation: MDLPackedJointAnimation?, anchor: Object?, startTime: Double?, startPoseOnly: Bool) -> Skeleton {
+func loadSkeleton(_ mdlSkeleton: MDLSkeleton, animation: MDLPackedJointAnimation?, startTime: Double?, startPoseOnly: Bool) -> Skeleton {
     Skeleton(
         jointPaths: mdlSkeleton.jointPaths,
         restTransforms: mdlSkeleton.jointRestTransforms.float4x4Array,
         bindTransforms: mdlSkeleton.jointBindTransforms.float4x4Array,
-        animation: animation.map { loadJointAnimation($0, startTime: startTime, startPoseOnly: startPoseOnly) },
-        anchor: anchor
+        animation: animation.map { loadJointAnimation($0, startTime: startTime, startPoseOnly: startPoseOnly) }
     )
 }
 

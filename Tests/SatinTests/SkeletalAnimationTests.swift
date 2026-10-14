@@ -79,8 +79,7 @@ final class SkeletalAnimationTests: XCTestCase {
         let bindPoses = [translation(0, 1, 0), translation(0, 2, 0) * rotation(.pi / 4, axis: [0, 0, 1])]
         var matrices: [simd_float4x4] = []
         SkeletonBinding.computeJointMatrices(&matrices, jointTransforms: bindPoses, skeletonJointIndices: [0, 1],
-                                             inverseBindMatrices: bindPoses.map(\.inverse), geometryBindTransform: matrix_identity_float4x4,
-                                             skeletonToGeometry: matrix_identity_float4x4)
+                                             inverseBindMatrices: bindPoses.map(\.inverse), geometryBindTransform: matrix_identity_float4x4)
         XCTAssertEqual(matrices.count, 3, "Two joints, then the rest joint")
         for matrix in matrices { assertEqual(matrix, matrix_identity_float4x4) }
     }
@@ -90,7 +89,7 @@ final class SkeletalAnimationTests: XCTestCase {
         // swings to (0, 2, 0).
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let skeleton = Skeleton(jointPaths: ["Joint"], restTransforms: [translation(0, 1, 0)], bindTransforms: [translation(0, 1, 0)])
-        let binding = skeleton.bind(device: device, mesh: nil, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
+        let binding = skeleton.bind(device: device, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
         skeleton.setLocalTransforms([translation(0, 1, 0) * rotation(.pi / 2, axis: [0, 0, 1])])
         skeleton.commitPose()
         let moved = binding.palette.joints[0].current * simd_float4(1, 1, 0, 1)
@@ -123,7 +122,7 @@ final class SkeletalAnimationTests: XCTestCase {
         )
         let skeleton = Skeleton(jointPaths: ["Root", "Root/Elbow"], restTransforms: [matrix_identity_float4x4, translation(0, 1, 0)],
                                 bindTransforms: [matrix_identity_float4x4, translation(0, 1, 0)], animation: animation)
-        let binding = skeleton.bind(device: device, mesh: nil, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
+        let binding = skeleton.bind(device: device, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
 
         // One frame: code moves Root, which the animation does not drive, the animation moves
         // Elbow, and one commit uploads both.
@@ -136,25 +135,6 @@ final class SkeletalAnimationTests: XCTestCase {
         assertEqual(binding.palette.joints[1].current, translation(5, 1, 0))
         assertEqual(binding.palette.joints[1].previous, matrix_identity_float4x4)
         assertEqual(binding.palette.joints[2].current, matrix_identity_float4x4, "The rest joint stays identity")
-    }
-
-    func testSkinFollowsTheSkeletonAnchorNotTheMesh() throws {
-        let context = try makeContext()
-        let anchor = Object(context: context, label: "Anchor")
-        let mesh = Object(context: context, label: "Mesh")
-        let skeleton = Skeleton(jointPaths: ["Joint"], restTransforms: [], bindTransforms: [], anchor: anchor)
-        let binding = skeleton.bind(device: context.device, mesh: mesh, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
-        func drawn() -> simd_float3 {
-            simd_make_float3(mesh.worldMatrix * binding.palette.joints[0].current * simd_float4(0.5, 0, 0, 1))
-        }
-
-        anchor.position = [10, 0, 0]
-        skeleton.commitPose()
-        assertEqual(drawn(), simd_float3(10.5, 0, 0))
-
-        mesh.position = [0, 5, 0]
-        skeleton.commitPose()
-        assertEqual(drawn(), simd_float3(10.5, 0, 0), "The mesh's own move does not carry skinned geometry")
     }
 
     func testMirroredObjectAnimationKeepsItsHandedness() throws {
@@ -171,20 +151,17 @@ final class SkeletalAnimationTests: XCTestCase {
     }
 
     func testUnweightedAndUnnamedJointsStayWithTheBoundSkin() throws {
-        // At rest, a weighted vertex lands at skeletonWorld × geometryBind × p; vertices on a
+        // At rest, a weighted vertex lands at geometryBind × p in skeleton space; vertices on a
         // joint the skeleton does not name, or on the rest joint, must land there too.
-        let context = try makeContext()
-        let anchor = Object(context: context, label: "Anchor")
-        let skeleton = Skeleton(jointPaths: ["Joint"], restTransforms: [], bindTransforms: [], anchor: anchor)
-        let binding = skeleton.bind(device: context.device, mesh: nil, jointPaths: ["Joint", "Missing"],
-                                    geometryBindTransform: translation(0, 3, 0))
-        anchor.position = [10, 0, 0]
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let skeleton = Skeleton(jointPaths: ["Joint"], restTransforms: [], bindTransforms: [])
+        let binding = skeleton.bind(device: device, jointPaths: ["Joint", "Missing"], geometryBindTransform: translation(0, 3, 0))
         skeleton.commitPose()
 
         let point = simd_float4(1, 0, 0, 1)
-        assertEqual(simd_make_float3(binding.palette.joints[0].current * point), simd_float3(11, 3, 0))
-        assertEqual(simd_make_float3(binding.palette.joints[1].current * point), simd_float3(11, 3, 0), "Unnamed joint")
-        assertEqual(simd_make_float3(binding.palette.joints[binding.restJointIndex].current * point), simd_float3(11, 3, 0), "Rest joint")
+        assertEqual(simd_make_float3(binding.palette.joints[0].current * point), simd_float3(1, 3, 0))
+        assertEqual(simd_make_float3(binding.palette.joints[1].current * point), simd_float3(1, 3, 0), "Unnamed joint")
+        assertEqual(simd_make_float3(binding.palette.joints[binding.restJointIndex].current * point), simd_float3(1, 3, 0), "Rest joint")
     }
 
     // MARK: - Loading
@@ -198,10 +175,17 @@ final class SkeletalAnimationTests: XCTestCase {
         XCTAssertEqual(animation.objectAnimation?.objects.map(\.label).sorted(), ["Holder", "Rig"])
         let mesh = try XCTUnwrap(loaded.root.getChildren().compactMap { $0 as? Mesh }.first)
 
+        XCTAssertEqual(mesh.parent?.label, "Skeleton", "The skin sits where its skeleton does")
+        assertEqual(mesh.localMatrix, matrix_identity_float4x4)
+
         animation.setTime(0)
         assertPosed(mesh, [[0.5, 0, 0]: [0.5, 0, 0]])
         animation.setTime(1)
         assertPosed(mesh, [[0.5, 0, 0]: [10.5, 0, 0]])
+
+        // Moving the model moves the skin, with no new pose.
+        loaded.root.position = [0, 0, 5]
+        assertPosed(mesh, [[0.5, 0, 0]: [10.5, 0, 5]])
     }
 
     func testStaticLoadingReadsOnlyTheStartPose() throws {

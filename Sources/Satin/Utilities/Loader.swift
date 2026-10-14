@@ -16,7 +16,8 @@ import SatinCore
 
 /// A loaded model with everything in it that moves over time.
 public struct LoadedAsset {
-    /// The model's hierarchy, as the file lays it out.
+    /// The model's hierarchy, as the file lays it out, except that skinned meshes sit where
+    /// their skeletons do.
     public let root: Object
     /// Its skeletons and animated objects on one clock; nil when nothing in it moves.
     public let animation: AssetAnimation?
@@ -24,8 +25,11 @@ public struct LoadedAsset {
 
 /// Loads a model with its hierarchy and animation: skinned meshes bound to their skeletons,
 /// and animated objects. Posed at the start of its animation.
-public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> LoadedAsset {
-    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false)
+///
+/// `instanced` loads each mesh as an `InstancedMesh` of one instance, where it sits, to draw
+/// the model several times; instance matrices apply in each mesh's own space.
+public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, instanced: Bool = false) -> LoadedAsset {
+    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false, instanced: instanced)
 }
 
 /// Loads a model as its meshes, each placed by its world transform, posed at the start of its
@@ -39,36 +43,38 @@ struct AssetLoadRecord {
     var skinnedMeshes: [(mesh: Mesh, mdlMesh: MDLMesh)] = []
     var animatedObjects: [(object: Object, mdlObject: MDLObject)] = []
     /// The object standing for each skeleton prim, by its ModelIO object: where that
-    /// skeleton's space sits in the scene.
+    /// skeleton's space sits in the scene, and so where its skinned meshes go.
     var skeletonAnchors: [ObjectIdentifier: Object] = [:]
 }
 
 /// The model's hierarchy and animation, posed at its start. `startPoseOnly` reads just that
 /// pose, for a model that will not be animated.
-func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool) -> LoadedAsset {
+func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool, instanced: Bool = false) -> LoadedAsset {
     let asset = MDLAsset(url: url)
     if textureLoader != nil { asset.loadTextures() }
 
     let root = Object(context: context, label: url.deletingPathExtension().lastPathComponent)
     var record = AssetLoadRecord()
     loadAssetChildren(parent: root, children: (0 ..< asset.count).map { asset.object(at: $0) }, context: context,
-                      textureLoader: textureLoader, record: &record)
+                      textureLoader: textureLoader, instanced: instanced, record: &record)
 
     let assetTimeRange = asset.endTime > asset.startTime ? asset.startTime ... asset.endTime : nil
-    // Objects first: skeletons bind where their anchors and meshes sit at the start.
+    // Objects first: animated objects take their start pose before skeletons take theirs.
     let objectAnimation = loadObjectAnimation(animatedObjects: record.animatedObjects, asset: asset,
                                               startTime: assetTimeRange?.lowerBound, startPoseOnly: startPoseOnly)
     if let objectAnimation, let start = assetTimeRange?.lowerBound ?? objectAnimation.timeRange?.lowerBound {
         objectAnimation.setTime(start)
     }
-    let skeletons = bindSkeletons(record: record, device: context.device, startTime: assetTimeRange?.lowerBound, startPoseOnly: startPoseOnly)
+    let skeletons = bindSkeletons(record: record, root: root, device: context.device, startTime: assetTimeRange?.lowerBound, startPoseOnly: startPoseOnly)
     guard !skeletons.isEmpty || objectAnimation != nil else { return LoadedAsset(root: root, animation: nil) }
     return LoadedAsset(root: root, animation: AssetAnimation(skeletons: skeletons, objectAnimation: objectAnimation, timeRange: assetTimeRange))
 }
 
-func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?) -> Mesh {
+func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?, instanced: Bool) -> Mesh {
     let geometry = Geometry(context: context)
-    let stnMesh = Mesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil)
+    let stnMesh = instanced
+        ? InstancedMesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil, count: 1)
+        : Mesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil)
     stnMesh.cullMode = .none
 
     // 0.1 appears to fix USD import issues with parts of sponza model...
@@ -261,11 +267,11 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
 }
 
 func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, textureLoader: MTKTextureLoader?,
-                       record: inout AssetLoadRecord) {
+                       instanced: Bool, record: inout AssetLoadRecord) {
     for child in children {
         let object: Object
         if let mdlMesh = child as? MDLMesh {
-            let mesh = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader)
+            let mesh = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader, instanced: instanced)
             if mdlMesh.skeletonBinding != nil { record.skinnedMeshes.append((mesh, mdlMesh)) }
             object = mesh
         }
@@ -276,9 +282,13 @@ func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, 
 
         if let transform = child.transform {
             object.localMatrix = transform.matrix
-            if transform.keyTimes.count > 1 { record.animatedObjects.append((object, child)) }
+            // A skinned mesh's own transform does not place its skin (UsdSkel): it moves to its
+            // skeleton when bound, so nothing animates it.
+            let isSkinned = (child as? MDLMesh)?.skeletonBinding != nil
+            if transform.keyTimes.count > 1, !isSkinned { record.animatedObjects.append((object, child)) }
         }
         parent.add(object)
-        loadAssetChildren(parent: object, children: child.children.objects, context: context, textureLoader: textureLoader, record: &record)
+        loadAssetChildren(parent: object, children: child.children.objects, context: context, textureLoader: textureLoader,
+                          instanced: instanced, record: &record)
     }
 }
