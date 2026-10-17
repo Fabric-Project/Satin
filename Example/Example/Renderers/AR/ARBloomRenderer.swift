@@ -94,8 +94,6 @@ final class ARBloomRenderer: BaseRenderer {
 
     lazy var bloomedScene = Object(context: defaultContext, label: "Bloomed Objects")
 
-    lazy var startTime = getTime()
-
     lazy var postContext = Context(device: device, sampleCount: 1, colorPixelFormat: colorPixelFormat)
 
     lazy var postMaterial: BloomMaterial = {
@@ -134,6 +132,10 @@ final class ARBloomRenderer: BaseRenderer {
         )
     }
 
+    override func update(frame: FrameTime) throws {
+        postMaterial.time = Float(frame.time)
+    }
+
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
             renderPassDescriptor: renderPassDescriptor,
@@ -162,7 +164,6 @@ final class ARBloomRenderer: BaseRenderer {
 
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
-        postMaterial.time = Float(getTime() - startTime)
 
         postProcessor.renderer.colorLoadAction = .load
 

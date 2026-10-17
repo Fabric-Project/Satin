@@ -99,9 +99,6 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private var previousPosition: simd_float2 = .zero
 
-    private var deltaTime: Float = .zero
-    private lazy var previousTime: TimeInterval = getTime()
-
 #if os(macOS)
 
     private var leftMouseDownHandler: Any?
@@ -154,16 +151,14 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     // MARK: - Update
 
-    public func update() {
-        updateTime()
-
+    public func update(frame: FrameTime) {
         guard state == .tweening else { return }
 
         var changed = false
 
-        changed = changed || tweenTranslation()
-        changed = changed || tweenZoom()
-        changed = changed || tweenRotation()
+        changed = changed || tweenTranslation(deltaTime: frame.deltaTime)
+        changed = changed || tweenZoom(deltaTime: frame.deltaTime)
+        changed = changed || tweenRotation(deltaTime: frame.deltaTime)
 
         if !changed { state = .inactive }
     }
@@ -412,10 +407,14 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         return (azimuthAngle, elevationAngle)
     }
 
-    private func tweenRotation() -> Bool {
+    // Each tween applies the distance its velocity travels over `deltaTime`, then keeps what
+    // remains of it.
+
+    private func tweenRotation(deltaTime: TimeInterval) -> Bool {
         guard oldState == .rotating, simd_length(rotationDelta) > 0.001 else { return false }
-        rotationDelta *= rotationDamping
-        updateRotation(delta: rotationDelta)
+        let step = dampedTweenStep(damping: rotationDamping, deltaTime: deltaTime)
+        updateRotation(delta: rotationDelta * step.travelled)
+        rotationDelta *= step.remaining
         return true
     }
 
@@ -425,10 +424,13 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         onChangePublisher.send(self)
     }
 
-    private func tweenZoom() -> Bool {
+    private func tweenZoom(deltaTime: TimeInterval) -> Bool {
         guard oldState == .zooming, abs(zoom) > 0.001 else { return false }
-        zoom *= zoomDamping
+        let step = dampedTweenStep(damping: zoomDamping, deltaTime: deltaTime)
+        let velocity = zoom
+        zoom = velocity * step.travelled
         updateZoom()
+        zoom = velocity * step.remaining
         return true
     }
 
@@ -439,10 +441,13 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         onChangePublisher.send(self)
     }
 
-    private func tweenTranslation() -> Bool {
+    private func tweenTranslation(deltaTime: TimeInterval) -> Bool {
         guard oldState == .panning || oldState == .dollying, simd_length(translation) > 0.001 else { return false }
-        translation *= translationDamping
+        let step = dampedTweenStep(damping: translationDamping, deltaTime: deltaTime)
+        let velocity = translation
+        translation = velocity * step.travelled
         updateTranslation()
+        translation = velocity * step.remaining
         return true
     }
 
@@ -897,14 +902,4 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     }
 
 #endif
-
-    private func getTime() -> TimeInterval {
-        return CFAbsoluteTimeGetCurrent()
-    }
-
-    private func updateTime() {
-        let currentTime = getTime()
-        deltaTime = Float(currentTime - previousTime)
-        previousTime = currentTime
-    }
 }

@@ -63,9 +63,8 @@ final class TessellationRenderer: BaseRenderer {
         tessWireMesh.material?.set("Color", [1.0, 1.0, 1.0, 0.33])
     }
 
-    lazy var startTime = getTime()
-    override func update() throws {
-        let currentTime = getTime() - startTime
+    override func update(frame: FrameTime) throws {
+        let currentTime = frame.time
         let osc = Float(sin(currentTime)) * 0.5
 
         tessWireMesh.material?.set("Amplitude", osc)
@@ -77,7 +76,7 @@ final class TessellationRenderer: BaseRenderer {
         tessellator.set("Edge Tessellation Factor", abs(oscEdge) * 16.0)
         tessellator.set("Inside Tessellation Factor", abs(oscInsider) * 16.0)
 
-        cameraController.update()
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

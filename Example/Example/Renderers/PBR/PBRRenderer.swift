@@ -71,7 +71,6 @@ final class PBRRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 6.0, 40.0], near: 0.001, far: 1000.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
-    lazy var startTime = getTime()
 
     var animatedLights: [AnimatedPointLight] = []
 
@@ -184,8 +183,8 @@ final class PBRRenderer: BaseRenderer {
         }
     }
 
-    override func update() throws {
-        let time = Float(getTime() - startTime)
+    override func update(frame: FrameTime) throws {
+        let time = Float(frame.time)
         for animatedLight in animatedLights {
             let orbitTime = time * animatedLight.speed + animatedLight.phase
             var position = animatedLight.basePosition
@@ -195,7 +194,7 @@ final class PBRRenderer: BaseRenderer {
             animatedLight.light.position = position
         }
 
-        cameraController.update()
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

@@ -49,7 +49,6 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
     )
     lazy var postMaterial = PostMaterial(context: postContext, pipelinesURL: pipelinesURL)
 
-    lazy var startTime = getTime()
     lazy var scene = Object(context: defaultContext, label: "Scene", [background, floor, mesh])
 
     var renderTexture: MTLTexture?
@@ -98,8 +97,8 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
 #endif
     }
 
-    override func update() throws {
-        let theta = Float(getTime() - startTime)
+    override func update(frame: FrameTime) throws {
+        let theta = Float(frame.time)
         mesh.orientation = simd_quatf(angle: theta * 0.75, axis: simd_normalize(simd_make_float3(sin(theta), cos(theta), 1.0)))
     }
 

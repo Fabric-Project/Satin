@@ -340,8 +340,6 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         material: postMaterial
     )
 
-    lazy var startTime = getTime()
-
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
     override init(context:Context) {
@@ -384,9 +382,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         )
     }
 
-    override func update() throws {
-        let time = getTime() - startTime
-        model.orientation = simd_quatf(angle: Float(time), axis: Satin.worldUpDirection)
+    override func update(frame: FrameTime) throws {
+        model.orientation = simd_quatf(angle: Float(frame.time), axis: Satin.worldUpDirection)
+        postMaterial.time = Float(frame.time)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
@@ -425,7 +423,6 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         postMaterial.depthMaskTexture = featheredDepthMaskTexture
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
-        postMaterial.time = Float(getTime() - startTime)
 
         postProcessor.draw(
             renderPassDescriptor: renderPassDescriptor,

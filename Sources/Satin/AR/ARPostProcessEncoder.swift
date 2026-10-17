@@ -21,6 +21,15 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         }
     }
 
+    /// Seconds that drive the camera grain: set it from the frame's time each frame.
+    public var time: TimeInterval = 0 {
+        didSet {
+            if let material = mesh.material as? ARPostMaterial {
+                material.time = time
+            }
+        }
+    }
+
     var session: ARSession
 
     public init(label: String, context: Context, session: ARSession) {

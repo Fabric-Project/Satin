@@ -132,7 +132,6 @@ final class SSGIProjectorRenderer: BaseRenderer {
     )
 
     private lazy var textureLoader = MTKTextureLoader(device: device)
-    private lazy var startTime = getTime()
 
     override func setup() throws {
         loadHdri()
@@ -147,12 +146,12 @@ final class SSGIProjectorRenderer: BaseRenderer {
         try super.setup()
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
 
         let projectorMotion = appParams.get("Projector Motion", as: FloatParameter.self)?.value ?? 1.0
         let objectMotion = appParams.get("Object Motion", as: FloatParameter.self)?.value ?? 1.0
-        let time = Float(getTime() - startTime)
+        let time = Float(frame.time)
         let projectorTheta = time * 0.48 * projectorMotion
         let objectTheta = time * 0.48 * objectMotion
 

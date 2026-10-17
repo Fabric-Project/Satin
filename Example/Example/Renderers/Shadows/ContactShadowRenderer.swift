@@ -143,12 +143,11 @@ final class ContactShadowRenderer: BaseRenderer {
         floorMesh.material?.blending = .alpha
     }
 
-    lazy var startTime = getTime()
     var theta: Float = 0
 
-    override func update() throws {
-        theta = 2.0 * Float(getTime() - startTime)
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        theta = 2.0 * Float(frame.time)
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

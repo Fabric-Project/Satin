@@ -81,11 +81,12 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         }
     }
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
         if _updateTextures {
             backgroundTexture = createTexture("Background Texture", colorPixelFormat)
             _updateTextures = false
         }
+        compositor.time = frame.time
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

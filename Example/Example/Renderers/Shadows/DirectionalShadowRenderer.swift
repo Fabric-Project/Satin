@@ -69,12 +69,10 @@ final class DirectionalShadowRenderer: BaseRenderer {
         camera.lookAt(target: shadowScene.sceneTarget)
     }
 
-    lazy var startTime = getTime()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
 
-    override func update() throws {
-        cameraController.update()
-
-        let time = getTime() - startTime
+        let time = frame.time
         var theta = Float(time)
         let radius: Float = 5.0
 

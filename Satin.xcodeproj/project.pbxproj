@@ -105,6 +105,7 @@
 		5A1E0000000000000000001B /* AssetAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000B /* AssetAnimation.swift */; };
 		5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000A /* ObjectAnimation.swift */; };
 		5A1E00000000000000000019 /* TimeDriven.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000009 /* TimeDriven.swift */; };
+		7F1A00000000000000000002 /* FrameTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000001 /* FrameTime.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
 		E101A8C62C070E8E0055FABA /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7C2C06A24B00B5A6C8 /* Object.swift */; };
@@ -370,6 +371,7 @@
 		5A1E0000000000000000000B /* AssetAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AssetAnimation.swift; sourceTree = "<group>"; };
 		5A1E0000000000000000000A /* ObjectAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ObjectAnimation.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000009 /* TimeDriven.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimeDriven.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000001 /* FrameTime.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameTime.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
 		66D7DD7C2C06A24B00B5A6C8 /* Object.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
@@ -774,6 +776,7 @@
 				5A1E0000000000000000000B /* AssetAnimation.swift */,
 				5A1E0000000000000000000A /* ObjectAnimation.swift */,
 				5A1E00000000000000000009 /* TimeDriven.swift */,
+				7F1A00000000000000000001 /* FrameTime.swift */,
 				5A1E00000000000000000006 /* SkeletonBinding.swift */,
 				66D7DD7C2C06A24B00B5A6C8 /* Object.swift */,
 				66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */,
@@ -1457,6 +1460,7 @@
 				5A1E0000000000000000001B /* AssetAnimation.swift in Sources */,
 				5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */,
 				5A1E00000000000000000019 /* TimeDriven.swift in Sources */,
+				7F1A00000000000000000002 /* FrameTime.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,
 				E101A8C62C070E8E0055FABA /* Object.swift in Sources */,

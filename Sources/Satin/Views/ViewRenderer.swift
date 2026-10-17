@@ -109,11 +109,13 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
 
     // MARK: - ViewRendererDelegate
 
-    func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable) {
+    func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable, hostTime: TimeInterval, presentationHostTime: TimeInterval?) {
         guard isSetup, let commandBuffer = preDraw() else { return }
 
+        let frame = advanceFrameTime(hostTime: hostTime, presentationHostTime: presentationHostTime)
+
         do {
-            try update()
+            try update(frame: frame)
             try draw(texture: drawable.texture, commandBuffer: commandBuffer)
             postDraw(drawable: drawable, commandBuffer: commandBuffer)
         } catch {

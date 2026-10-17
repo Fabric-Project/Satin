@@ -73,7 +73,6 @@ final class PBRMRTRenderer: BaseRenderer {
     private var sceneBounds = Bounds()
     private lazy var textureLoader = MTKTextureLoader(device: device)
 
-    private lazy var startTime = getTime()
     private lazy var sceneRenderer: RenderEncoder = {
         let renderer = RenderEncoder(
             label: "PBR MRT Scene RenderEncoder",
@@ -218,13 +217,13 @@ final class PBRMRTRenderer: BaseRenderer {
         try super.setup()
     }
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
         
-        let time = Float(getTime() - startTime)
+        let time = Float(frame.time)
         let theta = time * 0.2
 
-//        model?.orientation = simd_quatf(angle: Float(getTime() - startTime) * 0.5, axis: worldUpDirection)
-        cameraController.update()
+//        model?.orientation = simd_quatf(angle: Float(frame.time) * 0.5, axis: worldUpDirection)
+        cameraController.update(frame: frame)
         
         lightHolder.orientation = simd_quatf(angle: theta, axis: Satin.worldUpDirection)
         lightHolder.position = simd_make_float3(

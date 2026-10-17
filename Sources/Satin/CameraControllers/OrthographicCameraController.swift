@@ -123,7 +123,7 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     // MARK: - Update
 
-    public func update() {
+    public func update(frame: FrameTime) {
         setup()
     }
 

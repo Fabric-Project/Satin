@@ -162,12 +162,11 @@ final class PoissonRenderer: BaseRenderer {
     func generateSamplesViaSwift() {
         let rect = Rectangle(min: .init(-100, -100), max: .init(100, 100))
         // Usage
-        let startTime = getTime()
+        let clock = ContinuousClock()
+        let calculationStart = clock.now
         var sampler = PoissonDiskSampler(rect: rect, minDistance: 4, k: 30)
         let samples = sampler.generateSamples()
-        let endTime = getTime()
-        let deltaTime = (endTime - startTime) * 1000.0
-        print("Swift Calculation Time: \(deltaTime) ms")
+        print("Swift Calculation Time: \(clock.now - calculationStart)")
 
         var points = [simd_float3]()
         points.reserveCapacity(samples.count)
@@ -190,11 +189,10 @@ final class PoissonRenderer: BaseRenderer {
     func generateSamplesViaCpp(color: simd_float4) {
         let rect = Rectangle(min: .init(-100, -100), max: .init(100, 100))
         // Usage
-        let startTime = getTime()
+        let clock = ContinuousClock()
+        let calculationStart = clock.now
         var points2D = generatePoissonDiskSamples(rect, 4, 30)
-        let endTime = getTime()
-        let deltaTime = (endTime - startTime) * 1000.0
-        print("C++ Calculation Time: \(deltaTime) ms")
+        print("C++ Calculation Time: \(clock.now - calculationStart)")
 
         var points = [simd_float3]()
         points.reserveCapacity(Int(points2D.count))
@@ -216,8 +214,8 @@ final class PoissonRenderer: BaseRenderer {
         freePoints2D(&points2D)
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

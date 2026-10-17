@@ -108,7 +108,6 @@ final class ParametricSurfacesRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 1.25, 7.5], near: 0.01, far: 200.0, fov: 32.0)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
-    lazy var startTime = getTime()
 
     override func setup() throws {
         renderer.clearColor = .init(red: 0.1, green: 0.11, blue: 0.13, alpha: 1.0)
@@ -490,10 +489,10 @@ final class ParametricSurfacesRenderer: BaseRenderer {
         shapeParams.get(label, as: FloatParameter.self)?.value ?? value
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
 
-        let theta = Float(getTime() - startTime)
+        let theta = Float(frame.time)
         let spin = simd_quatf(angle: theta * 0.32, axis: Satin.worldUpDirection)
         let tilt = simd_quatf(angle: sin(theta * 0.45) * 0.18, axis: simd_normalize([0.6, 0.0, 0.8]))
         mesh.orientation = spin * tilt * baseOrientation
