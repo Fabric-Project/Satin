@@ -31,8 +31,8 @@ public class ARPostMaterial: Material {
         }
     }
 
-    private lazy var startTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
-    private var time: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    /// Seconds that drive the camera grain, set by the owner from the frame's time.
+    public var time: TimeInterval = 0
 
     init(context: Context, contentTexture: MTLTexture? = nil, cameraGrainTexture: MTLTexture? = nil) {
         self.contentTexture = contentTexture
@@ -59,7 +59,6 @@ public class ARPostMaterial: Material {
     }
 
     override public func update() {
-        time = CFAbsoluteTimeGetCurrent() - startTime
         set("Time", Float(time))
         if let cameraGrainTexture {
             set("Grain Size", simd_make_float2(Float(cameraGrainTexture.width), Float(cameraGrainTexture.height)))

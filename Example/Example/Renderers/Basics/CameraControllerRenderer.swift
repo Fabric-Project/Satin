@@ -79,8 +79,8 @@ final class CameraControllerRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
         targetMesh.orientation = cameraController.camera.worldOrientation.inverse
     }
 

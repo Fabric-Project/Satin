@@ -33,15 +33,19 @@ public final class Tween {
     private var _onPingPongComplete: (() -> ())?
 
     private var firstTime: Bool = true
-    private var delay: CFTimeInterval = 0.0
-    private var duration: CFTimeInterval = 0.0
-    private var startTime: CFTimeInterval = 0.0 {
+    private var delay: TimeInterval = 0.0
+    private var duration: TimeInterval = 0.0
+    /// The time progress counts from, on the timeline `update(time:)` is given. Nil until the
+    /// next update anchors it at that update's time plus `startTimeOffset`.
+    private var startTime: TimeInterval? {
         didSet {
             lastDeltaTime = -1.0
         }
     }
 
-    private var lastDeltaTime: CFTimeInterval = 0.0
+    private var startTimeOffset: TimeInterval = 0.0
+
+    private var lastDeltaTime: TimeInterval = 0.0
 
     init(duration: Double) {
         self.duration = duration
@@ -53,14 +57,21 @@ public final class Tween {
         return start()
     }
 
+    /// Starts on the next update.
     public func start() -> Tween {
+        start(anchoredAt: nil)
+    }
+
+    /// Starts at `time`, or on the next update when nil.
+    private func start(anchoredAt time: TimeInterval?) -> Tween {
         if complete {
             Tweener.append(self)
         }
         tweening = true
         complete = false
-        startTime = CFAbsoluteTimeGetCurrent() + ((firstTime || delayOnLoop || (delayOnPingPong && !pingPongState)) ? delay : 0.0)
-        updateProgress()
+        let startDelay = (firstTime || delayOnLoop || (delayOnPingPong && !pingPongState)) ? delay : 0.0
+        anchorStart(at: time, offset: startDelay)
+        progress = -startDelay / duration
         _onStart?()
         firstTime = false
         return self
@@ -132,20 +143,19 @@ public final class Tween {
         }
         else {
             tweening = true
-            startTime = CFAbsoluteTimeGetCurrent() - progress * duration
+            anchorStart(at: nil, offset: -progress * duration)
         }
         _onPlay?()
         return self
     }
 
+    /// Pauses at the progress of the last update.
     public func pause() {
-        updateProgress()
         tweening = false
         _onPause?()
     }
 
     public func stop() {
-        updateProgress()
         tweening = false
         _onStop?()
         progress = 0.0
@@ -195,9 +205,19 @@ public final class Tween {
         return progress
     }
 
-    func updateProgress() {
+    /// Anchors `startTime` `offset` seconds after `time`, or after the next update's time when nil.
+    private func anchorStart(at time: TimeInterval?, offset: TimeInterval) {
+        startTimeOffset = offset
+        startTime = time.map { $0 + offset }
+    }
+
+    func updateProgress(time: TimeInterval) {
         guard tweening else { return }
-        let deltaTime = (CFAbsoluteTimeGetCurrent() - startTime)
+        let startTime = self.startTime ?? time + startTimeOffset
+        if self.startTime == nil {
+            self.startTime = startTime
+        }
+        let deltaTime = time - startTime
         if deltaTime >= 0.0, lastDeltaTime < 0.0 {
             _onTweenStart?()
         }
@@ -205,8 +225,9 @@ public final class Tween {
         progress = deltaTime / duration
     }
 
-    func update() -> Bool {
-        updateProgress()
+    /// Advances to `time`, in seconds on the caller's timeline, and returns whether the tween is complete.
+    func update(time: TimeInterval) -> Bool {
+        updateProgress(time: time)
 
         guard tweening, progress >= 0.0 else { return complete }
 
@@ -252,7 +273,7 @@ public final class Tween {
             }
 
             if restart {
-                _ = start()
+                _ = start(anchoredAt: time)
             }
         }
 

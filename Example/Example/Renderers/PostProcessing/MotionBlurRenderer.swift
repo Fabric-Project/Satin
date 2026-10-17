@@ -101,7 +101,6 @@ final class MotionBlurRenderer: BaseRenderer {
     ]
 
     private var time: Float = 0.0
-    private var lastTime: CFAbsoluteTime = 0
 
     // MARK: - Lifecycle
 
@@ -114,12 +113,9 @@ final class MotionBlurRenderer: BaseRenderer {
         try super.setup()
     }
 
-    override func update() throws {
-        cameraController.update()
-        let now = getTime()
-        let dt = lastTime > 0 ? Float(now - lastTime) : 1.0 / 60.0
-        lastTime = now
-        time += dt
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
+        time += Float(frame.deltaTime)
         for (index, group) in orbitalGroups.enumerated() {
             let angularSpeed = appParams.get(ringSpeedParameterName(index), as: FloatParameter.self)?.value ?? ringParams[index].speed
             group.pivot.orientation = simd_quatf(angle: angularSpeed * time, axis: [0, 1, 0])

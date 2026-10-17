@@ -104,7 +104,7 @@ final class BloomRenderer: BaseRenderer {
 
     lazy var bloomGenerator = BloomGenerator(device: device, levels: 5)
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
         if size.x != Int(metalView.drawableSize.width) || size.y != Int(metalView.drawableSize.height) {
             renderTexture = createTexture(
                 "Render Texture",
@@ -116,7 +116,7 @@ final class BloomRenderer: BaseRenderer {
             size = simd_make_int2(Int32(Int(metalView.drawableSize.width)), Int32(metalView.drawableSize.height))
         }
 
-        cameraController.update()
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

@@ -27,7 +27,6 @@ final class InstancedMeshRenderer: BaseRenderer {
 
     // MARK: - Properties
 
-    lazy var startTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
     let dim = 7
 
     override func setup() throws {
@@ -59,7 +58,7 @@ final class InstancedMeshRenderer: BaseRenderer {
         self.instancedMesh = instancedMesh
 
         scene.add(container)
-        updateInstances(getTime())
+        updateInstances(0.0)
     }
 
     func updateInstances(_ time: Float) {
@@ -83,16 +82,13 @@ final class InstancedMeshRenderer: BaseRenderer {
         }
     }
 
-    func getTime() -> Float {
-        return Float(CFAbsoluteTimeGetCurrent() - startTime)
-    }
-
-    override func update() throws {
-        cameraController.update()
-        updateInstances(getTime())
-        container.position = [2.0 * sin(getTime()), 0.0, 0.0]
-        container.scale = .init(repeating: 1.0 + abs(cos(getTime())))
-        container.orientation = .init(angle: cos(getTime()) * .pi, axis: simd_normalize(.one))
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
+        let time = Float(frame.time)
+        updateInstances(time)
+        container.position = [2.0 * sin(time), 0.0, 0.0]
+        container.scale = .init(repeating: 1.0 + abs(cos(time)))
+        container.orientation = .init(angle: cos(time) * .pi, axis: simd_normalize(.one))
 
         camera.update()
     }

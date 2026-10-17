@@ -32,8 +32,6 @@ final class PointShadowRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    lazy var startTime = getTime()
-
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
@@ -76,10 +74,10 @@ final class PointShadowRenderer: BaseRenderer {
         light1.add(lightHelperMesh1)
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
 
-        let time = Float(getTime() - startTime)
+        let time = Float(frame.time)
         let theta = time * 0.8
 
         shadowScene.update(time: theta)

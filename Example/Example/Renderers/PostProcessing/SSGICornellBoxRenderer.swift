@@ -180,8 +180,8 @@ final class SSGICornellBoxRenderer: BaseRenderer {
         try super.setup()
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        cameraController.update(frame: frame)
 
         ssgiPostProcessEncoder.resolutionScale = appParams.get("SSGI Resolution", as: FloatParameter.self)?.value ?? 1.0
 

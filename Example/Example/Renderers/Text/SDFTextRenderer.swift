@@ -48,11 +48,9 @@ final class SDFTextRenderer: BaseRenderer {
 #endif
     }
 
-    private var frame: Int = 0
-    override func update() throws {
-        textMesh.text = "Satin 2.0\nframe: \(frame)"
-        frame += 1
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        textMesh.text = "Satin 2.0\nframe: \(frame.frameNumber)"
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

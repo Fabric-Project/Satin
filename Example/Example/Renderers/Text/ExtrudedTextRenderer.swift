@@ -68,11 +68,9 @@ final class ExtrudedTextRenderer: BaseRenderer {
         }
     }
 
-    private var frame: Int = 0
-    override func update() throws {
-        geo?.text = "Satin 2.0\nframe: \(frame)"
-        frame += 1
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        geo?.text = "Satin 2.0\nframe: \(frame.frameNumber)"
+        cameraController.update(frame: frame)
     }
 
 

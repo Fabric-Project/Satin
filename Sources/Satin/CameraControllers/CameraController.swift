@@ -29,7 +29,7 @@ public protocol CameraController {
 
     var state: CameraControllerState { get }
 
-    func update()
+    func update(frame: FrameTime)
     func enable()
     func disable()
     func reset()
@@ -66,3 +66,14 @@ func cameraControllerShouldBeginInteraction(_ event: NSEvent, view: MetalView, o
     return true
 }
 #endif
+
+/// A damped tween's step over `deltaTime`, played out as if updated once a frame at 60 Hz, where
+/// each frame multiplies the velocity by `damping` and then moves by it. `remaining` is the
+/// velocity left afterwards and `travelled` how far it moved meanwhile, both as multiples of the
+/// starting velocity, so a tween covers the same ground in the same time at any frame rate.
+func dampedTweenStep(damping: Float, deltaTime: TimeInterval) -> (remaining: Float, travelled: Float) {
+    let framesAt60Hz = Float(deltaTime * 60)
+    let remaining = pow(damping, framesAt60Hz)
+    let travelled = damping == 1 ? framesAt60Hz : damping * (1 - remaining) / (1 - damping)
+    return (remaining, travelled)
+}
