@@ -114,6 +114,8 @@ final class MotionBlurRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
         time += Float(frame.deltaTime)
         for (index, group) in orbitalGroups.enumerated() {

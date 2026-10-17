@@ -70,6 +70,8 @@ final class DirectionalShadowRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
 
         let time = frame.time

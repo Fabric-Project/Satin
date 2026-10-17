@@ -133,6 +133,8 @@ final class ARBloomRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         postMaterial.time = Float(frame.time)
     }
 

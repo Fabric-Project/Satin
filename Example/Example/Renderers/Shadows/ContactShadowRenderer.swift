@@ -146,6 +146,8 @@ final class ContactShadowRenderer: BaseRenderer {
     var theta: Float = 0
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         theta = 2.0 * Float(frame.time)
         cameraController.update(frame: frame)
     }

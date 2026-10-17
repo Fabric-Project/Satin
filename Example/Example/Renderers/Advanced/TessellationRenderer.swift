@@ -64,6 +64,8 @@ final class TessellationRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         let currentTime = frame.time
         let osc = Float(sin(currentTime)) * 0.5
 

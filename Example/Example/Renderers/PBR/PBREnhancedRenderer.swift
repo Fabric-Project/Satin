@@ -191,6 +191,8 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         let time = Float(frame.time)
         for animatedLight in animatedLights {
             let orbitTime = time * animatedLight.speed + animatedLight.phase

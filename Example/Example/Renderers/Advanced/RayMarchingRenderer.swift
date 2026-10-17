@@ -43,6 +43,8 @@ final class RayMarchingRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
     }
 

@@ -105,6 +105,8 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         mesh.orientation = simd_quatf(angle: Float(frame.time), axis: simd_normalize(simd_float3.one))
     }
 

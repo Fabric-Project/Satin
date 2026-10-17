@@ -50,6 +50,8 @@ final class LiveCodeRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         // Uniforms are parsed and title cases, i.e. time -> Time, appResolution -> App Resolution, etc
         if let material = mesh.material {
             material.set("Time", Float(frame.time))
