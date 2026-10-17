@@ -8,151 +8,55 @@ import AppKit
 import UIKit
 #endif
 
-public final class Tweener: Sendable {
-    static let shared = Tweener()
+/// Owns a set of tweens on one timeline. Whatever drives rendering keeps its own `Tweener` and
+/// calls `update(frame:)` once per frame, so tweens follow that driver's frame time and no other.
+public final class Tweener {
+    private var tweens: [Tween] = []
 
-    private nonisolated(unsafe) static var tweens: [Tween] = []
-    private nonisolated(unsafe) static var paused: Bool = true
+    public init() {}
 
-    #if os(macOS)
-
-    private nonisolated(unsafe) static var displayLink: CVDisplayLink?
-
-    private class func setupDisplayLink() {
-        if Tweener.displayLink == nil {
-            var cvReturn = CVDisplayLinkCreateWithActiveCGDisplays(&Tweener.displayLink)
-
-            assert(cvReturn == kCVReturnSuccess)
-
-            cvReturn = CVDisplayLinkSetOutputCallback(
-                Tweener.displayLink!,
-                Tweener.displayLoop,
-                Unmanaged.passUnretained(Tweener.shared).toOpaque()
-            )
-
-            assert(cvReturn == kCVReturnSuccess)
-
-            cvReturn = CVDisplayLinkSetCurrentCGDisplay(Tweener.displayLink!, CGMainDisplayID())
-
-            assert(cvReturn == kCVReturnSuccess)
-        }
-        resumeDisplayLink()
-    }
-
-    private static let displayLoop: CVDisplayLinkOutputCallback = {
-        _, _, _, _, _, _ in
-        Tweener.update()
-        return kCVReturnSuccess
-    }
-
-    #else
-
-    private static var displayLink: CADisplayLink?
-
-    private class func setupDisplayLink() {
-        if Tweener.displayLink == nil {
-            Tweener.displayLink = CADisplayLink(target: self, selector: #selector(Tweener.update))
-            Tweener.displayLink!.preferredFramesPerSecond = 120
-            Tweener.displayLink!.add(to: .main, forMode: .common)
-        }
-        resumeDisplayLink()
-    }
-
-    #endif
-
-    private class func stopDisplayLink() {
-        guard let displayLink = Tweener.displayLink else { return }
-
-        pauseDisplayLink()
-
-        #if os(macOS)
-
-        #else
-        displayLink.invalidate()
-        #endif
-
-        Tweener.displayLink = nil
-    }
-
-    private class func pauseDisplayLink() {
-        guard let displayLink = Tweener.displayLink, !Tweener.paused else { return }
-
-        #if os(macOS)
-        CVDisplayLinkStop(displayLink)
-        #else
-        displayLink.isPaused = true
-        #endif
-
-        Tweener.paused = true
-    }
-
-    class func resumeDisplayLink() {
-        guard let displayLink = Tweener.displayLink, Tweener.paused else { return }
-
-        #if os(macOS)
-        CVDisplayLinkStart(displayLink)
-        #else
-        displayLink.isPaused = false
-        #endif
-
-        Tweener.paused = false
-    }
-
-    deinit {
-        Tweener.stopDisplayLink()
-        Tweener.tweens = []
-    }
-
-    @objc public class func update() {
+    /// Advances every tween to `frame.time`, once per frame, and drops the ones that complete.
+    public func update(frame: FrameTime) {
         for i in stride(from: tweens.count - 1, through: 0, by: -1) {
-            if tweens[i].update() {
+            if tweens[i].update(time: frame.time) {
                 tweens.remove(at: i)
             }
         }
-
-        if tweens.isEmpty {
-            Tweener.pauseDisplayLink()
-        }
     }
 
-    public class func tween(duration: Double) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tween(duration: Double) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(tween)
         return tween
     }
 
-    public class func tweenValue(duration: Double, value: UnsafeMutablePointer<Float>, from: Float, to: Float) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenValue(duration: Double, value: UnsafeMutablePointer<Float>, from: Float, to: Float) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(tween.onTween { [value] (progress: Double) in
             value.pointee = .lerp(from, to, Float(progress))
         })
         return tween
     }
 
-    public class func tweenValue(duration: Double, value: UnsafeMutablePointer<CGFloat>, from: CGFloat, to: CGFloat) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenValue(duration: Double, value: UnsafeMutablePointer<CGFloat>, from: CGFloat, to: CGFloat) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(tween.onTween { [value] (progress: Double) in
             value.pointee = simd_mix(from, to, progress)
         })
         return tween
     }
 
-    public class func tweenPosition(duration: Double, object: Object, from: simd_float3, to: simd_float3) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenPosition(duration: Double, object: Object, from: simd_float3, to: simd_float3) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(tween.onTween { [weak object] (progress: Double) in
             object?.position = .lerp(from, to, Float(progress))
         })
         return tween
     }
 
-    public class func tweenPosition(duration: Double, object: Object, to: simd_float3) -> Tween {
-        setupDisplayLink()
+    public func tweenPosition(duration: Double, object: Object, to: simd_float3) -> Tween {
         var from: simd_float3 = object.position
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak object] in
                 from = object?.position ?? from
             }
@@ -163,9 +67,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenScale(duration: Double, object: Object, from: simd_float3, to: simd_float3) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenScale(duration: Double, object: Object, from: simd_float3, to: simd_float3) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(
             tween.onTween { [weak object] (progress: Double) in
                 object?.scale = .lerp(from, to, Float(progress))
@@ -174,10 +77,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenScale(duration: Double, object: Object, to: simd_float3) -> Tween {
-        setupDisplayLink()
+    public func tweenScale(duration: Double, object: Object, to: simd_float3) -> Tween {
         var from: simd_float3 = object.scale
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak object] in
                 from = object?.scale ?? from
             }
@@ -188,19 +90,17 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenOrientation(duration: Double, object: Object, from: simd_quatf, to: simd_quatf) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenOrientation(duration: Double, object: Object, from: simd_quatf, to: simd_quatf) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
         tweens.append(tween.onTween { [weak object] (value: Double) in
             object?.orientation = .lerp(from, to, Float(value))
         })
         return tween
     }
 
-    public class func tweenOrientation(duration: Double, object: Object, to: simd_quatf) -> Tween {
-        setupDisplayLink()
+    public func tweenOrientation(duration: Double, object: Object, to: simd_quatf) -> Tween {
         var from: simd_quatf = object.orientation
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak object] in
                 from = object?.orientation ?? from
             }
@@ -211,9 +111,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: FloatParameter, from: Float, to: Float) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: FloatParameter, from: Float, to: Float) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = .lerp(from, to, Float(value))
             }
@@ -221,10 +120,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: FloatParameter, to: Float) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: FloatParameter, to: Float) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -235,9 +133,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: DoubleParameter, from: Double, to: Double) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: DoubleParameter, from: Double, to: Double) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = simd_mix(from, to, value)
             }
@@ -245,10 +142,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: DoubleParameter, to: Double) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: DoubleParameter, to: Double) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -259,9 +155,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float2Parameter, from: simd_float2, to: simd_float2) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Float2Parameter, from: simd_float2, to: simd_float2) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = .lerp(from, to, Float(value))
             }
@@ -269,10 +164,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float2Parameter, to: simd_float2) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Float2Parameter, to: simd_float2) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -283,9 +177,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float3Parameter, from: simd_float3, to: simd_float3) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Float3Parameter, from: simd_float3, to: simd_float3) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = .lerp(from, to, Float(value))
             }
@@ -293,10 +186,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float3Parameter, to: simd_float3) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Float3Parameter, to: simd_float3) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -307,9 +199,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float4Parameter, from: simd_float4, to: simd_float4) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Float4Parameter, from: simd_float4, to: simd_float4) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = .lerp(from, to, Float(value))
             }
@@ -317,10 +208,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Float4Parameter, to: simd_float4) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Float4Parameter, to: simd_float4) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -331,9 +221,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: IntParameter, from: Int, to: Int) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: IntParameter, from: Int, to: Int) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = Int(simd_mix(Double(from), Double(to), value))
             }
@@ -341,10 +230,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: IntParameter, to: Int) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: IntParameter, to: Int) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -355,9 +243,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int2Parameter, from: simd_int2, to: simd_int2) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Int2Parameter, from: simd_int2, to: simd_int2) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = simd_int2(simd_mix(simd_double2(from), simd_double2(to), simd_double2(repeating: value)))
             }
@@ -365,10 +252,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int2Parameter, to: simd_int2) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Int2Parameter, to: simd_int2) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -379,9 +265,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int3Parameter, from: simd_int3, to: simd_int3) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Int3Parameter, from: simd_int3, to: simd_int3) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = simd_int3(simd_mix(simd_double3(from), simd_double3(to), simd_double3(repeating: value)))
             }
@@ -389,10 +274,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int3Parameter, to: simd_int3) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Int3Parameter, to: simd_int3) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -403,9 +287,8 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int4Parameter, from: simd_int4, to: simd_int4) -> Tween {
-        setupDisplayLink()
-        let tween = Tween(duration: duration)
+    public func tweenParameter(duration: Double, parameter: Int4Parameter, from: simd_int4, to: simd_int4) -> Tween {
+        let tween = Tween(duration: duration, tweener: self)
             .onTween { [weak parameter] (value: Double) in
                 parameter?.value = simd_int4(simd_mix(simd_double4(from), simd_double4(to), simd_double4(repeating: value)))
             }
@@ -413,10 +296,9 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenParameter(duration: Double, parameter: Int4Parameter, to: simd_int4) -> Tween {
-        setupDisplayLink()
+    public func tweenParameter(duration: Double, parameter: Int4Parameter, to: simd_int4) -> Tween {
         var from = parameter.value
-        let tween = Tween(duration: duration)
+        let tween = Tween(duration: duration, tweener: self)
             .onTweenStart { [weak parameter] in
                 from = parameter?.value ?? from
             }
@@ -427,88 +309,87 @@ public final class Tweener: Sendable {
         return tween
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: Float, to: Float) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: Float, to: Float) -> Tween? {
         guard let parameter = material.get(key) as? FloatParameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: Float) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: Float) -> Tween? {
         guard let parameter = material.get(key) as? FloatParameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float2, to: simd_float2) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float2, to: simd_float2) -> Tween? {
         guard let parameter = material.get(key) as? Float2Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float2) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float2) -> Tween? {
         guard let parameter = material.get(key) as? Float2Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float3, to: simd_float3) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float3, to: simd_float3) -> Tween? {
         guard let parameter = material.get(key) as? Float3Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float3) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float3) -> Tween? {
         guard let parameter = material.get(key) as? Float3Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float4, to: simd_float4) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_float4, to: simd_float4) -> Tween? {
         guard let parameter = material.get(key) as? Float4Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float4) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_float4) -> Tween? {
         guard let parameter = material.get(key) as? Float4Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: Int, to: Int) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: Int, to: Int) -> Tween? {
         guard let parameter = material.get(key) as? IntParameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: Int) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: Int) -> Tween? {
         guard let parameter = material.get(key) as? IntParameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int2, to: simd_int2) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int2, to: simd_int2) -> Tween? {
         guard let parameter = material.get(key) as? Int2Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int2) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int2) -> Tween? {
         guard let parameter = material.get(key) as? Int2Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int3, to: simd_int3) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int3, to: simd_int3) -> Tween? {
         guard let parameter = material.get(key) as? Int3Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int3) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int3) -> Tween? {
         guard let parameter = material.get(key) as? Int3Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int4, to: simd_int4) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, from: simd_int4, to: simd_int4) -> Tween? {
         guard let parameter = material.get(key) as? Int4Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, from: from, to: to)
     }
 
-    public class func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int4) -> Tween? {
+    public func tweenMaterial(duration: Double, material: Material, key: String, to: simd_int4) -> Tween? {
         guard let parameter = material.get(key) as? Int4Parameter else { return nil }
         return tweenParameter(duration: duration, parameter: parameter, to: to)
     }
 
-    public class func append(_ tween: Tween) {
-        setupDisplayLink()
+    public func append(_ tween: Tween) {
         if !tweens.contains(tween) {
             tweens.append(tween)
         }

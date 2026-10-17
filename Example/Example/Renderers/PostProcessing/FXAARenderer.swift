@@ -48,13 +48,15 @@ final class FXAARenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         if updateRenderTexture {
             renderTexture = createTexture("Render Texture", colorPixelFormat)
             updateRenderTexture = false
         }
 
-        cameraController.update()
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

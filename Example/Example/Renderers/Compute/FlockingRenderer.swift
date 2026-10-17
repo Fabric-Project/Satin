@@ -16,8 +16,6 @@ final class FlockingRenderer: BaseRenderer {
     final class InstanceMaterial: SourceMaterial {}
     final class SpriteMaterial: SourceMaterial {}
 
-    lazy var startTime = CFAbsoluteTimeGetCurrent()
-
     // MARK: - Controls
 
     var cancellables = Set<AnyCancellable>()
@@ -94,8 +92,10 @@ final class FlockingRenderer: BaseRenderer {
         }.store(in: &cancellables)
     }
 
-    override func update() throws {
-        let time = Float(CFAbsoluteTimeGetCurrent() - startTime)
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        let time = Float(frame.time)
         particleSystem.set("Time", time)
         spriteMaterial.set("Time", time)
     }

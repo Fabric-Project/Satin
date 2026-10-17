@@ -120,8 +120,6 @@ final class ARContactShadowRenderer: BaseRenderer {
 
     var backgroundRenderer: ARBackgroundEncoder!
 
-    lazy var startTime = getTime()
-
     override var depthPixelFormat: MTLPixelFormat {
         .invalid
     }
@@ -169,9 +167,11 @@ final class ARContactShadowRenderer: BaseRenderer {
         }
     }
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         if invaderContainer.visible {
-            let time = Float(getTime() - startTime)
+            let time = Float(frame.time)
             invader.voxels.orientation = simd_quatf(angle: time, axis: Satin.worldUpDirection)
             invader.voxels.orientation *= simd_quatf(angle: -time * 2.0, axis: Satin.worldRightDirection)
             invader.position.y = remap(sin(time + Float.pi * 0.5), -1.0, 1.0, 0.0, 1.0) * 0.5 + invader.voxelScale

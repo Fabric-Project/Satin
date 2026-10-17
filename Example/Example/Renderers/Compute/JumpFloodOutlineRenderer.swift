@@ -39,7 +39,6 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
 
     final class JumpFloodInitComputeSystem: TextureComputeSystem {}
 
-    lazy var startTime = getTime()
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 
     lazy var quad = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: PostMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true))
@@ -96,8 +95,10 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         tween?.remove()
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

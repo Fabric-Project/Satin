@@ -41,8 +41,6 @@ final class BufferComputeRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    var startTime: CFAbsoluteTime = 0.0
-
     // MARK: Render to Texture
 
     var renderTexture: MTLTexture!
@@ -57,18 +55,18 @@ final class BufferComputeRenderer: BaseRenderer {
         .invalid
     }
 
-    override func setup() throws {
-        startTime = CFAbsoluteTimeGetCurrent()
-    }
+    override func setup() throws {}
 
-    override func update() throws {
-        var time = Float(CFAbsoluteTimeGetCurrent() - startTime)
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        var time = Float(frame.time)
         chromaMaterial.set("Time", time)
 
         time *= 0.25
         let radius: Float = 10.0 * sin(time * 0.5) * cos(time)
         camera.position = simd_make_float3(radius * sin(time), radius * cos(time), 100.0)
-        cameraController.update()
+        cameraController.update(frame: frame)
     }
 
     func updateRenderTexture(width: Int, height: Int) {

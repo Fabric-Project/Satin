@@ -23,7 +23,6 @@ final class MeshShaderRenderer: BaseRenderer {
     lazy var camera = PerspectiveCamera(context: defaultContext, position: .init(0.0, 0.0, 8.0), near: 0.01, far: 100.0, fov: 45)
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
-    lazy var startTime = getTime()
 
     override func setup() throws {
         mesh.triangleFillMode = MTLTriangleFillMode.lines
@@ -34,9 +33,11 @@ final class MeshShaderRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() throws {
-        meshNormals.material?.set("Time", Float(getTime() - startTime))
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        meshNormals.material?.set("Time", Float(frame.time))
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

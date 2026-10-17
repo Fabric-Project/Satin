@@ -39,9 +39,6 @@ final class ARDrawingRenderer: BaseRenderer {
         return renderer
     }()
 
-    private lazy var startTime: CFAbsoluteTime = getTime()
-    private lazy var time: CFAbsoluteTime = getTime()
-
     // MARK: - Interaction
 
     var touchDown = false
@@ -93,9 +90,11 @@ final class ARDrawingRenderer: BaseRenderer {
 
     // MARK: - Update
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         updateDrawing()
-        updateMaterial()
+        updateMaterial(time: frame.time)
     }
 
     // MARK: - Draw
@@ -155,8 +154,7 @@ final class ARDrawingRenderer: BaseRenderer {
         }
     }
 
-    private func updateMaterial() {
-        time = getTime() - startTime
+    private func updateMaterial(time: TimeInterval) {
         material.set("Time", Float(time))
     }
 }

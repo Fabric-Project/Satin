@@ -29,8 +29,6 @@ final class LiveCodeRenderer: BaseRenderer {
         }
     }
 
-    var startTime: CFAbsoluteTime = 0.0
-
     lazy var camera = OrthographicCamera(context: defaultContext)
 
     lazy var mesh = Mesh(context: defaultContext, geometry: QuadGeometry(context: defaultContext), material: CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL))
@@ -41,7 +39,6 @@ final class LiveCodeRenderer: BaseRenderer {
     override var depthPixelFormat: MTLPixelFormat { .invalid }
 
     override func setup() throws {
-        startTime = getTime()
 #if os(macOS)
         openEditor()
 #endif
@@ -52,10 +49,12 @@ final class LiveCodeRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         // Uniforms are parsed and title cases, i.e. time -> Time, appResolution -> App Resolution, etc
         if let material = mesh.material {
-            material.set("Time", Float(getTime() - startTime))
+            material.set("Time", Float(frame.time))
         }
     }
 

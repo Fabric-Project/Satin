@@ -18,6 +18,8 @@ public protocol ErrorRenderDelegate: AnyObject {
 
 protocol ViewRendererDelegate: AnyObject {
     var id: String { get }
-    func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable)
+    /// `hostTime` is the host time (`CACurrentMediaTime`) the frame targets;
+    /// `presentationHostTime` is when it is expected on screen, nil when unknown.
+    func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable, hostTime: TimeInterval, presentationHostTime: TimeInterval?)
     func drawableResized(size: CGSize, scaleFactor: CGFloat)
 }
