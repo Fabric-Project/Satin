@@ -147,6 +147,8 @@ final class SSGIProjectorRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
 
         let projectorMotion = appParams.get("Projector Motion", as: FloatParameter.self)?.value ?? 1.0

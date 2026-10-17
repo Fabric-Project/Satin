@@ -168,6 +168,8 @@ final class ARContactShadowRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         if invaderContainer.visible {
             let time = Float(frame.time)
             invader.voxels.orientation = simd_quatf(angle: time, axis: Satin.worldUpDirection)

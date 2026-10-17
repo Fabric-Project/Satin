@@ -40,6 +40,8 @@ final class PBRCustomizationRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
         let osc = Float(sin(frame.time)) * 0.5
         let scale = simd_float2(repeating: osc + 1.0)

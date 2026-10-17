@@ -74,6 +74,8 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         let theta = Float(frame.time)
         mesh.orientation = simd_quatf(angle: theta * 0.75, axis: simd_normalize(simd_make_float3(sin(theta), cos(theta), 1.0)))
     }

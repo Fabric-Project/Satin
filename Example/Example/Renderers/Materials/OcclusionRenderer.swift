@@ -64,6 +64,8 @@ final class OcclusionRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
     }
 

@@ -93,6 +93,8 @@ final class FlockingRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         let time = Float(frame.time)
         particleSystem.set("Time", time)
         spriteMaterial.set("Time", time)

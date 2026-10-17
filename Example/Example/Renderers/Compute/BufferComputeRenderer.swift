@@ -58,6 +58,8 @@ final class BufferComputeRenderer: BaseRenderer {
     override func setup() throws {}
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         var time = Float(frame.time)
         chromaMaterial.set("Time", time)
 

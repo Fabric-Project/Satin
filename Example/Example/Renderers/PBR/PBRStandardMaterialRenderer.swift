@@ -61,6 +61,8 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         model?.orientation = simd_quatf(angle: Float(frame.time) * 0.5, axis: worldUpDirection)
         cameraController.update(frame: frame)
     }

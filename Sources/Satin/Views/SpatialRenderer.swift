@@ -271,7 +271,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
     open func renderFrame() throws {
         guard let frame = layerRenderer.queryNextFrame(), let predictedTiming = frame.predictTiming() else { return }
 
-        let frameTime = advanceFrameTime(
+        let frameTime = nextFrameTime(
             hostTime: predictedTiming.optimalInputTime.hostTime,
             presentationHostTime: predictedTiming.presentationTime.hostTime
         )

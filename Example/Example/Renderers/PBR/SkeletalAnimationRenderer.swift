@@ -107,6 +107,8 @@ final class SkeletalAnimationRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         cameraController.update(frame: frame)
         // Loops the animation; set once per frame, so velocity sees one step.
         guard let animation, let timeRange = animation.timeRange, timeRange.upperBound > timeRange.lowerBound else { return }

@@ -218,6 +218,8 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         
         let time = Float(frame.time)
         let theta = time * 0.2

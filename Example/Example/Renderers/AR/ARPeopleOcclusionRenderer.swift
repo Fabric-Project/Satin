@@ -82,6 +82,8 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         if _updateTextures {
             backgroundTexture = createTexture("Background Texture", colorPixelFormat)
             _updateTextures = false

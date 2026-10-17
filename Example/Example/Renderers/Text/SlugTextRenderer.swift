@@ -62,6 +62,8 @@ final class SlugTextRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         textMesh.text = "Satin 2.0\nframe: \(frame.frameNumber)"
         cameraController.update(frame: frame)
     }

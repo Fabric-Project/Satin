@@ -49,6 +49,8 @@ final class FXAARenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         if updateRenderTexture {
             renderTexture = createTexture("Render Texture", colorPixelFormat)
             updateRenderTexture = false

@@ -34,6 +34,8 @@ final class MeshShaderRenderer: BaseRenderer {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         meshNormals.material?.set("Time", Float(frame.time))
         cameraController.update(frame: frame)
     }

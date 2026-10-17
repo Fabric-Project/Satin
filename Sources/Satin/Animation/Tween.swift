@@ -47,8 +47,12 @@ public final class Tween {
 
     private var lastDeltaTime: TimeInterval = 0.0
 
-    init(duration: Double) {
+    /// The tweener that updates this tween, which takes it back when it restarts after completing.
+    private weak var tweener: Tweener?
+
+    init(duration: Double, tweener: Tweener) {
         self.duration = duration
+        self.tweener = tweener
     }
 
     public func restart() -> Tween {
@@ -65,7 +69,7 @@ public final class Tween {
     /// Starts at `time`, or on the next update when nil.
     private func start(anchoredAt time: TimeInterval?) -> Tween {
         if complete {
-            Tweener.append(self)
+            tweener?.append(self)
         }
         tweening = true
         complete = false

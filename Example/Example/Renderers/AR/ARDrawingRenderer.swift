@@ -91,6 +91,8 @@ final class ARDrawingRenderer: BaseRenderer {
     // MARK: - Update
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         updateDrawing()
         updateMaterial(time: frame.time)
     }

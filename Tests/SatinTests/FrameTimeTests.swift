@@ -40,11 +40,27 @@ final class FrameTimeTests: XCTestCase {
         return Renderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
     }
 
+    /// Runs one frame as the render loop does: makes it from the timestamps, then updates with it.
+    private func advance(_ renderer: Renderer, hostTime: TimeInterval, presentationHostTime: TimeInterval? = nil) throws -> FrameTime {
+        let frame = renderer.nextFrameTime(hostTime: hostTime, presentationHostTime: presentationHostTime)
+        try renderer.update(frame: frame)
+        return frame
+    }
+
+    func testUpdateStoresAFrameDrivenByHand() throws {
+        let renderer = try makeRenderer()
+        let frame = FrameTime.first(time: 3, hostMediaTime: 0).next(time: 3.5, hostMediaTime: 0)
+
+        try renderer.update(frame: frame)
+
+        XCTAssertEqual(renderer.frameTime, frame)
+    }
+
     func testFirstFrameIsFrameZeroAtTimeZero() throws {
         let renderer = try makeRenderer()
         XCTAssertEqual(renderer.frameTime, .zero, "no frame before the first advance")
 
-        let frame = renderer.advanceFrameTime(hostTime: 100, presentationHostTime: nil)
+        let frame = try advance(renderer, hostTime: 100)
 
         XCTAssertEqual(frame.frameNumber, 0)
         XCTAssertEqual(frame.time, 0)
@@ -55,9 +71,9 @@ final class FrameTimeTests: XCTestCase {
 
     func testTimeAndDeltaFollowHostTimestamps() throws {
         let renderer = try makeRenderer()
-        _ = renderer.advanceFrameTime(hostTime: 100, presentationHostTime: nil)
-        let second = renderer.advanceFrameTime(hostTime: 100.25, presentationHostTime: nil)
-        let third = renderer.advanceFrameTime(hostTime: 100.75, presentationHostTime: nil)
+        _ = try advance(renderer, hostTime: 100)
+        let second = try advance(renderer, hostTime: 100.25)
+        let third = try advance(renderer, hostTime: 100.75)
 
         XCTAssertEqual(second.frameNumber, 1)
         XCTAssertEqual(second.time, 0.25, accuracy: 1e-9)
@@ -69,8 +85,8 @@ final class FrameTimeTests: XCTestCase {
 
     func testDisplayTimeSharesTheTimelineAndIsNilWhenUnknown() throws {
         let renderer = try makeRenderer()
-        let undisplayed = renderer.advanceFrameTime(hostTime: 100, presentationHostTime: nil)
-        let displayed = renderer.advanceFrameTime(hostTime: 100.5, presentationHostTime: 100.75)
+        let undisplayed = try advance(renderer, hostTime: 100)
+        let displayed = try advance(renderer, hostTime: 100.5, presentationHostTime: 100.75)
 
         XCTAssertNil(undisplayed.displayTime)
         let displayTime = try XCTUnwrap(displayed.displayTime)
@@ -79,13 +95,13 @@ final class FrameTimeTests: XCTestCase {
 
     func testSettingUpStartsFrameTimeOver() throws {
         let renderer = try makeRenderer()
-        _ = renderer.advanceFrameTime(hostTime: 100, presentationHostTime: nil)
-        _ = renderer.advanceFrameTime(hostTime: 101, presentationHostTime: nil)
+        _ = try advance(renderer, hostTime: 100)
+        _ = try advance(renderer, hostTime: 101)
 
         renderer.isSetup = true
         XCTAssertEqual(renderer.frameTime, .zero)
 
-        let frame = renderer.advanceFrameTime(hostTime: 500, presentationHostTime: nil)
+        let frame = try advance(renderer, hostTime: 500)
         XCTAssertEqual(frame.frameNumber, 0)
         XCTAssertEqual(frame.time, 0)
         XCTAssertEqual(frame.deltaTime, 0)

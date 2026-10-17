@@ -383,6 +383,8 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     }
 
     override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         model.orientation = simd_quatf(angle: Float(frame.time), axis: Satin.worldUpDirection)
         postMaterial.time = Float(frame.time)
     }
