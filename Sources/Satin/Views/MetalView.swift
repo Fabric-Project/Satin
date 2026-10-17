@@ -545,6 +545,7 @@ public final class MetalView: UIView {
 
     /// Renders now, outside the display link, so the frame targets the current host time.
     private func render() {
+        guard _displayLink == nil else { return }  // the display link renders every frame when active
         render(hostTime: CACurrentMediaTime(), presentationHostTime: nil)
     }
 
