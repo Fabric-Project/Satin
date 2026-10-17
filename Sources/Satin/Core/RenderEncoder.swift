@@ -1451,24 +1451,23 @@ open class RenderEncoder {
                 renderEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &maps)
             }
 
-#if DEBUG
-            renderEncoder.pushDebugGroup("Alpha OIT Tile Init")
-#endif
-            renderEncoder.setRenderPipelineState(resources.tilePipeline)
-            renderEncoder.dispatchThreadsPerTile(alphaOitTileSize)
-#if DEBUG
-            renderEncoder.popDebugGroup()
-#endif
+            encodeAlphaOitTileClear(renderEncoder: renderEncoder, resources: resources)
 
-            for entry in routeEntries {
+            for (groupIndex, group) in alphaOitGroups(for: routeEntries).enumerated() {
+                if groupIndex > 0 {
+                    // Resolve the previous group into the color attachment, then start this
+                    // group from empty tile data so it composites over everything before it.
+                    encodeAlphaOitBlend(renderEncoder: renderEncoder, resources: resources)
+                    encodeAlphaOitTileClear(renderEncoder: renderEncoder, resources: resources)
+                }
 #if DEBUG
-                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(entry.pass)")
+                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(group.pass) Render Order \(group.renderables.first?.renderOrder ?? 0)")
 #endif
                 encode(
                     renderEncoder: renderEncoder,
-                    pass: entry.pass,
-                    renderables: entry.renderables,
-                    commands: entry.commands,
+                    pass: group.pass,
+                    renderables: group.renderables,
+                    commands: group.commands,
                     cameras: cameras,
                     viewports: simdViewports,
                     phase: .alphaTransparent
@@ -1478,15 +1477,8 @@ open class RenderEncoder {
 #endif
             }
 
+            encodeAlphaOitBlend(renderEncoder: renderEncoder, resources: resources)
 #if DEBUG
-            renderEncoder.pushDebugGroup("Alpha OIT Blend")
-#endif
-            renderEncoder.setRenderPipelineState(resources.blendPipeline)
-            renderEncoder.setDepthStencilState(resources.blendDepthStencilState)
-            renderEncoder.setCullMode(.none)
-            renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-#if DEBUG
-            renderEncoder.popDebugGroup()
             renderEncoder.popDebugGroup()
 #endif
             renderEncoder.endEncoding()
@@ -1496,6 +1488,57 @@ open class RenderEncoder {
             print("\(label) Alpha OIT: \(error.localizedDescription)")
             return false
         }
+    }
+
+    // Image-block OIT blends every fragment it accumulates order-independently, so draw order
+    // inside one accumulation is lost. Splitting the route into groups, each accumulated and
+    // resolved on its own, keeps ordering between groups: a group always composites over the
+    // groups before it. Groups split on render layer, and on render order when sortObjects is
+    // enabled. Renderables sharing a render layer and render order still blend order-independently.
+    // Scheduled commands encode their own renderables, so they cannot be split by render order;
+    // they stay with the last group of their render layer, running after its renderables as before.
+    private func alphaOitGroups(for routeEntries: [RenderRouteEntry]) -> [RenderRouteEntry] {
+        var groups: [RenderRouteEntry] = []
+
+        for entry in routeEntries {
+            var groupRenderables: [Renderable] = []
+
+            for renderable in entry.renderables {
+                if sortObjects, let previousRenderable = groupRenderables.last, previousRenderable.renderOrder != renderable.renderOrder {
+                    groups.append(RenderRouteEntry(pass: entry.pass, renderables: groupRenderables, commands: []))
+                    groupRenderables.removeAll()
+                }
+                groupRenderables.append(renderable)
+            }
+
+            groups.append(RenderRouteEntry(pass: entry.pass, renderables: groupRenderables, commands: entry.commands))
+        }
+
+        return groups
+    }
+
+    private func encodeAlphaOitTileClear(renderEncoder: MTLRenderCommandEncoder, resources: AlphaOitResources.Resources) {
+#if DEBUG
+        renderEncoder.pushDebugGroup("Alpha OIT Tile Init")
+#endif
+        renderEncoder.setRenderPipelineState(resources.tilePipeline)
+        renderEncoder.dispatchThreadsPerTile(alphaOitTileSize)
+#if DEBUG
+        renderEncoder.popDebugGroup()
+#endif
+    }
+
+    private func encodeAlphaOitBlend(renderEncoder: MTLRenderCommandEncoder, resources: AlphaOitResources.Resources) {
+#if DEBUG
+        renderEncoder.pushDebugGroup("Alpha OIT Blend")
+#endif
+        renderEncoder.setRenderPipelineState(resources.blendPipeline)
+        renderEncoder.setDepthStencilState(resources.blendDepthStencilState)
+        renderEncoder.setCullMode(.none)
+        renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+#if DEBUG
+        renderEncoder.popDebugGroup()
+#endif
     }
 
     @discardableResult
