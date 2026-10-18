@@ -315,17 +315,13 @@ open class RenderEncoder {
         renderPassDescriptor.colorAttachments[index]
     }
 
-    private var objectList = [Object]()
-    private var renderLists = [Int: RenderList]()
+    /// What the current update pass collected from the scene, and how it walks the scene.
+    private let renderCollection = RenderCollection()
+    private let sceneTraversal = SceneTraversal()
 
-    private var lightList = [Light]()
-    private var lightReceivers = [Renderable]()
     private var _updateLightDataBuffer = false
     private var lightDataBuffer: StructBuffer<LightData>?
     private var lightDataSubscriptions = Set<AnyCancellable>()
-
-    private var shadowCasters = [Renderable]()
-    private var shadowReceivers = [Renderable]()
 
     private var directShadowLights = [Light]()
     private var directShadowTextures = [MTLTexture?]()
@@ -554,10 +550,10 @@ open class RenderEncoder {
         }
 
         // render objects that cast shadows into the depth textures
-        if !shadowCasters.isEmpty, !shadowReceivers.isEmpty {
-            for light in lightList where light.castShadow {
+        if !renderCollection.shadowCasters.isEmpty, !renderCollection.shadowReceivers.isEmpty {
+            for light in renderCollection.lights where light.castShadow {
                 if light.shadow.shouldRender {
-                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: shadowCasters)
+                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: renderCollection.shadowCasters)
                 }
             }
         }
@@ -764,11 +760,7 @@ open class RenderEncoder {
         encode: @escaping (RenderEncoderState) -> Void
     ) {
         var renderables = [Renderable]()
-        collectCurrentPassRenderables(
-            object: scene,
-            parentVisible: true,
-            renderables: &renderables
-        )
+        collectCurrentPassRenderables(scene: scene, renderables: &renderables)
         scheduleCurrentPassEncoding(
             renderables: renderables,
             encode: encode
@@ -804,11 +796,7 @@ open class RenderEncoder {
         repeatedCount: Int = 1
     ) {
         var renderables = [Renderable]()
-        collectCurrentPassRenderables(
-            object: scene,
-            parentVisible: true,
-            renderables: &renderables
-        )
+        collectCurrentPassRenderables(scene: scene, renderables: &renderables)
         encodeCurrentPass(
             renderables: renderables,
             renderEncoderState: renderEncoderState,
@@ -844,24 +832,26 @@ open class RenderEncoder {
         }
     }
 
-    private func collectCurrentPassRenderables(
-        object: Object,
-        parentVisible: Bool,
-        renderables: inout [Renderable]
-    ) {
-        let visible = parentVisible && object.visible
-        guard visible else { return }
+    /// The visible renderables of `scene`, the root included, skipping everything below a hidden object.
+    private func collectCurrentPassRenderables(scene: Object, renderables: inout [Renderable]) {
+        guard scene.visible else { return }
 
-        if let renderable = object as? Renderable {
+        if let renderable = scene as? Renderable {
             renderables.append(renderable)
         }
 
-        for child in object.children {
-            collectCurrentPassRenderables(
-                object: child,
-                parentVisible: visible,
-                renderables: &renderables
-            )
+        let entries = scene.sceneIndex.entries
+        var entryIndex = 0
+        while entryIndex < entries.count {
+            let entry = entries[entryIndex]
+            if entry.object.visible {
+                if let renderable = entry.renderable {
+                    renderables.append(renderable)
+                }
+                entryIndex += 1
+            } else {
+                entryIndex = entry.subtreeEnd
+            }
         }
     }
 
@@ -971,16 +961,18 @@ open class RenderEncoder {
     }
 
     private func routePassEntries(route: RenderRoute) -> [RenderRouteEntry] {
-        let renderListLayers = Set(renderLists.keys)
+        // Layers with collected renderables, plus layers holding only scheduled commands. A route's
+        // pass is its position in this list.
+        let renderListLayers = Set(renderCollection.activeLayers)
         let commandLayers = Set(scheduledCurrentPassEncodingCommands.map(\.renderLayer))
         let layers = renderListLayers.union(commandLayers).sorted()
 
         return layers
             .enumerated()
             .compactMap { pass, renderLayer in
-                let renderables = renderLists[renderLayer]?
-                    .getRenderables(sorted: sortObjects)
-                    .filter { shouldRender($0, route: route) } ?? []
+                let renderables = renderCollection
+                    .renderables(renderLayer: renderLayer, sorted: sortObjects)
+                    .filter { shouldRender($0, route: route) }
                 let commands = scheduledCurrentPassEncodingCommands.filter {
                     $0.renderLayer == renderLayer &&
                         $0.routeRenderables.contains { shouldRender($0, route: route) }
@@ -1158,7 +1150,7 @@ open class RenderEncoder {
         deferredLightingMaterial.emissiveTexture = emissiveTexture
         deferredLightingMaterial.depthTexture = depthTexture
 
-        deferredLightingMaterial.lightCount = lightList.count
+        deferredLightingMaterial.lightCount = renderCollection.lights.count
         deferredLightingMaterial.projectorCount = projectorLights.count
         deferredLightingMaterial.directShadowCount = directShadowLights.count
         deferredLightingMaterial.directShadowTextureCount = directShadowTextures.count
@@ -1792,7 +1784,7 @@ open class RenderEncoder {
             return didEncode
 
         case .forwardPlus:
-            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (!hasUnlitOpaqueRenderables && !hasTransparentRenderables && renderLists.isEmpty)
+            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (!hasUnlitOpaqueRenderables && !hasTransparentRenderables && renderCollection.isEmpty)
             var didEncode = false
 
             if needsSurfacePass {
@@ -1937,7 +1929,7 @@ open class RenderEncoder {
 
         case .deferredGeometry:
             let opaqueUnlitEntries = routePassEntries(route: .unlitOpaque)
-            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (opaqueUnlitEntries.isEmpty && !hasTransparentRenderables && renderLists.isEmpty)
+            let needsSurfacePass = hasSurfaceOpaqueRenderables || usesAuxiliaryAttachments || (opaqueUnlitEntries.isEmpty && !hasTransparentRenderables && renderCollection.isEmpty)
             var didEncode = false
 
             if needsSurfacePass {
@@ -2109,19 +2101,8 @@ open class RenderEncoder {
 
         onUpdate?()
 
-        objectList.removeAll(keepingCapacity: true)
-        renderLists.removeAll(keepingCapacity: true)
-
-        lightList.removeAll(keepingCapacity: true)
-        lightReceivers.removeAll(keepingCapacity: true)
-
-        shadowCasters.removeAll(keepingCapacity: true)
-        shadowReceivers.removeAll(keepingCapacity: true)
-
-        updateLists(
-            object: scene,
-            visible: true
-        )
+        renderCollection.reset()
+        sceneTraversal.updateAndCollect(scene: scene, into: renderCollection)
 
         updateScene(
             commandBuffer: commandBuffer,
@@ -2132,51 +2113,10 @@ open class RenderEncoder {
         updateLights()
     }
 
-    private func updateLists(object: Object, visible: Bool) {
-        object.update()
-
-        if object.visible, visible {
-            objectList.append(object)
-
-            if let light = object as? Light {
-                light.shadowIndex = -1
-                light.projectorIndex = -1
-                lightList.append(light)
-            }
-
-            if let renderable = object as? Renderable {
-                if let renderPassList = renderLists[renderable.renderLayer.rawValue] {
-                    renderPassList.append(renderable)
-                } else {
-                    renderLists[renderable.renderLayer.rawValue] = RenderList(renderable)
-                }
-
-                if renderable.lighting {
-                    lightReceivers.append(renderable)
-                }
-
-                if renderable.receiveShadow {
-                    shadowReceivers.append(renderable)
-                }
-
-                if renderable.castShadow {
-                    shadowCasters.append(renderable)
-                }
-            }
-            
-            for child in object.children {
-                updateLists(
-                    object: child,
-                    visible: object.visible && visible
-                )
-            }
-        }
-    }
-
     private func updateScene(commandBuffer: MTLCommandBuffer, cameras: [Camera], viewports: [simd_float4]) {
         updateDirectLightingState()
 
-        let lightCount = lightList.count
+        let lightCount = renderCollection.lights.count
         let directShadowCount = directShadowLights.count
         let directShadowTextureCount = directShadowTextures.count
         let projectorCount = projectorLights.count
@@ -2189,8 +2129,10 @@ open class RenderEncoder {
         activeReflectionTexcoordTransform = matrix_identity_float3x3
         activeIrradianceTexcoordTransform = matrix_identity_float3x3
 
-        for object in objectList {
-            if let environment = object as? IBLEnvironment {
+        for collectedObject in renderCollection.objects {
+            let object = collectedObject.object
+
+            if let environment = collectedObject.environment {
                 activeEnvironmentIntensity = environment.environmentIntensity
                 cubemapTexture = environment.cubemapTexture
 
@@ -2203,7 +2145,7 @@ open class RenderEncoder {
                 activeBrdfTexture = environment.brdfTexture
             }
 
-            if let renderable = object as? Renderable {
+            if let renderable = collectedObject.renderable {
                 for material in renderable.materials {
                     let usesDeferredResolve = renderingMode == .deferredGeometry
                         && material.lightingModel == .surface
@@ -2289,7 +2231,7 @@ open class RenderEncoder {
             currentEncodePass = previousEncodePass
         }
 
-        if !lightReceivers.isEmpty {
+        if !renderCollection.lightReceivers.isEmpty {
             if let lightBuffer = lightDataBuffer {
                 renderEncoder.setFragmentBuffer(
                     lightBuffer.buffer,
@@ -2664,20 +2606,21 @@ open class RenderEncoder {
     }
 
     private func setupLightDataBuffer() {
-        guard lightList.count != lightDataBuffer?.count else { return }
+        let lights = renderCollection.lights
+        guard lights.count != lightDataBuffer?.count else { return }
         lightDataSubscriptions.removeAll(keepingCapacity: true)
 
-        if lightList.isEmpty {
+        if lights.isEmpty {
             lightDataBuffer = nil
         } else {
-            for light in lightList {
+            for light in lights {
                 light.publisher.sink { [weak self] _ in
                     self?._updateLightDataBuffer = true
                 }.store(in: &lightDataSubscriptions)
             }
             lightDataBuffer = StructBuffer<LightData>(
                 device: context.device,
-                count: lightList.count,
+                count: lights.count,
                 label: "Light Data Buffer"
             )
 
@@ -2688,7 +2631,7 @@ open class RenderEncoder {
     private func updateLightDataBuffer() {
         guard let lightBuffer = lightDataBuffer, _updateLightDataBuffer else { return }
 
-        lightBuffer.update(data: lightList.map { $0.data })
+        lightBuffer.update(data: renderCollection.lights.map { $0.data })
 
         _updateLightDataBuffer = false
     }
@@ -2709,7 +2652,7 @@ open class RenderEncoder {
         var directShadowMatrixIndex = 0
         var projectorIndex = 0
 
-        for light in lightList {
+        for light in renderCollection.lights {
             light.shadowIndex = -1
             light.projectorIndex = -1
 

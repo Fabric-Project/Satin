@@ -7,27 +7,38 @@
 
 import Foundation
 
+/// The renderables of one render layer for one update pass. It persists across passes: emptying it
+/// keeps its storage. The sorted order is made on the first sorted read of a pass and reused for the
+/// rest of it; unsorted reads keep the order renderables were appended in.
 final class RenderList {
     public var isEmpty: Bool {
         renderables.isEmpty
     }
 
-    private var renderables: [Renderable]
-    private var sortedRenderables: [Renderable] { renderables.sorted { $0.renderOrder < $1.renderOrder } }
-
-    public init(_ renderable: Renderable) {
-        self.renderables = [renderable]
-    }
+    private var renderables: [Renderable] = []
+    private var sortedRenderables: [Renderable] = []
+    private var sortedRenderablesAreCurrent = false
 
     public func append(_ renderable: Renderable) {
         renderables.append(renderable)
+        sortedRenderablesAreCurrent = false
     }
 
     public func removeAll(keepingCapacity: Bool = true) {
         renderables.removeAll(keepingCapacity: keepingCapacity)
+        sortedRenderables.removeAll(keepingCapacity: keepingCapacity)
+        sortedRenderablesAreCurrent = false
     }
 
     public func getRenderables(sorted: Bool) -> [Renderable] {
-        sorted ? sortedRenderables : renderables
+        guard sorted else { return renderables }
+
+        if !sortedRenderablesAreCurrent {
+            sortedRenderables.removeAll(keepingCapacity: true)
+            sortedRenderables.append(contentsOf: renderables)
+            sortedRenderables.sort { $0.renderOrder < $1.renderOrder }
+            sortedRenderablesAreCurrent = true
+        }
+        return sortedRenderables
     }
 }

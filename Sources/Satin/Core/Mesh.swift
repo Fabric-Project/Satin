@@ -24,13 +24,16 @@ import SatinCore
 /// the pipeline compiled first, and the one used by draws that state no layout.
 public struct DrawLayout {
     public let vertexDescriptor: MTLVertexDescriptor
+    /// `vertexDescriptor`'s interned layout, which pipeline lookups key by.
+    public let vertexLayoutID: Int
     public let skinning: Bool
     public let instancing: Bool
     public let castShadow: Bool
     public let receiveShadow: Bool
 
-    public init(vertexDescriptor: MTLVertexDescriptor, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
+    public init(vertexDescriptor: MTLVertexDescriptor, vertexLayoutID: Int, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
         self.vertexDescriptor = vertexDescriptor
+        self.vertexLayoutID = vertexLayoutID
         self.skinning = skinning
         self.instancing = instancing
         self.castShadow = castShadow
@@ -54,7 +57,7 @@ open class Mesh: Renderable {
 
     /// What this mesh's draws need from a material's pipeline; see `DrawLayout`.
     public var drawLayout: DrawLayout {
-        DrawLayout(vertexDescriptor: geometry.vertexDescriptor, skinning: geometry.isSkinned, instancing: isInstanced,
+        DrawLayout(vertexDescriptor: geometry.vertexDescriptor, vertexLayoutID: geometry.vertexLayoutID, skinning: geometry.isSkinned, instancing: isInstanced,
                    castShadow: castShadow, receiveShadow: receiveShadow)
     }
 

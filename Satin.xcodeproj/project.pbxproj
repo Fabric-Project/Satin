@@ -106,6 +106,9 @@
 		5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000A /* ObjectAnimation.swift */; };
 		5A1E00000000000000000019 /* TimeDriven.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000009 /* TimeDriven.swift */; };
 		7F1A00000000000000000002 /* FrameTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000001 /* FrameTime.swift */; };
+		7F1A00000000000000000004 /* SceneIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000003 /* SceneIndex.swift */; };
+		7F1A00000000000000000006 /* RenderCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000005 /* RenderCollection.swift */; };
+		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
 		E101A8C62C070E8E0055FABA /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7C2C06A24B00B5A6C8 /* Object.swift */; };
@@ -271,6 +274,7 @@
 		E14638662C8CB4C4005E36E9 /* TextureComputeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */; };
 		E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */; };
 		E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF812CBCD89C00F54A6D /* Locks.swift */; };
+		7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000009 /* VertexLayoutRegistry.swift */; };
 		E18ABF842CBCDC9600F54A6D /* MutexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF832CBCDC9000F54A6D /* MutexTests.swift */; };
 		E194F6992D288A22009A5C25 /* Raycast.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6952D288A22009A5C25 /* Raycast.swift */; };
 		E194F69A2D288A22009A5C25 /* RaycastOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6962D288A22009A5C25 /* RaycastOptions.swift */; };
@@ -372,6 +376,9 @@
 		5A1E0000000000000000000A /* ObjectAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ObjectAnimation.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000009 /* TimeDriven.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimeDriven.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000001 /* FrameTime.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameTime.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000003 /* SceneIndex.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneIndex.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000005 /* RenderCollection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderCollection.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
 		66D7DD7C2C06A24B00B5A6C8 /* Object.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
@@ -565,6 +572,7 @@
 		E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextureComputeProcessor.swift; sourceTree = "<group>"; };
 		E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeProcessor.swift; sourceTree = "<group>"; };
 		E18ABF812CBCD89C00F54A6D /* Locks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Locks.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000009 /* VertexLayoutRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexLayoutRegistry.swift; sourceTree = "<group>"; };
 		E18ABF832CBCDC9000F54A6D /* MutexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutexTests.swift; sourceTree = "<group>"; };
 		E194F6952D288A22009A5C25 /* Raycast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Raycast.swift; sourceTree = "<group>"; };
 		E194F6962D288A22009A5C25 /* RaycastOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastOptions.swift; sourceTree = "<group>"; };
@@ -777,6 +785,7 @@
 				5A1E0000000000000000000A /* ObjectAnimation.swift */,
 				5A1E00000000000000000009 /* TimeDriven.swift */,
 				7F1A00000000000000000001 /* FrameTime.swift */,
+				7F1A00000000000000000003 /* SceneIndex.swift */,
 				5A1E00000000000000000006 /* SkeletonBinding.swift */,
 				66D7DD7C2C06A24B00B5A6C8 /* Object.swift */,
 				66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */,
@@ -966,6 +975,8 @@
 			children = (
 				66D7DEAC2C06A24B00B5A6C8 /* RenderEncoderState.swift */,
 				66D7DEAD2C06A24B00B5A6C8 /* RenderList.swift */,
+				7F1A00000000000000000005 /* RenderCollection.swift */,
+				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
 			path = Renderer;
 			sourceTree = "<group>";
@@ -1039,6 +1050,7 @@
 			isa = PBXGroup;
 			children = (
 				E18ABF812CBCD89C00F54A6D /* Locks.swift */,
+				7F1A00000000000000000009 /* VertexLayoutRegistry.swift */,
 				66D7DECB2C06A24B00B5A6C8 /* FileWatcher.swift */,
 				66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */,
 				66D7DECD2C06A24B00B5A6C8 /* Loader.swift */,
@@ -1328,6 +1340,7 @@
 				E101A85E2C07061D0055FABA /* Types.mm in Sources */,
 				E101A8542C07061D0055FABA /* Bezier.mm in Sources */,
 				E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */,
+				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
@@ -1461,6 +1474,9 @@
 				5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */,
 				5A1E00000000000000000019 /* TimeDriven.swift in Sources */,
 				7F1A00000000000000000002 /* FrameTime.swift in Sources */,
+				7F1A00000000000000000004 /* SceneIndex.swift in Sources */,
+				7F1A00000000000000000006 /* RenderCollection.swift in Sources */,
+				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,
 				E101A8C62C070E8E0055FABA /* Object.swift in Sources */,

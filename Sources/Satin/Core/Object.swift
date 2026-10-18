@@ -385,9 +385,81 @@ open class Object: Codable {
         }
     }
 
-    public var children: [Object] = [] {
-        didSet {
-            updateLocalBounds = true
+    /// The objects this one contains, in order. Assigning it, or changing it in place, updates scene
+    /// membership the same way `add` and `remove` do.
+    public var children: [Object] {
+        get { _children }
+        set {
+            let previousChildren = _children
+            _children = newValue
+
+            let previousIdentifiers = Set(previousChildren.map(ObjectIdentifier.init))
+            let newIdentifiers = Set(newValue.map(ObjectIdentifier.init))
+            for child in previousChildren where !newIdentifiers.contains(ObjectIdentifier(child)) {
+                child.containers[ObjectIdentifier(self)] = nil
+            }
+            for child in newValue where !previousIdentifiers.contains(ObjectIdentifier(child)) {
+                registerAsContainer(of: child)
+            }
+
+            childrenDidChange()
+        }
+    }
+
+    private var _children: [Object] = []
+
+    // MARK: - Scene Structure
+
+    private struct WeakContainer {
+        weak var object: Object?
+    }
+
+    /// Every object whose `children` contain this one, by identity: its parent, and any object it
+    /// was attached to. Structure changes travel up through these.
+    private var containers: [ObjectIdentifier: WeakContainer] = [:]
+
+    /// Advances whenever this object's subtree changes structure.
+    private(set) var structureRevision: UInt64 = 0
+
+    private var lastStructureChangeToken: UInt64 = 0
+    private nonisolated(unsafe) static var structureChangeTokenCount: UInt64 = 0
+
+    private var cachedSceneIndex: SceneIndex?
+
+    /// This object's descendants, flattened and cast, rebuilt only after its structure changes.
+    public var sceneIndex: SceneIndex {
+        if let cachedSceneIndex, cachedSceneIndex.revision == structureRevision {
+            return cachedSceneIndex
+        }
+        let sceneIndex = SceneIndex(root: self)
+        cachedSceneIndex = sceneIndex
+        return sceneIndex
+    }
+
+    private func registerAsContainer(of child: Object) {
+        child.containers = child.containers.filter { $0.value.object != nil }
+        child.containers[ObjectIdentifier(self)] = WeakContainer(object: self)
+    }
+
+    private func childrenDidChange() {
+        updateLocalBounds = true
+        Object.structureChangeTokenCount &+= 1
+        structureDidChange(token: Object.structureChangeTokenCount)
+    }
+
+    /// Marks this object and every container above it as structurally changed, once per change.
+    private func structureDidChange(token: UInt64) {
+        guard lastStructureChangeToken != token else { return }
+        lastStructureChangeToken = token
+        structureRevision &+= 1
+        cachedSceneIndex = nil
+
+        for (identifier, container) in containers {
+            if let containerObject = container.object {
+                containerObject.structureDidChange(token: token)
+            } else {
+                containers[identifier] = nil
+            }
         }
     }
 
@@ -515,7 +587,9 @@ open class Object: Codable {
             if setParent {
                 child.parent = self
             }
-            children.insert(child, at: at)
+            _children.insert(child, at: at)
+            registerAsContainer(of: child)
+            childrenDidChange()
         }
     }
 
@@ -527,7 +601,9 @@ open class Object: Codable {
             child.parent = self
         }
 
-        children.append(child)
+        _children.append(child)
+        registerAsContainer(of: child)
+        childrenDidChange()
         childAddedPublisher.send(child)
 
         childAddedSubscriptions[child] = child.childAddedPublisher.sink { [weak self] subchild in
@@ -560,7 +636,11 @@ open class Object: Codable {
             child.parent = nil
         }
 
-        children.remove(at: childIndex)
+        _children.remove(at: childIndex)
+        if !_children.contains(where: { $0 === child }) {
+            child.containers[ObjectIdentifier(self)] = nil
+        }
+        childrenDidChange()
 
         _ = childAddedSubscriptions.removeValue(forKey: child)
 

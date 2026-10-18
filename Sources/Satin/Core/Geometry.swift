@@ -197,6 +197,11 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     private var _vertexDescriptor = ValueCache<MTLVertexDescriptor>()
     open var vertexDescriptor: MTLVertexDescriptor { _vertexDescriptor.get { generateVertexDescriptor() } }
+
+    private var internedVertexLayout = InternedVertexLayout()
+    /// `vertexDescriptor`'s layout as a small integer, equal for geometries with equal layouts, so
+    /// pipeline lookups don't hash the descriptor on every draw.
+    public var vertexLayoutID: Int { internedVertexLayout.layoutID(for: vertexDescriptor) }
     public var tessellationDescriptor: TessellationDescriptor? { nil }
 
     public private(set) var vertexAttributes: [VertexAttributeIndex: VertexAttribute] = [:] {
