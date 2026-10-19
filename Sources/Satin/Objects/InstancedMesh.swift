@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 10/19/22.
 //
 
-import Combine
 import Foundation
 import Metal
 import simd
@@ -41,7 +40,9 @@ public class InstancedMesh: Mesh {
     var instanceMatrices: [simd_float4x4]
     public private(set) var instanceMatricesUniforms: [InstanceMatrixUniforms]
 
-    private var transformSubscriber: AnyCancellable?
+    /// The world revision the instance uniforms were built at: a move of this mesh or an
+    /// ancestor rebuilds them.
+    private var instanceUniformsWorldRevision: UInt64 = .max
     private var _updateInstanceMatricesUniforms = true
 
     // Motion: instance matrices by snapshot ordinal, the kth snapshot of a frame pairing with the
@@ -69,10 +70,6 @@ public class InstancedMesh: Mesh {
         super.init(context: context, label: label, geometry: geometry, material: material)
 
         instanceCount = count
-
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            self?._updateInstanceMatricesUniforms = true
-        }
     }
 
     public required init(from _: Decoder) throws {
@@ -118,7 +115,7 @@ public class InstancedMesh: Mesh {
     }
 
     override public func update() {
-        if _updateInstanceMatricesUniforms { updateInstanceMatricesUniforms() }
+        if _updateInstanceMatricesUniforms || instanceUniformsWorldRevision != worldRevision { updateInstanceMatricesUniforms() }
         super.update()
     }
 
@@ -191,6 +188,7 @@ public class InstancedMesh: Mesh {
     }
     
     func updateInstanceMatricesUniforms() {
+        instanceUniformsWorldRevision = worldRevision
 
         let count = instanceCount
         guard count > 0 else {
@@ -419,9 +417,4 @@ public class InstancedMesh: Mesh {
         return results.count > 0
     }
 
-    // MARK: - Deinit
-
-    deinit {
-        transformSubscriber?.cancel()
-    }
 }

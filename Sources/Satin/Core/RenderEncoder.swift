@@ -6,7 +6,6 @@
 //  Copyright © 2019 Reza Ali. All rights reserved.
 //
 
-import Combine
 import Metal
 import simd
 
@@ -371,9 +370,24 @@ open class RenderEncoder {
     /// Each route's entries for this draw, by route raw value; built once after recording.
     private var routeEntries: [[RenderRouteEntry]] = Array(repeating: [], count: RenderRoute.allCases.count)
 
-    private var _updateLightDataBuffer = false
     private var lightDataBuffer: StructBuffer<LightData>?
-    private var lightDataSubscriptions = Set<AnyCancellable>()
+
+    /// What each slot of the light data buffer was uploaded from: the light, its transform and
+    /// properties, and the indices this encoder assigned it. A slot is re-uploaded when any of
+    /// them differs.
+    private struct UploadedLight {
+        let identity: ObjectIdentifier
+        let worldRevision: UInt64
+        let lightRevision: UInt64
+        let shadowIndex: Int
+        let projectorIndex: Int
+    }
+
+    private var uploadedLights: [UploadedLight] = []
+    /// The light data last uploaded, in light order.
+    private(set) var uploadedLightData: [LightData] = []
+    /// Uploads so far; for tests.
+    private(set) var lightDataUploadCount = 0
 
     private var directShadowLights = [Light]()
     private var directShadowTextures = [MTLTexture?]()
@@ -2590,40 +2604,50 @@ open class RenderEncoder {
 
     // MARK: - Lights
 
+    /// Uploads the collected lights' data when any light, its order, its transform, its properties
+    /// or its assigned shadow or projector index changed. Runs after `updateDirectLightingState`,
+    /// which re-aims the lights' views and assigns those indices.
     private func updateLights() {
-        setupLightDataBuffer()
-        updateLightDataBuffer()
-    }
-
-    private func setupLightDataBuffer() {
         let lights = renderCollection.lights
-        guard lights.count != lightDataBuffer?.count else { return }
-        lightDataSubscriptions.removeAll(keepingCapacity: true)
-
-        if lights.isEmpty {
+        guard !lights.isEmpty else {
             lightDataBuffer = nil
-        } else {
-            for light in lights {
-                light.publisher.sink { [weak self] _ in
-                    self?._updateLightDataBuffer = true
-                }.store(in: &lightDataSubscriptions)
-            }
-            lightDataBuffer = StructBuffer<LightData>(
-                device: context.device,
-                count: lights.count,
-                label: "Light Data Buffer"
-            )
-
-            _updateLightDataBuffer = true
+            uploadedLights.removeAll(keepingCapacity: true)
+            uploadedLightData.removeAll(keepingCapacity: true)
+            return
         }
-    }
 
-    private func updateLightDataBuffer() {
-        guard let lightBuffer = lightDataBuffer, _updateLightDataBuffer else { return }
+        var changed = lights.count != uploadedLights.count
+        if !changed {
+            for (index, light) in lights.enumerated() {
+                let uploaded = uploadedLights[index]
+                if uploaded.identity != ObjectIdentifier(light) || uploaded.worldRevision != light.worldRevision
+                    || uploaded.lightRevision != light.lightRevision || uploaded.shadowIndex != light.shadowIndex
+                    || uploaded.projectorIndex != light.projectorIndex
+                {
+                    changed = true
+                    break
+                }
+            }
+        }
+        guard changed else { return }
 
-        lightBuffer.update(data: renderCollection.lights.map { $0.data })
-
-        _updateLightDataBuffer = false
+        if lightDataBuffer?.count != lights.count {
+            lightDataBuffer = StructBuffer<LightData>(device: context.device, count: lights.count, label: "Light Data Buffer")
+        }
+        uploadedLights.removeAll(keepingCapacity: true)
+        uploadedLightData.removeAll(keepingCapacity: true)
+        for light in lights {
+            uploadedLights.append(UploadedLight(
+                identity: ObjectIdentifier(light),
+                worldRevision: light.worldRevision,
+                lightRevision: light.lightRevision,
+                shadowIndex: light.shadowIndex,
+                projectorIndex: light.projectorIndex
+            ))
+            uploadedLightData.append(light.data)
+        }
+        lightDataBuffer?.update(data: uploadedLightData)
+        lightDataUploadCount += 1
     }
 
     private func updateDirectLightingState() {
@@ -2643,6 +2667,10 @@ open class RenderEncoder {
         var projectorIndex = 0
 
         for light in renderCollection.lights {
+            // In order: lights re-aim their shadow and projector views if they moved or changed
+            // (by revision), then get their shadow and projector indices, then `updateLights`
+            // uploads their data.
+            light.updateViewIfNeeded()
             light.shadowIndex = -1
             light.projectorIndex = -1
 
@@ -2742,8 +2770,6 @@ open class RenderEncoder {
             projectorMatricesBuffer?.update(data: projectorMatrices)
             projectorTransformsBuffer?.update(data: projectorTransforms)
         }
-
-        _updateLightDataBuffer = true
     }
 
     private func updateDirectShadowTextures() {

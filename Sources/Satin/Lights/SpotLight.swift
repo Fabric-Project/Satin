@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 11/6/22.
 //
 
-import Combine
 import Foundation
 import Metal
 import simd
@@ -19,32 +18,31 @@ public final class SpotLight: Light {
 
     public var projectionTexture: MTLTexture? {
         didSet {
-            updateProjectorCamera()
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var projectionMode: SpotLightProjectionMode = .mask {
         didSet {
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var projectionAspect: Float? {
         didSet {
-            updateProjectorCamera()
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var projectionTransform = matrix_identity_float3x3 {
         didSet {
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var projectorMatrix: simd_float4x4 {
-        projectorCamera.viewProjectionMatrix
+        updateViewIfNeeded()
+        return projectorCamera.viewProjectionMatrix
     }
 
     private let projectorCamera: PerspectiveCamera
@@ -77,28 +75,21 @@ public final class SpotLight: Light {
 
     public var radius: Float {
         didSet {
-            updateProjectorCamera()
-            shadow.update(light: self)
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var angleInner: Float {
         didSet {
-            updateProjectorCamera()
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
 
     public var angleOuter: Float {
         didSet {
-            updateProjectorCamera()
-            shadow.update(light: self)
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case radius
@@ -140,12 +131,6 @@ public final class SpotLight: Light {
 
     override public func setup() {
         super.setup()
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.updateProjectorCamera()
-            self.publisher.send(self)
-        }
         setupShadow()
     }
 
@@ -153,6 +138,11 @@ public final class SpotLight: Light {
         guard castShadow, let spotShadow = shadow as? SpotShadow else { return }
         spotShadow.device = context.device
         spotShadow.update(light: self)
+    }
+
+    override func updateView() {
+        super.updateView()
+        updateProjectorCamera()
     }
 
     private func updateProjectorCamera() {

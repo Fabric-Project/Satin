@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 11/6/22.
 //
 
-import Combine
 import Foundation
 import Metal
 import simd
@@ -36,12 +35,9 @@ public final class PointLight: Light {
     
     public var radius: Float {
         didSet {
-            shadow.update(light: self)
-            publisher.send(self)
+            lightPropertiesDidChange()
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case radius
@@ -71,11 +67,6 @@ public final class PointLight: Light {
 
     override public func setup() {
         super.setup()
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.publisher.send(self)
-        }
         setupShadow()
     }
 

@@ -92,22 +92,19 @@ final class ObjectTests: XCTestCase {
 //                    }
 //                }
 
-                Task {
-                    unfair.sync {
-                        object.add(newObject)
-                    }
+                // Run here, on concurrentPerform's threads, rather than in Tasks nothing awaits:
+                // those outlived the test and kept mutating objects (and the transform epoch)
+                // while later tests ran.
+                unfair.sync {
+                    object.add(newObject)
                 }
 
-                Task {
-                    unfair.sync {
-                        object.remove(newObject)
-                    }
+                unfair.sync {
+                    object.remove(newObject)
                 }
 
-                Task {
-                    unfair.sync {
-                        object.removeAll()
-                    }
+                unfair.sync {
+                    object.removeAll()
                 }
             }
         }

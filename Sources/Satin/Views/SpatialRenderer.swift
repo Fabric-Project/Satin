@@ -392,11 +392,9 @@ fileprivate func updateCameras(drawable: LayerRenderer.Drawable, deviceAnchor: s
 
         let camera = PerspectiveCamera()
 
+        // Assigned matrices hold exactly until the camera's inputs or transform change after them.
         camera.viewMatrix = info.view
-        camera.updateViewMatrix = false
-
         camera.projectionMatrix = info.projection
-        camera.updateProjectionMatrix = false
 
         cameras.append(camera)
     }

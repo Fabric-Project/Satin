@@ -6,23 +6,128 @@
 //  Copyright © 2022 Reza Ali. All rights reserved.
 //
 
-import Combine
 import simd
 
 open class Camera: Object {
-    private var _viewDirection = ValueCache<simd_float3>()
-    public var viewDirection: simd_float3 {
-        _viewDirection.get {
-            simd_normalize(simd_make_float3(worldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0)))
+    // MARK: - View
+
+    /// A view assigned through `viewMatrix`, kept exactly until the camera's world transform changes
+    /// after it (the assignment itself moves the camera to match).
+    private var assignedView: (matrix: matrix_float4x4, worldRevision: UInt64)?
+    private var computedView = matrix_identity_float4x4
+    private var computedViewRevision: UInt64 = .max
+    /// Advances with every view assignment, for caches derived from the view.
+    private var viewAssignmentRevision: UInt64 = 0
+
+    /// The inverse of the world matrix, or an assigned view until the camera moves after it.
+    public final var viewMatrix: matrix_float4x4 {
+        get {
+            let revision = worldRevision
+            if let assignedView, assignedView.worldRevision == revision {
+                return assignedView.matrix
+            }
+            if computedViewRevision != revision {
+                computedView = worldMatrixInverse
+                computedViewRevision = revision
+            }
+            return computedView
+        }
+        set {
+            localMatrix = newValue.inverse
+            assignedView = (newValue, worldRevision)
+            viewAssignmentRevision &+= 1
         }
     }
 
-    public var viewProjectionMatrix: matrix_float4x4 {
-        if _updateViewProjectionMatrix {
-            _viewProjectionMatrix = simd_mul(projectionMatrix, viewMatrix)
-            _updateViewProjectionMatrix = false
+    private var computedViewDirection = simd_float3(0, 0, -1)
+    private var computedViewDirectionRevision: UInt64 = .max
+    public var viewDirection: simd_float3 {
+        let revision = worldRevision
+        if computedViewDirectionRevision != revision {
+            computedViewDirection = simd_normalize(simd_make_float3(worldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0)))
+            computedViewDirectionRevision = revision
         }
-        return _viewProjectionMatrix
+        return computedViewDirection
+    }
+
+    // MARK: - Projection
+
+    /// Advances when a projection input changes value: `near`, `far`, and a subclass's own (field
+    /// of view, aspect, lens shift, extents).
+    public private(set) var projectionInputsRevision: UInt64 = 0
+    /// Advances whenever the effective projection may change: an input, or an assignment.
+    private var projectionRevision: UInt64 = 0
+    /// A projection assigned through `projectionMatrix` (or ARKit), kept exactly until a
+    /// projection input changes after it.
+    private var assignedProjection: (matrix: matrix_float4x4, inputsRevision: UInt64)?
+    private var computedProjection = matrix_identity_float4x4
+    private var computedProjectionInputsRevision: UInt64 = .max
+
+    /// Subclasses call this when one of their projection inputs changes value. Rebuilding the
+    /// projection never calls it.
+    func projectionInputsDidChange() {
+        projectionInputsRevision &+= 1
+        projectionRevision &+= 1
+    }
+
+    /// The projection the inputs describe. Subclasses override.
+    open func computeProjectionMatrix() -> matrix_float4x4 {
+        matrix_identity_float4x4
+    }
+
+    /// Sets the inputs that `matrix` implies, when it is assigned. Subclasses override; inputs set
+    /// here come before the assignment, so they don't replace it.
+    open func adoptProjectionInputs(from matrix: matrix_float4x4) {}
+
+    /// The projection the inputs describe, or an assigned one until an input changes after it.
+    public final var projectionMatrix: matrix_float4x4 {
+        get {
+            if let assignedProjection, assignedProjection.inputsRevision == projectionInputsRevision {
+                return assignedProjection.matrix
+            }
+            if computedProjectionInputsRevision != projectionInputsRevision {
+                computedProjection = computeProjectionMatrix()
+                computedProjectionInputsRevision = projectionInputsRevision
+            }
+            return computedProjection
+        }
+        set {
+            adoptProjectionInputs(from: newValue)
+            assignProjection(newValue)
+        }
+    }
+
+    /// Records `matrix` as the projection, as of the current inputs.
+    func assignProjection(_ matrix: matrix_float4x4) {
+        assignedProjection = (matrix, projectionInputsRevision)
+        projectionRevision &+= 1
+    }
+
+    public var near: Float = 0.01 {
+        didSet {
+            if near != oldValue { projectionInputsDidChange() }
+        }
+    }
+
+    public var far: Float = 100.0 {
+        didSet {
+            if far != oldValue { projectionInputsDidChange() }
+        }
+    }
+
+    // MARK: - View Projection
+
+    private var computedViewProjection = matrix_identity_float4x4
+    private var computedViewProjectionKey: (projection: UInt64, world: UInt64, viewAssignment: UInt64)?
+
+    public var viewProjectionMatrix: matrix_float4x4 {
+        let key = (projection: projectionRevision, world: worldRevision, viewAssignment: viewAssignmentRevision)
+        if let computedViewProjectionKey, computedViewProjectionKey == key {
+            return computedViewProjection
+        }
+        computedViewProjection = simd_mul(projectionMatrix, viewMatrix)
+        computedViewProjectionKey = key
+        return computedViewProjection
     }
 
     // MARK: - Motion
@@ -48,73 +153,6 @@ open class Camera: Object {
         }
         return motionPreviousViewProjectionMatrix
     }
-
-    public var viewMatrix: matrix_float4x4 {
-        get {
-            if updateViewMatrix {
-                _viewMatrix = worldMatrixInverse
-                updateViewMatrix = false
-            }
-            return _viewMatrix
-        }
-        set {
-            _viewMatrix = newValue
-            localMatrix = newValue.inverse
-        }
-    }
-
-    public var projectionMatrix: matrix_float4x4 {
-        get {
-            if updateProjectionMatrix {
-                updateProjectionMatrix = false
-            }
-            return _projectionMatrix
-        }
-        set {
-            _projectionMatrix = newValue
-        }
-    }
-
-    @Published public var near: Float = 0.01 {
-        didSet {
-            updateProjectionMatrix = true
-        }
-    }
-
-    @Published public var far: Float = 100.0 {
-        didSet {
-            updateProjectionMatrix = true
-        }
-    }
-
-    var _updateViewProjectionMatrix = true
-
-    public var updateProjectionMatrix = true {
-        didSet {
-            if updateProjectionMatrix {
-                _updateViewProjectionMatrix = true
-            }
-        }
-    }
-
-    public var updateViewMatrix = true {
-        didSet {
-            if updateViewMatrix {
-                _updateViewProjectionMatrix = true
-                _viewDirection.clear()
-            }
-        }
-    }
-
-    override var updateWorldMatrix: Bool {
-        didSet {
-            updateViewMatrix = true
-        }
-    }
-
-    var _viewMatrix: matrix_float4x4 = matrix_identity_float4x4
-    var _projectionMatrix: matrix_float4x4 = matrix_identity_float4x4
-    var _viewProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
 
     public init(context: Context, label: String = "Camera") {
         super.init(context: context, label: label)

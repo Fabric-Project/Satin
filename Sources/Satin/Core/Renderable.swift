@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 4/19/22.
 //
 
-import Combine
 import Metal
 import simd
 
@@ -50,60 +49,25 @@ open class Renderable : Object {
 
     open var opaque: Bool { material!.blending == .disabled }
     
-    final let doubleSidedPublisher = PassthroughSubject<Bool, Never>()
-    open var doubleSided: Bool = false {
-        didSet {
-            doubleSidedPublisher.send(doubleSided)
-        }
-    }
+    open var doubleSided: Bool = false
 
-    final let renderOrderPublisher = PassthroughSubject<Int, Never>()
-    open var renderOrder = 0 {
-        didSet {
-            renderOrderPublisher.send(renderOrder)
-        }
-    }
+    open var renderOrder = 0
 
-    final let renderLayerPublisher = PassthroughSubject<RenderLayer, Never>()
-    open var renderLayer: RenderLayer = .opaque {
-        didSet {
-            renderLayerPublisher.send(renderLayer)
-        }
-    }
+    open var renderLayer: RenderLayer = .opaque
     
     open var lighting: Bool { material?.lighting ?? false }
 
 
-    final let receiveShadowPublisher = PassthroughSubject<Bool, Never>()
-    open var receiveShadow = false {
-        didSet {
-            receiveShadowPublisher.send(receiveShadow)
-        }
-    }
+    open var receiveShadow = false
 
-    final let castShadowPublisher = PassthroughSubject<Bool, Never>()
-    open var castShadow = false {
-        didSet {
-            castShadowPublisher.send(castShadow)
-        }
-    }
+    open var castShadow = false
 
 
-    final let cullModePublisher = PassthroughSubject<MTLCullMode, Never>()
-    open var cullMode: MTLCullMode = .back {
-        didSet {
-            cullModePublisher.send(cullMode)
-        }
-    }
+    open var cullMode: MTLCullMode = .back
 
     open var windingOrder: MTLWinding = .counterClockwise
     
-    final let triangleFillModePublisher = PassthroughSubject<MTLTriangleFillMode, Never>()
-    open var triangleFillMode: MTLTriangleFillMode = .fill {
-        didSet {
-            triangleFillModePublisher.send(triangleFillMode)
-        }
-    }
+    open var triangleFillMode: MTLTriangleFillMode = .fill
     
     // MARK: - Occurrences and Motion
 

@@ -191,6 +191,16 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 * Customisation goes through `draw(in:)` on renderables, materials and geometry, with custom commands that last for their own draw; `preDraw` and `onBind` are gone.
 * GPU work per frame goes through `encode(in: EncodingContext)`, writing to per-frame arena slices so repeated encodes never overwrite each other.
 
+## Model Loading
+
+* Meshes loaded from one asset share a material when their source materials are identical, and each texture loads once per set of loading options.
+* Culling follows the asset's sidedness instead of drawing back faces everywhere; mirrored meshes keep their winding correct.
+
+## Transform Revisions
+
+* Transform changes no longer push through the scene graph via Combine. Objects carry revisions; world matrices, bounds, camera views and light data validate when read. Moving a parent costs nothing until something reads its descendants.
+* Removed the per-object Combine subjects that had no subscribers, and `@Published` from camera properties, which cost key-path and metadata lookups on every access.
+
 ## Bug Fixes
 
 * Fix a bug in text tessellation, improving some edge cases with certain fonts not rendering correctly
