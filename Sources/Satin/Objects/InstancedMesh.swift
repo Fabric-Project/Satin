@@ -15,22 +15,6 @@ import SatinCore
 #endif
 
 public class InstancedMesh: Mesh {
-    override public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard instanceMatrixBuffer != nil, instanceMatricesUniforms.count >= instanceCount else { return false }
-
-        if let drawCount = drawCount {
-            if drawCount > 0 {
-                return super.isDrawable(renderContext: renderContext, shadow: shadow)
-            }
-            else {
-                return false
-            }
-        }
-        else {
-            return super.isDrawable(renderContext: renderContext, shadow: shadow)
-        }
-    }
-
     public var drawCount: Int? {
         didSet {
             if let drawCount = drawCount, drawCount > instanceCount {
@@ -388,9 +372,9 @@ public class InstancedMesh: Mesh {
 
     
     override public func draw(in context: RenderableDrawContext) {
-        if let instanceMatrixBuffer {
-            context.setVertexBuffer(instanceMatrixBuffer.buffer, offset: instanceMatrixBuffer.offset, index: .InstanceMatrixUniforms)
-        }
+        // Nothing to draw without its instance matrices, all of them, or with a draw count of zero.
+        guard let instanceMatrixBuffer, instanceMatricesUniforms.count >= instanceCount else { return }
+        context.setVertexBuffer(instanceMatrixBuffer.buffer, offset: instanceMatrixBuffer.offset, index: .InstanceMatrixUniforms)
         drawMesh(in: context, instanceCount: drawCount.map { min($0, instanceCount) } ?? instanceCount)
     }
 

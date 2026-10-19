@@ -25,6 +25,30 @@ open class Camera: Object {
         return _viewProjectionMatrix
     }
 
+    // MARK: - Motion
+
+    /// The view-projection at the frame this camera was last drawn from, and the one before it, so
+    /// every renderable and pass in a frame reads the same previous value.
+    private var motionFrameNumber: Int?
+    private var motionViewProjectionMatrix = matrix_identity_float4x4
+    private var motionPreviousViewProjectionMatrix = matrix_identity_float4x4
+
+    /// The view-projection this camera had in the frame before `frame`, or its current one when it
+    /// wasn't drawn from then. Advances once per frame, on the first draw of that frame.
+    public func previousViewProjectionMatrix(frame: FrameTime) -> simd_float4x4 {
+        if motionFrameNumber != frame.frameNumber {
+            let current = viewProjectionMatrix
+            if let motionFrameNumber, motionFrameNumber == frame.frameNumber - 1 {
+                motionPreviousViewProjectionMatrix = motionViewProjectionMatrix
+            } else {
+                motionPreviousViewProjectionMatrix = current
+            }
+            motionViewProjectionMatrix = current
+            motionFrameNumber = frame.frameNumber
+        }
+        return motionPreviousViewProjectionMatrix
+    }
+
     public var viewMatrix: matrix_float4x4 {
         get {
             if updateViewMatrix {

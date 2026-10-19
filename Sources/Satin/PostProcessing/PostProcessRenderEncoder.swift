@@ -37,12 +37,6 @@ open class PostProcessRenderEncoder {
         }
     }
 
-    private struct RenderContextKey: Hashable {
-        let colorPixelFormat: MTLPixelFormat
-        let depthPixelFormat: MTLPixelFormat
-        let stencilPixelFormat: MTLPixelFormat
-    }
-
     private struct RenderPassDescriptorState {
         let colorTexture: MTLTexture?
         let colorResolveTexture: MTLTexture?
@@ -63,9 +57,9 @@ open class PostProcessRenderEncoder {
         let renderTargetHeight: Int
     }
 
-    private var renderContextCache = [RenderContextKey: Context]()
-    /// Records the mesh's draw before executing it; reused for every draw.
-    private let drawRecorder = DrawRecorder()
+    /// Per-draw storage: the mesh's vertex uniforms in the arena, its packets in leased storage.
+    private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
+    private let packetStoragePool = PacketStoragePool()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
     private var colorTexture: MTLTexture?
@@ -126,6 +120,7 @@ open class PostProcessRenderEncoder {
     }
 
     open func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         mesh: Mesh,
@@ -144,6 +139,7 @@ open class PostProcessRenderEncoder {
         }
 
         draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -155,12 +151,14 @@ open class PostProcessRenderEncoder {
     }
 
     open func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         mesh: Mesh,
         camera: Camera
     ) {
         draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -170,6 +168,7 @@ open class PostProcessRenderEncoder {
     }
 
     open func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         mesh: Mesh,
@@ -190,6 +189,7 @@ open class PostProcessRenderEncoder {
         }
 
         draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -203,6 +203,7 @@ open class PostProcessRenderEncoder {
     }
 
     open func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         mesh: Mesh,
@@ -219,17 +220,13 @@ open class PostProcessRenderEncoder {
 
         mesh.update()
         mesh.encode(commandBuffer)
-        mesh.ensureVertexUniformBuffer(context: renderContext)
 
-        let updateCount = min(context.vertexAmplificationCount, cameras.count, simdViewports.count)
-        for index in 0..<updateCount {
-            mesh.update(
-                renderContext: renderContext,
-                camera: cameras[index],
-                viewport: simdViewports[index],
-                index: index
-            )
-        }
+        let storage = packetStoragePool.lease()
+        defer { packetStoragePool.returnStorage(storage) }
+        let recorder = PacketRecorder(storage: storage, arena: frameArena, commandBuffer: commandBuffer, frame: frame)
+        mesh.beginOccurrence(frame: frame)
+        // One amplified draw covers every view.
+        let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, cameras: cameras, viewports: simdViewports)
 
         let descriptorState = saveState(renderPassDescriptor)
         defer { restoreState(descriptorState, to: renderPassDescriptor) }
@@ -256,13 +253,7 @@ open class PostProcessRenderEncoder {
             renderCommandEncoder.setViewports(viewports)
         }
 
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderCommandEncoder)
-        renderEncoderState.windingOrder = mesh.windingOrder
-        renderEncoderState.triangleFillMode = mesh.triangleFillMode
-        renderEncoderState.cullMode = mesh.cullMode
-
-        mesh.preDraw?(renderCommandEncoder)
-        mesh.encodeDraw(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: false, recorder: drawRecorder)
+        recorder.encode(packets, into: RenderEncoderState(renderEncoder: renderCommandEncoder))
         renderCommandEncoder.endEncoding()
     }
 
@@ -357,37 +348,27 @@ open class PostProcessRenderEncoder {
         }
     }
 
+    /// The forward context for this encoder's formats, which never change.
+    private lazy var forwardRenderContext = Context(
+        device: context.device,
+        sampleCount: context.sampleCount,
+        colorPixelFormat: colorPixelFormat,
+        depthPixelFormat: depthPixelFormat,
+        stencilPixelFormat: stencilPixelFormat,
+        vertexAmplificationCount: context.vertexAmplificationCount,
+        maxBuffersInFlight: context.maxBuffersInFlight,
+        renderingMode: .forward,
+        activeOutputs: .color,
+        alphaOitEnabled: false,
+        albedoPixelFormat: context.albedoPixelFormat,
+        normalsPixelFormat: context.normalsPixelFormat,
+        pbrPixelFormat: context.pbrPixelFormat,
+        velocityPixelFormat: context.velocityPixelFormat,
+        emissivePixelFormat: context.emissivePixelFormat
+    )
+
     private func fastRenderContext() -> Context {
-        let key = RenderContextKey(
-            colorPixelFormat: colorPixelFormat,
-            depthPixelFormat: depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat
-        )
-
-        if let context = renderContextCache[key] {
-            return context
-        }
-
-        let renderContext = Context(
-            device: context.device,
-            sampleCount: context.sampleCount,
-            colorPixelFormat: colorPixelFormat,
-            depthPixelFormat: depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat,
-            vertexAmplificationCount: context.vertexAmplificationCount,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            renderingMode: .forward,
-            activeOutputs: .color,
-            alphaOitEnabled: false,
-            albedoPixelFormat: context.albedoPixelFormat,
-            normalsPixelFormat: context.normalsPixelFormat,
-            pbrPixelFormat: context.pbrPixelFormat,
-            velocityPixelFormat: context.velocityPixelFormat,
-            emissivePixelFormat: context.emissivePixelFormat
-        )
-
-        renderContextCache[key] = renderContext
-        return renderContext
+        forwardRenderContext
     }
 
     private func setupColorTexture() {

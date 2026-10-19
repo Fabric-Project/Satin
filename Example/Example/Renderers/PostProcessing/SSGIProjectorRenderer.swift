@@ -185,6 +185,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -197,10 +198,10 @@ final class SSGIProjectorRenderer: BaseRenderer {
         ssgiPostProcessEncoder.albedoTexture = sceneRenderer.albedoTexture
         ssgiPostProcessEncoder.pbrTexture = sceneRenderer.pbrTexture
         ssgiPostProcessEncoder.sceneCamera = camera
-        ssgiPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        ssgiPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         compositorMaterial.texture = ssgiPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
-        compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        compositor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

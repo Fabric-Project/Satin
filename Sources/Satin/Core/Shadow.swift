@@ -11,9 +11,6 @@ import Metal
 import simd
 
 public class Shadow {
-    /// Records each caster's draw before executing it; reused for every draw.
-    let drawRecorder = DrawRecorder()
-
     public var label: String
     public var texture: MTLTexture? = nil
     
@@ -64,7 +61,9 @@ public class Shadow {
         enabled && (autoUpdate || needsUpdate)
     }
     
-    public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
+    /// Records and encodes the casters among `renderables` into this shadow's map, from the light's
+    /// view, into `recorder`'s draw.
+    func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
         fatalError("Subclasses must overload")
     }
 }

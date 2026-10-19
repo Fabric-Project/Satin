@@ -237,6 +237,7 @@ final class PBRMRTRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -247,6 +248,7 @@ final class PBRMRTRenderer: BaseRenderer {
         updatePreviewTextures(beautyTexture: beautyTexture)
 
         overlayRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: overlayScene,
@@ -455,6 +457,7 @@ final class PBRMRTRenderer: BaseRenderer {
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
         bokehDepthOfFieldPostProcessEncoder.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )

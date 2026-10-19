@@ -49,9 +49,9 @@ open class TessellationMesh: Mesh {
     // MARK: - Draw
 
     override public func draw(in context: RenderableDrawContext) {
-        guard instanceCount > 0, let vertexUniforms = self.vertexUniforms(for: context.renderContext.id), let material, !geometry.vertexBuffers.isEmpty else { return }
+        guard instanceCount > 0, let material, !geometry.vertexBuffers.isEmpty else { return }
 
-        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
 
         let geometryContext = context.geometryContext(instanceCount: instanceCount)
         geometry.recordBindings(in: geometryContext)

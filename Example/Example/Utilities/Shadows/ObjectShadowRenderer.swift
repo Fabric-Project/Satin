@@ -141,7 +141,7 @@ final class ObjectShadowRenderer {
         update()
     }
 
-    public func update(commandBuffer: MTLCommandBuffer) {
+    public func update(frame: FrameTime, commandBuffer: MTLCommandBuffer) {
         update()
 
         let finalScene = Object(context: context, label: "Shadow Scene")
@@ -160,6 +160,7 @@ final class ObjectShadowRenderer {
         rpd.renderTargetWidth = resolution
         rpd.renderTargetHeight = resolution
         renderer.draw(
+            frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,
             scene: finalScene,
@@ -175,7 +176,7 @@ final class ObjectShadowRenderer {
             processor.depthTexture = renderer.depthTexture
             processor.mesh.material?.set("Near Far", [camera.near, camera.far])
             processor.mesh.material?.set("Color", color)
-            processor.draw(renderPassDescriptor: srpd, commandBuffer: commandBuffer)
+            processor.draw(frame: frame, renderPassDescriptor: srpd, commandBuffer: commandBuffer)
 
             if let blurFilter = blurFilter {
                 blurFilter.encode(

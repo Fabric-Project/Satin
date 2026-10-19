@@ -63,11 +63,13 @@ final class ARRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

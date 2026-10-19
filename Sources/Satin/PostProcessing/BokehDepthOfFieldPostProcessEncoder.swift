@@ -272,7 +272,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         resizeResourcesIfNeeded(force: false)
 
         guard let colorTexture,
@@ -362,6 +362,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         compositeMaterial.blend = resolvedSettings.blend
 
         super.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

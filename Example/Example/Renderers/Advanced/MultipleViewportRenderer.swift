@@ -96,6 +96,7 @@ final class MultipleViewportRenderer: BaseRenderer {
         }
 
         subRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: subRenderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: subScene,
@@ -106,6 +107,7 @@ final class MultipleViewportRenderer: BaseRenderer {
         material.set(subColorTexture, index: FragmentTextureIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: mesh,

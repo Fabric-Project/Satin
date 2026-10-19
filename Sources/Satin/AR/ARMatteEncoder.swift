@@ -59,14 +59,14 @@ public class ARMatteEncoder {
         _updateGeometry = true
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer) {
-        guard let frame = session.currentFrame else { return }
+    public func encode(frame: FrameTime, commandBuffer: MTLCommandBuffer) {
+        guard let arFrame = session.currentFrame else { return }
 
-        material.alphaTexture = matteGenerator.generateMatte(from: frame, commandBuffer: commandBuffer)
-        material.dilatedDepthTexture = matteGenerator.generateDilatedDepth(from: frame, commandBuffer: commandBuffer)
+        material.alphaTexture = matteGenerator.generateMatte(from: arFrame, commandBuffer: commandBuffer)
+        material.dilatedDepthTexture = matteGenerator.generateDilatedDepth(from: arFrame, commandBuffer: commandBuffer)
 
         if _updateGeometry {
-            updateGeometry(frame)
+            updateGeometry(arFrame)
             _updateGeometry = false
         }
 
@@ -80,6 +80,7 @@ public class ARMatteEncoder {
         rpd.depthAttachment.texture = dilatedDepthTexture
 
         renderer.draw(
+            frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,
             scene: mesh,

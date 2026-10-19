@@ -90,8 +90,9 @@ open class PostProcessEncoder {
         scene = Object(context: context, label: label + " Scene", [mesh])
     }
 
-    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
+    open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
         postProcessRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -100,8 +101,9 @@ open class PostProcessEncoder {
         )
     }
 
-    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         postProcessRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -109,8 +111,9 @@ open class PostProcessEncoder {
         )
     }
 
-    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = [], renderTarget: MTLTexture) {
+    open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = [], renderTarget: MTLTexture) {
         postProcessRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
@@ -121,8 +124,9 @@ open class PostProcessEncoder {
         )
     }
 
-    open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
+    open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
         postProcessRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,

@@ -47,14 +47,14 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
-        super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
-    override public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
         update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
-        super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: renderTarget)
+        super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: renderTarget)
     }
 }
 

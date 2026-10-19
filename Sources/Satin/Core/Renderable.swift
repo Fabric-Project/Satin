@@ -76,45 +76,81 @@ open class Renderable : Object {
         }
     }
     
-    open var vertexUniforms: [UUID: VertexUniformBuffer] = [:] {
-        didSet {
-            vertexUniformsContextIDs = Array(vertexUniforms.keys)
-            vertexUniformsBuffers = vertexUniformsContextIDs.compactMap { vertexUniforms[$0] }
-        }
+    // MARK: - Occurrences and Motion
+
+    /// What one occurrence of this renderable draws with: its model and normal matrices, and the
+    /// model matrix the same occurrence had last frame, for motion. Every pass of the occurrence
+    /// (shadow lights, faces, colour) reads it; only the engine advances it.
+    struct Occurrence {
+        var modelMatrix: simd_float4x4
+        var normalMatrix: simd_float3x3
+        var previousModelMatrix: simd_float4x4
     }
 
-    // `vertexUniforms` as two parallel arrays: a renderable draws in a handful of contexts, so
-    // finding a context's buffer on every draw compares a few identifiers instead of hashing one,
-    // and touches no buffer until it finds the match.
-    private var vertexUniformsContextIDs: [UUID] = []
-    private var vertexUniformsBuffers: [VertexUniformBuffer] = []
+    private(set) var occurrence = Occurrence(
+        modelMatrix: matrix_identity_float4x4,
+        normalMatrix: matrix_identity_float3x3,
+        previousModelMatrix: matrix_identity_float4x4
+    )
 
-    /// The vertex uniforms this renderable keeps for `contextID`, if any.
-    public func vertexUniforms(for contextID: UUID) -> VertexUniformBuffer? {
-        for index in vertexUniformsContextIDs.indices where vertexUniformsContextIDs[index] == contextID {
-            return vertexUniformsBuffers[index]
+    /// Model matrices by draw ordinal: the kth occurrence of this frame pairs with the kth of the
+    /// last frame this renderable was drawn in, if that was the frame before.
+    private var previousFrameModelMatrices: [simd_float4x4] = []
+    private var currentFrameModelMatrices: [simd_float4x4] = []
+    private var motionFrameNumber: Int?
+
+    /// Starts an occurrence of this renderable in `frame`, before any of its passes record. The
+    /// first occurrence of a frame moves the last frame's samples into place; an ordinal with no
+    /// sample from the frame before starts with no motion.
+    func beginOccurrence(frame: FrameTime) {
+        if motionFrameNumber != frame.frameNumber {
+            if let motionFrameNumber, motionFrameNumber == frame.frameNumber - 1 {
+                swap(&previousFrameModelMatrices, &currentFrameModelMatrices)
+            } else {
+                previousFrameModelMatrices.removeAll(keepingCapacity: true)
+            }
+            currentFrameModelMatrices.removeAll(keepingCapacity: true)
+            motionFrameNumber = frame.frameNumber
         }
-        return nil
-    }
-    var materialPass: MaterialPass = .all
 
-    private var repeatedVertexUniformSourceStates: [VertexUniformBuffer.SourceState] = []
+        let modelMatrix = selectedRepeatedSourceState?.modelMatrix ?? worldMatrix
+        let ordinal = currentFrameModelMatrices.count
+        let previousModelMatrix = ordinal < previousFrameModelMatrices.count ? previousFrameModelMatrices[ordinal] : modelMatrix
+        currentFrameModelMatrices.append(modelMatrix)
+
+        occurrence = Occurrence(
+            modelMatrix: modelMatrix,
+            normalMatrix: selectedRepeatedSourceState?.normalMatrix ?? normalMatrix,
+            previousModelMatrix: previousModelMatrix
+        )
+    }
+
+    /// Forgets this renderable's motion: its next occurrences draw with none. For an owner whose
+    /// drawing changed in a way ordinals can't see, such as a reordered or resized set of draws.
+    public func resetMotion() {
+        previousFrameModelMatrices.removeAll(keepingCapacity: true)
+        currentFrameModelMatrices.removeAll(keepingCapacity: true)
+    }
+
+    // MARK: - Repeated Encoding State
+
+    /// The world and normal matrices one repetition drew with.
+    struct RepeatedSourceState {
+        let modelMatrix: simd_float4x4
+        let normalMatrix: simd_float3x3
+    }
+
+    private var repeatedSourceStates: [RepeatedSourceState] = []
+    private var selectedRepeatedSourceState: RepeatedSourceState?
 
     open var material: Material? = nil
     open var materials: [Material] = []
 
     open var preDraw: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)? = nil
 
-    open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        fatalError("Subclasses must implement this method")
-    }
-
-//    func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-//        fatalError("Subclasses must implement this method")
-//    }
-
-    /// Records this renderable's draw for one pass: its bindings, material and geometry draws, and
-    /// any custom commands. Recorded values are captured, so later changes don't affect this draw.
+    /// Records this renderable's draw for one render event: its bindings, material and geometry
+    /// draws, and any custom commands. Recorded values are captured, so later changes don't affect
+    /// this draw. Recording no draw call means it doesn't draw in this pass.
     open func draw(in context: RenderableDrawContext) {
         fatalError("Subclasses must implement this method")
     }
@@ -131,30 +167,37 @@ open class Renderable : Object {
     /// each encoding sees independent data. Call once before the iteration loop begins,
     /// whenever `count` or the set of child renderables changes.
     open func prepareForRepeatedEncoding(count: Int) {
-        prepareRepeatedVertexUniformSourceStates(count: count)
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.prepareForRepeatedEncoding(count: count)
+        let count = max(1, count)
+        if count > 1 {
+            repeatedSourceStates.reserveCapacity(count)
+        } else {
+            repeatedSourceStates.removeAll(keepingCapacity: true)
+            selectedRepeatedSourceState = nil
         }
     }
 
     open func captureRepeatedEncodingState(iteration: Int, count: Int) {
-        captureRepeatedVertexUniformSourceState(iteration: iteration, count: count)
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.captureRepeatedEncodingSourceState(
-                object: self,
-                iteration: iteration,
-                count: count
-            )
+        let count = max(1, count)
+        guard count > 1 else {
+            repeatedSourceStates.removeAll(keepingCapacity: true)
+            selectedRepeatedSourceState = nil
+            return
         }
+
+        let state = RepeatedSourceState(modelMatrix: worldMatrix, normalMatrix: normalMatrix)
+        if repeatedSourceStates.count != count {
+            repeatedSourceStates = Array(repeating: state, count: count)
+        }
+        repeatedSourceStates[min(max(iteration, 0), count - 1)] = state
     }
 
     open func selectRepeatedEncodingState(iteration: Int, count: Int) {
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.selectRepeatedEncodingState(
-                iteration: iteration,
-                count: count
-            )
+        let count = max(1, count)
+        guard count > 1, repeatedSourceStates.count == count else {
+            selectedRepeatedSourceState = nil
+            return
         }
+        selectedRepeatedSourceState = repeatedSourceStates[min(max(iteration, 0), count - 1)]
     }
 
     open func captureRepeatedEncodingSlot(iteration: Int, count: Int) {
@@ -163,60 +206,5 @@ open class Renderable : Object {
 
     open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
         selectRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    @discardableResult
-    func ensureVertexUniformBuffer(
-        context: Context,
-        encodesPerFrame: Int = Satin.maxSubPassesPerFrame
-    ) -> VertexUniformBuffer {
-        let encodesPerFrame = max(1, encodesPerFrame)
-        if let existingVertexUniformBuffer = vertexUniforms(for: context.id),
-           existingVertexUniformBuffer.encodesPerFrame >= encodesPerFrame
-        {
-            return existingVertexUniformBuffer
-        }
-
-        let vertexUniformBuffer = VertexUniformBuffer(
-            context: context,
-            encodesPerFrame: encodesPerFrame
-        )
-
-        if !repeatedVertexUniformSourceStates.isEmpty {
-            vertexUniformBuffer.loadRepeatedEncodingSourceStates(repeatedVertexUniformSourceStates)
-        }
-
-        vertexUniforms[context.id] = vertexUniformBuffer
-        return vertexUniformBuffer
-    }
-
-    private func prepareRepeatedVertexUniformSourceStates(count: Int) {
-        let count = max(1, count)
-        if count > 1 {
-            repeatedVertexUniformSourceStates.reserveCapacity(count)
-        }
-        else {
-            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
-        }
-    }
-
-    private func captureRepeatedVertexUniformSourceState(iteration: Int, count: Int) {
-        let count = max(1, count)
-        guard count > 1 else {
-            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
-            return
-        }
-
-        let state = VertexUniformBuffer.SourceState(
-            modelMatrix: worldMatrix,
-            normalMatrix: normalMatrix
-        )
-
-        if repeatedVertexUniformSourceStates.count != count {
-            repeatedVertexUniformSourceStates = Array(repeating: state, count: count)
-        }
-        
-        let slot = min(max(iteration, 0), count - 1)
-        repeatedVertexUniformSourceStates[slot] = state
     }
 }

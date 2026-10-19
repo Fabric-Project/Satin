@@ -657,10 +657,12 @@ final class SkinningTests: XCTestCase {
         let target = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
 
         var frames: [[UInt16]] = []
+        var frameTime = FrameTime.zero
         for frame in 0 ..< frameCount {
             beforeFrame(frame)
+            if frame > 0 { frameTime = frameTime.next(time: Double(frame) / 60.0) }
             let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            renderer.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, scene: scene, camera: camera, renderTarget: target)
+            renderer.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, scene: scene, camera: camera, renderTarget: target)
             if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
                 blitEncoder.synchronize(resource: target)
                 blitEncoder.endEncoding()

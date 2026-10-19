@@ -234,6 +234,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -244,6 +245,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         updatePreviewTextures(beautyTexture: beautyTexture)
 
         overlayRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: overlayScene,
@@ -488,14 +490,14 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         ssaoPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         ssaoPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
         ssaoPostProcessEncoder.sceneCamera = camera
-        ssaoPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        ssaoPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let compositeTexture = ssaoPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
 
         motionBlurPostProcessEncoder.colorTexture = compositeTexture
         motionBlurPostProcessEncoder.velocityTexture = sceneRenderer.velocityTexture
         motionBlurPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
-        motionBlurPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        motionBlurPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let motionBlurTexture = motionBlurPostProcessEncoder.outputTexture ?? compositeTexture
 
@@ -503,6 +505,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
         bokehDepthOfFieldPostProcessEncoder.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )

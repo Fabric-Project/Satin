@@ -91,6 +91,7 @@ final class WaveSimulationRenderer: BaseRenderer {
         material.set(computer.dstTexture, index: FragmentTextureIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

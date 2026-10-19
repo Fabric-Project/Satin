@@ -124,6 +124,7 @@ final class BloomRenderer: BaseRenderer {
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let renderTexture else { return }
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -136,6 +137,7 @@ final class BloomRenderer: BaseRenderer {
         postProcessor.mesh.material?.set(bloomTexture, index: FragmentTextureIndex.Custom1)
 
         postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )

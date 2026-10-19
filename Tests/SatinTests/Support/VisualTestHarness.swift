@@ -119,6 +119,7 @@ enum VisualTestHarness {
         }
 
         try renderer.draw(
+            frame: .zero,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: sceneResult.scene,

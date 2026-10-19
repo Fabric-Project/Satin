@@ -66,10 +66,19 @@ final class RenderContextRegistryTests: XCTestCase {
         // Compiling reflects which slots the shader reads.
         XCTAssertNotNil(material.getPipeline(renderContext: context, shadow: false))
 
+        let vertexUniformsBuffer = try XCTUnwrap(device.makeBuffer(length: 4096))
         func recordsAlbedo() -> Bool {
-            let recorder = DrawRecorder()
-            material.draw(in: RenderableDrawContext(renderContext: context, pass: .color, recorder: recorder).materialContext(layout: nil))
-            return recorder.commands.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true } else { return false } }
+            let storage = PacketStorage()
+            storage.beginRecording(cullMode: .back, windingOrder: .counterClockwise, triangleFillMode: .fill, renderOrder: 0, debugLabel: "Test")
+            let drawContext = RenderableDrawContext(
+                renderContext: context,
+                pass: .color,
+                materialPass: .all,
+                vertexUniforms: VertexUniformsBinding(buffer: vertexUniformsBuffer, offset: 0),
+                storage: storage
+            )
+            material.draw(in: drawContext.materialContext(layout: nil))
+            return storage.commands.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true } else { return false } }
         }
 
         XCTAssertTrue(recordsAlbedo())

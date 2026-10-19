@@ -270,7 +270,7 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         syncMaterialParameters()
 
         let hasAOInputs = depthTexture != nil &&
@@ -295,12 +295,14 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
             denoiseMaterial.update(camera: sceneCamera)
 
             prefilterProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: linearDepthTexture
             )
 
             super.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: rawTexture
@@ -308,6 +310,7 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
 
             denoiseMaterial.aoTexture = rawTexture
             denoiseProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
@@ -320,6 +323,7 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.aoTexture = compositeAOTexture
         compositeProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

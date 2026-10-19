@@ -89,6 +89,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
         viewMappings: [MTLVertexAmplificationViewMapping]
     ) {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -100,6 +101,7 @@ final class Immersive3DRenderer: ImmersiveBaseRenderer {
 
     override func drawView(view: Int, frame: LayerRenderer.Frame, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, camera: PerspectiveCamera, viewport: MTLViewport) {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

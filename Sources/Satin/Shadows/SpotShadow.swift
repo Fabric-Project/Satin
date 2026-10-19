@@ -98,7 +98,7 @@ public final class SpotShadow: Shadow {
         needsUpdate = true
     }
 
-    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
+    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
         guard enabled else { return }
 
         if device == nil {
@@ -121,12 +121,11 @@ public final class SpotShadow: Shadow {
         renderEncoder.setViewport(viewport)
 
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-            renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
-            renderable.encodeDraw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true, recorder: drawRecorder)
+        let shadowCameras = [camera]
+        let shadowViewports = [viewportFloat4]
+        for renderable in renderables where renderable.castShadow {
+            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, cameras: shadowCameras, viewports: shadowViewports)
+            recorder.encode(packets, into: renderEncoderState)
         }
 
         renderEncoder.endEncoding()

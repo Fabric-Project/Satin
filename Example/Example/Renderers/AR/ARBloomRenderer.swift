@@ -140,11 +140,13 @@ final class ARBloomRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -154,6 +156,7 @@ final class ARBloomRenderer: BaseRenderer {
         let brpd = MTLRenderPassDescriptor()
         brpd.depthAttachment.texture = renderPassDescriptor.depthAttachment.texture
         bloomRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: brpd,
             commandBuffer: commandBuffer,
             scene: bloomedScene,
@@ -170,6 +173,7 @@ final class ARBloomRenderer: BaseRenderer {
         postProcessor.renderer.colorLoadAction = .load
 
         postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )

@@ -86,7 +86,7 @@ public final class TessellationGeometry: Geometry {
         let patchCount = self.patchCount
         let instanceCount = context.instanceCount
         if let indexBuffer {
-            context.addCustomCommand { renderEncoder in
+            context.addCustomDraw { renderEncoder in
                 renderEncoder.drawIndexedPatches(
                     numberOfPatchControlPoints: controlPointsPerPatch,
                     patchStart: 0,
@@ -100,7 +100,7 @@ public final class TessellationGeometry: Geometry {
                 )
             }
         } else {
-            context.addCustomCommand { renderEncoder in
+            context.addCustomDraw { renderEncoder in
                 renderEncoder.drawPatches(
                     numberOfPatchControlPoints: controlPointsPerPatch,
                     patchStart: 0,

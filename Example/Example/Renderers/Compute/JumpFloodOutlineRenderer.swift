@@ -105,6 +105,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         guard let renderTexture else { return }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -140,6 +141,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         quad.material?.set(jumpFlood.dstTexture, index: FragmentTextureIndex.Custom1)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: quad,

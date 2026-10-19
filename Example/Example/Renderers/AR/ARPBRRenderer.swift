@@ -391,15 +391,17 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )
 
         if modelContainer.visible {
-            shadowRenderer.update(commandBuffer: commandBuffer)
+            shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
         }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -427,6 +429,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
 
         postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )

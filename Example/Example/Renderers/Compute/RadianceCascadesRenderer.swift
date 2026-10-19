@@ -63,6 +63,7 @@ final class RadianceCascadesRenderer: BaseRenderer {
         radianceCascadesProcessor.update(commandBuffer)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

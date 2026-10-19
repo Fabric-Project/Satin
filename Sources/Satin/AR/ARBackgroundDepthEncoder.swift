@@ -153,12 +153,14 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     }
 
     override public func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer
     ) {
         update(commandBuffer)
 
         depthRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: depthScene,
@@ -167,6 +169,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     }
 
     override public func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         renderTarget: MTLTexture
@@ -174,6 +177,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         update(commandBuffer)
 
         depthRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: depthScene,

@@ -312,6 +312,7 @@ private func drawFrame(
     scene: Object,
     camera: Camera,
     renderTarget: MTLTexture,
+    frame: FrameTime = .zero,
     synchronizeTextures: [MTLTexture] = []
 ) throws {
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
@@ -320,6 +321,7 @@ private func drawFrame(
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
     try renderer.draw(
+        frame: frame,
         renderPassDescriptor: renderPassDescriptor,
         commandBuffer: commandBuffer,
         scene: scene,

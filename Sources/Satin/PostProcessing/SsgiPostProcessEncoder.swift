@@ -187,7 +187,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
         let hasInputs = colorTexture != nil &&
             depthTexture != nil &&
             normalTexture != nil &&
@@ -203,6 +203,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
             ssgiMaterial.update(camera: sceneCamera, viewportHeight: Float(rawTexture.height))
 
             super.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: rawTexture
@@ -213,6 +214,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
             blurMaterial.noiseIndex = Int32(frameIndex & 3)
             blurMaterial.update(camera: sceneCamera)
             blurProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
@@ -227,6 +229,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.ssgiTexture = compositeSsgiTexture
         compositeProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

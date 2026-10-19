@@ -67,7 +67,6 @@
 		5A1E00000000000000000011 /* JointPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000001 /* JointPalette.swift */; };
 		E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */; };
 		E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */; };
-		E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */; };
 		E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD542C06A24B00B5A6C8 /* CameraController.swift */; };
 		E101A8A72C070E8E0055FABA /* OrthographicCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD552C06A24B00B5A6C8 /* OrthographicCameraController.swift */; };
 		E101A8A82C070E8E0055FABA /* PerspectiveCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD562C06A24B00B5A6C8 /* PerspectiveCameraController.swift */; };
@@ -111,6 +110,8 @@
 		7F1A0000000000000000000C /* FrameArena.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000B /* FrameArena.swift */; };
 		7F1A0000000000000000000E /* RenderDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000D /* RenderDestination.swift */; };
 		7F1A00000000000000000010 /* DrawRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000F /* DrawRecording.swift */; };
+		7F1A00000000000000000016 /* DrawPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000015 /* DrawPacket.swift */; };
+		7F1A00000000000000000018 /* PacketRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000017 /* PacketRecorder.swift */; };
 		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
@@ -342,7 +343,6 @@
 		5A1E00000000000000000001 /* JointPalette.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = JointPalette.swift; sourceTree = "<group>"; };
 		66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StructBuffer.swift; sourceTree = "<group>"; };
 		66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UniformBuffer.swift; sourceTree = "<group>"; };
-		66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VertexUniformBuffer.swift; sourceTree = "<group>"; };
 		66D7DD542C06A24B00B5A6C8 /* CameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		66D7DD552C06A24B00B5A6C8 /* OrthographicCameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OrthographicCameraController.swift; sourceTree = "<group>"; };
 		66D7DD562C06A24B00B5A6C8 /* PerspectiveCameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PerspectiveCameraController.swift; sourceTree = "<group>"; };
@@ -386,6 +386,8 @@
 		7F1A0000000000000000000B /* FrameArena.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameArena.swift; sourceTree = "<group>"; };
 		7F1A0000000000000000000D /* RenderDestination.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderDestination.swift; sourceTree = "<group>"; };
 		7F1A0000000000000000000F /* DrawRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawRecording.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000015 /* DrawPacket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawPacket.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000017 /* PacketRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PacketRecorder.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
@@ -686,7 +688,6 @@
 				5A1E00000000000000000001 /* JointPalette.swift */,
 				66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */,
 				66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */,
-				66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */,
 			);
 			path = Buffers;
 			sourceTree = "<group>";
@@ -990,6 +991,8 @@
 				7F1A0000000000000000000B /* FrameArena.swift */,
 				7F1A0000000000000000000D /* RenderDestination.swift */,
 				7F1A0000000000000000000F /* DrawRecording.swift */,
+				7F1A00000000000000000015 /* DrawPacket.swift */,
+				7F1A00000000000000000017 /* PacketRecorder.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
 			path = Renderer;
@@ -1441,7 +1444,6 @@
 				5A1E00000000000000000011 /* JointPalette.swift in Sources */,
 				E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */,
 				E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */,
-				E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */,
 				E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */,
 				1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */,
 				AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */,
@@ -1495,6 +1497,8 @@
 				7F1A0000000000000000000C /* FrameArena.swift in Sources */,
 				7F1A0000000000000000000E /* RenderDestination.swift in Sources */,
 				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
+				7F1A00000000000000000016 /* DrawPacket.swift in Sources */,
+				7F1A00000000000000000018 /* PacketRecorder.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,

@@ -126,6 +126,7 @@ final class MotionBlurRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -135,14 +136,14 @@ final class MotionBlurRenderer: BaseRenderer {
         motionBlurPostProcessEncoder.colorTexture = renderer.colorTexture
         motionBlurPostProcessEncoder.velocityTexture = renderer.velocityTexture
         motionBlurPostProcessEncoder.depthTexture = renderer.depthTexture
-        motionBlurPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        motionBlurPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         if let blurredTexture = motionBlurPostProcessEncoder.outputTexture {
             compositorMaterial.texture = blurredTexture
         } else if let colorTexture = renderer.colorTexture {
             compositorMaterial.texture = colorTexture
         }
-        compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        compositor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

@@ -83,6 +83,7 @@ class TextureComputeRenderer: BaseRenderer {
         material.set(textureCompute.dstTexture, index: VertexTextureIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

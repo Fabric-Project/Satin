@@ -64,6 +64,7 @@ final class SeparablePostProcessEncoder {
     }
 
     func draw(
+        frame: FrameTime,
         commandBuffer: MTLCommandBuffer,
         inputTexture: MTLTexture,
         configurePass: (Pass, MTLTexture) -> Void
@@ -72,6 +73,7 @@ final class SeparablePostProcessEncoder {
 
         configurePass(.horizontal, inputTexture)
         horizontalProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: intermediateTexture
@@ -79,6 +81,7 @@ final class SeparablePostProcessEncoder {
 
         configurePass(.vertical, intermediateTexture)
         verticalProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

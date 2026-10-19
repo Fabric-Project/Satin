@@ -42,6 +42,7 @@ final class MeshShaderRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -188,16 +189,6 @@ private final class CustomMaterial: SourceMaterial {
 
 private final class CustomMesh: Mesh {
 
-    override func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard #available(macOS 13.0, iOS 16.0, *),
-              let material,
-              material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
-              !geometry.vertexBuffers.isEmpty,
-              vertexUniforms(for: renderContext.id) != nil
-        else { return false }
-        return true
-    }
-
     public required init(from _: Decoder) throws {
         fatalError("init(from:) has not been implemented")
     }
@@ -210,7 +201,6 @@ private final class CustomMesh: Mesh {
 
     override func draw(in context: RenderableDrawContext) {
         guard #available(macOS 13.0, iOS 16.0, *),
-              let vertexUniforms = self.vertexUniforms(for: context.renderContext.id),
               let material,
               let vertexBuffer = geometry.vertexBuffers[VertexBufferIndex.Vertices]
         else { return }
@@ -218,11 +208,12 @@ private final class CustomMesh: Mesh {
         material.draw(in: context.materialContext(layout: nil))
 
         let indexBuffer = geometry.indexBuffer
-        let vertexUniformsBuffer = vertexUniforms.buffer
-        let vertexUniformsOffset = vertexUniforms.offset
+        let vertexUniformsBuffer = context.vertexUniforms.buffer
+        let vertexUniformsOffset = context.vertexUniforms.offset
         let instances = geometry.indexCount / 3
 
-        context.addCustomCommand { renderEncoder in
+        // Issues the draw itself: a mesh-shader dispatch.
+        context.addCustomDraw { renderEncoder in
             renderEncoder.setObjectBuffer(vertexBuffer, offset: 0, index: ObjectBufferIndex.Vertices.rawValue)
             renderEncoder.setObjectBuffer(indexBuffer, offset: 0, index: ObjectBufferIndex.Indicies.rawValue)
             renderEncoder.setMeshBuffer(vertexUniformsBuffer, offset: vertexUniformsOffset, index: MeshBufferIndex.VertexUniforms.rawValue)

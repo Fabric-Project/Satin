@@ -78,36 +78,11 @@ open class Mesh: Renderable {
         return drawLayout
     }
 
-    // `drawLayout` is read for every draw and every drawability check; it is rebuilt only when
-    // its inputs change. A geometry replaces its vertex descriptor whenever its attributes change,
+    // `drawLayout` is read for every draw; it is rebuilt only when its inputs change. A geometry replaces its vertex descriptor whenever its attributes change,
     // so comparing the geometry, its descriptor and its palette by identity is enough.
     private var cachedDrawLayout: DrawLayout?
     private var cachedDrawLayoutGeometry: Geometry?
     private var cachedDrawLayoutJointPalette: JointPalette?
-
-    override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard instanceCount > 0,
-              geometry.hasVertexBuffers,
-              vertexUniforms(for: renderContext.id) != nil
-        else { return false }
-
-        let layout = drawLayout
-        if submeshes.isEmpty,
-           let material = material,
-           materialMatchesCurrentPass(material, shadow: shadow),
-           material.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
-        {
-            return true
-        } else if submeshes.contains(where: {
-            $0.visible &&
-                materialMatchesCurrentPass($0.material, shadow: shadow) &&
-                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
-        }) {
-            return true
-        } else {
-            return false
-        }
-    }
 
     public let instanceCountPublisher = PassthroughSubject<Int, Never>()
     public var instanceCount = 1 {
@@ -170,7 +145,6 @@ open class Mesh: Renderable {
     // MARK: - Setup
 
     override open func setup() {
-        setupVertexUniforms()
         setupGeometry()
         setupSubmeshes()
         setupMaterial()
@@ -179,17 +153,6 @@ open class Mesh: Renderable {
     func cleanupGeometrySubscriber() {
         geometrySubscription?.cancel()
         geometrySubscription = nil
-    }
-
-    // MARK: - Setup Uniforms
-
-    open func setupVertexUniforms() {
-        guard vertexUniforms(for: context.id) == nil else { return }
-        ensureVertexUniformBuffer(context: context)
-    }
-
-    open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
-        vertexUniforms(for: renderContext.id)
     }
 
     open func setupGeometry() {
@@ -239,10 +202,6 @@ open class Mesh: Renderable {
     override open func prepareForRepeatedEncoding(count: Int) {
         super.prepareForRepeatedEncoding(count: count)
         minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
-        ensureVertexUniformBuffer(
-            context: context,
-            encodesPerFrame: max(Satin.maxSubPassesPerFrame, minimumEncodesPerFrame)
-        )
 
         // Expand material uniform buffer to hold one slot per in-flight iteration.
         material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
@@ -277,21 +236,16 @@ open class Mesh: Renderable {
 
     // MARK: - Binding
 
-    /// Records this mesh's vertex uniforms for the context, at the stages its materials read them.
-    /// Binds this mesh's vertex uniforms to the stages `material`'s shader reads them in, for the
-    /// draw that material is about to record. Repeat bindings across submeshes are skipped when
-    /// the draw replays.
+    /// Binds the render event's vertex uniforms to the stages `material`'s shader reads them in.
+    /// Called after the material records, so its pipeline, and with it which stages read them, is
+    /// known. Repeat bindings across submeshes are skipped when the draws encode.
     func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) {
         guard let shader = material.shader else { return }
-        let vertexWantsVertexUniforms = shader.vertexWantsVertexUniforms
-        let fragmentWantsVertexUniforms = shader.fragmentWantsVertexUniforms
-        guard vertexWantsVertexUniforms || fragmentWantsVertexUniforms,
-              let vertexUniforms = self.vertexUniforms(for: context.renderContext.id)
-        else { return }
-        if vertexWantsVertexUniforms {
+        let vertexUniforms = context.vertexUniforms
+        if shader.vertexWantsVertexUniforms {
             context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
-        if fragmentWantsVertexUniforms {
+        if shader.fragmentWantsVertexUniforms {
             context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
     }
@@ -323,22 +277,6 @@ open class Mesh: Renderable {
         super.encode(commandBuffer)
     }
 
-    override open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms(for: renderContext.id)?.update(
-            object: self,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-
-        super.update(
-            renderContext: renderContext,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-    }
-    
     private func updateAllMaterials()
     {
         var allMaterials = [Material]()
@@ -360,39 +298,40 @@ open class Mesh: Renderable {
         drawMesh(in: context, instanceCount: instanceCount)
     }
 
-    /// Records this mesh's draw with `instanceCount` instances: its vertex uniforms and geometry
-    /// bindings, then the material and draw call of each submesh drawn in this pass, or its own.
+    /// Records this mesh's draws with `instanceCount` instances: its geometry bindings, shared by
+    /// every draw, then for each submesh drawn in this pass, or for itself, its material, vertex
+    /// uniforms and draw call. Nothing to draw records nothing.
     func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
-        let shadow = context.isShadowPass
+        guard instanceCount > 0, geometry.hasVertexBuffers else { return }
         let geometryContext = context.geometryContext(instanceCount: instanceCount)
         geometry.recordBindings(in: geometryContext)
 
+        // The material may be shared with meshes of another layout: pick the pipeline for ours.
+        let layout = drawLayout
         if !submeshes.isEmpty {
-            let layout = drawLayout
             for submesh in submeshes where submesh.visible {
                 guard let submeshMaterial = submesh.material,
-                      materialMatchesCurrentPass(submeshMaterial, shadow: shadow)
+                      materialMatchesCurrentPass(submeshMaterial, in: context)
                 else { continue }
+                submeshMaterial.draw(in: context.materialContext(layout: layout))
                 recordVertexUniforms(in: context, for: submeshMaterial)
-                submesh.draw(in: context, instanceCount: instanceCount, layout: layout)
+                submesh.recordDrawCall(in: context, instanceCount: instanceCount)
             }
-        } else if let material, materialMatchesCurrentPass(material, shadow: shadow) {
+        } else if let material, materialMatchesCurrentPass(material, in: context) {
+            material.draw(in: context.materialContext(layout: layout))
             recordVertexUniforms(in: context, for: material)
-            // The material may be shared with meshes of another layout: pick the pipeline for ours.
-            material.draw(in: context.materialContext(layout: drawLayout))
             geometry.recordDrawCall(in: geometryContext)
         }
     }
 
-    private func materialMatchesCurrentPass(_ material: Material?, shadow: Bool) -> Bool {
-        guard let material else { return false }
-        if shadow {
+    private func materialMatchesCurrentPass(_ material: Material, in context: RenderableDrawContext) -> Bool {
+        if context.isShadowPass {
             return true
         }
 
         let isTransparent = material.blending != .disabled
 
-        switch materialPass {
+        switch context.materialPass {
         case .all:
             return true
         case .opaque:

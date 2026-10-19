@@ -71,6 +71,7 @@ final class PostProcessingRenderer: BaseRenderer {
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let renderTexture else { return }
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -78,7 +79,7 @@ final class PostProcessingRenderer: BaseRenderer {
             renderTarget: renderTexture
         )
         postMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
-        postProcessor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        postProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

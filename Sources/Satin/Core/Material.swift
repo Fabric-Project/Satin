@@ -529,11 +529,14 @@ open class Material: Codable {
     /// call `super`. `onBind` runs when the draw executes, after these bindings.
     open func draw(in context: MaterialDrawContext) {
         let shadow = context.isShadowPass
+        // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
+        // a layout variant's included, and the bindings below are made from that.
+        let pipeline = shader?.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
         recordUniforms(in: context, shadow: shadow)
         recordDepthState(in: context, shadow: shadow)
         recordBuffers(in: context)
         recordTextures(in: context)
-        if let pipeline = shader?.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout) {
+        if let pipeline {
             context.setPipeline(pipeline)
         }
         if let onBind {

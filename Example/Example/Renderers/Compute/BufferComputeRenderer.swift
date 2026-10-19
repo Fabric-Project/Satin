@@ -91,6 +91,7 @@ final class BufferComputeRenderer: BaseRenderer {
         particleSystem.update(commandBuffer)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -100,7 +101,7 @@ final class BufferComputeRenderer: BaseRenderer {
 
         chromaMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
 
-        chromaticProcessor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        chromaticProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

@@ -212,12 +212,12 @@ open class RenderEncoder {
 
     // The encoding phase applied when drawing a collected set of renderables.
     // Controls which render Context is built (shader defines, G-buffer outputs, OIT flag)
-    // and sets renderable.materialPass so Mesh.materialMatchesCurrentPass can gate
-    // per-material drawing within a single encoder.
+    // and the recording context's material pass, which Mesh.materialMatchesCurrentPass reads to
+    // gate per-material drawing within a single encoder.
     private enum MaterialPassType: Int {
         // All opaque geometry in a plain forward pass. No G-buffer outputs, no OIT.
         // Used for every opaque renderable in .forward rendering mode (surface-lit and
-        // unlit alike). Sets materialPass = .opaque so all non-transparent materials draw.
+        // unlit alike). Its recordings draw every non-transparent material.
         case forwardOpaque
 
         // Opaque surface-lit geometry writing to the G-buffer. Active only in .forwardPlus
@@ -248,7 +248,7 @@ open class RenderEncoder {
     // Route and MaterialPassType are separate because the same route can map to different
     // phases depending on rendering mode (e.g. .opaque → .forwardOpaque in .forward, but
     // opaque geometry is split into .surfaceOpaque + .unlitOpaque in .forwardPlus/.deferredGeometry).
-    private enum RenderRoute {
+    private enum RenderRoute: Int, CaseIterable {
         // All opaque geometry (blending == .disabled), regardless of lighting model.
         // Used as a single bucket in .forward mode. In other modes, opaque geometry is
         // collected via .surfaceOpaque and .unlitOpaque instead.
@@ -277,7 +277,6 @@ open class RenderEncoder {
         let cameras: [Camera]
         let viewports: [simd_float4]
         let phase: MaterialPassType
-        let overrideMaterial: Material?
     }
 
     private struct ScheduledCurrentPassEncodingCommand {
@@ -286,9 +285,11 @@ open class RenderEncoder {
         let encode: (RenderEncoderState) -> Void
     }
 
+    /// One render layer's share of a route: the packets recorded for it, in draw order, and the
+    /// scheduled commands that run after them.
     private struct RenderRouteEntry {
         let pass: Int
-        let renderables: [Renderable]
+        let packets: ArraySlice<Int>
         let commands: [ScheduledCurrentPassEncodingCommand]
     }
 
@@ -320,7 +321,18 @@ open class RenderEncoder {
     private let renderCollection = RenderCollection()
     private let sceneTraversal = SceneTraversal()
     /// Records each renderable's draw before executing it; reused for every draw.
-    private let drawRecorder = DrawRecorder()
+    /// Per-draw storage: vertex uniforms in the arena, packets in storage leased for one draw.
+    private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
+    private let packetStoragePool = PacketStoragePool()
+    /// The draw in progress: set for the length of `draw`, so scheduled commands record into it.
+    private var recorder: PacketRecorder?
+    /// This draw's render layers, ascending: every layer with renderables and every layer holding
+    /// scheduled commands. A layer's position here is its pass index.
+    private var passLayers: [Int] = []
+    /// Packet indices by route and pass, `packetBuckets[route.rawValue][pass]`, in draw order.
+    private var packetBuckets: [[[Int]]] = Array(repeating: [], count: RenderRoute.allCases.count)
+    /// Each route's entries for this draw, by route raw value; built once after recording.
+    private var routeEntries: [[RenderRouteEntry]] = Array(repeating: [], count: RenderRoute.allCases.count)
 
     private var _updateLightDataBuffer = false
     private var lightDataBuffer: StructBuffer<LightData>?
@@ -457,6 +469,7 @@ open class RenderEncoder {
     // MARK: - Drawing
 
     public func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         scene: Object,
@@ -468,6 +481,7 @@ open class RenderEncoder {
             let resolveTexture = renderPassDescriptor.colorAttachments[0].resolveTexture
             renderPassDescriptor.colorAttachments[0].resolveTexture = renderTarget
             draw(
+                frame: frame,
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,
@@ -479,6 +493,7 @@ open class RenderEncoder {
             let renderTexture = renderPassDescriptor.colorAttachments[0].texture
             renderPassDescriptor.colorAttachments[0].texture = renderTarget
             draw(
+                frame: frame,
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,
@@ -489,11 +504,12 @@ open class RenderEncoder {
         }
     }
 
-    public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = [], renderTarget: MTLTexture) {
+    public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = [], renderTarget: MTLTexture) {
         if context.sampleCount > 1 {
             let resolveTexture = renderPassDescriptor.colorAttachments[0].resolveTexture
             renderPassDescriptor.colorAttachments[0].resolveTexture = renderTarget
             draw(
+                frame: frame,
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,
@@ -506,6 +522,7 @@ open class RenderEncoder {
             let renderTexture = renderPassDescriptor.colorAttachments[0].texture
             renderPassDescriptor.colorAttachments[0].texture = renderTarget
             draw(
+                frame: frame,
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,
@@ -520,8 +537,9 @@ open class RenderEncoder {
     // https://developer.apple.com/documentation/metal/render_passes/improving_rendering_performance_with_vertex_amplification?language=objc
     // https://developer.apple.com/documentation/metal/render_passes/rendering_to_multiple_viewports_in_a_draw_command?language=objc
 
-    public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, camera: Camera, viewport: MTLViewport? = nil) {
+    public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, camera: Camera, viewport: MTLViewport? = nil) {
         draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -534,9 +552,15 @@ open class RenderEncoder {
     ///
     /// Shadow passes run before the main scene pass. Surface materials render first according to
     /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
-    public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
+    public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) {
+        let storage = packetStoragePool.lease()
+        let recorder = PacketRecorder(storage: storage, arena: frameArena, commandBuffer: commandBuffer, frame: frame)
+        self.recorder = recorder
         defer {
             scheduledCurrentPassEncodingCommands.removeAll(keepingCapacity: true)
+            clearRouteEntries()
+            self.recorder = nil
+            packetStoragePool.returnStorage(storage)
         }
 
         let simd_viewports = viewports.map(\.float4)
@@ -547,6 +571,11 @@ open class RenderEncoder {
             viewports: simd_viewports
         )
 
+        // Every renderable takes its motion sample once, before any of its passes record.
+        for collectedObject in renderCollection.objects {
+            collectedObject.renderable?.beginOccurrence(frame: frame)
+        }
+
         var arrayLength = 1
         for viewMapping in viewMappings {
             arrayLength = max(arrayLength, Int(viewMapping.renderTargetArrayIndexOffset) + 1)
@@ -556,10 +585,12 @@ open class RenderEncoder {
         if !renderCollection.shadowCasters.isEmpty, !renderCollection.shadowReceivers.isEmpty {
             for light in renderCollection.lights where light.castShadow {
                 if light.shadow.shouldRender {
-                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: renderCollection.shadowCasters)
+                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: renderCollection.shadowCasters, recorder: recorder)
                 }
             }
         }
+
+        recordScene(recorder: recorder, cameras: cameras, viewports: simd_viewports)
 
         let inColorStoreAction = renderPassDescriptor.colorAttachments[0].storeAction
         let inColorLoadAction = renderPassDescriptor.colorAttachments[0].loadAction
@@ -865,37 +896,26 @@ open class RenderEncoder {
         repeatedIteration: Int?,
         repeatedCount: Int
     ) {
-        let repeatedCount = max(1, repeatedCount)
-        let drawContext = currentEncodePass.overrideMaterial?.context ?? renderContext(
-            for: renderable,
-            phase: currentEncodePass.phase
-        )
-
-        if let repeatedIteration {
-            renderable.ensureVertexUniformBuffer(
-                context: drawContext,
-                encodesPerFrame: max(Satin.maxSubPassesPerFrame, repeatedCount)
-            )
-
-            renderable.selectRepeatedEncodingState(
-                iteration: repeatedIteration,
-                count: repeatedCount
-            )
-        } else if renderable.vertexUniforms(for: drawContext.id) == nil {
-            renderable.ensureVertexUniformBuffer(context: drawContext)
+        guard let recorder else {
+            assertionFailure("encodeCurrentPass called outside a RenderEncoder draw.")
+            return
         }
 
-        guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { return }
+        if let repeatedIteration {
+            renderable.selectRepeatedEncodingState(iteration: repeatedIteration, count: max(1, repeatedCount))
+        }
 
-        _encode(
-            renderEncoder: renderEncoderState.renderEncoder,
-            renderEncoderState: renderEncoderState,
-            renderable: renderable,
+        // A scheduled encode is its own occurrence, recorded and encoded at once.
+        renderable.beginOccurrence(frame: recorder.frame)
+        let packets = recorder.record(
+            renderable,
+            renderContext: renderContext(for: renderable, phase: currentEncodePass.phase),
+            pass: .color,
+            materialPass: materialPass(for: currentEncodePass.phase),
             cameras: currentEncodePass.cameras,
-            viewports: currentEncodePass.viewports,
-            phase: currentEncodePass.phase,
-            overrideMaterial: currentEncodePass.overrideMaterial
+            viewports: currentEncodePass.viewports
         )
+        recorder.encode(packets, into: renderEncoderState)
     }
 
     private func normalizedOutputs(_ outputs: RendererOutputs) -> RendererOutputs {
@@ -935,59 +955,122 @@ open class RenderEncoder {
         return [renderable.material].compactMap { $0 }
     }
 
+    /// The routes `renderable` draws in, as bits of route raw values: each of its materials puts it
+    /// in the routes that material's blending and lighting model select.
+    private func routeMembership(of renderable: Renderable) -> Int {
+        var membership = 0
+        for material in materials(for: renderable) {
+            if material.blending == .disabled {
+                membership |= 1 << RenderRoute.opaque.rawValue
+                if material.lightingModel == .surface { membership |= 1 << RenderRoute.surfaceOpaque.rawValue }
+                if material.lightingModel == .unlit { membership |= 1 << RenderRoute.unlitOpaque.rawValue }
+            } else if usesAlphaOit(material) {
+                membership |= 1 << RenderRoute.alphaTransparent.rawValue
+            } else {
+                membership |= 1 << RenderRoute.classicTransparent.rawValue
+            }
+        }
+        return membership
+    }
+
     private func shouldRender(_ renderable: Renderable, route: RenderRoute) -> Bool {
-        let materials = materials(for: renderable)
-        let hasOpaque = materials.contains { $0.blending == .disabled }
-        let hasAlphaTransparent = materials.contains { usesAlphaOit($0) }
-        let hasClassicTransparent = materials.contains {
-            $0.blending != .disabled && !usesAlphaOit($0)
+        routeMembership(of: renderable) & (1 << route.rawValue) != 0
+    }
+
+    /// The routes this encoder's rendering mode draws the scene in.
+    private var recordedRoutes: [RenderRoute] {
+        renderingMode == .forward ? Self.forwardRoutes : Self.layeredRoutes
+    }
+
+    private static let forwardRoutes: [RenderRoute] = [.opaque, .alphaTransparent, .classicTransparent]
+    private static let layeredRoutes: [RenderRoute] = [.surfaceOpaque, .unlitOpaque, .alphaTransparent, .classicTransparent]
+
+    private static func phase(for route: RenderRoute) -> MaterialPassType {
+        switch route {
+        case .opaque: return .forwardOpaque
+        case .surfaceOpaque: return .surfaceOpaque
+        case .unlitOpaque: return .unlitOpaque
+        case .alphaTransparent: return .alphaTransparent
+        case .classicTransparent: return .classicTransparent
         }
-        let hasSurfaceOpaque = materials.contains {
-            $0.lightingModel == .surface && $0.blending == .disabled
+    }
+
+    /// Which of a renderable's materials draw in `phase`.
+    private func materialPass(for phase: MaterialPassType) -> Renderable.MaterialPass {
+        switch phase {
+        case .forwardOpaque: return .opaque
+        case .surfaceOpaque: return .surfaceOpaque
+        case .unlitOpaque: return .unlitOpaque
+        case .alphaTransparent: return .alphaTransparent
+        case .classicTransparent: return .classicTransparent
         }
-        let hasUnlitOpaque = materials.contains {
-            $0.lightingModel == .unlit && $0.blending == .disabled
+    }
+
+    /// Records the scene's colour passes: every collected renderable, once per route it draws in, in
+    /// each pass layer's draw order (render order when sorting). Each recording is a render event
+    /// with its own vertex uniforms; its packets go to that route's bucket for the layer.
+    private func recordScene(recorder: PacketRecorder, cameras: [Camera], viewports: [simd_float4]) {
+        passLayers.removeAll(keepingCapacity: true)
+        passLayers.append(contentsOf: renderCollection.activeLayers)
+        for command in scheduledCurrentPassEncodingCommands where !passLayers.contains(command.renderLayer) {
+            let insertionIndex = passLayers.firstIndex { $0 > command.renderLayer } ?? passLayers.count
+            passLayers.insert(command.renderLayer, at: insertionIndex)
         }
 
-        switch route {
-        case .opaque:
-            return hasOpaque
-        case .alphaTransparent:
-            return hasAlphaTransparent
-        case .classicTransparent:
-            return hasClassicTransparent
-        case .surfaceOpaque:
-            return hasSurfaceOpaque
-        case .unlitOpaque:
-            return hasUnlitOpaque
+        for routeIndex in packetBuckets.indices {
+            if packetBuckets[routeIndex].count < passLayers.count {
+                packetBuckets[routeIndex].append(contentsOf: repeatElement([], count: passLayers.count - packetBuckets[routeIndex].count))
+            }
+            for pass in packetBuckets[routeIndex].indices {
+                packetBuckets[routeIndex][pass].removeAll(keepingCapacity: true)
+            }
+        }
+
+        let routes = recordedRoutes
+        for (pass, renderLayer) in passLayers.enumerated() {
+            for renderable in renderCollection.renderables(renderLayer: renderLayer, sorted: sortObjects) {
+                let membership = routeMembership(of: renderable)
+                for route in routes where membership & (1 << route.rawValue) != 0 {
+                    let phase = Self.phase(for: route)
+                    let packets = recorder.record(
+                        renderable,
+                        renderContext: renderContext(for: renderable, phase: phase),
+                        pass: .color,
+                        materialPass: materialPass(for: phase),
+                        cameras: cameras,
+                        viewports: viewports
+                    )
+                    packetBuckets[route.rawValue][pass].append(contentsOf: packets)
+                }
+            }
+        }
+
+        for route in RenderRoute.allCases {
+            buildRouteEntries(route: route)
+        }
+    }
+
+    /// The route's entries: each pass with packets or scheduled commands for it, in pass order.
+    private func buildRouteEntries(route: RenderRoute) {
+        for (pass, renderLayer) in passLayers.enumerated() {
+            let packets = packetBuckets[route.rawValue][pass][...]
+            let commands = scheduledCurrentPassEncodingCommands.isEmpty ? [] : scheduledCurrentPassEncodingCommands.filter {
+                $0.renderLayer == renderLayer && $0.routeRenderables.contains { shouldRender($0, route: route) }
+            }
+            guard !packets.isEmpty || !commands.isEmpty else { continue }
+            routeEntries[route.rawValue].append(RenderRouteEntry(pass: pass, packets: packets, commands: commands))
+        }
+    }
+
+    /// Entries hold slices of the buckets: cleared first, so the buckets are cleared in place.
+    private func clearRouteEntries() {
+        for routeIndex in routeEntries.indices {
+            routeEntries[routeIndex].removeAll(keepingCapacity: true)
         }
     }
 
     private func routePassEntries(route: RenderRoute) -> [RenderRouteEntry] {
-        // Layers with collected renderables, plus layers holding only scheduled commands. A route's
-        // pass is its position in this list.
-        let renderListLayers = Set(renderCollection.activeLayers)
-        let commandLayers = Set(scheduledCurrentPassEncodingCommands.map(\.renderLayer))
-        let layers = renderListLayers.union(commandLayers).sorted()
-
-        return layers
-            .enumerated()
-            .compactMap { pass, renderLayer in
-                let renderables = renderCollection
-                    .renderables(renderLayer: renderLayer, sorted: sortObjects)
-                    .filter { shouldRender($0, route: route) }
-                let commands = scheduledCurrentPassEncodingCommands.filter {
-                    $0.renderLayer == renderLayer &&
-                        $0.routeRenderables.contains { shouldRender($0, route: route) }
-                }
-
-                guard !renderables.isEmpty || !commands.isEmpty else { return nil }
-                return RenderRouteEntry(
-                    pass: pass,
-                    renderables: renderables,
-                    commands: commands
-                )
-            }
+        routeEntries[route.rawValue]
     }
 
     private func supportedOutputs(for renderable: Renderable, phase: MaterialPassType) -> RendererOutputs {
@@ -1241,10 +1324,23 @@ open class RenderEncoder {
         }
 
         let deferredCameras = Array(repeating: deferredLightingCamera, count: max(context.vertexAmplificationCount, 1))
+        // The lighting quad isn't in the scene: it is its own occurrence, recorded for this encoder.
+        var lightingPackets: Range<Int>?
+        if let recorder {
+            deferredLightingMesh.beginOccurrence(frame: recorder.frame)
+            lightingPackets = recorder.record(
+                deferredLightingMesh,
+                renderContext: renderContext(for: deferredLightingMesh, phase: .unlitOpaque),
+                pass: .color,
+                materialPass: materialPass(for: .unlitOpaque),
+                cameras: deferredCameras,
+                viewports: simdViewports
+            )
+        }
         encode(
             renderEncoder: renderEncoder,
             pass: 0,
-            renderables: [deferredLightingMesh],
+            recordedPackets: lightingPackets,
             cameras: deferredCameras,
             viewports: simdViewports,
             phase: .unlitOpaque
@@ -1257,7 +1353,7 @@ open class RenderEncoder {
             encode(
                 renderEncoder: renderEncoder,
                 pass: firstEntry.pass,
-                renderables: firstEntry.renderables,
+                packets: firstEntry.packets,
                 commands: firstEntry.commands,
                 cameras: unlitCameras,
                 viewports: simdViewports,
@@ -1301,7 +1397,7 @@ open class RenderEncoder {
             encode(
                 renderEncoder: enc,
                 pass: entry.pass,
-                renderables: entry.renderables,
+                packets: entry.packets,
                 commands: entry.commands,
                 cameras: unlitCameras,
                 viewports: simdViewports,
@@ -1371,9 +1467,16 @@ open class RenderEncoder {
     }
 
     private func alphaOitImageblockSampleLength(for routeEntries: [RenderRouteEntry]) -> Int? {
+        if let recorder {
+            for entry in routeEntries {
+                if let packetIndex = entry.packets.first {
+                    return recorder.storage.pipeline(of: recorder.storage.packets[packetIndex]).imageblockSampleLength
+                }
+            }
+        }
+        // Only scheduled commands: their renderables aren't recorded until they encode.
         for entry in routeEntries {
-            let renderables = entry.renderables + entry.commands.flatMap(\.routeRenderables)
-            for renderable in renderables {
+            for renderable in entry.commands.flatMap(\.routeRenderables) {
                 let renderContext = renderContext(for: renderable, phase: .alphaTransparent)
                 for material in materials(for: renderable) where usesAlphaOit(material) {
                     if let pipeline = material.getPipeline(renderContext: renderContext, shadow: false) {
@@ -1451,12 +1554,12 @@ open class RenderEncoder {
                     encodeAlphaOitTileClear(renderEncoder: renderEncoder, resources: resources)
                 }
 #if DEBUG
-                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(group.pass) Render Order \(group.renderables.first?.renderOrder ?? 0)")
+                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(group.pass) Render Order \(group.packets.first.map { recorder?.storage.packets[$0].renderOrder ?? 0 } ?? 0)")
 #endif
                 encode(
                     renderEncoder: renderEncoder,
                     pass: group.pass,
-                    renderables: group.renderables,
+                    packets: group.packets,
                     commands: group.commands,
                     cameras: cameras,
                     viewports: simdViewports,
@@ -1490,18 +1593,19 @@ open class RenderEncoder {
     private func alphaOitGroups(for routeEntries: [RenderRouteEntry]) -> [RenderRouteEntry] {
         var groups: [RenderRouteEntry] = []
 
+        guard let recorder else { return routeEntries }
         for entry in routeEntries {
-            var groupRenderables: [Renderable] = []
-
-            for renderable in entry.renderables {
-                if sortObjects, let previousRenderable = groupRenderables.last, previousRenderable.renderOrder != renderable.renderOrder {
-                    groups.append(RenderRouteEntry(pass: entry.pass, renderables: groupRenderables, commands: []))
-                    groupRenderables.removeAll()
+            var groupStart = entry.packets.startIndex
+            for packetPosition in entry.packets.indices where packetPosition > groupStart {
+                let renderOrder = recorder.storage.packets[entry.packets[packetPosition]].renderOrder
+                let previousRenderOrder = recorder.storage.packets[entry.packets[packetPosition - 1]].renderOrder
+                if sortObjects, renderOrder != previousRenderOrder {
+                    groups.append(RenderRouteEntry(pass: entry.pass, packets: entry.packets[groupStart ..< packetPosition], commands: []))
+                    groupStart = packetPosition
                 }
-                groupRenderables.append(renderable)
             }
 
-            groups.append(RenderRouteEntry(pass: entry.pass, renderables: groupRenderables, commands: entry.commands))
+            groups.append(RenderRouteEntry(pass: entry.pass, packets: entry.packets[groupStart ..< entry.packets.endIndex], commands: entry.commands))
         }
 
         return groups
@@ -1588,7 +1692,7 @@ open class RenderEncoder {
             encode(
                 renderEncoder: renderEncoder,
                 pass: entry.pass,
-                renderables: entry.renderables,
+                packets: entry.packets,
                 commands: entry.commands,
                 cameras: cameras,
                 viewports: simdViewports,
@@ -1673,7 +1777,7 @@ open class RenderEncoder {
             encode(
                 renderEncoder: renderEncoder,
                 pass: entry.pass,
-                renderables: entry.renderables,
+                packets: entry.packets,
                 commands: entry.commands,
                 cameras: cameras,
                 viewports: simdViewports,
@@ -2190,15 +2294,6 @@ open class RenderEncoder {
 
                     material.update()
                 }
-            } else {
-                for i in 0..<context.vertexAmplificationCount {
-                    object.update(
-                        renderContext: context,
-                        camera: cameras[i],
-                        viewport: viewports[i],
-                        index: i
-                    )
-                }
             }
 
             object.encode(commandBuffer)
@@ -2207,23 +2302,25 @@ open class RenderEncoder {
 
     // MARK: - Internal Encoding
 
+    /// Encodes `packets`, then `commands`, into one render encoder, after the fragment state every
+    /// pass shares: lights, shadows and projectors. `recordedPackets` encodes a contiguous range
+    /// recorded for this encoder alone, such as the deferred lighting quad.
     private func encode(
         renderEncoder: MTLRenderCommandEncoder,
         pass: Int,
-        renderables: [Renderable],
+        packets: ArraySlice<Int> = [],
+        recordedPackets: Range<Int>? = nil,
         commands: [ScheduledCurrentPassEncodingCommand] = [],
         cameras: [Camera],
         viewports: [simd_float4],
-        phase: MaterialPassType,
-        overrideMaterial: Material? = nil
+        phase: MaterialPassType
     ) {
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
         let previousEncodePass = currentEncodePass
         currentEncodePass = CurrentEncodePass(
             cameras: cameras,
             viewports: viewports,
-            phase: phase,
-            overrideMaterial: overrideMaterial
+            phase: phase
         )
         defer {
             currentEncodePass = previousEncodePass
@@ -2315,111 +2412,16 @@ open class RenderEncoder {
             }
         }
 
-        for renderable in renderables {
-            let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
-            if renderable.vertexUniforms(for: drawContext.id) == nil {
-                renderable.ensureVertexUniformBuffer(context: drawContext)
+        if let recorder {
+            recorder.encode(packets, into: renderEncoderState)
+            if let recordedPackets {
+                recorder.encode(recordedPackets, into: renderEncoderState)
             }
-            guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
-            _encode(
-                renderEncoder: renderEncoder,
-                renderEncoderState: renderEncoderState,
-                renderable: renderable,
-                cameras: cameras,
-                viewports: viewports,
-                phase: phase,
-                overrideMaterial: overrideMaterial
-            )
         }
 
         for command in commands {
             command.encode(renderEncoderState)
         }
-    }
-
-    private func _encode(
-        renderEncoder: MTLRenderCommandEncoder,
-        renderEncoderState: RenderEncoderState,
-        renderable: Renderable,
-        cameras: [Camera],
-        viewports: [simd_float4],
-        phase: MaterialPassType,
-        overrideMaterial: Material? = nil
-    ) {
-#if DEBUG
-        renderEncoder.pushDebugGroup(renderable.label)
-#endif
-        let savedMaterial = renderable.material
-        // Determine which context to use for pipeline/uniform lookups
-        let renderContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
-        let savedMaterialPass = renderable.materialPass
-
-        switch phase {
-        case .forwardOpaque:
-            renderable.materialPass = .opaque
-        case .alphaTransparent:
-            renderable.materialPass = .alphaTransparent
-        case .classicTransparent:
-            renderable.materialPass = .classicTransparent
-        case .surfaceOpaque:
-            renderable.materialPass = .surfaceOpaque
-        case .unlitOpaque:
-            renderable.materialPass = .unlitOpaque
-        }
-
-        if let overrideMaterial {
-            renderable.material = overrideMaterial
-        }
-        defer {
-            renderable.materialPass = savedMaterialPass
-            if overrideMaterial != nil {
-                renderable.material = savedMaterial
-            }
-        }
-
-        for i in 0..<context.vertexAmplificationCount {
-            renderable.update(
-                renderContext: renderContext,
-                camera: cameras[i],
-                viewport: viewports[i],
-                index: i
-            )
-        }
-
-        renderable.preDraw?(renderEncoder)
-
-        renderEncoderState.windingOrder = renderable.windingOrder
-        renderEncoderState.triangleFillMode = renderable.triangleFillMode
-
-        if renderable.doubleSided, renderable.cullMode == .none, renderable.opaque == false {
-            renderEncoderState.cullMode = .front
-            renderable.encodeDraw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: false,
-                recorder: drawRecorder
-            )
-
-            renderEncoderState.cullMode = .back
-            renderable.encodeDraw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: false,
-                recorder: drawRecorder
-            )
-        } else {
-            renderEncoderState.cullMode = renderable.cullMode
-            renderable.encodeDraw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: false,
-                recorder: drawRecorder
-            )
-        }
-
-#if DEBUG
-        renderEncoder.popDebugGroup()
-#endif
     }
 
     // MARK: - Resizing

@@ -97,7 +97,7 @@ public final class DirectionalShadow: Shadow {
         needsUpdate = true
     }
 
-    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
+    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
         guard enabled else { return }
 
         setupTexture()
@@ -122,30 +122,11 @@ public final class DirectionalShadow: Shadow {
         renderEncoder.label = label + " Shadow Encoder"
         renderEncoder.setViewport(viewport)
         let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-            #if DEBUG
-            renderEncoder.pushDebugGroup(renderable.label)
-            #endif
-            renderable.update(
-                renderContext: context,
-                camera: camera,
-                viewport: _viewport,
-                index: 0
-            )
-
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
-
-            renderable.encodeDraw(
-                renderContext: context,
-                renderEncoderState: renderEncoderState,
-                shadow: true,
-                recorder: drawRecorder
-            )
-            #if DEBUG
-            renderEncoder.popDebugGroup()
-            #endif
+        let shadowCameras = [camera]
+        let shadowViewports = [_viewport]
+        for renderable in renderables where renderable.castShadow {
+            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, cameras: shadowCameras, viewports: shadowViewports)
+            recorder.encode(packets, into: renderEncoderState)
         }
         renderEncoder.endEncoding()
         needsUpdate = false

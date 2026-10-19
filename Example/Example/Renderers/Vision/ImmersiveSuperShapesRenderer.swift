@@ -119,6 +119,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         viewMappings: [MTLVertexAmplificationViewMapping]
     ) {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -130,6 +131,7 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
 
     override func drawView(view: Int, frame: LayerRenderer.Frame, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, camera: PerspectiveCamera, viewport: MTLViewport) {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

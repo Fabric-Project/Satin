@@ -106,6 +106,7 @@ final class FlockingRenderer: BaseRenderer {
         }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

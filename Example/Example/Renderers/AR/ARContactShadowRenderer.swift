@@ -187,15 +187,17 @@ final class ARContactShadowRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if invaderContainer.visible {
-            shadowRenderer.update(commandBuffer: commandBuffer)
+            shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
         }
 
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

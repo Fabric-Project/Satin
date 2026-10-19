@@ -30,16 +30,6 @@ public class ARLidarMesh: Renderable {
 
     override public var opaque: Bool { material?.blending == .disabled }
 
-    override  public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard let material,
-              material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
-              vertexUniforms(for: renderContext.id) != nil,
-              vertexBuffer != nil,
-              indexBuffer != nil
-        else { return false }
-        return true
-    }
-
 
     public var indexBuffer: MTLBuffer? {
         meshAnchor?.geometry.faces.buffer ?? nil
@@ -75,16 +65,10 @@ public class ARLidarMesh: Renderable {
     }
 
     override public func setup() {
-        setupUniforms()
         setupMaterial()
     }
 
     func setupMaterial() {}
-
-    func setupUniforms() {
-        guard vertexUniforms(for: context.id) == nil else { return }
-        ensureVertexUniformBuffer(context: context)
-    }
 
     required init(from decoder: Decoder) throws {
         try super.init(from: decoder)
@@ -97,47 +81,31 @@ public class ARLidarMesh: Renderable {
         super.encode(commandBuffer)
     }
 
-    override public func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
+    override public func update() {
         if let meshAnchor = meshAnchor { localMatrix = meshAnchor.transform }
-        vertexUniforms(for: renderContext.id)?.update(object: self, camera: camera, viewport: viewport, index: index)
-        super.update(
-            renderContext: renderContext,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
+        super.update()
     }
 
     // MARK: - Draw
 
     override public func draw(in context: RenderableDrawContext) {
-        guard let vertexUniforms = self.vertexUniforms(for: context.renderContext.id),
-              let vertexBuffer = vertexBuffer,
+        guard let vertexBuffer = vertexBuffer,
+              let indexBuffer = indexBuffer,
               let material = material
         else { return }
 
-        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
         context.setVertexBuffer(vertexBuffer, offset: 0, index: .Vertices)
         material.draw(in: context.materialContext(layout: nil))
 
-        let geometryContext = context.geometryContext(instanceCount: 1)
-        if let indexBuffer = indexBuffer {
-            geometryContext.drawIndexedPrimitives(
-                type: .triangle,
-                indexCount: indexCount,
-                indexType: .uint32,
-                indexBuffer: indexBuffer,
-                indexBufferOffset: 0,
-                instanceCount: 1
-            )
-        } else {
-            geometryContext.drawPrimitives(
-                type: .triangle,
-                vertexStart: 0,
-                vertexCount: vertexCount,
-                instanceCount: 1
-            )
-        }
+        context.geometryContext(instanceCount: 1).drawIndexedPrimitives(
+            type: .triangle,
+            indexCount: indexCount,
+            indexType: .uint32,
+            indexBuffer: indexBuffer,
+            indexBufferOffset: 0,
+            instanceCount: 1
+        )
     }
 }
 
