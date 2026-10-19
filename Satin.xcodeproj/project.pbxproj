@@ -143,6 +143,7 @@
 		E101A8E02C070E8E0055FABA /* AnyBufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */; };
 		E101A8E12C070E8E0055FABA /* Attribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */; };
 		E101A8E22C070E8E0055FABA /* BufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */; };
+		7F1A00000000000000000012 /* GeometryBufferObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000011 /* GeometryBufferObserver.swift */; };
 		E101A8E32C070E8E0055FABA /* ElementBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */; };
 		E101A8E42C070E8E0055FABA /* InterleavedBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */; };
 		E101A8E52C070E8E0055FABA /* InterleavedBufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */; };
@@ -417,6 +418,7 @@
 		66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnyBufferAttribute.swift; sourceTree = "<group>"; };
 		66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Attribute.swift; sourceTree = "<group>"; };
 		66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BufferAttribute.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000011 /* GeometryBufferObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeometryBufferObserver.swift; sourceTree = "<group>"; };
 		66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ElementBuffer.swift; sourceTree = "<group>"; };
 		66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InterleavedBuffer.swift; sourceTree = "<group>"; };
 		66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InterleavedBufferAttribute.swift; sourceTree = "<group>"; };
@@ -850,6 +852,7 @@
 				66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */,
 				66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */,
 				66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */,
+				7F1A00000000000000000011 /* GeometryBufferObserver.swift */,
 				66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */,
 				66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */,
 				66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */,
@@ -1523,6 +1526,7 @@
 				E101A8E02C070E8E0055FABA /* AnyBufferAttribute.swift in Sources */,
 				E101A8E12C070E8E0055FABA /* Attribute.swift in Sources */,
 				E101A8E22C070E8E0055FABA /* BufferAttribute.swift in Sources */,
+				7F1A00000000000000000012 /* GeometryBufferObserver.swift in Sources */,
 				E101A8E32C070E8E0055FABA /* ElementBuffer.swift in Sources */,
 				E101A8E42C070E8E0055FABA /* InterleavedBuffer.swift in Sources */,
 				E101A8E52C070E8E0055FABA /* InterleavedBufferAttribute.swift in Sources */,

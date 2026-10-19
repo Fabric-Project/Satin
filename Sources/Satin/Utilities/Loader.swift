@@ -229,7 +229,6 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
                             Submesh(
                                 context: context,
                                 label: mdlSubmesh.name,
-                                parent: stnMesh,
                                 elementBuffer: ElementBuffer(
                                     type: .uint32,
                                     data: indexBytes,

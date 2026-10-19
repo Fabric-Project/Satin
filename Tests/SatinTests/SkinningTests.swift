@@ -314,7 +314,7 @@ final class SkinningTests: XCTestCase {
                             material: BasicColorMaterial(context: context))
             let material = BasicColorMaterial(context: context)
             submeshMaterial = material
-            mesh.addSubmesh(Submesh(parent: mesh, elementBuffer: ElementBuffer(type: .uint32, data: indices, count: 48, source: nil), material: material))
+            mesh.addSubmesh(Submesh(context: mesh.context, elementBuffer: ElementBuffer(type: .uint32, data: indices, count: 48, source: nil), material: material))
             // Swapped afterwards, as Fabric's Mesh node does.
             mesh.geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)])
             mesh.cullMode = .none
@@ -341,7 +341,7 @@ final class SkinningTests: XCTestCase {
             for halfIndex in 0 ..< 2 {
                 let material = BasicColorMaterial(context: context)
                 submeshMaterials.append(material)
-                multiMaterial.addSubmesh(Submesh(parent: multiMaterial, elementBuffer: ElementBuffer(type: .uint32, data: indices.advanced(by: halfIndex * 24), count: 24, source: nil),
+                multiMaterial.addSubmesh(Submesh(context: multiMaterial.context, elementBuffer: ElementBuffer(type: .uint32, data: indices.advanced(by: halfIndex * 24), count: 24, source: nil),
                                                  material: material))
             }
             plain.cullMode = .none

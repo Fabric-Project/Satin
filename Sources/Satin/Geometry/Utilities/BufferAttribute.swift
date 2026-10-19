@@ -11,7 +11,9 @@ import Metal
 import simd
 
 open class BufferAttribute: VertexAttribute, Codable {
-    public weak var delegate: BufferAttributeDelegate?
+    /// The geometries using this attribute; see `GeometryBufferObserver`.
+    var observers = GeometryBufferObservers()
+    var observerCount: Int { observers.count }
     public var needsUpdate: Bool = true
     public var buffer: MTLBuffer?
 
@@ -38,10 +40,6 @@ open class BufferAttribute: VertexAttribute, Codable {
     open func expand(_ size: Int) { fatalError("Subclasses must override expand(_:)") }
     open func interpolate(start: Int, end: Int, at time: Float) { fatalError("Subclasses must override interpolate(start:end:at:)") }
     open func set(at: Int, from: Int, source: BufferAttribute) { fatalError("Subclasses must override set(at:from:source:)") }
-}
-
-public protocol BufferAttributeDelegate: AnyObject {
-    func updated(attribute: BufferAttribute)
 }
 
 open class GenericBufferAttribute<T: Codable>: BufferAttribute {
@@ -72,7 +70,7 @@ open class GenericBufferAttribute<T: Codable>: BufferAttribute {
     public var data: [ValueType] {
         didSet {
             needsUpdate = true
-            delegate?.updated(attribute: self)
+            observers.notifyVertexDataChanged()
         }
     }
 

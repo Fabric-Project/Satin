@@ -278,17 +278,16 @@ open class Mesh: Renderable {
     // MARK: - Binding
 
     /// Records this mesh's vertex uniforms for the context, at the stages its materials read them.
-    func recordVertexUniforms(in context: RenderableDrawContext) {
-        guard let vertexUniforms = self.vertexUniforms(for: context.renderContext.id) else { return }
-        // Every material this mesh draws with, its own and its submeshes': a mesh whose materials
-        // are all on its submeshes still has to place them.
-        var vertexWantsVertexUniforms = false
-        var fragmentWantsVertexUniforms = false
-        for material in materials {
-            guard let shader = material.shader else { continue }
-            vertexWantsVertexUniforms = vertexWantsVertexUniforms || shader.vertexWantsVertexUniforms
-            fragmentWantsVertexUniforms = fragmentWantsVertexUniforms || shader.fragmentWantsVertexUniforms
-        }
+    /// Binds this mesh's vertex uniforms to the stages `material`'s shader reads them in, for the
+    /// draw that material is about to record. Repeat bindings across submeshes are skipped when
+    /// the draw replays.
+    func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) {
+        guard let shader = material.shader else { return }
+        let vertexWantsVertexUniforms = shader.vertexWantsVertexUniforms
+        let fragmentWantsVertexUniforms = shader.fragmentWantsVertexUniforms
+        guard vertexWantsVertexUniforms || fragmentWantsVertexUniforms,
+              let vertexUniforms = self.vertexUniforms(for: context.renderContext.id)
+        else { return }
         if vertexWantsVertexUniforms {
             context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
@@ -365,17 +364,22 @@ open class Mesh: Renderable {
     /// bindings, then the material and draw call of each submesh drawn in this pass, or its own.
     func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
         let shadow = context.isShadowPass
-        recordVertexUniforms(in: context)
         let geometryContext = context.geometryContext(instanceCount: instanceCount)
         geometry.recordBindings(in: geometryContext)
 
         if !submeshes.isEmpty {
-            for submesh in submeshes where submesh.visible && materialMatchesCurrentPass(submesh.material, shadow: shadow) {
-                submesh.draw(in: context, instanceCount: instanceCount)
+            let layout = drawLayout
+            for submesh in submeshes where submesh.visible {
+                guard let submeshMaterial = submesh.material,
+                      materialMatchesCurrentPass(submeshMaterial, shadow: shadow)
+                else { continue }
+                recordVertexUniforms(in: context, for: submeshMaterial)
+                submesh.draw(in: context, instanceCount: instanceCount, layout: layout)
             }
-        } else if materialMatchesCurrentPass(material, shadow: shadow) {
+        } else if let material, materialMatchesCurrentPass(material, shadow: shadow) {
+            recordVertexUniforms(in: context, for: material)
             // The material may be shared with meshes of another layout: pick the pipeline for ours.
-            material?.draw(in: context.materialContext(layout: drawLayout))
+            material.draw(in: context.materialContext(layout: drawLayout))
             geometry.recordDrawCall(in: geometryContext)
         }
     }
@@ -406,11 +410,10 @@ open class Mesh: Renderable {
 
     open func addSubmesh(_ submesh: Submesh) {
         assert(submesh.context == context, "Submesh context mismatch")
-        submesh.parent = self
         submeshes.append(submesh)
         // Its material needs its depth-stencil state and shader before the first draw; nothing
         // else sets a submesh up.
-        submesh.setup()
+        submesh.setup(vertexGeometry: geometry)
     }
 
     // MARK: - Comoute Bounds

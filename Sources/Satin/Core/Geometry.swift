@@ -133,7 +133,7 @@ public struct GeometryPieces: Equatable {
     }
 }
 
-open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, ElementBufferDelegate {
+open class Geometry {
     public var id: String = UUID().uuidString
 
     public let context: Context
@@ -221,6 +221,16 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     }
     private var bufferAttributes: [VertexAttributeIndex: BufferAttribute] = [:]
     private var interleavedAttributes: [VertexAttributeIndex: InterleavedBufferAttribute] = [:]
+
+    /// Registered with every buffer this geometry uses, which notify it through it; see
+    /// `GeometryBufferObserver`. Created on first registration, so nil means none.
+    private var bufferObserverStorage: GeometryBufferObserver?
+    private var bufferObserver: GeometryBufferObserver {
+        if let bufferObserverStorage { return bufferObserverStorage }
+        let observer = GeometryBufferObserver(geometry: self)
+        bufferObserverStorage = observer
+        return observer
+    }
 
     public let onUpdate = PassthroughSubject<Geometry, Never>()
 
@@ -474,13 +484,13 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     // MARK: - Elements
 
     public func setElements(_ elementBuffer: ElementBuffer?) {
-        if let oldElementBuffer = self.elementBuffer {
-            oldElementBuffer.delegate = nil
+        if let oldElementBuffer = self.elementBuffer, oldElementBuffer !== elementBuffer, let bufferObserverStorage {
+            oldElementBuffer.observers.remove(bufferObserverStorage)
         }
 
         self.elementBuffer = elementBuffer
         if let newElementBuffer = self.elementBuffer {
-            newElementBuffer.delegate = self
+            newElementBuffer.observers.add(bufferObserver)
         }
     }
 
@@ -491,45 +501,62 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     }
 
     public func addAttribute(_ attribute: VertexAttribute, for index: VertexAttributeIndex) {
+        let replacedAttribute = vertexAttributes[index]
         vertexAttributes[index] = attribute
         if let bufferAttribute = attribute as? BufferAttribute {
             bufferAttributes[index] = bufferAttribute
             interleavedAttributes.removeValue(forKey: index)
-            bufferAttribute.delegate = self
+            bufferAttribute.observers.add(bufferObserver)
         } else if let interleavedBuffer = attribute as? InterleavedBufferAttribute {
             interleavedAttributes[index] = interleavedBuffer
             bufferAttributes.removeValue(forKey: index)
-            interleavedBuffer.parent.delegate = self
+            interleavedBuffer.parent.observers.add(bufferObserver)
         } else {
             bufferAttributes.removeValue(forKey: index)
             interleavedAttributes.removeValue(forKey: index)
+        }
+        if let replacedAttribute, replacedAttribute !== attribute {
+            stopObservingIfUnused(replacedAttribute)
         }
     }
 
     public func removeAttribute(_ index: VertexAttributeIndex) {
         if let attribute = vertexAttributes[index] {
-            if let bufferAttribute = attribute as? BufferAttribute {
-                bufferAttribute.delegate = nil
-            } else if let interleavedAttribute = attribute as? InterleavedBufferAttribute {
-                interleavedAttribute.parent.delegate = nil
-            }
             vertexAttributes.removeValue(forKey: index)
             bufferAttributes.removeValue(forKey: index)
             interleavedAttributes.removeValue(forKey: index)
+            stopObservingIfUnused(attribute)
         }
     }
 
     public func removeAttributes() {
-        for (index, attribute) in vertexAttributes {
-            if let bufferAttribute = attribute as? BufferAttribute {
-                bufferAttribute.delegate = nil
-            } else if let interleavedAttribute = attribute as? InterleavedBufferAttribute {
-                interleavedAttribute.parent.delegate = nil
+        if let bufferObserverStorage {
+            for attribute in bufferAttributes.values {
+                attribute.observers.remove(bufferObserverStorage)
             }
-            vertexAttributes.removeValue(forKey: index)
+            for attribute in interleavedAttributes.values {
+                attribute.parent.observers.remove(bufferObserverStorage)
+            }
         }
+        vertexAttributes.removeAll()
         bufferAttributes.removeAll()
         interleavedAttributes.removeAll()
+    }
+
+    /// Unregisters from the buffer behind `attribute`, a removed or replaced attribute, unless
+    /// another of this geometry's attributes still uses it.
+    private func stopObservingIfUnused(_ attribute: VertexAttribute) {
+        guard let bufferObserverStorage else { return }
+        if let bufferAttribute = attribute as? BufferAttribute {
+            if !bufferAttributes.values.contains(where: { $0 === bufferAttribute }) {
+                bufferAttribute.observers.remove(bufferObserverStorage)
+            }
+        } else if let interleavedAttribute = attribute as? InterleavedBufferAttribute {
+            let buffer = interleavedAttribute.parent
+            if !interleavedAttributes.values.contains(where: { $0.parent === buffer }) {
+                buffer.observers.remove(bufferObserverStorage)
+            }
+        }
     }
 
     public func hasAttribute(_ index: VertexAttributeIndex) -> Bool {
@@ -1063,26 +1090,26 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         drawStates.removeAll()
         selectedDrawState = nil
 
-        elementBuffer?.delegate = nil
+        if let elementBuffer, let bufferObserverStorage {
+            elementBuffer.observers.remove(bufferObserverStorage)
+        }
+        // Any buffer that outlives this geometry is unregistered above; a stray reference to the
+        // observer now finds no geometry.
+        bufferObserverStorage?.geometry = nil
         elementBuffer = nil
         indexBuffer = nil
     }
 
-    // MARK: - Updated Buffer Attribute Data
+    // MARK: - Buffer Changes
 
-    public func updated(attribute: BufferAttribute) {
+    /// Called by `GeometryBufferObserver` when a vertex attribute or interleaved buffer this
+    /// geometry uses changes its data.
+    func vertexDataChanged() {
         _updateVertexBuffers = true
     }
 
-    // MARK: - Updated Interleaved Buffer Data {
-
-    public func updated(buffer: InterleavedBuffer) {
-        _updateVertexBuffers = true
-    }
-
-    // MARK: - Updated Element Buffer Data {
-
-    public func updated(buffer: ElementBuffer) {
+    /// Called by `GeometryBufferObserver` when this geometry's element buffer changes its data.
+    func indexDataChanged() {
         _updateIndexBuffer = true
     }
 }
