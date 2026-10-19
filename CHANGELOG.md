@@ -181,6 +181,16 @@ Internally to our main `RenderEncoder` class, we remove some cases of temporary 
 
 Model loading now collapses object hierarchies which do not have meshes, reducing the graph size / object traversal and matrix calculations needed for rendering larger more complicated models substantially. 
 
+## Render Packets
+
+Satin 2.0 records each draw into plain-data render packets and encodes them per pass, in place of objects encoding themselves into the live encoder. See [MIGRATION.md](MIGRATION.md) for every API change.
+
+* Drawing takes the frame being drawn (`draw(frame:…)`) and throws on a mismatched or misused submission. Renderers' `update(frame:)` overrides must call `super` first.
+* Rendering a scene more than once a frame uses one `RenderSubmission` with a `record(scene:)` per iteration, replacing repeated encoding. Each record snapshots its transforms, uniforms, instances and joint palettes.
+* Motion vectors are tracked per occurrence of an object, so iterated and recorded draws get correct velocity.
+* Customisation goes through `draw(in:)` on renderables, materials and geometry, with custom commands that last for their own draw; `preDraw` and `onBind` are gone.
+* GPU work per frame goes through `encode(in: EncodingContext)`, writing to per-frame arena slices so repeated encodes never overwrite each other.
+
 ## Bug Fixes
 
 * Fix a bug in text tessellation, improving some edge cases with certain fonts not rendering correctly

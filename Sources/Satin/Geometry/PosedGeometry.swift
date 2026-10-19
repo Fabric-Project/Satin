@@ -16,9 +16,8 @@ import Metal
 /// source's. Changes to the source reach meshes drawing the view.
 ///
 /// Updating the view updates the source, so a source drawn by several views (or by its own
-/// mesh as well) is updated more than once a frame. That is harmless unless its data
-/// changes every frame while drawn with repeated encoding, where each update takes a
-/// versioned slot.
+/// mesh as well) is updated more than once a frame. That is harmless: a draw's palette and
+/// uniforms are snapshotted when it is recorded.
 open class PosedGeometry: Geometry {
     public let source: Geometry
     private var sourceSubscription: AnyCancellable?
