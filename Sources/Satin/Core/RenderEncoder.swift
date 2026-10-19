@@ -131,7 +131,12 @@ open class RenderEncoder {
     /// Controls whether the renderer runs a traditional forward pass, a forward MRT pass,
     /// or the deferred geometry stage. Switching modes compiles new pipeline variants on
     /// the next frame, so avoid changing this every frame.
-    public var renderingMode: RenderingMode
+    public var renderingMode: RenderingMode {
+        didSet {
+            // The surface pass's contexts carry the rendering mode.
+            if renderingMode != oldValue { renderContexts.removeAll() }
+        }
+    }
 
     /// Declares which auxiliary outputs the renderer should produce in addition to color.
     /// Each active flag adds a texture allocation and an extra color attachment write.
@@ -205,20 +210,11 @@ open class RenderEncoder {
         }
     }
 
-    private struct RenderContextKey: Hashable {
-        let renderingMode: RenderingMode
-        let activeOutputs: RendererOutputs
-        let alphaOitEnabled: Bool
-        let colorPixelFormat: MTLPixelFormat
-        let depthPixelFormat: MTLPixelFormat
-        let stencilPixelFormat: MTLPixelFormat
-    }
-
     // The encoding phase applied when drawing a collected set of renderables.
     // Controls which render Context is built (shader defines, G-buffer outputs, OIT flag)
     // and sets renderable.materialPass so Mesh.materialMatchesCurrentPass can gate
     // per-material drawing within a single encoder.
-    private enum MaterialPassType {
+    private enum MaterialPassType: Int {
         // All opaque geometry in a plain forward pass. No G-buffer outputs, no OIT.
         // Used for every opaque renderable in .forward rendering mode (surface-lit and
         // unlit alike). Sets materialPass = .opaque so all non-transparent materials draw.
@@ -304,7 +300,12 @@ open class RenderEncoder {
         let clearColor: MTLClearColor
     }
 
-    private var renderContextCache: [RenderContextKey: Context] = [:]
+    /// The context for each pass type and output set, made on first use, at
+    /// `phase.rawValue * renderContextOutputSets + outputs.rawValue`; nil until then. The formats
+    /// are fixed for the encoder's life, and a rendering mode change clears them.
+    private var renderContexts: [Context?] = []
+    /// Every combination of the six `RendererOutputs` flags.
+    private static let renderContextOutputSets = 64
     private var currentEncodePass: CurrentEncodePass?
     private var scheduledCurrentPassEncodingCommands = [ScheduledCurrentPassEncodingCommand]()
     private let supportsAlphaOit: Bool
@@ -1008,16 +1009,8 @@ open class RenderEncoder {
         let mode: RenderingMode = phase == .surfaceOpaque ? renderingMode : .forward
         let alphaOitEnabled = phase == .alphaTransparent
         let outputs = supportedOutputs(for: renderable, phase: phase)
-        let key = RenderContextKey(
-            renderingMode: mode,
-            activeOutputs: outputs,
-            alphaOitEnabled: alphaOitEnabled,
-            colorPixelFormat: colorPixelFormat,
-            depthPixelFormat: depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat
-        )
-
-        if let renderContext = renderContextCache[key] {
+        let slot = phase.rawValue * Self.renderContextOutputSets + outputs.rawValue
+        if slot < renderContexts.count, let renderContext = renderContexts[slot] {
             return renderContext
         }
 
@@ -1039,7 +1032,10 @@ open class RenderEncoder {
             emissivePixelFormat: context.emissivePixelFormat
         )
 
-        renderContextCache[key] = renderContext
+        if slot >= renderContexts.count {
+            renderContexts.append(contentsOf: repeatElement(nil, count: slot + 1 - renderContexts.count))
+        }
+        renderContexts[slot] = renderContext
         return renderContext
     }
 

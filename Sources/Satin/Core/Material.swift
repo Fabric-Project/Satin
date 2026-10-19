@@ -123,15 +123,26 @@ open class Material: Codable {
         }
     }
 
-    public private(set) var vertexUniformBuffers: [VertexBufferIndex: UniformBuffer] = [:]
-    public private(set) var vertexStructBuffers: [VertexBufferIndex: BindableBuffer] = [:]
-    public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
-    public private(set) var vertexTextures: [VertexTextureIndex: MTLTexture] = [:]
+    /// What a material binds at one buffer index; a draw binds the first that is set, in this order.
+    private struct BufferSlot {
+        var uniformBuffer: UniformBuffer?
+        var structBuffer: BindableBuffer?
+        var buffer: MTLBuffer?
+    }
 
-    public private(set) var fragmentUniformBuffers: [FragmentBufferIndex: UniformBuffer] = [:]
-    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: BindableBuffer] = [:]
-    public private(set) var fragmentBuffers: [FragmentBufferIndex: MTLBuffer] = [:]
-    public private(set) var fragmentTextures: [FragmentTextureIndex: MTLTexture] = [:]
+    /// The material's own bindings, indexed by the index enums' raw values and grown on demand, so
+    /// a draw reads them without hashing.
+    private var vertexBufferSlots: [BufferSlot] = []
+    private var vertexTextureSlots: [MTLTexture?] = []
+    private var fragmentBufferSlots: [BufferSlot] = []
+    private var fragmentTextureSlots: [MTLTexture?] = []
+
+    /// Grows `slots` so `index` is valid, filling new entries with `empty`.
+    private static func makeRoom<Slot>(in slots: inout [Slot], for index: Int, empty: Slot) {
+        if index >= slots.count {
+            slots.append(contentsOf: repeatElement(empty, count: index + 1 - slots.count))
+        }
+    }
 
     public internal(set) var isClone = false
     public weak var delegate: MaterialDelegate?
@@ -556,21 +567,25 @@ open class Material: Codable {
         guard let shader else { return }
 
         for index in shader.vertexBufferBindingIsUsed {
-            if let uniformBuffer = vertexUniformBuffers[index] {
+            let slot = index.rawValue
+            guard slot < vertexBufferSlots.count else { continue }
+            if let uniformBuffer = vertexBufferSlots[slot].uniformBuffer {
                 context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
-            } else if let structBuffer = vertexStructBuffers[index] {
+            } else if let structBuffer = vertexBufferSlots[slot].structBuffer {
                 context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
-            } else if let buffer = vertexBuffers[index] {
+            } else if let buffer = vertexBufferSlots[slot].buffer {
                 context.setVertexBuffer(buffer, offset: 0, index: index)
             }
         }
 
         for index in shader.fragmentBufferBindingIsUsed {
-            if let uniformBuffer = fragmentUniformBuffers[index] {
+            let slot = index.rawValue
+            guard slot < fragmentBufferSlots.count else { continue }
+            if let uniformBuffer = fragmentBufferSlots[slot].uniformBuffer {
                 context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
-            } else if let structBuffer = fragmentStructBuffers[index] {
+            } else if let structBuffer = fragmentBufferSlots[slot].structBuffer {
                 context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
-            } else if let buffer = fragmentBuffers[index] {
+            } else if let buffer = fragmentBufferSlots[slot].buffer {
                 context.setFragmentBuffer(buffer, offset: 0, index: index)
             }
         }
@@ -580,13 +595,15 @@ open class Material: Codable {
         guard let shader else { return }
 
         for index in shader.vertexTextureBindingIsUsed {
-            if let texture = vertexTextures[index] {
+            let slot = index.rawValue
+            if slot < vertexTextureSlots.count, let texture = vertexTextureSlots[slot] {
                 context.setVertexTexture(texture, index: index)
             }
         }
 
         for index in shader.fragmentTextureBindingIsUsed {
-            if let texture = fragmentTextures[index] {
+            let slot = index.rawValue
+            if slot < fragmentTextureSlots.count, let texture = fragmentTextureSlots[slot] {
                 context.setFragmentTexture(texture, index: index)
             }
         }
@@ -603,67 +620,43 @@ open class Material: Codable {
     }
 
     public func set(_ buffer: MTLBuffer?, index: VertexBufferIndex) {
-        if let buffer = buffer {
-            vertexBuffers[index] = buffer
-        } else {
-            vertexBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].buffer = buffer
     }
 
     public func set(_ uniformBuffer: UniformBuffer?, index: VertexBufferIndex) {
-        if let uniformBuffer {
-            vertexUniformBuffers[index] = uniformBuffer
-        } else {
-            vertexUniformBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].uniformBuffer = uniformBuffer
     }
 
     public func set(_ structBuffer: BindableBuffer?, index: VertexBufferIndex) {
-        if let structBuffer {
-            vertexStructBuffers[index] = structBuffer
-        } else {
-            vertexStructBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].structBuffer = structBuffer
     }
 
     public func set(_ texture: MTLTexture?, index: VertexTextureIndex) {
-        if let texture = texture {
-            vertexTextures[index] = texture
-        } else {
-            vertexTextures.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexTextureSlots, for: index.rawValue, empty: nil)
+        vertexTextureSlots[index.rawValue] = texture
     }
 
     public func set(_ uniformBuffer: UniformBuffer?, index: FragmentBufferIndex) {
-        if let uniformBuffer {
-            fragmentUniformBuffers[index] = uniformBuffer
-        } else {
-            fragmentUniformBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].uniformBuffer = uniformBuffer
     }
 
     public func set(_ structBuffer: BindableBuffer?, index: FragmentBufferIndex) {
-        if let structBuffer {
-            fragmentStructBuffers[index] = structBuffer
-        } else {
-            fragmentStructBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].structBuffer = structBuffer
     }
 
     public func set(_ buffer: MTLBuffer?, index: FragmentBufferIndex) {
-        if let buffer = buffer {
-            fragmentBuffers[index] = buffer
-        } else {
-            fragmentBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].buffer = buffer
     }
 
     public func set(_ texture: MTLTexture?, index: FragmentTextureIndex) {
-        if let texture = texture {
-            fragmentTextures[index] = texture
-        } else {
-            fragmentTextures.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentTextureSlots, for: index.rawValue, empty: nil)
+        fragmentTextureSlots[index.rawValue] = texture
     }
 
     public func set(_ name: String, _ value: [Float]) {

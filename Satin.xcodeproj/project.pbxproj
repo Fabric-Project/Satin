@@ -279,6 +279,7 @@
 		E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */; };
 		E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF812CBCD89C00F54A6D /* Locks.swift */; };
 		7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000009 /* VertexLayoutRegistry.swift */; };
+		7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000013 /* RenderContextRegistry.swift */; };
 		E18ABF842CBCDC9600F54A6D /* MutexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF832CBCDC9000F54A6D /* MutexTests.swift */; };
 		E194F6992D288A22009A5C25 /* Raycast.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6952D288A22009A5C25 /* Raycast.swift */; };
 		E194F69A2D288A22009A5C25 /* RaycastOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6962D288A22009A5C25 /* RaycastOptions.swift */; };
@@ -581,6 +582,7 @@
 		E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeProcessor.swift; sourceTree = "<group>"; };
 		E18ABF812CBCD89C00F54A6D /* Locks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Locks.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000009 /* VertexLayoutRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexLayoutRegistry.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000013 /* RenderContextRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderContextRegistry.swift; sourceTree = "<group>"; };
 		E18ABF832CBCDC9000F54A6D /* MutexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutexTests.swift; sourceTree = "<group>"; };
 		E194F6952D288A22009A5C25 /* Raycast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Raycast.swift; sourceTree = "<group>"; };
 		E194F6962D288A22009A5C25 /* RaycastOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastOptions.swift; sourceTree = "<group>"; };
@@ -1063,6 +1065,7 @@
 			children = (
 				E18ABF812CBCD89C00F54A6D /* Locks.swift */,
 				7F1A00000000000000000009 /* VertexLayoutRegistry.swift */,
+				7F1A00000000000000000013 /* RenderContextRegistry.swift */,
 				66D7DECB2C06A24B00B5A6C8 /* FileWatcher.swift */,
 				66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */,
 				66D7DECD2C06A24B00B5A6C8 /* Loader.swift */,
@@ -1353,6 +1356,7 @@
 				E101A8542C07061D0055FABA /* Bezier.mm in Sources */,
 				E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */,
 				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
+				7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,

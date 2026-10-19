@@ -26,7 +26,16 @@ final class RenderCollection {
     /// an earlier pass is not in it.
     private(set) var activeLayers: [Int] = []
 
-    private var renderLists: [Int: RenderList] = [:]
+    /// One list per render layer ever collected, kept across passes and found by a short scan: a
+    /// scene uses a handful of layers.
+    private var layerRenderLists: [(renderLayer: Int, renderList: RenderList)] = []
+
+    private func renderList(renderLayer: Int) -> RenderList? {
+        for entry in layerRenderLists where entry.renderLayer == renderLayer {
+            return entry.renderList
+        }
+        return nil
+    }
 
     /// Whether this pass collected no renderables.
     var isEmpty: Bool {
@@ -40,8 +49,8 @@ final class RenderCollection {
         shadowCasters.removeAll(keepingCapacity: true)
         shadowReceivers.removeAll(keepingCapacity: true)
         activeLayers.removeAll(keepingCapacity: true)
-        for renderList in renderLists.values {
-            renderList.removeAll(keepingCapacity: true)
+        for entry in layerRenderLists {
+            entry.renderList.removeAll(keepingCapacity: true)
         }
     }
 
@@ -59,11 +68,11 @@ final class RenderCollection {
 
         let renderLayer = renderable.renderLayer.rawValue
         let renderList: RenderList
-        if let existingRenderList = renderLists[renderLayer] {
+        if let existingRenderList = self.renderList(renderLayer: renderLayer) {
             renderList = existingRenderList
         } else {
             renderList = RenderList()
-            renderLists[renderLayer] = renderList
+            layerRenderLists.append((renderLayer: renderLayer, renderList: renderList))
         }
 
         if renderList.isEmpty {
@@ -88,6 +97,6 @@ final class RenderCollection {
     /// The renderables of `renderLayer` this pass, sorted by render order or in collection order. A
     /// layer with none, such as one holding only scheduled commands, gives an empty list.
     func renderables(renderLayer: Int, sorted: Bool) -> [Renderable] {
-        renderLists[renderLayer]?.getRenderables(sorted: sorted) ?? []
+        renderList(renderLayer: renderLayer)?.getRenderables(sorted: sorted) ?? []
     }
 }

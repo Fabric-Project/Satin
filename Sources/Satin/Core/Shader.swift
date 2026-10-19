@@ -12,9 +12,7 @@ import Metal
 open class Shader {
     // MARK: - Main Pipeline
 
-    public internal(set) var pipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var pipelineError: Error?
-    var pipelineErrors: [UUID: Error] = [:]
     public internal(set) var pipelineReflection: MTLRenderPipelineReflection? {
         didSet {
             vertexBufferBindingIsUsed.removeAll()
@@ -78,14 +76,66 @@ open class Shader {
 
     // MARK: - Shadow Pipeline
 
-    public internal(set) var shadowPipelines: [UUID: MTLRenderPipelineState] = [:]
     public internal(set) var shadowPipelineError: Error?
-    var shadowPipelineErrors: [UUID: Error] = [:]
+
+    // MARK: - Per-Context State
+
+    /// What this shader has made for one render context: the configuration it compiles from and
+    /// its pipelines.
+    private struct ContextState {
+        var configuration: ShaderConfiguration?
+        var pipeline: MTLRenderPipelineState?
+        var pipelineError: Error?
+        var shadowPipeline: MTLRenderPipelineState?
+        var shadowPipelineError: Error?
+    }
+
+    /// The states, in the order their contexts were first seen, and each context's position among
+    /// them, indexed by `Context.index` (-1 for none): a draw finds its pipelines with two array
+    /// reads, without hashing.
+    private var contextStates: [ContextState] = []
+    private var contextStatePositions: [Int] = []
+
+    private func contextStatePosition(for context: Context) -> Int? {
+        let index = context.index
+        guard index < contextStatePositions.count else { return nil }
+        let position = contextStatePositions[index]
+        return position < 0 ? nil : position
+    }
+
+    private func contextStatePositionAddingIfNeeded(for context: Context) -> Int {
+        if let position = contextStatePosition(for: context) { return position }
+        let index = context.index
+        if index >= contextStatePositions.count {
+            contextStatePositions.append(contentsOf: repeatElement(-1, count: index + 1 - contextStatePositions.count))
+        }
+        contextStates.append(ContextState())
+        contextStatePositions[index] = contextStates.count - 1
+        return contextStates.count - 1
+    }
+
+    /// Forgets every context's configuration and pipelines.
+    func clearContextStates() {
+        contextStates.removeAll()
+        contextStatePositions.removeAll()
+    }
+
+    /// The configurations compiled from so far, for a reload to invalidate what was cached for them.
+    var contextConfigurations: [ShaderConfiguration] {
+        contextStates.compactMap(\.configuration)
+    }
+
+    /// The pipeline already compiled for `context`, or nil if none has been yet.
+    public func pipeline(for context: Context, shadow: Bool) -> MTLRenderPipelineState? {
+        guard let position = contextStatePosition(for: context) else { return nil }
+        return shadow ? contextStates[position].shadowPipeline : contextStates[position].pipeline
+    }
 
     /// Pipelines for meshes drawn with a vertex layout, skinning, instancing or shadow settings
     /// other than the material's own; see `DrawLayout`.
     private struct LayoutVariant {
-        let contextID: UUID
+        /// The render context's interned index; equal contexts share variants.
+        let contextIndex: Int
         let shadow: Bool
         let skinning: Bool
         let instancing: Bool
@@ -121,8 +171,6 @@ open class Shader {
     public let context: Context
 
     // MARK: - Configurations
-
-    public internal(set) var configurations: [UUID: ShaderConfiguration] = [:]
 
     public internal(set) var renderingConfiguration = RenderingConfiguration() {
         didSet {
@@ -376,15 +424,11 @@ open class Shader {
     public var configurationNeedsUpdate = true {
         didSet {
             if configurationNeedsUpdate {
-                configurations.removeAll()
-                pipelines.removeAll()
+                clearContextStates()
                 pipelineReflection = nil
                 pipelineError = nil
-                pipelineErrors.removeAll()
-                shadowPipelines.removeAll()
                 shadowPipelineReflection = nil
                 shadowPipelineError = nil
-                shadowPipelineErrors.removeAll()
                 clearLayoutVariants()
             }
         }
@@ -480,10 +524,11 @@ open class Shader {
     // MARK: - Configuration
 
     func setupConfiguration() {
-        guard configurations[context.id] == nil else { return }
+        let position = contextStatePositionAddingIfNeeded(for: context)
+        guard contextStates[position].configuration == nil else { return }
 
         configuration.context = context
-        configurations[context.id] = configuration
+        contextStates[position].configuration = configuration
 
         pipelineNeedsUpdate = true
         shadowPipelineNeedsUpdate = true
@@ -498,13 +543,14 @@ open class Shader {
     }
 
     func getConfiguration(renderContext: Context) -> ShaderConfiguration {
-        if let configuration = configurations[renderContext.id] {
+        let position = contextStatePositionAddingIfNeeded(for: renderContext)
+        if let configuration = contextStates[position].configuration {
             return configuration
         }
 
         var configuration = self.configuration
         configuration.context = renderContext
-        configurations[renderContext.id] = configuration
+        contextStates[position].configuration = configuration
         return configuration
     }
 
@@ -554,19 +600,20 @@ open class Shader {
     // MARK: - Pipelines
 
     open func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
+        let position = contextStatePositionAddingIfNeeded(for: renderContext)
         if shadow {
-            if shadowPipelines[renderContext.id] == nil,
-               shadowPipelineErrors[renderContext.id] == nil,
+            if contextStates[position].shadowPipeline == nil,
+               contextStates[position].shadowPipelineError == nil,
                castShadow
             {
                 setupShadowPipeline(renderContext: renderContext)
             }
-            return shadowPipelines[renderContext.id]
+            return pipeline(for: renderContext, shadow: true)
         } else {
-            if pipelines[renderContext.id] == nil, pipelineErrors[renderContext.id] == nil {
+            if contextStates[position].pipeline == nil, contextStates[position].pipelineError == nil {
                 setupPipeline(renderContext: renderContext)
             }
-            return pipelines[renderContext.id]
+            return pipeline(for: renderContext, shadow: false)
         }
     }
 
@@ -587,7 +634,7 @@ open class Shader {
               || layout.vertexLayoutID != configuredVertexLayout.layoutID(for: renderingConfiguration.vertexDescriptor)
         else { return getPipeline(renderContext: renderContext, shadow: shadow) }
 
-        let contextID = renderContext.id
+        let contextIndex = renderContext.index
         let existingVariantIndex = layoutVariants.firstIndex { variant in
             variant.vertexLayoutID == layout.vertexLayoutID
                 && variant.shadow == shadow
@@ -595,7 +642,7 @@ open class Shader {
                 && variant.instancing == layout.instancing
                 && variant.castShadow == castShadow
                 && variant.receiveShadow == receiveShadow
-                && variant.contextID == contextID
+                && variant.contextIndex == contextIndex
         }
         if let existingVariantIndex {
             if let pipeline = layoutVariants[existingVariantIndex].pipeline { return pipeline }
@@ -619,7 +666,7 @@ open class Shader {
             variantIndex = layoutVariants.count
             layoutVariants.append(
                 LayoutVariant(
-                    contextID: contextID,
+                    contextIndex: contextIndex,
                     shadow: shadow,
                     skinning: layout.skinning,
                     instancing: layout.instancing,
@@ -689,19 +736,22 @@ open class Shader {
     }
 
     func setupPipeline(renderContext: Context) {
-        guard pipelines[renderContext.id] == nil, pipelineErrors[renderContext.id] == nil else { return }
+        let position = contextStatePositionAddingIfNeeded(for: renderContext)
+        guard contextStates[position].pipeline == nil, contextStates[position].pipelineError == nil else { return }
         do {
             let renderContextConfiguration = getConfiguration(renderContext: renderContext)
             let savedConfiguration = configuration
             configuration = renderContextConfiguration
             let result = try makePipeline()
             configuration = savedConfiguration
-            pipelines[renderContext.id] = result.pipeline
+            // Compiling may have cleared every context's state (a configuration change).
+            let position = contextStatePositionAddingIfNeeded(for: renderContext)
+            contextStates[position].pipeline = result.pipeline
             if pipelineReflection == nil {
                 pipelineReflection = result.reflection
             }
             pipelineError = nil
-            pipelineErrors[renderContext.id] = nil
+            contextStates[position].pipelineError = nil
         }
         catch {
             print("\(label) Shader Pipeline: \(error.localizedDescription)")
@@ -709,8 +759,9 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             pipelineError = error
-            pipelineErrors[renderContext.id] = error
-            pipelines[renderContext.id] = nil
+            let position = contextStatePositionAddingIfNeeded(for: renderContext)
+            contextStates[position].pipelineError = error
+            contextStates[position].pipeline = nil
         }
         pipelineNeedsUpdate = false
     }
@@ -730,14 +781,17 @@ open class Shader {
     }
 
     func setupShadowPipeline(renderContext: Context) {
-        guard shadowPipelines[renderContext.id] == nil,
-              shadowPipelineErrors[renderContext.id] == nil,
+        let position = contextStatePositionAddingIfNeeded(for: renderContext)
+        guard contextStates[position].shadowPipeline == nil,
+              contextStates[position].shadowPipelineError == nil,
               castShadow
         else { return }
         do {
-            shadowPipelines[renderContext.id] = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
+            let shadowPipeline = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
+            let position = contextStatePositionAddingIfNeeded(for: renderContext)
+            contextStates[position].shadowPipeline = shadowPipeline
             shadowPipelineError = nil
-            shadowPipelineErrors[renderContext.id] = nil
+            contextStates[position].shadowPipelineError = nil
         }
         catch {
             print("\(label) Shadow Shader Pipeline: \(error.localizedDescription)")
@@ -745,25 +799,20 @@ open class Shader {
                 print("\(label) Shader Path: \(url.path)")
             }
             shadowPipelineError = error
-            shadowPipelineErrors[renderContext.id] = error
-            shadowPipelines[renderContext.id] = nil
+            let position = contextStatePositionAddingIfNeeded(for: renderContext)
+            contextStates[position].shadowPipelineError = error
+            contextStates[position].shadowPipeline = nil
         }
 
         shadowPipelineNeedsUpdate = false
     }
 
     deinit {
-        configurations.removeAll()
-
-        pipelines.removeAll()
+        clearContextStates()
         pipelineReflection = nil
         pipelineError = nil
-        pipelineErrors.removeAll()
-
-        shadowPipelines.removeAll()
         shadowPipelineReflection = nil
         shadowPipelineError = nil
-        shadowPipelineErrors.removeAll()
     }
 
     public func clone() -> Shader {
