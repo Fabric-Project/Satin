@@ -47,42 +47,17 @@ open class PosedGeometry: Geometry {
 
     override open func update() {
         source.update()
-        jointPalette?.settleMotion()
         updatePose()
     }
 
-    override open func encode(_ commandBuffer: MTLCommandBuffer) {
-        source.encode(commandBuffer)
+    override open func encode(in context: EncodingContext) {
+        source.encode(in: context)
     }
 
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    override open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
-        // Never lower what another mesh drawing the source asked for.
-        source.setMinimumEncodesPerFrame(max(encodesPerFrame, source.minimumEncodesPerFrame))
-        // This view's own palette.
-        super.setMinimumEncodesPerFrame(encodesPerFrame)
-    }
-
-    override open func captureRepeatedEncoding(iteration: Int, count: Int) {
-        source.captureRepeatedEncoding(iteration: iteration, count: count)
-        super.captureRepeatedEncoding(iteration: iteration, count: count)
-    }
-
-    override open func selectRecentSlot(iteration: Int, count: Int) {
-        source.selectRecentSlot(iteration: iteration, count: count)
-        jointPalette?.selectRecentSlot(iteration: iteration, count: count)
-    }
-
-    override open func recordBindings(in context: GeometryDrawContext) {
-        source.recordBindings(in: context)
-        // Replaces any palette the source bound.
-        if isSkinned, let jointPalette {
-            context.setJointPalette(jointPalette)
-        }
-    }
-
-    override open func recordDrawCall(in context: GeometryDrawContext) {
-        source.recordDrawCall(in: context)
+    /// Draws through the source's own `draw(in:)`, with this view's palette replacing the source's
+    /// when this view is skinned.
+    override open func draw(in context: GeometryDrawContext) {
+        source.draw(in: context.replacingJointPalette(isSkinned ? jointPalette : context.jointPalette))
     }
 
     /// The source's vertices, moved by this view's palette.

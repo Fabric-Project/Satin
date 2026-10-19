@@ -141,7 +141,7 @@ final class ObjectShadowRenderer {
         update()
     }
 
-    public func update(frame: FrameTime, commandBuffer: MTLCommandBuffer) {
+    public func update(frame: FrameTime, commandBuffer: MTLCommandBuffer) throws {
         update()
 
         let finalScene = Object(context: context, label: "Shadow Scene")
@@ -159,7 +159,7 @@ final class ObjectShadowRenderer {
         let rpd = MTLRenderPassDescriptor()
         rpd.renderTargetWidth = resolution
         rpd.renderTargetHeight = resolution
-        renderer.draw(
+        try renderer.draw(
             frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,

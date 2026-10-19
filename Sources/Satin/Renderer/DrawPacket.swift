@@ -59,6 +59,27 @@ enum PacketCommand {
 /// a draw call finishes it, or abandons it if no pipeline was set. `endRecording` drops anything
 /// recorded after the last draw call.
 final class PacketStorage {
+    /// Unique across every storage of every encoder, for the life of the process: snapshot caches
+    /// (material uniforms, instances, palettes) key on it, so one never reuses another lease's slice.
+    fileprivate(set) var leaseToken: UInt64 = 0
+
+    /// One renderable's packets for one route, in the order recorded: a draw's own scene, and each
+    /// `record(scene:)` into its submission.
+    struct PacketRun {
+        let renderLayer: Int
+        let routeIndex: Int
+        let packets: Range<Int>
+        /// From `record(scene:)`, encoded after the draw's own scene in its layer.
+        let isRecorded: Bool
+    }
+
+    private(set) var runs: [PacketRun] = []
+
+    func appendRun(renderLayer: Int, routeIndex: Int, packets: Range<Int>, isRecorded: Bool) {
+        guard !packets.isEmpty else { return }
+        runs.append(PacketRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded))
+    }
+
     private(set) var packets: [DrawPacket] = []
     private(set) var commands: [PacketCommand] = []
     private(set) var buffers: [MTLBuffer] = []
@@ -98,6 +119,7 @@ final class PacketStorage {
     private var recordingDebugLabelIndex: Int32 = -1
 
     func reset() {
+        runs.removeAll(keepingCapacity: true)
         packets.removeAll(keepingCapacity: true)
         commands.removeAll(keepingCapacity: true)
         buffers.removeAll(keepingCapacity: true)
@@ -273,6 +295,8 @@ final class PacketStorage {
         renderEncoder.pushDebugGroup(debugLabels[Int(packet.debugLabelIndex)])
         defer { renderEncoder.popDebugGroup() }
 #endif
+        // After a custom command, the pass is put back before this packet sets its own state.
+        state.beginPacket()
         state.cullMode = packet.cullMode
         state.windingOrder = packet.windingOrder
         state.triangleFillMode = packet.triangleFillMode
@@ -301,7 +325,8 @@ final class PacketStorage {
             case let .custom(commandIndex):
                 customCommands[Int(commandIndex)](renderEncoder)
                 // A custom command may set anything: forget what the encoder is known to hold.
-                state.invalidateBufferBindings()
+                // What it set holds for the rest of this packet; the next one starts from the pass.
+                state.invalidate()
             }
         }
 
@@ -344,8 +369,19 @@ final class PacketStorage {
 final class PacketStoragePool {
     private var available: [PacketStorage] = []
 
+    /// Storages returned and ready to lease.
+    var availableCount: Int { available.count }
+
+    private static let leaseTokenLock = UnfairLock()
+    private nonisolated(unsafe) static var lastLeaseToken: UInt64 = 0
+
     func lease() -> PacketStorage {
-        available.popLast() ?? PacketStorage()
+        let storage = available.popLast() ?? PacketStorage()
+        storage.leaseToken = Self.leaseTokenLock.sync {
+            Self.lastLeaseToken &+= 1
+            return Self.lastLeaseToken
+        }
+        return storage
     }
 
     func returnStorage(_ storage: PacketStorage) {

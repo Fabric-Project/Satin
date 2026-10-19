@@ -46,10 +46,6 @@ final class PostProcessingRenderer: BaseRenderer {
             context: postContext,
             material: postMaterial
         )
-        processor.mesh.preDraw = { [weak self] renderEncoder in
-            guard let self = self else { return }
-            renderEncoder.setFragmentTexture(self.renderTexture, index: FragmentTextureIndex.Custom0.rawValue)
-        }
         return processor
     }()
 

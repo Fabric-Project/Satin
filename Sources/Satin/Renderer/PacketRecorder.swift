@@ -17,10 +17,18 @@ public struct VertexUniformsBinding {
     public let offset: Int
 }
 
+/// One record into a lease: a draw's own scene, or one `record(scene:)`. Unique process-wide, as
+/// lease tokens are, so a palette shared by several meshes snapshots and advances once per record.
+struct RecordToken: Equatable {
+    let leaseToken: UInt64
+    let recordIndex: Int
+}
+
 /// Records renderables into the packets of one draw, and encodes them. A render event is one
 /// occurrence of a renderable in one pass invocation (the colour pass, a shadow light, a point-shadow
 /// face): it gets its own vertex uniforms, written from that pass's views and the occurrence's
 /// model matrices, which the renderable took once with `beginOccurrence(frame:)` before any pass.
+/// Materials, instances and palettes snapshot what they draw with into the same arena.
 final class PacketRecorder {
     /// The distance between one view's `VertexUniforms` and the next in a render event's slice.
     static let vertexUniformsStride = MemoryLayout<VertexUniforms>.stride
@@ -30,11 +38,31 @@ final class PacketRecorder {
     private let arena: FrameArena
     private let commandBuffer: MTLCommandBuffer
 
+    /// The record in progress; `beginRecord()` starts the next.
+    private(set) var recordToken: RecordToken
+
     init(storage: PacketStorage, arena: FrameArena, commandBuffer: MTLCommandBuffer, frame: FrameTime) {
         self.storage = storage
         self.arena = arena
         self.commandBuffer = commandBuffer
         self.frame = frame
+        recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: 0)
+    }
+
+    /// Starts the next record: what's recorded from here snapshots palettes afresh.
+    func beginRecord() {
+        recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: recordToken.recordIndex + 1)
+    }
+
+    /// `length` bytes valid until this draw's command buffer completes, for a snapshot.
+    func allocate(length: Int) -> FrameArena.Slice {
+        arena.allocate(length: length, alignment: 256, commandBuffer: commandBuffer)
+    }
+
+    /// Keeps `owner` alive until this draw's command buffer completes, or its arena region is
+    /// reclaimed if the command buffer is never committed.
+    func retainUntilCompleted(_ owner: AnyObject) {
+        arena.retainUntilCompleted(owner, commandBuffer: commandBuffer)
     }
 
     /// Records one render event of `renderable` and returns the packets it produced: none when it
@@ -45,17 +73,15 @@ final class PacketRecorder {
         renderContext: Context,
         pass: RenderPass,
         materialPass: Renderable.MaterialPass,
-        cameras: [Camera],
-        viewports: [simd_float4]
+        views: [RenderView]
     ) -> Range<Int> {
         let firstPacket = storage.packets.count
-        guard !cameras.isEmpty, !viewports.isEmpty else { return firstPacket ..< firstPacket }
+        guard !views.isEmpty else { return firstPacket ..< firstPacket }
 
         let vertexUniforms = writeVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, 1),
-            cameras: cameras,
-            viewports: viewports
+            views: views
         )
 
         // A double-sided transparent renderable is recorded twice, culling front faces and then back
@@ -85,15 +111,12 @@ final class PacketRecorder {
             renderOrder: renderable.renderOrder,
             debugLabel: renderable.label
         )
-        if let preDraw = renderable.preDraw {
-            storage.appendCustomCommand(preDraw)
-        }
         renderable.draw(in: RenderableDrawContext(
             renderContext: renderContext,
             pass: pass,
             materialPass: materialPass,
             vertexUniforms: vertexUniforms,
-            storage: storage
+            recorder: self
         ))
         storage.endRecording()
     }
@@ -111,33 +134,33 @@ final class PacketRecorder {
     }
 
     /// One `VertexUniforms` per view, contiguous, in an arena slice valid until the command buffer
-    /// completes. A pass with fewer cameras than views repeats its last camera.
-    private func writeVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, cameras: [Camera], viewports: [simd_float4]) -> VertexUniformsBinding {
-        let slice = arena.allocate(length: Self.vertexUniformsStride * viewCount, alignment: 256, commandBuffer: commandBuffer)
+    /// completes. A pass with fewer views than the context's repeats its last view.
+    private func writeVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, views: [RenderView]) -> VertexUniformsBinding {
+        let slice = allocate(length: Self.vertexUniformsStride * viewCount)
         let uniforms = slice.contents.bindMemory(to: VertexUniforms.self, capacity: viewCount)
         let modelMatrix = occurrence.modelMatrix
         let previousModelMatrix = occurrence.previousModelMatrix
-        for view in 0 ..< viewCount {
-            let camera = cameras[min(view, cameras.count - 1)]
-            let viewProjectionMatrix = camera.viewProjectionMatrix
-            let previousViewProjectionMatrix = camera.previousViewProjectionMatrix(frame: frame)
+        for viewIndex in 0 ..< viewCount {
+            let view = views[min(viewIndex, views.count - 1)]
+            let viewProjectionMatrix = view.viewProjectionMatrix
+            let previousViewProjectionMatrix = view.previousViewProjectionMatrix
             let modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix
 
-            uniforms[view].modelMatrix = modelMatrix
-            uniforms[view].viewMatrix = camera.viewMatrix
-            uniforms[view].modelViewMatrix = camera.viewMatrix * modelMatrix
-            uniforms[view].projectionMatrix = camera.projectionMatrix
-            uniforms[view].viewProjectionMatrix = viewProjectionMatrix
-            uniforms[view].modelViewProjectionMatrix = modelViewProjectionMatrix
-            uniforms[view].inverseModelViewProjectionMatrix = modelViewProjectionMatrix.inverse
-            uniforms[view].inverseViewMatrix = camera.worldMatrix
-            uniforms[view].normalMatrix = occurrence.normalMatrix
-            uniforms[view].viewport = viewports[min(view, viewports.count - 1)]
-            uniforms[view].worldCameraPosition = camera.worldPosition
-            uniforms[view].worldCameraViewDirection = camera.viewDirection
-            uniforms[view].previousModelMatrix = previousModelMatrix
-            uniforms[view].previousViewProjectionMatrix = previousViewProjectionMatrix
-            uniforms[view].previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
+            uniforms[viewIndex].modelMatrix = modelMatrix
+            uniforms[viewIndex].viewMatrix = view.viewMatrix
+            uniforms[viewIndex].modelViewMatrix = view.viewMatrix * modelMatrix
+            uniforms[viewIndex].projectionMatrix = view.projectionMatrix
+            uniforms[viewIndex].viewProjectionMatrix = viewProjectionMatrix
+            uniforms[viewIndex].modelViewProjectionMatrix = modelViewProjectionMatrix
+            uniforms[viewIndex].inverseModelViewProjectionMatrix = modelViewProjectionMatrix.inverse
+            uniforms[viewIndex].inverseViewMatrix = view.inverseViewMatrix
+            uniforms[viewIndex].normalMatrix = occurrence.normalMatrix
+            uniforms[viewIndex].viewport = view.viewport
+            uniforms[viewIndex].worldCameraPosition = view.worldPosition
+            uniforms[viewIndex].worldCameraViewDirection = view.viewDirection
+            uniforms[viewIndex].previousModelMatrix = previousModelMatrix
+            uniforms[viewIndex].previousViewProjectionMatrix = previousViewProjectionMatrix
+            uniforms[viewIndex].previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
         }
         return VertexUniformsBinding(buffer: slice.buffer, offset: slice.offset)
     }

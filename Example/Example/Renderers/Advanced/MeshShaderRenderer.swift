@@ -171,7 +171,7 @@ private final class CustomMaterial: SourceMaterial {
 
     override func draw(in context: MaterialDrawContext) {
         super.draw(in: context)
-        guard #available(macOS 13.0, iOS 16.0, *), let uniforms = uniforms else { return }
+        guard #available(macOS 13.0, iOS 16.0, *), let uniforms = uniformsBinding(in: context) else { return }
 
         // The mesh pipeline reads material uniforms in its object and mesh stages too.
         let buffer = uniforms.buffer

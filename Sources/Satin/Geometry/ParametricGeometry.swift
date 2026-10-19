@@ -58,9 +58,10 @@ public final class ParametricGeometry: Geometry {
         setupGeometry()
     }
 
-    override public func encode(_ commandBuffer: MTLCommandBuffer) {
+    // Regenerating is CPU work: it belongs to the update, before the buffers are refreshed.
+    override public func update() {
         updateGeometry()
-        super.encode(commandBuffer)
+        super.update()
     }
 
     func setupGeometry() {

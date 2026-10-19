@@ -118,13 +118,12 @@ public final class SpotShadow: Shadow {
         guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
 
         renderEncoder.label = label + " Shadow Encoder"
-        renderEncoder.setViewport(viewport)
+        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+        renderEncoderState.setPassViewport(viewport)
 
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        let shadowCameras = [camera]
-        let shadowViewports = [viewportFloat4]
+        let shadowViews = [RenderView(camera: camera, viewport: viewportFloat4, frame: recorder.frame)]
         for renderable in renderables where renderable.castShadow {
-            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, cameras: shadowCameras, viewports: shadowViewports)
+            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: shadowViews)
             recorder.encode(packets, into: renderEncoderState)
         }
 

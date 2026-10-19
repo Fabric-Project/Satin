@@ -84,6 +84,9 @@ public struct RenderView {
     public let viewDirection: simd_float3
     /// x, y, width, height.
     public let viewport: simd_float4
+    /// The camera's view-projection in the frame before, for motion; equal to
+    /// `viewProjectionMatrix` when the view was made without a frame.
+    public let previousViewProjectionMatrix: simd_float4x4
 
     public init(camera: Camera, viewport: simd_float4) {
         viewMatrix = camera.viewMatrix
@@ -93,5 +96,18 @@ public struct RenderView {
         worldPosition = camera.worldPosition
         viewDirection = camera.viewDirection
         self.viewport = viewport
+        previousViewProjectionMatrix = viewProjectionMatrix
+    }
+
+    /// `camera` as it is now, with its view-projection from the frame before `frame`.
+    public init(camera: Camera, viewport: simd_float4, frame: FrameTime) {
+        viewMatrix = camera.viewMatrix
+        projectionMatrix = camera.projectionMatrix
+        viewProjectionMatrix = camera.viewProjectionMatrix
+        inverseViewMatrix = camera.worldMatrix
+        worldPosition = camera.worldPosition
+        viewDirection = camera.viewDirection
+        self.viewport = viewport
+        previousViewProjectionMatrix = camera.previousViewProjectionMatrix(frame: frame)
     }
 }

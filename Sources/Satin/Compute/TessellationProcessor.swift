@@ -10,7 +10,11 @@ import Foundation
 import Metal
 
 public protocol Tessellator: ComputeProcessor {
-    var factorsBuffer: MTLBuffer? { get }
+    /// The bytes one dispatch writes: a factors value per patch.
+    var factorsLength: Int { get }
+    /// Where the next dispatch writes its factors, such as a slice of a frame's arena. Nothing is
+    /// dispatched without one: the tessellator owns no factors storage.
+    var factorsDestination: (buffer: MTLBuffer, offset: Int)? { get set }
     func update(_ commandBuffer: MTLCommandBuffer, iterations: Int)
     func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int)
 }
@@ -30,24 +34,14 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         return prefix
     }
 
-    var geometry: TessellationGeometry {
-        didSet {
-            if oldValue != geometry {
-                setupFactorsBuffer()
-            }
-        }
-    }
+    var geometry: TessellationGeometry
 
-    public internal(set) var factorsBuffer: MTLBuffer?
+    public var factorsDestination: (buffer: MTLBuffer, offset: Int)?
+    public var factorsLength: Int { MemoryLayout<T>.stride * geometry.patchCount }
 
     public init(device: MTLDevice, pipelineURL: URL, live: Bool, geometry: TessellationGeometry) {
         self.geometry = geometry
         super.init(device: device, pipelineURL: pipelineURL, live: live)
-    }
-
-    override public func setup() {
-        setupFactorsBuffer()
-        super.setup()
     }
 
     override open func update() {
@@ -56,15 +50,6 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         set(geometry.indexBuffer, index: .TessellationIndices)
     }
 
-    func setupFactorsBuffer() {
-        factorsBuffer = device.makeBuffer(
-            length: MemoryLayout<T>.stride * geometry.patchCount,
-            options: [.storageModePrivate]
-        )
-
-        factorsBuffer?.label = "\(label) Factors Buffer"
-        set(factorsBuffer, index: ComputeBufferIndex.TessellationFactors)
-    }
 
     override func updateSize() {
         parameters.set("Count", geometry.patchCount)
@@ -77,7 +62,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
 
         guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
 
-        if factorsBuffer != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+        if factorsDestination != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.label = label
             encode(computeEncoder, iterations: iterations)
             computeEncoder.endEncoding()
@@ -87,7 +72,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
     override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
         super.update(computeEncoder)
 
-        if factorsBuffer != nil {
+        if factorsDestination != nil {
             encode(computeEncoder, iterations: iterations)
         }
     }
@@ -96,6 +81,9 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         bindUniforms(computeEncoder)
         bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
+        if let factorsDestination {
+            computeEncoder.setBuffer(factorsDestination.buffer, offset: factorsDestination.offset, index: ComputeBufferIndex.TessellationFactors.rawValue)
+        }
 
         if _reset, let pipeline = resetPipeline {
             computeEncoder.setComputePipelineState(pipeline)

@@ -77,7 +77,7 @@ final class MeshShadowRenderer {
         }
     }
 
-    func draw(frame: FrameTime, commandBuffer: MTLCommandBuffer) {
+    func draw(frame: FrameTime, commandBuffer: MTLCommandBuffer) throws {
         guard _update, var _texture = _texture else { return }
 
         let rpd = MTLRenderPassDescriptor()
@@ -85,7 +85,7 @@ final class MeshShadowRenderer {
         rpd.renderTargetWidth = width
         rpd.renderTargetHeight = height
 
-        renderer.draw(
+        try renderer.draw(
             frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,

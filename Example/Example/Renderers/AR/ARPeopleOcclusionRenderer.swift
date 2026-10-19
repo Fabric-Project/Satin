@@ -92,7 +92,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        matteRenderer.encode(frame: frameTime, commandBuffer: commandBuffer)
+        try matteRenderer.encode(frame: frameTime, commandBuffer: commandBuffer)
 
         if let backgroundTexture = backgroundTexture {
             backgroundRenderer.draw(

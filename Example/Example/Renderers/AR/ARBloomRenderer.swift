@@ -155,7 +155,7 @@ final class ARBloomRenderer: BaseRenderer {
 
         let brpd = MTLRenderPassDescriptor()
         brpd.depthAttachment.texture = renderPassDescriptor.depthAttachment.texture
-        bloomRenderer.draw(
+        try bloomRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: brpd,
             commandBuffer: commandBuffer,

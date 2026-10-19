@@ -138,13 +138,12 @@ public final class PointShadow: Shadow {
             guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
 
             renderEncoder.label = "\(label) Shadow Encoder \(faceIndex)"
-            renderEncoder.setViewport(viewport)
+            let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+            renderEncoderState.setPassViewport(viewport)
 
-            let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-            let faceCameras = [cameras[faceIndex]]
-            let faceViewports = [viewportFloat4]
+            let faceViews = [RenderView(camera: cameras[faceIndex], viewport: viewportFloat4, frame: recorder.frame)]
             for renderable in renderables where renderable.castShadow {
-                let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, cameras: faceCameras, viewports: faceViewports)
+                let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: faceViews)
                 recorder.encode(packets, into: renderEncoderState)
             }
 

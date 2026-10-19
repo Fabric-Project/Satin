@@ -81,7 +81,9 @@ public final class TessellationGeometry: Geometry {
         )
     }
 
-    override public func recordDrawCall(in context: GeometryDrawContext) {
+    /// Records its bindings, then its patches: a draw call the contexts don't model.
+    override public func draw(in context: GeometryDrawContext) {
+        recordBindings(in: context)
         let controlPointsPerPatch = self.controlPointsPerPatch
         let patchCount = self.patchCount
         let instanceCount = context.instanceCount

@@ -233,7 +233,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        sceneRenderer.draw(
+        try sceneRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
@@ -244,7 +244,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         let beautyTexture = postProcessedBeautyTexture(commandBuffer: commandBuffer)
         updatePreviewTextures(beautyTexture: beautyTexture)
 
-        overlayRenderer.draw(
+        try overlayRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,

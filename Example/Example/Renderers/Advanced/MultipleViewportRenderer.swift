@@ -95,7 +95,7 @@ final class MultipleViewportRenderer: BaseRenderer {
             setupTextures()
         }
 
-        subRenderer.draw(
+        try subRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: subRenderPassDescriptor,
             commandBuffer: commandBuffer,

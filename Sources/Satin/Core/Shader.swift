@@ -131,18 +131,23 @@ open class Shader {
         return shadow ? contextStates[position].shadowPipeline : contextStates[position].pipeline
     }
 
-    /// Pipelines for meshes drawn with a vertex layout, skinning, instancing or shadow settings
-    /// other than the material's own; see `DrawLayout`.
-    private struct LayoutVariant {
+    /// What selects a layout variant: plain values, so finding one compares them in turn without
+    /// copying or retaining anything.
+    private struct LayoutVariantKey: Equatable {
         /// The render context's interned index; equal contexts share variants.
         let contextIndex: Int
+        /// The interned vertex layout: geometries with the same layout share a variant.
+        let vertexLayoutID: Int
         let shadow: Bool
         let skinning: Bool
         let instancing: Bool
         let castShadow: Bool
         let receiveShadow: Bool
-        /// The interned vertex layout: geometries with the same layout share a variant.
-        let vertexLayoutID: Int
+    }
+
+    /// Pipelines for meshes drawn with a vertex layout, skinning, instancing or shadow settings
+    /// other than the material's own; see `DrawLayout`. Parallel to `layoutVariantKeys`.
+    private struct LayoutVariant {
         /// What it is compiled from, so a live reload can drop its cached libraries.
         let configuration: ShaderConfiguration
         var pipeline: MTLRenderPipelineState?
@@ -156,6 +161,7 @@ open class Shader {
     /// One per distinct context, pass and layout this shader is drawn with: a handful, so every draw
     /// finds its variant by comparing a few values in turn rather than hashing a key.
     private var layoutVariants: [LayoutVariant] = []
+    private var layoutVariantKeys: [LayoutVariantKey] = []
     public internal(set) var shadowPipelineReflection: MTLRenderPipelineReflection?
 
     public internal(set) var vertexBufferBindingIsUsed: [VertexBufferIndex] = []
@@ -634,15 +640,19 @@ open class Shader {
               || layout.vertexLayoutID != configuredVertexLayout.layoutID(for: renderingConfiguration.vertexDescriptor)
         else { return getPipeline(renderContext: renderContext, shadow: shadow) }
 
-        let contextIndex = renderContext.index
-        let existingVariantIndex = layoutVariants.firstIndex { variant in
-            variant.vertexLayoutID == layout.vertexLayoutID
-                && variant.shadow == shadow
-                && variant.skinning == layout.skinning
-                && variant.instancing == layout.instancing
-                && variant.castShadow == castShadow
-                && variant.receiveShadow == receiveShadow
-                && variant.contextIndex == contextIndex
+        let key = LayoutVariantKey(
+            contextIndex: renderContext.index,
+            vertexLayoutID: layout.vertexLayoutID,
+            shadow: shadow,
+            skinning: layout.skinning,
+            instancing: layout.instancing,
+            castShadow: castShadow,
+            receiveShadow: receiveShadow
+        )
+        var existingVariantIndex: Int?
+        for index in layoutVariantKeys.indices where layoutVariantKeys[index] == key {
+            existingVariantIndex = index
+            break
         }
         if let existingVariantIndex {
             if let pipeline = layoutVariants[existingVariantIndex].pipeline { return pipeline }
@@ -664,18 +674,8 @@ open class Shader {
             variantIndex = existingVariantIndex
         } else {
             variantIndex = layoutVariants.count
-            layoutVariants.append(
-                LayoutVariant(
-                    contextIndex: contextIndex,
-                    shadow: shadow,
-                    skinning: layout.skinning,
-                    instancing: layout.instancing,
-                    castShadow: castShadow,
-                    receiveShadow: receiveShadow,
-                    vertexLayoutID: layout.vertexLayoutID,
-                    configuration: variantConfiguration
-                )
-            )
+            layoutVariants.append(LayoutVariant(configuration: variantConfiguration))
+            layoutVariantKeys.append(key)
         }
 
         do {
@@ -719,6 +719,7 @@ open class Shader {
 
     private func clearLayoutVariants() {
         layoutVariants.removeAll()
+        layoutVariantKeys.removeAll()
     }
 
     func updatePipeline() {

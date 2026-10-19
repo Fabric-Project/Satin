@@ -159,13 +159,18 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     ) {
         update(commandBuffer)
 
-        depthRenderer.draw(
-            frame: frame,
-            renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            scene: depthScene,
-            camera: depthCamera
-        )
+        // A post-processor's draw doesn't throw: a rejected depth draw is reported here.
+        do {
+            try depthRenderer.draw(
+                frame: frame,
+                renderPassDescriptor: renderPassDescriptor,
+                commandBuffer: commandBuffer,
+                scene: depthScene,
+                camera: depthCamera
+            )
+        } catch {
+            reportDepthDrawFailure(error)
+        }
     }
 
     override public func draw(
@@ -176,14 +181,23 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     ) {
         update(commandBuffer)
 
-        depthRenderer.draw(
-            frame: frame,
-            renderPassDescriptor: renderPassDescriptor,
-            commandBuffer: commandBuffer,
-            scene: depthScene,
-            camera: depthCamera,
-            renderTarget: renderTarget
-        )
+        do {
+            try depthRenderer.draw(
+                frame: frame,
+                renderPassDescriptor: renderPassDescriptor,
+                commandBuffer: commandBuffer,
+                scene: depthScene,
+                camera: depthCamera,
+                renderTarget: renderTarget
+            )
+        } catch {
+            reportDepthDrawFailure(error)
+        }
+    }
+
+    private func reportDepthDrawFailure(_ error: Error) {
+        print("\(label): depth draw failed: \(error)")
+        assertionFailure("\(label): depth draw failed: \(error)")
     }
 
     override public func resize(size: (width: Float, height: Float), scaleFactor: Float) {

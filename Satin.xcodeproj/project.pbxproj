@@ -63,7 +63,6 @@
 		E101A89F2C070E8E0055FABA /* ARPlaneMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4B2C06A24B00B5A6C8 /* ARPlaneMesh.swift */; };
 		E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */; };
 		E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */; };
-		E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */; };
 		5A1E00000000000000000011 /* JointPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000001 /* JointPalette.swift */; };
 		E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */; };
 		E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */; };
@@ -112,6 +111,8 @@
 		7F1A00000000000000000010 /* DrawRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000F /* DrawRecording.swift */; };
 		7F1A00000000000000000016 /* DrawPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000015 /* DrawPacket.swift */; };
 		7F1A00000000000000000018 /* PacketRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000017 /* PacketRecorder.swift */; };
+		7F1A0000000000000000001A /* RenderSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000019 /* RenderSubmission.swift */; };
+		7F1A0000000000000000001C /* EncodingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000001B /* EncodingContext.swift */; };
 		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
@@ -339,7 +340,6 @@
 		66D7DD4B2C06A24B00B5A6C8 /* ARPlaneMesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPlaneMesh.swift; sourceTree = "<group>"; };
 		66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPostProcessEncoder.swift; sourceTree = "<group>"; };
 		66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARSessionPublisher.swift; sourceTree = "<group>"; };
-		66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InstanceMatrixUniformBuffer.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000001 /* JointPalette.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = JointPalette.swift; sourceTree = "<group>"; };
 		66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StructBuffer.swift; sourceTree = "<group>"; };
 		66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UniformBuffer.swift; sourceTree = "<group>"; };
@@ -388,6 +388,8 @@
 		7F1A0000000000000000000F /* DrawRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawRecording.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000015 /* DrawPacket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawPacket.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000017 /* PacketRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PacketRecorder.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000019 /* RenderSubmission.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderSubmission.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000001B /* EncodingContext.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EncodingContext.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
@@ -684,7 +686,6 @@
 		66D7DD532C06A24B00B5A6C8 /* Buffers */ = {
 			isa = PBXGroup;
 			children = (
-				66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */,
 				5A1E00000000000000000001 /* JointPalette.swift */,
 				66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */,
 				66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */,
@@ -993,6 +994,8 @@
 				7F1A0000000000000000000F /* DrawRecording.swift */,
 				7F1A00000000000000000015 /* DrawPacket.swift */,
 				7F1A00000000000000000017 /* PacketRecorder.swift */,
+				7F1A00000000000000000019 /* RenderSubmission.swift */,
+				7F1A0000000000000000001B /* EncodingContext.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
 			path = Renderer;
@@ -1440,7 +1443,6 @@
 				E101A89F2C070E8E0055FABA /* ARPlaneMesh.swift in Sources */,
 				E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */,
 				E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */,
-				E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */,
 				5A1E00000000000000000011 /* JointPalette.swift in Sources */,
 				E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */,
 				E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */,
@@ -1499,6 +1501,8 @@
 				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
 				7F1A00000000000000000016 /* DrawPacket.swift in Sources */,
 				7F1A00000000000000000018 /* PacketRecorder.swift in Sources */,
+				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
+				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,

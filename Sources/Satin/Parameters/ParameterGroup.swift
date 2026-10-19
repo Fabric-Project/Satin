@@ -414,7 +414,16 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     private var _updateSize = true
     private var _updateStride = true
     private var _updateAlignment = true
-    private var _updateData = true
+    private var _updateData = true {
+        didSet {
+            if _updateData { contentRevision &+= 1 }
+        }
+    }
+
+    /// Advances whenever a change invalidates `data`: a value, an added or removed parameter, a
+    /// replaced set. It advances when the change happens, not when `data` is next rebuilt, so a
+    /// snapshot of `data` can be checked against it without reading `data` first.
+    public private(set) var contentRevision: UInt64 = 0
 
     private func updateSize() {
         var result = 0

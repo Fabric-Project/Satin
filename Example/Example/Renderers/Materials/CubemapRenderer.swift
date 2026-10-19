@@ -36,9 +36,6 @@ final class CubemapRenderer: BaseRenderer {
         lazy var mesh = Mesh(context: defaultContext, geometry: geometry, material: customMaterial)
         mesh.cullMode = .none
         mesh.label = "Knot"
-        mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
-            renderEncoder.setFragmentTexture(self.cubeTexture, index: FragmentTextureIndex.Custom0.rawValue)
-        }
         return mesh
     }()
 
@@ -50,7 +47,9 @@ final class CubemapRenderer: BaseRenderer {
         return mesh
     }()
 
-    var cubeTexture: MTLTexture!
+    var cubeTexture: MTLTexture! {
+        didSet { customMaterial.set(cubeTexture, index: FragmentTextureIndex.Custom0) }
+    }
 
     override func setup() throws {
         let url = texturesURL.appendingPathComponent("Cubemap")

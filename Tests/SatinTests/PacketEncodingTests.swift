@@ -107,10 +107,12 @@ final class PacketEncodingTests: XCTestCase {
     }
 
     func testACustomDrawFinishesThePacketWithoutABuiltInDrawCall() throws {
-        let storage = PacketStorage()
+        let storage = PacketStoragePool().lease()
+        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
+        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
         let vertexUniforms = VertexUniformsBinding(buffer: try buffer(), offset: 0)
         beginRecording(storage)
-        let drawContext = RenderableDrawContext(renderContext: context, pass: .color, materialPass: .all, vertexUniforms: vertexUniforms, storage: storage)
+        let drawContext = RenderableDrawContext(renderContext: context, pass: .color, materialPass: .all, vertexUniforms: vertexUniforms, recorder: recorder)
         _ = drawContext.materialContext(layout: nil)
         storage.setPipeline(try pipeline())
         drawContext.addCustomDraw { _ in }
@@ -126,13 +128,11 @@ final class PacketEncodingTests: XCTestCase {
     func testDoubleSidedTransparentRecordsFrontCulledThenBackCulled() throws {
         let commandQueue = try XCTUnwrap(device.makeCommandQueue())
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let storage = PacketStorage()
+        let storage = PacketStoragePool().lease()
         let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
 
-        let material = BasicColorMaterial(context: context)
+        let material = CustomCommandMaterial(context: context)
         material.blending = .alpha
-        var onBindCount = 0
-        material.onBind = { _ in onBindCount += 1 }
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: material)
         mesh.doubleSided = true
         mesh.cullMode = .none
@@ -140,14 +140,13 @@ final class PacketEncodingTests: XCTestCase {
         mesh.beginOccurrence(frame: .zero)
 
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, cameras: [camera], viewports: [simd_float4(0, 0, 64, 64)])
+        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
 
         XCTAssertEqual(packets.count, 2)
         XCTAssertEqual(storage.packets[packets.lowerBound].cullMode, .front)
         XCTAssertEqual(storage.packets[packets.lowerBound + 1].cullMode, .back)
-        let onBindCommands = storage.commands.filter { if case .custom = $0 { return true } else { return false } }.count
-        XCTAssertEqual(onBindCommands, 2, "onBind is recorded once per recording, as it ran once per draw before")
-        XCTAssertEqual(onBindCount, 0, "and runs only when the packets encode")
+        let customCommands = storage.commands.filter { if case .custom = $0 { return true } else { return false } }.count
+        XCTAssertEqual(customCommands, 2, "the material's custom command is recorded once per culled draw")
     }
 
     // MARK: - Pool

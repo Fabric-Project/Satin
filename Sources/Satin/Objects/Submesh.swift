@@ -53,9 +53,9 @@ open class Submesh {
         geometry.update()
     }
 
-    open func encode(_ commandBuffer: MTLCommandBuffer) {
-        material?.encode(commandBuffer)
-        geometry.encode(commandBuffer)
+    open func encode(in context: EncodingContext) {
+        material?.encode(in: context)
+        geometry.encode(in: context)
     }
 
     open func setupMaterial(vertexGeometry: Geometry) {
@@ -66,10 +66,4 @@ open class Submesh {
     }
 
     open func setupGeometry() {}
-
-    /// Records this submesh's draw call, over its range of indices; its mesh has recorded the
-    /// vertex buffers, this submesh's material and the vertex uniforms.
-    open func recordDrawCall(in context: RenderableDrawContext, instanceCount: Int) {
-        geometry.recordDrawCall(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: indexBufferOffset))
-    }
 }

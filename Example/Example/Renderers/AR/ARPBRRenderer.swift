@@ -76,7 +76,9 @@ fileprivate final class ARScene:  IBLEnvironment {
         return closest
     }
 
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
+    // Reads ARKit state: CPU work, done in the update.
+    override func update() {
+        super.update()
         guard let currentFrame = session.currentFrame else { return }
 
         if let lightEstimate = currentFrame.lightEstimate {
@@ -133,14 +135,15 @@ fileprivate final class ARObject: Object {
         fatalError("init(from:) has not been implemented")
     }
 
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
+    // Reads ARKit state: CPU work, done in the update.
+    override func update() {
         if let anchor = anchor,
            let currentFrame = session.currentFrame,
            let index = currentFrame.anchors.firstIndex(of: anchor)
         {
             worldMatrix = currentFrame.anchors[index].transform
         }
-        super.encode(commandBuffer)
+        super.update()
     }
 }
 
@@ -397,7 +400,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         )
 
         if modelContainer.visible {
-            shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
+            try shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
         }
 
         try renderer.draw(

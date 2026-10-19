@@ -24,7 +24,6 @@ public final class UniformBuffer {
     public private(set) var maxBuffersInFlight: Int
     public private(set) var encodesPerFrame: Int
     public private(set) var totalSlotCount: Int
-    private var latestUpdatedIndex: Int = -1
 
     public init(
         device: MTLDevice,
@@ -48,19 +47,8 @@ public final class UniformBuffer {
 
     public func update() {
         index = (index + 1) % totalSlotCount
-        latestUpdatedIndex = index
         offset = alignedSize * index
         (buffer.contents() + offset).copyMemory(from: parameters.data, byteCount: parameters.size)
-    }
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    public func selectRecentSlot(iteration: Int, count: Int) {
-        guard latestUpdatedIndex >= 0 else { return }
-        let sanitizedCount = max(1, count)
-        let clampedIteration = min(max(0, iteration), sanitizedCount - 1)
-        let distanceFromCurrent = sanitizedCount - 1 - clampedIteration
-        index = (latestUpdatedIndex - distanceFromCurrent + totalSlotCount) % totalSlotCount
-        offset = alignedSize * index
     }
 
     public func reset() {

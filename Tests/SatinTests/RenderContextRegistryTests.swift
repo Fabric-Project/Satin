@@ -68,14 +68,16 @@ final class RenderContextRegistryTests: XCTestCase {
 
         let vertexUniformsBuffer = try XCTUnwrap(device.makeBuffer(length: 4096))
         func recordsAlbedo() -> Bool {
-            let storage = PacketStorage()
+            let storage = PacketStoragePool().lease()
+            guard let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else { return false }
+            let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
             storage.beginRecording(cullMode: .back, windingOrder: .counterClockwise, triangleFillMode: .fill, renderOrder: 0, debugLabel: "Test")
             let drawContext = RenderableDrawContext(
                 renderContext: context,
                 pass: .color,
                 materialPass: .all,
                 vertexUniforms: VertexUniformsBinding(buffer: vertexUniformsBuffer, offset: 0),
-                storage: storage
+                recorder: recorder
             )
             material.draw(in: drawContext.materialContext(layout: nil))
             return storage.commands.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true } else { return false } }

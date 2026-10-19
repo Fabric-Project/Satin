@@ -218,15 +218,20 @@ open class PostProcessRenderEncoder {
             camera.update()
         }
 
-        mesh.update()
-        mesh.encode(commandBuffer)
-
         let storage = packetStoragePool.lease()
         defer { packetStoragePool.returnStorage(storage) }
         let recorder = PacketRecorder(storage: storage, arena: frameArena, commandBuffer: commandBuffer, frame: frame)
+        var views: [RenderView] = []
+        for (index, camera) in cameras.enumerated() {
+            let viewport = simdViewports.isEmpty ? simd_float4.zero : simdViewports[min(index, simdViewports.count - 1)]
+            views.append(RenderView(camera: camera, viewport: viewport, frame: frame))
+        }
+
+        mesh.update()
+        mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
         mesh.beginOccurrence(frame: frame)
         // One amplified draw covers every view.
-        let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, cameras: cameras, viewports: simdViewports)
+        let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)
 
         let descriptorState = saveState(renderPassDescriptor)
         defer { restoreState(descriptorState, to: renderPassDescriptor) }
@@ -235,6 +240,7 @@ open class PostProcessRenderEncoder {
 
         guard let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
         renderCommandEncoder.label = label
+        let renderEncoderState = RenderEncoderState(renderEncoder: renderCommandEncoder, renderPassDescriptor: renderPassDescriptor)
 
         if context.vertexAmplificationCount > 1 {
             var mappings = viewMappings
@@ -246,14 +252,14 @@ open class PostProcessRenderEncoder {
                     )
                 }
             }
-            renderCommandEncoder.setVertexAmplificationCount(context.vertexAmplificationCount, viewMappings: &mappings)
+            renderEncoderState.setPassVertexAmplification(count: context.vertexAmplificationCount, viewMappings: mappings)
         }
 
         if !viewports.isEmpty {
-            renderCommandEncoder.setViewports(viewports)
+            renderEncoderState.setPassViewports(viewports)
         }
 
-        recorder.encode(packets, into: RenderEncoderState(renderEncoder: renderCommandEncoder))
+        recorder.encode(packets, into: renderEncoderState)
         renderCommandEncoder.endEncoding()
     }
 

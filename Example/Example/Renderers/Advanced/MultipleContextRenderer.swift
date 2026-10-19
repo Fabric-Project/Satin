@@ -85,7 +85,7 @@ final class MultipleContextRenderer: BaseRenderer {
             camera: camera
         )
 
-        rendererNoDepth.draw(
+        try rendererNoDepth.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,

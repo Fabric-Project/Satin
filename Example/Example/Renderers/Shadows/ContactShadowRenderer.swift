@@ -153,7 +153,7 @@ final class ContactShadowRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
+        try shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
 
         try renderer.draw(
             frame: frameTime,

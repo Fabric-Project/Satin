@@ -118,10 +118,6 @@ public final class MotionBlurMaterial: Material {
         set(tileMaxTexture, index: FragmentTextureIndex.Custom5)
     }
 
-    override public func updateUniforms() {
-        super.updateUniforms()
-    }
-
     private func resolveShutterAngle() -> Float {
         if let shutterAngle = get("Shutter Angle", as: FloatParameter.self)?.value {
             return clampShutterAngle(shutterAngle)

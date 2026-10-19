@@ -11,7 +11,7 @@ final class MultiviewUniformsTests: XCTestCase {
         guard device.supportsVertexAmplificationCount(2) else { throw XCTSkip("Vertex amplification is unavailable") }
         let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float, vertexAmplificationCount: 2)
         let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
-        let storage = PacketStorage()
+        let storage = PacketStoragePool().lease()
         let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
 
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
@@ -23,7 +23,7 @@ final class MultiviewUniformsTests: XCTestCase {
         ]
         let viewport = simd_float4(0, 0, 64, 64)
 
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, cameras: cameras, viewports: [viewport, viewport])
+        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: viewport) })
 
         XCTAssertEqual(packets.count, 1, "one draw covers both views")
         let packet = storage.packets[packets.lowerBound]

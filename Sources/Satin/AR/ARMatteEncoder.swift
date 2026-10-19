@@ -59,7 +59,7 @@ public class ARMatteEncoder {
         _updateGeometry = true
     }
 
-    public func encode(frame: FrameTime, commandBuffer: MTLCommandBuffer) {
+    public func encode(frame: FrameTime, commandBuffer: MTLCommandBuffer) throws {
         guard let arFrame = session.currentFrame else { return }
 
         material.alphaTexture = matteGenerator.generateMatte(from: arFrame, commandBuffer: commandBuffer)
@@ -79,7 +79,7 @@ public class ARMatteEncoder {
         rpd.colorAttachments[0].texture = alphaTexture
         rpd.depthAttachment.texture = dilatedDepthTexture
 
-        renderer.draw(
+        try renderer.draw(
             frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,

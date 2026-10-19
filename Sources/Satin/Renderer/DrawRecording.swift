@@ -23,7 +23,8 @@ public struct MaterialDrawContext {
     public let pass: RenderPass
     /// What the mesh being drawn needs from the pipeline (see `DrawLayout`); nil uses the material's own.
     public let layout: DrawLayout?
-    let storage: PacketStorage
+    let recorder: PacketRecorder
+    var storage: PacketStorage { recorder.storage }
 
     public var isShadowPass: Bool { pass == .shadow }
 
@@ -52,7 +53,9 @@ public struct MaterialDrawContext {
     }
 
     /// Runs `command` on the live encoder when this draw executes, after what was recorded before it.
-    /// It must capture the values it uses: it runs later, not now.
+    /// It runs later, not now: copy what it uses into locals before recording it, since reading
+    /// through `self` when it runs sees the object as it is then. What it sets holds for this draw
+    /// only (see `RenderEncoderState`).
     public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
         storage.appendCustomCommand(command)
     }
@@ -67,15 +70,27 @@ public struct MaterialDrawContext {
 }
 
 /// What a geometry's `draw(in:)` records for one draw: its vertex buffers, joint palette and draw
-/// call. The draw call finishes the draw.
+/// call, after its material's bindings. The draw call finishes the draw.
 public struct GeometryDrawContext {
     public let pass: RenderPass
     /// Instances to draw.
     public let instanceCount: Int
-    /// Added to the geometry's own index buffer offset: a submesh's range of a shared index buffer.
+    /// Added to the index buffer offset: a submesh's range of its index buffer.
     public let indexBufferOffset: Int
     public let vertexStart: Int
-    let storage: PacketStorage
+    /// A submesh's indices, drawn over this geometry's vertices instead of its own indices; nil
+    /// draws the geometry's own.
+    public let elements: Geometry?
+    /// A palette replacing the geometry's own, from a posed view of it; nil uses its own.
+    public let jointPalette: JointPalette?
+    let recorder: PacketRecorder
+
+    /// This context with `jointPalette` replacing the geometry's palette.
+    func replacingJointPalette(_ jointPalette: JointPalette?) -> GeometryDrawContext {
+        GeometryDrawContext(pass: pass, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart,
+                            elements: elements, jointPalette: jointPalette, recorder: recorder)
+    }
+    var storage: PacketStorage { recorder.storage }
 
     public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex) {
         storage.appendVertexBuffer(buffer, offset: offset, slot: index)
@@ -102,22 +117,24 @@ public struct GeometryDrawContext {
     }
 
     /// Runs `command` on the live encoder when this draw executes, to set state the context does not
-    /// model. It must capture the values it uses.
+    /// model. Copy what it uses into locals before recording it: it runs later, not now. What it
+    /// sets holds for this draw only (see `RenderEncoderState`).
     public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
         storage.appendCustomCommand(command)
     }
 
     /// Finishes the draw with `draw`, a command that issues the draw call itself, such as
-    /// tessellation patches. It must capture the values it uses.
+    /// tessellation patches. Copy what it uses into locals before recording it. What it sets holds
+    /// for this draw only (see `RenderEncoderState`).
     public func addCustomDraw(_ draw: @escaping (MTLRenderCommandEncoder) -> Void) {
         storage.appendCustomCommand(draw)
         storage.finishPacket(drawCall: .custom)
     }
 
-    /// Binds `palette` at the joint-matrices index, as it is now.
+    /// Binds `palette`'s snapshot for this record at the joint-matrices index.
     func setJointPalette(_ palette: JointPalette) {
-        storage.appendVertexBuffer(palette.buffer, offset: palette.offset, slot: .JointMatrices)
-        palette.markDrawn()
+        let snapshot = palette.snapshot(recorder: recorder)
+        storage.appendVertexBuffer(snapshot.buffer, offset: snapshot.offset, slot: .JointMatrices)
     }
 }
 
@@ -131,7 +148,8 @@ public struct RenderableDrawContext {
     let materialPass: Renderable.MaterialPass
     /// This render event's vertex uniforms: one per view.
     public let vertexUniforms: VertexUniformsBinding
-    let storage: PacketStorage
+    let recorder: PacketRecorder
+    var storage: PacketStorage { recorder.storage }
 
     public var isShadowPass: Bool { pass == .shadow }
 
@@ -139,12 +157,14 @@ public struct RenderableDrawContext {
     /// pipeline until the material sets one.
     public func materialContext(layout: DrawLayout?) -> MaterialDrawContext {
         storage.beginMaterial()
-        return MaterialDrawContext(renderContext: renderContext, pass: pass, layout: layout, storage: storage)
+        return MaterialDrawContext(renderContext: renderContext, pass: pass, layout: layout, recorder: recorder)
     }
 
-    /// The context for drawing a geometry in this pass.
-    public func geometryContext(instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) -> GeometryDrawContext {
-        GeometryDrawContext(pass: pass, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart, storage: storage)
+    /// The context for drawing a geometry in this pass: over `elements`' indices when given, as a
+    /// submesh draws its mesh's vertices.
+    public func geometryContext(instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0, elements: Geometry? = nil) -> GeometryDrawContext {
+        GeometryDrawContext(pass: pass, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart,
+                            elements: elements, jointPalette: nil, recorder: recorder)
     }
 
     public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex) {
@@ -156,13 +176,15 @@ public struct RenderableDrawContext {
     }
 
     /// Runs `command` on the live encoder when this draw executes, after what was recorded before it.
-    /// It must capture the values it uses.
+    /// Copy what it uses into locals before recording it: it runs later, not now. What it sets
+    /// holds for this draw only (see `RenderEncoderState`).
     public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
         storage.appendCustomCommand(command)
     }
 
     /// Finishes the draw with `draw`, a command that issues the draw call itself, such as a
-    /// mesh-shader dispatch. It must capture the values it uses.
+    /// mesh-shader dispatch. Copy what it uses into locals before recording it. What it sets holds
+    /// for this draw only (see `RenderEncoderState`).
     public func addCustomDraw(_ draw: @escaping (MTLRenderCommandEncoder) -> Void) {
         storage.appendCustomCommand(draw)
         storage.finishPacket(drawCall: .custom)

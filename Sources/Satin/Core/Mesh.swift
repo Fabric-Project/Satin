@@ -96,7 +96,6 @@ open class Mesh: Renderable {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
-                geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
                 _updateLocalBounds = true
             }
         }
@@ -113,7 +112,6 @@ open class Mesh: Renderable {
     var geometrySubscription: AnyCancellable?
     private weak var boundsJointPalette: JointPalette?
     private var boundsPoseVersion = -1
-    private var minimumEncodesPerFrame = 1
 
     public internal(set) var submeshes: [Submesh] = []
     {
@@ -191,47 +189,8 @@ open class Mesh: Renderable {
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
         material.setup()
-        material.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
 
         self.updateAllMaterials()
-    }
-
-    // MARK: - Repeated Encoding
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    override open func prepareForRepeatedEncoding(count: Int) {
-        super.prepareForRepeatedEncoding(count: count)
-        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
-
-        // Expand material uniform buffer to hold one slot per in-flight iteration.
-        material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-        for submesh in submeshes {
-            submesh.material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-        }
-
-        // Geometry records one draw state per encode and uploads changed buffers into versioned slots.
-        geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-    }
-
-    override open func captureRepeatedEncodingState(iteration: Int, count: Int) {
-        super.captureRepeatedEncodingState(iteration: iteration, count: count)
-        // Submesh geometries hold only indices: no palette to capture.
-        geometry.captureRepeatedEncoding(iteration: iteration, count: count)
-    }
-
-    override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        selectRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    override open func selectRepeatedEncodingState(iteration: Int, count: Int) {
-        super.selectRepeatedEncodingState(iteration: iteration, count: count)
-        geometry.selectRecentSlot(iteration: iteration, count: count)
-        material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
-
-        for submesh in submeshes {
-            submesh.geometry.selectRecentSlot(iteration: iteration, count: count)
-            submesh.material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
-        }
     }
 
     // MARK: - Binding
@@ -268,13 +227,13 @@ open class Mesh: Renderable {
         super.update()
     }
 
-    override open func encode(_ commandBuffer: MTLCommandBuffer) {
-        geometry.encode(commandBuffer)
-        material?.encode(commandBuffer)
+    override open func encode(in context: EncodingContext) {
+        geometry.encode(in: context)
+        material?.encode(in: context)
         for submesh in submeshes {
-            submesh.encode(commandBuffer)
+            submesh.encode(in: context)
         }
-        super.encode(commandBuffer)
+        super.encode(in: context)
     }
 
     private func updateAllMaterials()
@@ -298,13 +257,11 @@ open class Mesh: Renderable {
         drawMesh(in: context, instanceCount: instanceCount)
     }
 
-    /// Records this mesh's draws with `instanceCount` instances: its geometry bindings, shared by
-    /// every draw, then for each submesh drawn in this pass, or for itself, its material, vertex
-    /// uniforms and draw call. Nothing to draw records nothing.
+    /// Records this mesh's draws with `instanceCount` instances: for each submesh drawn in this
+    /// pass, or for itself, its material, vertex uniforms, then its geometry's `draw(in:)` (over the
+    /// submesh's indices for a submesh). Nothing to draw records nothing.
     func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
         guard instanceCount > 0, geometry.hasVertexBuffers else { return }
-        let geometryContext = context.geometryContext(instanceCount: instanceCount)
-        geometry.recordBindings(in: geometryContext)
 
         // The material may be shared with meshes of another layout: pick the pipeline for ours.
         let layout = drawLayout
@@ -315,36 +272,17 @@ open class Mesh: Renderable {
                 else { continue }
                 submeshMaterial.draw(in: context.materialContext(layout: layout))
                 recordVertexUniforms(in: context, for: submeshMaterial)
-                submesh.recordDrawCall(in: context, instanceCount: instanceCount)
+                geometry.draw(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: submesh.indexBufferOffset, elements: submesh.geometry))
             }
         } else if let material, materialMatchesCurrentPass(material, in: context) {
             material.draw(in: context.materialContext(layout: layout))
             recordVertexUniforms(in: context, for: material)
-            geometry.recordDrawCall(in: geometryContext)
+            geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
         }
     }
 
     private func materialMatchesCurrentPass(_ material: Material, in context: RenderableDrawContext) -> Bool {
-        if context.isShadowPass {
-            return true
-        }
-
-        let isTransparent = material.blending != .disabled
-
-        switch context.materialPass {
-        case .all:
-            return true
-        case .opaque:
-            return !isTransparent
-        case .alphaTransparent:
-            return material.blending == .alpha
-        case .classicTransparent:
-            return isTransparent
-        case .surfaceOpaque:
-            return material.lightingModel == .surface && !isTransparent
-        case .unlitOpaque:
-            return material.lightingModel == .unlit && !isTransparent
-        }
+        context.isShadowPass || context.materialPass.includes(material)
     }
 
     open func addSubmesh(_ submesh: Submesh) {

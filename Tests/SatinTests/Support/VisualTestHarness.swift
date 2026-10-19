@@ -86,12 +86,20 @@ enum VisualTestHarness {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw NSError(domain: "VisualTestHarness", code: 1, userInfo: [NSLocalizedDescriptionKey: "Metal is unavailable"])
         }
+        return try render(context: makeContext(device: device), size: size, configure: configure)
+    }
 
+    /// Renders with `context`, for tests that need a context of their own (alpha OIT, say).
+    static func render(
+        context: Context,
+        size: SIMD2<Int>,
+        configure: (RenderEncoder, Camera) -> (scene: Object, camera: Camera)
+    ) throws -> RGBAImage {
+        let device = context.device
         guard let commandQueue = device.makeCommandQueue() else {
             throw NSError(domain: "VisualTestHarness", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create command queue"])
         }
 
-        let context = makeContext(device: device)
         let renderer = RenderEncoder(context: context, clearColor: defaultClearColor)
         renderer.resize((width: Float(size.x), height: Float(size.y)))
 

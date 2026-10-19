@@ -108,20 +108,23 @@ open class Material: Codable {
         }
     }
 
-    public var uniforms: UniformBuffer?
-
     public let parametersSetPublisher = PassthroughSubject<ParameterGroup, Never>()
-    private var parameterGroupSubscriptions = Set<AnyCancellable>()
     public private(set) var parameters: ParameterGroup = ParameterGroup() {
         didSet {
             if parameters == oldValue { return }
             parameters.label = "\(label) Uniforms"
-            setupParameterGroupSubscriptions(parameters)
-            uniformsNeedsUpdate = true
             //objectWillChange.send()
             parametersSetPublisher.send(parameters)
         }
     }
+
+    // The uniforms snapshot this lease's draws bind: taken once per lease, parameter group and
+    // content revision, so a material shared by many meshes in one record copies its uniforms once,
+    // and a change between records gets a new snapshot.
+    private var uniformsSnapshotLeaseToken: UInt64 = 0
+    private var uniformsSnapshotParameters: ParameterGroup?
+    private var uniformsSnapshotRevision: UInt64 = 0
+    private var uniformsSnapshot: (buffer: MTLBuffer, offset: Int)?
 
     /// What a material binds at one buffer index; a draw binds the first that is set, in this order.
     private struct BufferSlot {
@@ -217,12 +220,9 @@ open class Material: Codable {
         }
     }
 
-    private var uniformsNeedsUpdate = true
     private var depthNeedsUpdate = false
-    private var minimumEncodesPerFrame = 1
 
     public var depthBias: DepthBias?
-    public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
 
     // MARK: - Rendering Path
@@ -256,7 +256,6 @@ open class Material: Codable {
 
     public required init(context: Context) {
         self.context = context
-        setupParameterGroupSubscriptions(parameters)
         parametersSetPublisher.send(parameters)
     }
 
@@ -266,8 +265,6 @@ open class Material: Codable {
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
         setupShaderParametersSubscription(shader)
-        setupParameterGroupSubscriptions(parameters)
-        uniformsNeedsUpdate = true
         parametersSetPublisher.send(parameters)
     }
 
@@ -299,7 +296,6 @@ open class Material: Codable {
     public required init(from decoder: Decoder) throws {
         context = try decoder.requireSatinContext(typeName: String(describing: Self.self))
         try decode(from: decoder)
-        setupParameterGroupSubscriptions(parameters)
     }
 
     public func decode(from decoder: Decoder) throws {
@@ -351,43 +347,7 @@ open class Material: Codable {
     open func setup() {
         setupDepthStencilState()
         setupShader()
-        setupUniforms()
 //        objectWillChange.send()
-    }
-
-    private func setupParameterGroupSubscriptions(_ parameterGroup: ParameterGroup) {
-        parameterGroupSubscriptions.removeAll()
-
-        parameterGroup.parameterAddedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.parameterRemovedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.parameterUpdatedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.loadedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.clearedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
     }
 
     private func makeDepthStencilState(depthWriteEnabled: Bool, labelSuffix: String) -> MTLDepthStencilState? {
@@ -452,8 +412,6 @@ open class Material: Codable {
 
             self.parameters.label = newParameters.label
 
-            self.uniformsNeedsUpdate = true
-
             //self.objectWillChange.send()
 
             self.parametersSetPublisher.send(self.parameters)
@@ -465,43 +423,9 @@ open class Material: Codable {
         }
     }
 
-    open func setupUniforms() {
-        guard parameters.size > 0, uniformsNeedsUpdate
-        else
-        {
-            uniformsNeedsUpdate = false
-            return
-        }
-
-        uniforms = UniformBuffer(
-            device: context.device,
-            parameters: parameters,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            encodesPerFrame: minimumEncodesPerFrame
-        )
-
-        uniformsNeedsUpdate = false
-    }
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    /// Ensures material uniforms have enough slots for repeated encodes before GPU completion.
-    public func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
-        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, encodesPerFrame))
-        guard parameters.size > 0 else { return }
-        let minSlots = context.maxBuffersInFlight * minimumEncodesPerFrame
-        guard minSlots > (uniforms?.totalSlotCount ?? context.maxBuffersInFlight) else { return }
-        uniforms = UniformBuffer(
-            device: context.device,
-            parameters: parameters,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            encodesPerFrame: minimumEncodesPerFrame
-        )
-    }
-
     open func update() {
         updateDepth()
         updateShader()
-        updateUniforms()
         onUpdate?()
     }
 
@@ -515,18 +439,13 @@ open class Material: Codable {
         if depthNeedsUpdate { setupDepthStencilState() }
     }
 
-    open func updateUniforms() {
-        if uniformsNeedsUpdate { setupUniforms() }
-        uniforms?.update()
-    }
-
-    open func encode(_ commandBuffer: MTLCommandBuffer) {}
+    open func encode(in context: EncodingContext) {}
 
     // MARK: - Draw
 
     /// Records what drawing with this material needs for one draw: its pipeline for the pass and
     /// layout, depth state, uniforms, buffers and textures. Subclasses add their own bindings and
-    /// call `super`. `onBind` runs when the draw executes, after these bindings.
+    /// call `super`; state the context doesn't model goes through `context.addCustomCommand`.
     open func draw(in context: MaterialDrawContext) {
         let shadow = context.isShadowPass
         // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
@@ -539,13 +458,10 @@ open class Material: Codable {
         if let pipeline {
             context.setPipeline(pipeline)
         }
-        if let onBind {
-            context.addCustomCommand(onBind)
-        }
     }
 
     private func recordUniforms(in context: MaterialDrawContext, shadow: Bool) {
-        guard let shader, let uniforms else { return }
+        guard let shader, let uniforms = uniformsBinding(in: context) else { return }
 
         if shader.vertexWantsMaterialUniforms {
             context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
@@ -554,6 +470,34 @@ open class Material: Codable {
         if !shadow, shader.fragmentWantsMaterialUniforms {
             context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
+    }
+
+    /// This material's uniforms as they are now, in the draw's arena: the slice its draws bind,
+    /// for a subclass that binds them to stages the context doesn't model. Nil when it has none.
+    public func uniformsBinding(in context: MaterialDrawContext) -> (buffer: MTLBuffer, offset: Int)? {
+        let parameters = self.parameters
+        let leaseToken = context.storage.leaseToken
+        let revision = parameters.contentRevision
+        // Checked before anything else: every draw after the first in a lease is a hit.
+        if let uniformsSnapshot,
+           uniformsSnapshotLeaseToken == leaseToken,
+           uniformsSnapshotParameters === parameters,
+           uniformsSnapshotRevision == revision
+        {
+            return uniformsSnapshot
+        }
+
+        let size = parameters.size
+        guard size > 0 else { return nil }
+
+        let slice = context.recorder.allocate(length: size)
+        slice.contents.copyMemory(from: parameters.data, byteCount: size)
+        let snapshot = (buffer: slice.buffer, offset: slice.offset)
+        uniformsSnapshot = snapshot
+        uniformsSnapshotLeaseToken = leaseToken
+        uniformsSnapshotParameters = parameters
+        uniformsSnapshotRevision = revision
+        return snapshot
     }
 
     private func recordDepthState(in context: MaterialDrawContext, shadow: Bool) {
@@ -835,7 +779,6 @@ open class Material: Codable {
         clone.parameters = parameters.clone()
 
         clone.onUpdate = onUpdate
-        clone.onBind = onBind
 
         clone.renderingConfiguration = renderingConfiguration
 

@@ -76,9 +76,9 @@ public class ARLidarMesh: Renderable {
 
     // MARK: - Update
 
-    override public func encode(_ commandBuffer: MTLCommandBuffer) {
-        material?.encode(commandBuffer)
-        super.encode(commandBuffer)
+    override public func encode(in context: EncodingContext) {
+        material?.encode(in: context)
+        super.encode(in: context)
     }
 
     override public func update() {
