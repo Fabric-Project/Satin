@@ -83,18 +83,11 @@ open class Submesh {
 
     open func setupGeometry() {}
 
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
+    /// Records this submesh's material and draw call; its parent has recorded the shared vertex
+    /// uniforms and vertex buffers.
+    open func draw(in context: RenderableDrawContext, instanceCount: Int) {
         // The material may be shared with meshes of another layout: pick the pipeline for ours.
-        material?.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow,
-            layout: parent?.drawLayout
-        )
-        geometry.draw(
-            renderEncoderState: renderEncoderState,
-            instanceCount: instanceCount,
-            indexBufferOffset: indexBufferOffset
-        )
+        material?.draw(in: context.materialContext(layout: parent?.drawLayout))
+        geometry.recordDrawCall(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: indexBufferOffset))
     }
 }

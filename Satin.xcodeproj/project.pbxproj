@@ -108,6 +108,9 @@
 		7F1A00000000000000000002 /* FrameTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000001 /* FrameTime.swift */; };
 		7F1A00000000000000000004 /* SceneIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000003 /* SceneIndex.swift */; };
 		7F1A00000000000000000006 /* RenderCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000005 /* RenderCollection.swift */; };
+		7F1A0000000000000000000C /* FrameArena.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000B /* FrameArena.swift */; };
+		7F1A0000000000000000000E /* RenderDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000D /* RenderDestination.swift */; };
+		7F1A00000000000000000010 /* DrawRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000F /* DrawRecording.swift */; };
 		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
@@ -378,6 +381,9 @@
 		7F1A00000000000000000001 /* FrameTime.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameTime.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000003 /* SceneIndex.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneIndex.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000005 /* RenderCollection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderCollection.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000B /* FrameArena.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameArena.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000D /* RenderDestination.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderDestination.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000F /* DrawRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawRecording.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
@@ -976,6 +982,9 @@
 				66D7DEAC2C06A24B00B5A6C8 /* RenderEncoderState.swift */,
 				66D7DEAD2C06A24B00B5A6C8 /* RenderList.swift */,
 				7F1A00000000000000000005 /* RenderCollection.swift */,
+				7F1A0000000000000000000B /* FrameArena.swift */,
+				7F1A0000000000000000000D /* RenderDestination.swift */,
+				7F1A0000000000000000000F /* DrawRecording.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
 			path = Renderer;
@@ -1476,6 +1485,9 @@
 				7F1A00000000000000000002 /* FrameTime.swift in Sources */,
 				7F1A00000000000000000004 /* SceneIndex.swift in Sources */,
 				7F1A00000000000000000006 /* RenderCollection.swift in Sources */,
+				7F1A0000000000000000000C /* FrameArena.swift in Sources */,
+				7F1A0000000000000000000E /* RenderDestination.swift in Sources */,
+				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,

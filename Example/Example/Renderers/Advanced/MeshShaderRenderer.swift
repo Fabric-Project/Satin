@@ -168,29 +168,20 @@ private final class CustomMaterial: SourceMaterial {
         return shader
     }
 
-    override func bindUniforms(renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override func draw(in context: MaterialDrawContext) {
+        super.draw(in: context)
         guard #available(macOS 13.0, iOS 16.0, *), let uniforms = uniforms else { return }
 
-        let renderEncoder = renderEncoderState.renderEncoder
-
-        renderEncoder.setObjectBuffer(
-            uniforms.buffer,
-            offset: uniforms.offset,
-            index: ObjectBufferIndex.MaterialUniforms.rawValue
-        )
-
-        renderEncoder.setMeshBuffer(
-            uniforms.buffer,
-            offset: uniforms.offset,
-            index: MeshBufferIndex.MaterialUniforms.rawValue
-        )
-
-        if !shadow {
-            renderEncoder.setFragmentBuffer(
-                uniforms.buffer,
-                offset: uniforms.offset,
-                index: FragmentBufferIndex.MaterialUniforms.rawValue
-            )
+        // The mesh pipeline reads material uniforms in its object and mesh stages too.
+        let buffer = uniforms.buffer
+        let offset = uniforms.offset
+        let shadow = context.isShadowPass
+        context.addCustomCommand { renderEncoder in
+            renderEncoder.setObjectBuffer(buffer, offset: offset, index: ObjectBufferIndex.MaterialUniforms.rawValue)
+            renderEncoder.setMeshBuffer(buffer, offset: offset, index: MeshBufferIndex.MaterialUniforms.rawValue)
+            if !shadow {
+                renderEncoder.setFragmentBuffer(buffer, offset: offset, index: FragmentBufferIndex.MaterialUniforms.rawValue)
+            }
         }
     }
 }
@@ -202,7 +193,7 @@ private final class CustomMesh: Mesh {
               let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
               !geometry.vertexBuffers.isEmpty,
-              vertexUniforms[renderContext.id] != nil
+              vertexUniforms(for: renderContext.id) != nil
         else { return false }
         return true
     }
@@ -217,45 +208,29 @@ private final class CustomMesh: Mesh {
 
     // MARK: - Draw
 
-    override func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    override func draw(in context: RenderableDrawContext) {
         guard #available(macOS 13.0, iOS 16.0, *),
-              let vertexUniforms = vertexUniforms[renderContext.id],
+              let vertexUniforms = self.vertexUniforms(for: context.renderContext.id),
               let material,
               let vertexBuffer = geometry.vertexBuffers[VertexBufferIndex.Vertices]
         else { return }
 
-        material.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+        material.draw(in: context.materialContext(layout: nil))
 
-        let renderEncoder = renderEncoderState.renderEncoder
-
-        renderEncoder.setObjectBuffer(
-            vertexBuffer,
-            offset: 0,
-            index: ObjectBufferIndex.Vertices.rawValue
-        )
-
-        renderEncoder.setObjectBuffer(
-            geometry.indexBuffer,
-            offset: 0,
-            index: ObjectBufferIndex.Indicies.rawValue
-        )
-
-        renderEncoder.setMeshBuffer(
-            vertexUniforms.buffer,
-            offset: vertexUniforms.offset,
-            index: MeshBufferIndex.VertexUniforms.rawValue
-        )
-
+        let indexBuffer = geometry.indexBuffer
+        let vertexUniformsBuffer = vertexUniforms.buffer
+        let vertexUniformsOffset = vertexUniforms.offset
         let instances = geometry.indexCount / 3
 
-        renderEncoder.drawMeshThreadgroups(
-            MTLSizeMake(instances, 1, 1),
-            threadsPerObjectThreadgroup: MTLSizeMake(1, 1, 1),
-            threadsPerMeshThreadgroup: MTLSizeMake(36, 1, 1)
-        )
+        context.addCustomCommand { renderEncoder in
+            renderEncoder.setObjectBuffer(vertexBuffer, offset: 0, index: ObjectBufferIndex.Vertices.rawValue)
+            renderEncoder.setObjectBuffer(indexBuffer, offset: 0, index: ObjectBufferIndex.Indicies.rawValue)
+            renderEncoder.setMeshBuffer(vertexUniformsBuffer, offset: vertexUniformsOffset, index: MeshBufferIndex.VertexUniforms.rawValue)
+            renderEncoder.drawMeshThreadgroups(
+                MTLSizeMake(instances, 1, 1),
+                threadsPerObjectThreadgroup: MTLSizeMake(1, 1, 1),
+                threadsPerMeshThreadgroup: MTLSizeMake(36, 1, 1)
+            )
+        }
     }
 }

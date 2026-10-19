@@ -57,14 +57,38 @@ open class Mesh: Renderable {
 
     /// What this mesh's draws need from a material's pipeline; see `DrawLayout`.
     public var drawLayout: DrawLayout {
-        DrawLayout(vertexDescriptor: geometry.vertexDescriptor, vertexLayoutID: geometry.vertexLayoutID, skinning: geometry.isSkinned, instancing: isInstanced,
-                   castShadow: castShadow, receiveShadow: receiveShadow)
+        let geometry: Geometry = self.geometry
+        let vertexDescriptor = geometry.vertexDescriptor
+        let jointPalette = geometry.jointPalette
+        if let cachedDrawLayout,
+           cachedDrawLayoutGeometry === geometry,
+           cachedDrawLayout.vertexDescriptor === vertexDescriptor,
+           cachedDrawLayoutJointPalette === jointPalette,
+           cachedDrawLayout.castShadow == castShadow,
+           cachedDrawLayout.receiveShadow == receiveShadow
+        {
+            return cachedDrawLayout
+        }
+
+        let drawLayout = DrawLayout(vertexDescriptor: vertexDescriptor, vertexLayoutID: geometry.vertexLayoutID, skinning: geometry.isSkinned, instancing: isInstanced,
+                                    castShadow: castShadow, receiveShadow: receiveShadow)
+        cachedDrawLayout = drawLayout
+        cachedDrawLayoutGeometry = geometry
+        cachedDrawLayoutJointPalette = jointPalette
+        return drawLayout
     }
+
+    // `drawLayout` is read for every draw and every drawability check; it is rebuilt only when
+    // its inputs change. A geometry replaces its vertex descriptor whenever its attributes change,
+    // so comparing the geometry, its descriptor and its palette by identity is enough.
+    private var cachedDrawLayout: DrawLayout?
+    private var cachedDrawLayoutGeometry: Geometry?
+    private var cachedDrawLayoutJointPalette: JointPalette?
 
     override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard instanceCount > 0,
               geometry.hasVertexBuffers,
-              vertexUniforms[renderContext.id] != nil
+              vertexUniforms(for: renderContext.id) != nil
         else { return false }
 
         let layout = drawLayout
@@ -160,12 +184,12 @@ open class Mesh: Renderable {
     // MARK: - Setup Uniforms
 
     open func setupVertexUniforms() {
-        guard vertexUniforms[context.id] == nil else { return }
+        guard vertexUniforms(for: context.id) == nil else { return }
         ensureVertexUniformBuffer(context: context)
     }
 
     open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
-        vertexUniforms[renderContext.id]
+        vertexUniforms(for: renderContext.id)
     }
 
     open func setupGeometry() {
@@ -253,12 +277,9 @@ open class Mesh: Renderable {
 
     // MARK: - Binding
 
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        bindUniforms(renderContext: renderContext, renderEncoderState: renderEncoderState)
-        bindGeometry(renderEncoderState: renderEncoderState, shadow: shadow)
-    }
-
-    open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
+    /// Records this mesh's vertex uniforms for the context, at the stages its materials read them.
+    func recordVertexUniforms(in context: RenderableDrawContext) {
+        guard let vertexUniforms = self.vertexUniforms(for: context.renderContext.id) else { return }
         // Every material this mesh draws with, its own and its submeshes': a mesh whose materials
         // are all on its submeshes still has to place them.
         var vertexWantsVertexUniforms = false
@@ -269,15 +290,11 @@ open class Mesh: Renderable {
             fragmentWantsVertexUniforms = fragmentWantsVertexUniforms || shader.fragmentWantsVertexUniforms
         }
         if vertexWantsVertexUniforms {
-            renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext.id]
+            context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
         if fragmentWantsVertexUniforms {
-            renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext.id]
+            context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
-    }
-
-    open func bindGeometry(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        geometry.bind(renderEncoderState: renderEncoderState, shadow: shadow)
     }
 
     // MARK: - Update
@@ -308,7 +325,7 @@ open class Mesh: Renderable {
     }
 
     override open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms[renderContext.id]?.update(
+        vertexUniforms(for: renderContext.id)?.update(
             object: self,
             camera: camera,
             viewport: viewport,
@@ -340,43 +357,26 @@ open class Mesh: Renderable {
 
     // MARK: - Draw
 
-    override open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        draw(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            instanceCount: instanceCount,
-            shadow: shadow
-        )
+    override open func draw(in context: RenderableDrawContext) {
+        drawMesh(in: context, instanceCount: instanceCount)
     }
 
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+    /// Records this mesh's draw with `instanceCount` instances: its vertex uniforms and geometry
+    /// bindings, then the material and draw call of each submesh drawn in this pass, or its own.
+    func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
+        let shadow = context.isShadowPass
+        recordVertexUniforms(in: context)
+        let geometryContext = context.geometryContext(instanceCount: instanceCount)
+        geometry.recordBindings(in: geometryContext)
 
         if !submeshes.isEmpty {
             for submesh in submeshes where submesh.visible && materialMatchesCurrentPass(submesh.material, shadow: shadow) {
-                submesh.draw(
-                    renderContext: renderContext,
-                    renderEncoderState: renderEncoderState,
-                    instanceCount: instanceCount,
-                    shadow: shadow
-                )
+                submesh.draw(in: context, instanceCount: instanceCount)
             }
         } else if materialMatchesCurrentPass(material, shadow: shadow) {
             // The material may be shared with meshes of another layout: pick the pipeline for ours.
-            material?.bind(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: shadow,
-                layout: drawLayout
-            )
-            geometry.draw(
-                renderEncoderState: renderEncoderState,
-                instanceCount: instanceCount
-            )
+            material?.draw(in: context.materialContext(layout: drawLayout))
+            geometry.recordDrawCall(in: geometryContext)
         }
     }
 

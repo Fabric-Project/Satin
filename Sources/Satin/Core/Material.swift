@@ -511,111 +511,85 @@ open class Material: Codable {
 
     open func encode(_ commandBuffer: MTLCommandBuffer) {}
 
-    /// `layout`: what the mesh being drawn needs from the pipeline (see `DrawLayout`); nil uses this material's own.
-    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) else { return }
-        renderEncoderState.pipeline = pipeline
+    // MARK: - Draw
+
+    /// Records what drawing with this material needs for one draw: its pipeline for the pass and
+    /// layout, depth state, uniforms, buffers and textures. Subclasses add their own bindings and
+    /// call `super`. `onBind` runs when the draw executes, after these bindings.
+    open func draw(in context: MaterialDrawContext) {
+        let shadow = context.isShadowPass
+        recordUniforms(in: context, shadow: shadow)
+        recordDepthState(in: context, shadow: shadow)
+        recordBuffers(in: context)
+        recordTextures(in: context)
+        if let pipeline = shader?.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout) {
+            context.setPipeline(pipeline)
+        }
+        if let onBind {
+            context.addCustomCommand(onBind)
+        }
     }
 
-    open func bindUniforms(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        guard let shader else { return }
+    private func recordUniforms(in context: MaterialDrawContext, shadow: Bool) {
+        guard let shader, let uniforms else { return }
 
         if shader.vertexWantsMaterialUniforms {
-            renderEncoderState.vertexMaterialUniforms = uniforms
+            context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
 
         if !shadow, shader.fragmentWantsMaterialUniforms {
-            renderEncoderState.fragmentMaterialUniforms = uniforms
+            context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
     }
 
-    open func bindDepthStates(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool = false) {
+    private func recordDepthState(in context: MaterialDrawContext, shadow: Bool) {
+        let renderContext = context.renderContext
         guard renderContext.depthPixelFormat != .invalid else { return }
-        renderEncoderState.depthStencilState = (!shadow && renderContext.alphaOitEnabled) ? alphaOitDepthStencilState : depthStencilState
-        renderEncoderState.depthBias = depthBias
-        renderEncoderState.depthClipMode = depthClipMode
+        context.setDepthStencilState(
+            (!shadow && renderContext.alphaOitEnabled) ? alphaOitDepthStencilState : depthStencilState,
+            bias: depthBias,
+            clipMode: depthClipMode
+        )
     }
 
-    open func bindBuffers(renderEncoderState: RenderEncoderState) {
+    private func recordBuffers(in context: MaterialDrawContext) {
         guard let shader else { return }
 
         for index in shader.vertexBufferBindingIsUsed {
             if let uniformBuffer = vertexUniformBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    uniformBuffer.buffer,
-                    offset: uniformBuffer.offset,
-                    index: index
-                )
+                context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
             } else if let structBuffer = vertexStructBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    structBuffer.buffer,
-                    offset: structBuffer.offset,
-                    index: index
-                )
+                context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
             } else if let buffer = vertexBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    buffer,
-                    offset: 0,
-                    index: index
-                )
+                context.setVertexBuffer(buffer, offset: 0, index: index)
             }
         }
 
         for index in shader.fragmentBufferBindingIsUsed {
             if let uniformBuffer = fragmentUniformBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    uniformBuffer.buffer,
-                    offset: uniformBuffer.offset,
-                    index: index
-                )
+                context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
             } else if let structBuffer = fragmentStructBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    structBuffer.buffer,
-                    offset: structBuffer.offset,
-                    index: index
-                )
+                context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
             } else if let buffer = fragmentBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    buffer,
-                    offset: 0,
-                    index: index
-                )
+                context.setFragmentBuffer(buffer, offset: 0, index: index)
             }
         }
     }
 
-    open func bindTextures(renderEncoderState: RenderEncoderState) {
+    private func recordTextures(in context: MaterialDrawContext) {
         guard let shader else { return }
 
         for index in shader.vertexTextureBindingIsUsed {
             if let texture = vertexTextures[index] {
-                renderEncoderState.setVertexTexture(texture, index: index)
+                context.setVertexTexture(texture, index: index)
             }
         }
 
         for index in shader.fragmentTextureBindingIsUsed {
             if let texture = fragmentTextures[index] {
-                renderEncoderState.setFragmentTexture(texture, index: index)
+                context.setFragmentTexture(texture, index: index)
             }
         }
-    }
-
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        bindUniforms(renderEncoderState: renderEncoderState, shadow: shadow)
-        bindDepthStates(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
-        bindBuffers(renderEncoderState: renderEncoderState)
-        bindTextures(renderEncoderState: renderEncoderState)
-        bindPipeline(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow,
-            layout: layout
-        )
-        onBind?(renderEncoderState.renderEncoder)
     }
 
     public func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {

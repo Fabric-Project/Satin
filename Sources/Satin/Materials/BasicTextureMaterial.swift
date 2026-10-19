@@ -71,18 +71,6 @@ open class BasicTextureMaterial: BasicColorMaterial {
         sampler = context.device.makeSamplerState(descriptor: desc)
     }
 
-    public func bindTexture(_ renderEncoder: MTLRenderCommandEncoder) {
-        if let texture = texture {
-            renderEncoder.setFragmentTexture(texture, index: FragmentTextureIndex.Custom0.rawValue)
-        }
-    }
-
-    public func bindSampler(_ renderEncoder: MTLRenderCommandEncoder) {
-        if let sampler = sampler {
-            renderEncoder.setFragmentSamplerState(sampler, index: FragmentSamplerIndex.Custom0.rawValue)
-        }
-    }
-
     private func initializeTextureTransform(_ transform: simd_float4x4 = matrix_identity_float4x4) {
         if get("Texture Transform") == nil {
             set("Texture Transform", transform)
@@ -92,15 +80,13 @@ open class BasicTextureMaterial: BasicColorMaterial {
         }
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        let renderEncoder = renderEncoderState.renderEncoder
-        bindTexture(renderEncoder)
-        bindSampler(renderEncoder)
-        super.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow,
-            layout: layout
-        )
+    override public func draw(in context: MaterialDrawContext) {
+        if let texture {
+            context.setFragmentTexture(texture, index: .Custom0)
+        }
+        if let sampler {
+            context.setFragmentSamplerState(sampler, index: .Custom0)
+        }
+        super.draw(in: context)
     }
 }

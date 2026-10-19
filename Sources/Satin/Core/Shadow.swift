@@ -11,6 +11,9 @@ import Metal
 import simd
 
 public class Shadow {
+    /// Records each caster's draw before executing it; reused for every draw.
+    let drawRecorder = DrawRecorder()
+
     public var label: String
     public var texture: MTLTexture? = nil
     

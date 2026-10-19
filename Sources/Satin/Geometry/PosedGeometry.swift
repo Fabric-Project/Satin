@@ -73,17 +73,16 @@ open class PosedGeometry: Geometry {
         jointPalette?.selectRecentSlot(iteration: iteration, count: count)
     }
 
-    override open func bind(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        source.bind(renderEncoderState: renderEncoderState, shadow: shadow)
+    override open func recordBindings(in context: GeometryDrawContext) {
+        source.recordBindings(in: context)
         // Replaces any palette the source bound.
         if isSkinned, let jointPalette {
-            renderEncoderState.vertexJointPalette = jointPalette
-            jointPalette.markDrawn()
+            context.setJointPalette(jointPalette)
         }
     }
 
-    override open func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
-        source.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart)
+    override open func recordDrawCall(in context: GeometryDrawContext) {
+        source.recordDrawCall(in: context)
     }
 
     /// The source's vertices, moved by this view's palette.

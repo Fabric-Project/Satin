@@ -64,6 +64,8 @@ open class PostProcessRenderEncoder {
     }
 
     private var renderContextCache = [RenderContextKey: Context]()
+    /// Records the mesh's draw before executing it; reused for every draw.
+    private let drawRecorder = DrawRecorder()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
     private var colorTexture: MTLTexture?
@@ -260,7 +262,7 @@ open class PostProcessRenderEncoder {
         renderEncoderState.cullMode = mesh.cullMode
 
         mesh.preDraw?(renderCommandEncoder)
-        mesh.draw(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: false)
+        mesh.encodeDraw(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: false, recorder: drawRecorder)
         renderCommandEncoder.endEncoding()
     }
 

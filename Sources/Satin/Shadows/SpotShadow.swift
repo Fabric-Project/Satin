@@ -126,7 +126,7 @@ public final class SpotShadow: Shadow {
             renderEncoderState.cullMode = renderable.cullMode
             renderEncoderState.windingOrder = renderable.windingOrder
             renderEncoderState.triangleFillMode = renderable.triangleFillMode
-            renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
+            renderable.encodeDraw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true, recorder: drawRecorder)
         }
 
         renderEncoder.endEncoding()

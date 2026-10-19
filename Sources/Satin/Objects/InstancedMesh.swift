@@ -200,14 +200,7 @@ public class InstancedMesh: Mesh {
         super.update()
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        super.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
-        renderEncoderState.vertexInstanceUniforms = instanceMatrixBuffer
-    }
+
 
     // MARK: - Private Instancing
 
@@ -394,23 +387,11 @@ public class InstancedMesh: Mesh {
 //    }
 
     
-    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        if let drawCount = drawCount {
-            super.draw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                instanceCount: min(drawCount, instanceCount),
-                shadow: shadow
-            )
+    override public func draw(in context: RenderableDrawContext) {
+        if let instanceMatrixBuffer {
+            context.setVertexBuffer(instanceMatrixBuffer.buffer, offset: instanceMatrixBuffer.offset, index: .InstanceMatrixUniforms)
         }
-        else {
-            super.draw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                instanceCount: instanceCount,
-                shadow: shadow
-            )
-        }
+        drawMesh(in: context, instanceCount: drawCount.map { min($0, instanceCount) } ?? instanceCount)
     }
 
     // MARK: - Intersections

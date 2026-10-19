@@ -318,6 +318,8 @@ open class RenderEncoder {
     /// What the current update pass collected from the scene, and how it walks the scene.
     private let renderCollection = RenderCollection()
     private let sceneTraversal = SceneTraversal()
+    /// Records each renderable's draw before executing it; reused for every draw.
+    private let drawRecorder = DrawRecorder()
 
     private var _updateLightDataBuffer = false
     private var lightDataBuffer: StructBuffer<LightData>?
@@ -878,7 +880,7 @@ open class RenderEncoder {
                 iteration: repeatedIteration,
                 count: repeatedCount
             )
-        } else if renderable.vertexUniforms[drawContext.id] == nil {
+        } else if renderable.vertexUniforms(for: drawContext.id) == nil {
             renderable.ensureVertexUniformBuffer(context: drawContext)
         }
 
@@ -2319,7 +2321,7 @@ open class RenderEncoder {
 
         for renderable in renderables {
             let drawContext = overrideMaterial?.context ?? renderContext(for: renderable, phase: phase)
-            if renderable.vertexUniforms[drawContext.id] == nil {
+            if renderable.vertexUniforms(for: drawContext.id) == nil {
                 renderable.ensureVertexUniformBuffer(context: drawContext)
             }
             guard renderable.isDrawable(renderContext: drawContext, shadow: false) else { continue }
@@ -2395,24 +2397,27 @@ open class RenderEncoder {
 
         if renderable.doubleSided, renderable.cullMode == .none, renderable.opaque == false {
             renderEncoderState.cullMode = .front
-            renderable.draw(
+            renderable.encodeDraw(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
-                shadow: false
+                shadow: false,
+                recorder: drawRecorder
             )
 
             renderEncoderState.cullMode = .back
-            renderable.draw(
+            renderable.encodeDraw(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
-                shadow: false
+                shadow: false,
+                recorder: drawRecorder
             )
         } else {
             renderEncoderState.cullMode = renderable.cullMode
-            renderable.draw(
+            renderable.encodeDraw(
                 renderContext: renderContext,
                 renderEncoderState: renderEncoderState,
-                shadow: false
+                shadow: false,
+                recorder: drawRecorder
             )
         }
 

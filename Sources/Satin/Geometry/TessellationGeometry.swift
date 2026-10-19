@@ -81,30 +81,36 @@ public final class TessellationGeometry: Geometry {
         )
     }
 
-    override public func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
-        let renderEncoder = renderEncoderState.renderEncoder
+    override public func recordDrawCall(in context: GeometryDrawContext) {
+        let controlPointsPerPatch = self.controlPointsPerPatch
+        let patchCount = self.patchCount
+        let instanceCount = context.instanceCount
         if let indexBuffer {
-            renderEncoder.drawIndexedPatches(
-                numberOfPatchControlPoints: controlPointsPerPatch,
-                patchStart: 0,
-                patchCount: patchCount,
-                patchIndexBuffer: nil,
-                patchIndexBufferOffset: 0,
-                controlPointIndexBuffer: indexBuffer,
-                controlPointIndexBufferOffset: 0,
-                instanceCount: instanceCount,
-                baseInstance: 0
-            )
+            context.addCustomCommand { renderEncoder in
+                renderEncoder.drawIndexedPatches(
+                    numberOfPatchControlPoints: controlPointsPerPatch,
+                    patchStart: 0,
+                    patchCount: patchCount,
+                    patchIndexBuffer: nil,
+                    patchIndexBufferOffset: 0,
+                    controlPointIndexBuffer: indexBuffer,
+                    controlPointIndexBufferOffset: 0,
+                    instanceCount: instanceCount,
+                    baseInstance: 0
+                )
+            }
         } else {
-            renderEncoder.drawPatches(
-                numberOfPatchControlPoints: controlPointsPerPatch,
-                patchStart: 0,
-                patchCount: patchCount,
-                patchIndexBuffer: nil,
-                patchIndexBufferOffset: 0,
-                instanceCount: instanceCount,
-                baseInstance: 0
-            )
+            context.addCustomCommand { renderEncoder in
+                renderEncoder.drawPatches(
+                    numberOfPatchControlPoints: controlPointsPerPatch,
+                    patchStart: 0,
+                    patchCount: patchCount,
+                    patchIndexBuffer: nil,
+                    patchIndexBufferOffset: 0,
+                    instanceCount: instanceCount,
+                    baseInstance: 0
+                )
+            }
         }
     }
 }

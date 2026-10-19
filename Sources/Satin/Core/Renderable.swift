@@ -76,7 +76,26 @@ open class Renderable : Object {
         }
     }
     
-    open var vertexUniforms: [UUID: VertexUniformBuffer] = [:]
+    open var vertexUniforms: [UUID: VertexUniformBuffer] = [:] {
+        didSet {
+            vertexUniformsContextIDs = Array(vertexUniforms.keys)
+            vertexUniformsBuffers = vertexUniformsContextIDs.compactMap { vertexUniforms[$0] }
+        }
+    }
+
+    // `vertexUniforms` as two parallel arrays: a renderable draws in a handful of contexts, so
+    // finding a context's buffer on every draw compares a few identifiers instead of hashing one,
+    // and touches no buffer until it finds the match.
+    private var vertexUniformsContextIDs: [UUID] = []
+    private var vertexUniformsBuffers: [VertexUniformBuffer] = []
+
+    /// The vertex uniforms this renderable keeps for `contextID`, if any.
+    public func vertexUniforms(for contextID: UUID) -> VertexUniformBuffer? {
+        for index in vertexUniformsContextIDs.indices where vertexUniformsContextIDs[index] == contextID {
+            return vertexUniformsBuffers[index]
+        }
+        return nil
+    }
     var materialPass: MaterialPass = .all
 
     private var repeatedVertexUniformSourceStates: [VertexUniformBuffer.SourceState] = []
@@ -94,7 +113,9 @@ open class Renderable : Object {
 //        fatalError("Subclasses must implement this method")
 //    }
 
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
+    /// Records this renderable's draw for one pass: its bindings, material and geometry draws, and
+    /// any custom commands. Recorded values are captured, so later changes don't affect this draw.
+    open func draw(in context: RenderableDrawContext) {
         fatalError("Subclasses must implement this method")
     }
 
@@ -150,7 +171,7 @@ open class Renderable : Object {
         encodesPerFrame: Int = Satin.maxSubPassesPerFrame
     ) -> VertexUniformBuffer {
         let encodesPerFrame = max(1, encodesPerFrame)
-        if let existingVertexUniformBuffer = vertexUniforms[context.id],
+        if let existingVertexUniformBuffer = vertexUniforms(for: context.id),
            existingVertexUniformBuffer.encodesPerFrame >= encodesPerFrame
         {
             return existingVertexUniformBuffer

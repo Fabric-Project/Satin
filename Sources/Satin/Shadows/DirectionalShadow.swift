@@ -137,10 +137,11 @@ public final class DirectionalShadow: Shadow {
             renderEncoderState.windingOrder = renderable.windingOrder
             renderEncoderState.triangleFillMode = renderable.triangleFillMode
 
-            renderable.draw(
+            renderable.encodeDraw(
                 renderContext: context,
                 renderEncoderState: renderEncoderState,
-                shadow: true
+                shadow: true,
+                recorder: drawRecorder
             )
             #if DEBUG
             renderEncoder.popDebugGroup()

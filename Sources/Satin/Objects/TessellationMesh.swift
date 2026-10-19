@@ -48,30 +48,21 @@ open class TessellationMesh: Mesh {
 
     // MARK: - Draw
 
-    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext.id], let material, !geometry.vertexBuffers.isEmpty else { return }
+    override public func draw(in context: RenderableDrawContext) {
+        guard instanceCount > 0, let vertexUniforms = self.vertexUniforms(for: context.renderContext.id), let material, !geometry.vertexBuffers.isEmpty else { return }
 
-        renderEncoderState.vertexVertexUniforms = vertexUniforms
+        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
 
-        geometry.bind(
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+        let geometryContext = context.geometryContext(instanceCount: instanceCount)
+        geometry.recordBindings(in: geometryContext)
+        material.draw(in: context.materialContext(layout: nil))
 
-        material.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+        if let factorsBuffer = tessellator.factorsBuffer {
+            context.addCustomCommand { renderEncoder in
+                renderEncoder.setTessellationFactorBuffer(factorsBuffer, offset: 0, instanceStride: 0)
+            }
+        }
 
-        let renderEncoder = renderEncoderState.renderEncoder
-
-        renderEncoder.setTessellationFactorBuffer(
-            tessellator.factorsBuffer,
-            offset: 0,
-            instanceStride: 0
-        )
-
-        geometry.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount)
+        geometry.recordDrawCall(in: geometryContext)
     }
 }

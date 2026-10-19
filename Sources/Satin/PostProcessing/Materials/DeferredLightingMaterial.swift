@@ -95,18 +95,20 @@ public final class DeferredLightingMaterial: Material {
         }
     }
 
-    private var maps: [PBRTextureType: MTLTexture?] = [:] {
+    /// The texture for each map, indexed by `PBRTextureType.index`.
+    private var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != maps.keys, let shader = shader as? PBRShader {
-                shader.maps = maps.filter { $0.value != nil }
+            if pbrSlotPresenceDiffers(oldValue, maps), let shader = shader as? PBRShader {
+                shader.maps = maps
             }
         }
     }
 
-    private var samplers: [PBRTextureType: MTLSamplerDescriptor?] = [:] {
+    /// The sampler for each map, indexed by `PBRTextureType.index`.
+    private var samplers = [MTLSamplerDescriptor?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != samplers.keys, let shader = shader as? PBRShader {
-                shader.samplers = samplers.filter { $0.value != nil }
+            if pbrSlotPresenceDiffers(oldValue, samplers), let shader = shader as? PBRShader {
+                shader.samplers = samplers
             }
         }
     }
@@ -161,33 +163,35 @@ public final class DeferredLightingMaterial: Material {
     override public func setupShaderRenderingConfiguration(_ shader: Shader) {
         super.setupShaderRenderingConfiguration(shader)
         guard let pbrShader = shader as? PBRShader else { return }
-        pbrShader.maps = maps.filter { $0.value != nil }
-        pbrShader.samplers = samplers.filter { $0.value != nil }
+        pbrShader.maps = maps
+        pbrShader.samplers = samplers
         pbrShader.tonemapping = tonemapping
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow, layout: layout)
-        if !shadow {
-            for (type, texture) in maps {
-                renderEncoderState.setFragmentPBRTexture(texture, type: type)
+    override public func draw(in context: MaterialDrawContext) {
+        super.draw(in: context)
+        if !context.isShadowPass {
+            for (index, texture) in maps.enumerated() where texture != nil {
+                context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
             }
         }
     }
 
     private func setEnvironmentTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+        let index = type.index
         if let texture {
-            maps[type] = texture
-            if samplers[type] == nil {
+            if maps[index] === texture { return }
+            maps[index] = texture
+            if samplers[index] == nil {
                 let sampler = MTLSamplerDescriptor()
                 sampler.minFilter = .linear
                 sampler.magFilter = .linear
                 sampler.mipFilter = .linear
-                samplers[type] = sampler
+                samplers[index] = sampler
             }
         } else {
-            maps.removeValue(forKey: type)
-            samplers.removeValue(forKey: type)
+            maps[index] = nil
+            samplers[index] = nil
         }
     }
 }

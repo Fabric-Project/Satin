@@ -180,7 +180,14 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
     private var versionedSlotIndex: Int = -1
     private var latestVersionedSlotIndex: Int = -1
     private var versionedVertexBuffers: [VertexBufferIndex: VersionedVertexBuffer] = [:]
-    private var vertexBufferOffsets: [VertexBufferIndex: Int] = [:]
+    private var vertexBufferOffsets: [VertexBufferIndex: Int] = [:] {
+        didSet { vertexBufferBindingsAreCurrent = false }
+    }
+
+    /// `vertexBuffers` with their offsets, flattened in slot order when either changes, so each
+    /// draw walks an array instead of iterating a dictionary and looking up every offset.
+    private var vertexBufferBindings: [(index: VertexBufferIndex, buffer: MTLBuffer, offset: Int)] = []
+    private var vertexBufferBindingsAreCurrent = false
     private var versionedIndexBuffer: VersionedIndexBuffer?
     private var indexBufferOffset = 0
     private var drawStates: [Int: DrawState] = [:]
@@ -206,6 +213,7 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     public private(set) var vertexAttributes: [VertexAttributeIndex: VertexAttribute] = [:] {
         didSet {
+            positionAttribute = vertexAttributes[.Position]
             // Clear first: setting the flag tells meshes, which read the new layout at once.
             _vertexDescriptor.clear()
             _updateVertexBuffers = true
@@ -216,7 +224,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     public let onUpdate = PassthroughSubject<Geometry, Never>()
 
-    public var vertexCount: Int { vertexAttributes[.Position]?.count ?? 0 }
+    /// The position attribute, held directly so counting vertices on every draw needs no lookup.
+    private var positionAttribute: VertexAttribute?
+    public var vertexCount: Int { positionAttribute?.count ?? 0 }
 
     /// The pose of this geometry's joints. Together with `JointIndices` and `JointWeights`
     /// attributes it makes the geometry skinned: any mesh drawing it, with any standard
@@ -272,7 +282,9 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
         else { return false }
         return jointPalette.jointCount >= pieces?.count ?? 0
     }
-    public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
+    public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:] {
+        didSet { vertexBufferBindingsAreCurrent = false }
+    }
 
     /// Has vertex data on the GPU, so a mesh can draw it.
     open var hasVertexBuffers: Bool { !vertexBuffers.isEmpty }
@@ -365,13 +377,19 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Bind
 
-    open func bind(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        for (index, buffer) in vertexBuffers {
-            renderEncoderState.setVertexBuffer(buffer, offset: vertexBufferOffsets[index, default: 0], index: index)
+    /// Records this geometry's vertex buffers and, when skinned, its joint palette.
+    open func recordBindings(in context: GeometryDrawContext) {
+        if !vertexBufferBindingsAreCurrent {
+            vertexBufferBindings = vertexBuffers
+                .map { (index: $0.key, buffer: $0.value, offset: vertexBufferOffsets[$0.key, default: 0]) }
+                .sorted { $0.index.rawValue < $1.index.rawValue }
+            vertexBufferBindingsAreCurrent = true
+        }
+        for binding in vertexBufferBindings {
+            context.setVertexBuffer(binding.buffer, offset: binding.offset, index: binding.index)
         }
         if isSkinned, let jointPalette {
-            renderEncoderState.vertexJointPalette = jointPalette
-            jointPalette.markDrawn()
+            context.setJointPalette(jointPalette)
         }
     }
 
@@ -413,35 +431,41 @@ open class Geometry: BufferAttributeDelegate, InterleavedBufferDelegate, Element
 
     // MARK: - Draw
 
-    open func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
-        let renderEncoder = renderEncoderState.renderEncoder
+    /// Records this geometry's bindings and draw call: what drawing it needs on its own.
+    open func draw(in context: GeometryDrawContext) {
+        recordBindings(in: context)
+        recordDrawCall(in: context)
+    }
+
+    /// Records the draw call: indexed when there is an index buffer, otherwise by vertex count.
+    open func recordDrawCall(in context: GeometryDrawContext) {
         let drawState = selectedDrawState
         let drawPrimitiveType = drawState?.primitiveType ?? primitiveType
         let drawIndexBuffer = drawState?.indexBuffer ?? indexBuffer
         let drawIndexType = drawState?.indexType ?? indexType
         let drawIndexCount = drawState?.indexCount ?? indexCount
-        let drawIndexBufferOffset = (drawState?.indexBufferOffset ?? self.indexBufferOffset) + indexBufferOffset
-        let drawVertexCount = drawState?.vertexCount ?? vertexCount
+        let drawIndexBufferOffset = (drawState?.indexBufferOffset ?? self.indexBufferOffset) + context.indexBufferOffset
 
         if let indexBuffer = drawIndexBuffer, let indexType = drawIndexType {
             if drawIndexCount > 0 {
-                renderEncoder.drawIndexedPrimitives(
+                context.drawIndexedPrimitives(
                     type: drawPrimitiveType,
                     indexCount: drawIndexCount,
                     indexType: indexType,
                     indexBuffer: indexBuffer,
                     indexBufferOffset: drawIndexBufferOffset,
-                    instanceCount: instanceCount
+                    instanceCount: context.instanceCount
                 )
             }
         }
         else {
+            let drawVertexCount = drawState?.vertexCount ?? vertexCount
             if drawVertexCount > 0 {
-                renderEncoder.drawPrimitives(
+                context.drawPrimitives(
                     type: drawPrimitiveType,
-                    vertexStart: vertexStart,
+                    vertexStart: context.vertexStart,
                     vertexCount: drawVertexCount,
-                    instanceCount: instanceCount
+                    instanceCount: context.instanceCount
                 )
             }
         }

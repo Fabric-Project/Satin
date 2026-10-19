@@ -263,7 +263,10 @@ final class SceneIndexTests: XCTestCase {
         let a = Object(context: context, label: "a")
         let b = Object(context: context, label: "b")
         a.add(b)
-        b.attach(a)
+        // The back edge is a direct assignment: `attach` would also subscribe to `a`'s child-added
+        // publisher, and Object's Combine forwarding recurses forever around a cycle (a limitation
+        // it has always had, independent of structure propagation).
+        b.children = [a]
         let revision = a.structureRevision
 
         b.add(Object(context: context, label: "c"))

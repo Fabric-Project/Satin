@@ -33,7 +33,7 @@ public class ARLidarMesh: Renderable {
     override  public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
         guard let material,
               material.getPipeline(renderContext: renderContext, shadow: shadow) != nil,
-              vertexUniforms[renderContext.id] != nil,
+              vertexUniforms(for: renderContext.id) != nil,
               vertexBuffer != nil,
               indexBuffer != nil
         else { return false }
@@ -82,7 +82,7 @@ public class ARLidarMesh: Renderable {
     func setupMaterial() {}
 
     func setupUniforms() {
-        guard vertexUniforms[context.id] == nil else { return }
+        guard vertexUniforms(for: context.id) == nil else { return }
         ensureVertexUniformBuffer(context: context)
     }
 
@@ -99,7 +99,7 @@ public class ARLidarMesh: Renderable {
 
     override public func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
         if let meshAnchor = meshAnchor { localMatrix = meshAnchor.transform }
-        vertexUniforms[renderContext.id]?.update(object: self, camera: camera, viewport: viewport, index: index)
+        vertexUniforms(for: renderContext.id)?.update(object: self, camera: camera, viewport: viewport, index: index)
         super.update(
             renderContext: renderContext,
             camera: camera,
@@ -110,24 +110,19 @@ public class ARLidarMesh: Renderable {
 
     // MARK: - Draw
 
-    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        guard let vertexUniforms = vertexUniforms[renderContext.id],
+    override public func draw(in context: RenderableDrawContext) {
+        guard let vertexUniforms = self.vertexUniforms(for: context.renderContext.id),
               let vertexBuffer = vertexBuffer,
               let material = material
         else { return }
 
-        renderEncoderState.vertexVertexUniforms = vertexUniforms
-        renderEncoderState.setVertexBuffer(vertexBuffer, offset: 0, index: .Vertices)
-        material.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        context.setVertexBuffer(vertexBuffer, offset: 0, index: .Vertices)
+        material.draw(in: context.materialContext(layout: nil))
 
-        let renderEncoder = renderEncoderState.renderEncoder
-
+        let geometryContext = context.geometryContext(instanceCount: 1)
         if let indexBuffer = indexBuffer {
-            renderEncoder.drawIndexedPrimitives(
+            geometryContext.drawIndexedPrimitives(
                 type: .triangle,
                 indexCount: indexCount,
                 indexType: .uint32,
@@ -136,7 +131,7 @@ public class ARLidarMesh: Renderable {
                 instanceCount: 1
             )
         } else {
-            renderEncoder.drawPrimitives(
+            geometryContext.drawPrimitives(
                 type: .triangle,
                 vertexStart: 0,
                 vertexCount: vertexCount,
