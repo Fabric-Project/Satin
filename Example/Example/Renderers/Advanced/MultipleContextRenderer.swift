@@ -29,7 +29,6 @@ final class MultipleContextRenderer: BaseRenderer {
         return Mesh(context: noDepthContext, geometry: IcoSphereGeometry(context: defaultContext, radius: 0.5, resolution: 0), material: material)
     }()
 
-    lazy var startTime = getTime()
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var sceneNoDepth = Object(context: defaultContext, label: "Scene No Depth", [meshNoDepth])
 
@@ -71,8 +70,10 @@ final class MultipleContextRenderer: BaseRenderer {
         tween?.remove()
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

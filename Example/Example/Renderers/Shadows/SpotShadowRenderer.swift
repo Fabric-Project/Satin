@@ -49,8 +49,6 @@ final class SpotShadowRenderer: BaseRenderer {
 
     lazy var textureLoader = MTKTextureLoader(device: device)
 
-    lazy var startTime = getTime()
-
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
@@ -115,10 +113,12 @@ final class SpotShadowRenderer: BaseRenderer {
         }
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
 
-        let time = Float(getTime() - startTime)
+        cameraController.update(frame: frame)
+
+        let time = Float(frame.time)
         let theta = time * 0.72
 
         shadowScene.update(time: theta)

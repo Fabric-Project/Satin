@@ -62,9 +62,6 @@ final class ARPointCloudRenderer: BaseRenderer {
         return renderer
     }()
 
-    private lazy var startTime: CFAbsoluteTime = getTime()
-    private lazy var time: CFAbsoluteTime = getTime()
-
     // MARK: - Background
 
     var backgroundRenderer: ARBackgroundDepthEncoder!

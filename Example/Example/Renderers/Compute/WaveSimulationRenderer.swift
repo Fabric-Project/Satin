@@ -78,11 +78,11 @@ final class WaveSimulationRenderer: BaseRenderer {
         try super.setup()
     }
 
-    lazy var startTime = getTime()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
 
-    override func update() throws {
-        computer.set("Time", Float(getTime() - startTime))
-        cameraController.update()
+        computer.set("Time", Float(frame.time))
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

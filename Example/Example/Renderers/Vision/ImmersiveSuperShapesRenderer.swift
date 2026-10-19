@@ -82,7 +82,6 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         res: resParam.value
     )
 
-    lazy var startTime = getTime()
     lazy var mesh = Mesh(geometry: geometry, material: NormalColorMaterial(context: defaultContext, true))
     lazy var scene = Object(context: defaultContext, label: "Scene", [background, mesh])
 
@@ -105,8 +104,10 @@ final class ImmersiveSuperShapesRenderer: ImmersiveBaseRenderer {
         // }
     }
 
-    override func update() throws {
-        mesh.orientation = simd_quatf(angle: Float(getTime() - startTime), axis: simd_normalize(simd_float3.one))
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        mesh.orientation = simd_quatf(angle: Float(frame.time), axis: simd_normalize(simd_float3.one))
     }
 
     override func draw(

@@ -61,7 +61,6 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 
     private var _displayLinkPaused = false
     private var _displayLink: CAMetalDisplayLink?
-    private var _previousTargetPresentationTimestamp: CFTimeInterval = 0
 
     // MARK: - Init
 
@@ -148,10 +147,11 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 
     // MARK: - Layer Rendering
 
+    /// Renders now, outside the display link, so the frame targets the current host time.
     private func render() {
         guard _displayLink == nil else { return }  // CAMetalDisplayLink owns drawables when active
         guard let delegate, let drawable = metalLayer.nextDrawable() else { return }
-        delegate.draw(metalLayer: metalLayer, drawable: drawable)
+        delegate.draw(metalLayer: metalLayer, drawable: drawable, hostTime: CACurrentMediaTime(), presentationHostTime: nil)
     }
 
     // MARK: - Event Based Rendering
@@ -195,7 +195,6 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         link.preferredFrameLatency = Float(maxBuffersInFlight)
         link.delegate = self
         link.isPaused = _displayLinkPaused
-        _previousTargetPresentationTimestamp = CACurrentMediaTime()
         link.add(to: .main, forMode: .common)
         _displayLink = link
 
@@ -208,11 +207,13 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     }
 
     public func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
-        let deltaTime = update.targetPresentationTimestamp - _previousTargetPresentationTimestamp
-        _previousTargetPresentationTimestamp = update.targetPresentationTimestamp
-        _ = deltaTime  // available for delegate protocol extension in future
         guard let delegate else { return }
-        delegate.draw(metalLayer: metalLayer, drawable: update.drawable)
+        delegate.draw(
+            metalLayer: metalLayer,
+            drawable: update.drawable,
+            hostTime: update.targetTimestamp,
+            presentationHostTime: update.targetPresentationTimestamp
+        )
     }
 
     func pauseRenderLoop() {
@@ -466,7 +467,7 @@ public final class MetalView: UIView {
         _displayLink?.invalidate()
         _displayLink = nil
 
-        let displayLink = CADisplayLink(target: self, selector: #selector(render))
+        let displayLink = CADisplayLink(target: self, selector: #selector(displayLinkFired(_:)))
         displayLink.isPaused = _displayLinkPaused
         displayLink.preferredFramesPerSecond = preferredFramesPerSecond
         displayLink.add(to: .main, forMode: .default)
@@ -538,9 +539,19 @@ public final class MetalView: UIView {
 
     // MARK: - Render
 
-    @objc private func render() {
+    @objc private func displayLinkFired(_ displayLink: CADisplayLink) {
+        render(hostTime: displayLink.timestamp, presentationHostTime: displayLink.targetTimestamp)
+    }
+
+    /// Renders now, outside the display link, so the frame targets the current host time.
+    private func render() {
+        guard _displayLink == nil else { return }  // the display link renders every frame when active
+        render(hostTime: CACurrentMediaTime(), presentationHostTime: nil)
+    }
+
+    private func render(hostTime: TimeInterval, presentationHostTime: TimeInterval?) {
         guard let drawable = metalLayer.nextDrawable() else { return }
-        delegate?.draw(metalLayer: metalLayer, drawable: drawable)
+        delegate?.draw(metalLayer: metalLayer, drawable: drawable, hostTime: hostTime, presentationHostTime: presentationHostTime)
     }
 
     // MARK: - Event Based Rendering

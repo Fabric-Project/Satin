@@ -13,10 +13,10 @@ import simd
 import Spatial
 import SwiftUI
 
-extension LayerRenderer.Clock.Instant.Duration {
-    var timeInterval: TimeInterval {
-        let nanoseconds = TimeInterval(components.attoseconds / 1_000_000_000)
-        return TimeInterval(components.seconds) + (nanoseconds / TimeInterval(NSEC_PER_SEC))
+extension LayerRenderer.Clock.Instant {
+    /// This instant on the host clock (`CACurrentMediaTime`).
+    var hostTime: TimeInterval {
+        LayerRenderer.Clock.Instant.epoch.duration(to: self) / .seconds(1)
     }
 }
 
@@ -150,13 +150,9 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
         waitForAvailableFrameSlot()
 
-        frameIndex += 1
-
         frame.startSubmission()
 
-        let time = LayerRenderer.Clock.Instant.epoch.duration(to: drawable.frameTiming.presentationTime).timeInterval
-
-        let deviceAnchor = worldTracking.queryDeviceAnchor(atTimestamp: time)
+        let deviceAnchor = worldTracking.queryDeviceAnchor(atTimestamp: drawable.frameTiming.presentationTime.hostTime)
 
         drawable.deviceAnchor = deviceAnchor
 
@@ -179,7 +175,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
         cameras: [PerspectiveCamera]
     ) {
         if layerRenderer.configuration.layout == .dedicated {
-            let indexOffset = (frameIndex % maxBuffersInFlight) * 2 // 0 1 2
+            let indexOffset = (frameTime.frameNumber % maxBuffersInFlight) * 2 // 0 1 2
             for i in 0 ..< drawable.views.count {
                 let renderPassDescriptor = MTLRenderPassDescriptor()
                 if sampleCount > 1 {
@@ -220,7 +216,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
             let renderPassDescriptor = MTLRenderPassDescriptor()
 
             if sampleCount > 1 {
-                let indexOffset = frameIndex % maxBuffersInFlight
+                let indexOffset = frameTime.frameNumber % maxBuffersInFlight
                 renderPassDescriptor.colorAttachments[0].texture = getMultisampleColorTexture(
                     ref: drawable.colorTextures[0],
                     index: indexOffset
@@ -273,11 +269,16 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
     }
 
     open func renderFrame() throws {
-        guard let frame = layerRenderer.queryNextFrame() else { return }
+        guard let frame = layerRenderer.queryNextFrame(), let predictedTiming = frame.predictTiming() else { return }
+
+        let frameTime = nextFrameTime(
+            hostTime: predictedTiming.optimalInputTime.hostTime,
+            presentationHostTime: predictedTiming.presentationTime.hostTime
+        )
 
         frame.startUpdate()
 
-        try update()
+        try update(frame: frameTime)
 
         frame.endUpdate()
 
