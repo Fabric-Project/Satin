@@ -11,7 +11,11 @@ import Metal
 public final class ShaderPipelineCache: Sendable {
     private nonisolated(unsafe) static var pipelineCache: [ShaderConfiguration: MTLRenderPipelineState] = [:]
 
-    private nonisolated(unsafe) static var shadowPipelineCache: [ShaderConfiguration: MTLRenderPipelineState] = [:]
+    private struct ShadowPipeline {
+        let pipeline: MTLRenderPipelineState
+        let usage: PipelineResourceUsage?
+    }
+    private nonisolated(unsafe) static var shadowPipelineCache: [ShaderConfiguration: ShadowPipeline] = [:]
     private nonisolated(unsafe) static var pipelineReflectionCache: [ShaderConfiguration: MTLRenderPipelineReflection] = [:]
 
     private nonisolated(unsafe) static var pipelineParametersCache: [ShaderConfiguration: ParameterGroup] = [:]
@@ -123,14 +127,14 @@ public final class ShaderPipelineCache: Sendable {
     }
 
     public static func getShadowPipeline(configuration: ShaderConfiguration) throws -> MTLRenderPipelineState? {
-        var cachedShadowPipeline: MTLRenderPipelineState?
+        var cachedShadowPipeline: ShadowPipeline?
 
         shadowPipelineCacheQueue.sync {
             cachedShadowPipeline = shadowPipelineCache[configuration]
         }
 
         if let cachedShadowPipeline {
-            return cachedShadowPipeline
+            return cachedShadowPipeline.pipeline
         }
 
         guard let context = configuration.context,
@@ -156,13 +160,23 @@ public final class ShaderPipelineCache: Sendable {
         descriptor.rasterSampleCount = 1
         descriptor.depthAttachmentPixelFormat = context.depthPixelFormat
 
-        let pipeline = try context.device.makeRenderPipelineState(descriptor: descriptor)
+        var reflection: MTLRenderPipelineReflection?
+        let pipeline = try context.device.makeRenderPipelineState(descriptor: descriptor, options: [.bindingInfo], reflection: &reflection)
 
         shadowPipelineCacheQueue.sync(flags: .barrier) {
-            shadowPipelineCache[configuration] = pipeline
+            shadowPipelineCache[configuration] = ShadowPipeline(pipeline: pipeline, usage: reflection.map(PipelineResourceUsage.init))
         }
 
         return pipeline
+    }
+
+    /// Used only when a shader resolves/compiles a pipeline, never during packet replay. An
+    /// override returning a different state cannot accidentally inherit the cached state's usage.
+    static func shadowUsage(configuration: ShaderConfiguration, pipeline: MTLRenderPipelineState) -> PipelineResourceUsage? {
+        shadowPipelineCacheQueue.sync {
+            guard let cached = shadowPipelineCache[configuration], cached.pipeline === pipeline else { return nil }
+            return cached.usage
+        }
     }
 
     public static func getPipelineReflection(configuration: ShaderConfiguration) -> MTLRenderPipelineReflection? {

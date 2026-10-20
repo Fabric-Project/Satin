@@ -28,12 +28,18 @@ public struct MaterialDrawContext {
 
     public var isShadowPass: Bool { pass == .shadow }
 
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex) {
-        storage.appendVertexBuffer(buffer, offset: offset, slot: index)
+    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
+    /// It copies bytes from `offset` to the end; the default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+        storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex) {
-        storage.appendFragmentBuffer(buffer, offset: offset, slot: index)
+    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
+    /// It copies bytes from `offset` to the end; the default retains without copying.
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecord: Bool = false) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+        storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
     public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
@@ -60,8 +66,8 @@ public struct MaterialDrawContext {
         storage.appendCustomCommand(command)
     }
 
-    func setPipeline(_ pipeline: MTLRenderPipelineState) {
-        storage.setPipeline(pipeline)
+    func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage? = nil) {
+        storage.setPipeline(pipeline, usage: usage)
     }
 
     func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
@@ -92,8 +98,11 @@ public struct GeometryDrawContext {
     }
     var storage: PacketStorage { recorder.storage }
 
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex) {
-        storage.appendVertexBuffer(buffer, offset: offset, slot: index)
+    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
+    /// It copies bytes from `offset` to the end; the default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+        storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
     public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
@@ -167,12 +176,18 @@ public struct RenderableDrawContext {
                             elements: elements, jointPalette: nil, recorder: recorder)
     }
 
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex) {
-        storage.appendVertexBuffer(buffer, offset: offset, slot: index)
+    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
+    /// It copies bytes from `offset` to the end; the default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+        storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex) {
-        storage.appendFragmentBuffer(buffer, offset: offset, slot: index)
+    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
+    /// It copies bytes from `offset` to the end; the default retains without copying.
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecord: Bool = false) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+        storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
     /// Runs `command` on the live encoder when this draw executes, after what was recorded before it.

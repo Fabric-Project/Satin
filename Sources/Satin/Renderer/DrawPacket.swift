@@ -39,7 +39,7 @@ enum PacketDrawCall {
 /// arrays; a texture index of -1 binds nil.
 ///
 /// The per-view cases bind the render event's own vertex uniforms: one `VertexUniforms` per view.
-/// Encoded for view k, their offset moves on by k of `PacketRecorder.separateViewStride`, so one
+/// Encoded for view k, their offset moves on by k of the recorder's captured view stride, so one
 /// recording serves each view of a multi-view shadow (a point light's faces) in its own pass.
 /// Amplified events are only ever encoded as view 0: their shaders index the views themselves.
 enum PacketCommand {
@@ -97,7 +97,7 @@ final class PacketStorage {
 
     func beginMaterial() { tables.beginMaterial() }
     func endRecording() { tables.endRecording() }
-    func setPipeline(_ pipeline: MTLRenderPipelineState) { tables.setPipeline(pipeline) }
+    func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage? = nil) { tables.setPipeline(pipeline, usage: usage) }
 
     func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
         tables.setDepthStencilState(depthStencilState, bias: bias, clipMode: clipMode)
@@ -138,10 +138,10 @@ final class PacketStorage {
 
     // MARK: Encoding
 
-    /// Replays the packets at `packetIndices`, in order, into `state`, binding view `viewIndex`'s
-    /// vertex uniforms.
-    func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int = 0) where PacketIndices.Element == Int {
-        tables.encode(packetIndices, into: state, viewIndex: viewIndex)
+    /// Replays the packets at `packetIndices`, in order, into `state`, advancing view-following
+    /// bindings by the captured byte offset.
+    func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewOffset: Int = 0) where PacketIndices.Element == Int {
+        tables.encode(packetIndices, into: state, viewOffset: viewOffset)
     }
 
     /// Whether `packets` encode correctly for any view of their render event: none runs a custom
@@ -207,6 +207,7 @@ struct PacketTables {
     /// The first buffer entry of the recording in progress: a buffer appended again in the same
     /// recording reuses its entry, never one from an earlier recording.
     private var recordingBufferStart = 0
+    private var pendingPipelineUsage: PipelineResourceUsage?
     private var pendingPipelineIndex: Int32 = -1
     private var pendingDepthStencilStateIndex: Int32 = -1
     private var pendingSetsDepthState = false
@@ -297,6 +298,7 @@ struct PacketTables {
             customCommands: customCommands.count
         )
         pendingPipelineIndex = -1
+        pendingPipelineUsage = nil
         pendingDepthStencilStateIndex = -1
         pendingSetsDepthState = false
         pendingDepthBias = nil
@@ -315,7 +317,8 @@ struct PacketTables {
         customCommands.removeSubrange(marks.customCommands...)
     }
 
-    mutating func setPipeline(_ pipeline: MTLRenderPipelineState) {
+    mutating func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage?) {
+        pendingPipelineUsage = usage
         pipelines.append(pipeline)
         pendingPipelineIndex = Int32(pipelines.count - 1)
     }
@@ -404,6 +407,15 @@ struct PacketTables {
             return
         }
 
+        let unprunedEnd = commands.count
+        let sharedCount = prefixLength ?? 0
+        for commandIndex in packetCommandStart ..< packetCommandStart + sharedCount {
+            commands.append(commands[commandIndex])
+        }
+        let commandEnd = pruneBindings(in: packetCommandStart ..< unprunedEnd)
+        for offset in 0 ..< sharedCount { commands[commandEnd + offset] = commands[unprunedEnd + offset] }
+        commands.removeSubrange((commandEnd + sharedCount)...)
+
         packets.append(DrawPacket(
             pipelineIndex: pendingPipelineIndex,
             depthStencilStateIndex: pendingDepthStencilStateIndex,
@@ -415,25 +427,33 @@ struct PacketTables {
             triangleFillMode: recordingTriangleFillMode,
             renderOrder: recordingRenderOrder,
             commandStart: Int32(packetCommandStart),
-            commandCount: Int32(commands.count - packetCommandStart),
+            commandCount: Int32(commandEnd - packetCommandStart),
             drawCall: drawCall,
             debugLabelIndex: recordingDebugLabelIndex
         ))
 
-        let finishedStart = packetCommandStart
-        packetCommandStart = commands.count
-        for commandIndex in finishedStart ..< finishedStart + (prefixLength ?? 0) {
-            commands.append(commands[commandIndex])
-        }
+        packetCommandStart = commandEnd
         startOwnCommands()
+    }
+
+    /// Custom commands can replace the pipeline or issue their own draws. Preserve their entire
+    /// packet, including the shared prefix, rather than infer what an opaque closure will read.
+    private mutating func pruneBindings(in range: Range<Int>) -> Int {
+        guard let usage = pendingPipelineUsage else { return range.upperBound }
+        for index in range { if case .custom = commands[index] { return range.upperBound } }
+        var destination = range.lowerBound
+        for index in range where usage.uses(commands[index]) {
+            if destination != index { commands[destination] = commands[index] }
+            destination += 1
+        }
+        return destination
     }
 
     // MARK: Encoding
 
     /// Replays the packets at `packetIndices` into `state`, each its state, its commands in
     /// recorded order, then its draw call.
-    mutating func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int) where PacketIndices.Element == Int {
-        let viewOffset = viewIndex * PacketRecorder.separateViewStride
+    mutating func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewOffset: Int) where PacketIndices.Element == Int {
         for packetIndex in packetIndices {
             encode(packets[packetIndex], into: state, viewOffset: viewOffset)
         }
@@ -522,15 +542,16 @@ struct PacketTables {
 /// two draws in flight never share or clear each other's packets.
 final class PacketStoragePool {
     private var available = ContiguousArray<PacketStorage>()
+    private let lock = UnfairLock()
 
     /// Storages returned and ready to lease.
-    var availableCount: Int { available.count }
+    var availableCount: Int { lock.sync { available.count } }
 
     private static let leaseTokenLock = UnfairLock()
     private nonisolated(unsafe) static var lastLeaseToken: UInt64 = 0
 
     func lease() -> PacketStorage {
-        let storage = available.popLast() ?? PacketStorage()
+        let storage = lock.sync { available.popLast() } ?? PacketStorage()
         storage.leaseToken = Self.leaseTokenLock.sync {
             Self.lastLeaseToken &+= 1
             return Self.lastLeaseToken
@@ -540,6 +561,6 @@ final class PacketStoragePool {
 
     func returnStorage(_ storage: PacketStorage) {
         storage.reset()
-        available.append(storage)
+        lock.sync { available.append(storage) }
     }
 }

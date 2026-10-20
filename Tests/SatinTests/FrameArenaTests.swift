@@ -6,6 +6,68 @@ import XCTest
 /// completes; growth never moves earlier slices; completed and never-committed regions return their
 /// chunks; a steady workload stops creating chunks; owners are released on completion.
 final class FrameArenaTests: XCTestCase {
+    func testLeaseCanRecordBeforeACommandBufferExists() throws {
+        let arena = FrameArena(device: device)
+        var lease: FrameArena.Lease? = arena.lease(frame: .zero)
+        let slice = try XCTUnwrap(lease).allocate(length: 32)
+        slice.contents.storeBytes(of: UInt32(42), as: UInt32.self)
+        let commandBuffer = try makeCommandBuffer()
+        try XCTUnwrap(lease).retain(untilCompleted: commandBuffer)
+        lease = nil
+        let other = arena.lease(frame: .zero)
+        XCTAssertFalse(other.allocate(length: 32).buffer === slice.buffer)
+        XCTAssertEqual(slice.contents.load(as: UInt32.self), 42)
+        complete(commandBuffer)
+        let later = arena.lease(frame: .zero)
+        XCTAssertTrue(later.allocate(length: 32).buffer === slice.buffer)
+    }
+
+    func testAbandonedLeaseImmediatelyReleasesOwnersAndStorage() {
+        final class Owner {}
+        let arena = FrameArena(device: device)
+        weak var retainedOwner: Owner?
+        var buffer: MTLBuffer?
+        do {
+            let lease = arena.lease(frame: .zero)
+            buffer = lease.allocate(length: 32).buffer
+            let owner = Owner()
+            retainedOwner = owner
+            lease.retain(owner)
+        }
+        XCTAssertNil(retainedOwner)
+        XCTAssertTrue(arena.lease(frame: .zero).allocate(length: 32).buffer === buffer)
+    }
+
+    func testACompletedSegmentDoesNotReleaseTheFramesProducerLease() throws {
+        final class Owner {}
+        let arena = FrameArena(device: device)
+        var lease: FrameArena.Lease? = arena.lease(frame: .zero)
+        weak var retainedOwner: Owner?
+        do {
+            let owner = Owner()
+            retainedOwner = owner
+            lease?.retain(owner)
+        }
+        let first = try XCTUnwrap(lease).allocate(length: 32)
+        first.contents.storeBytes(of: UInt32(99), as: UInt32.self)
+        let prefix = try makeCommandBuffer()
+        lease?.retain(untilCompleted: prefix)
+        complete(prefix)
+        let unrelated = arena.lease(frame: .zero)
+        XCTAssertFalse(unrelated.allocate(length: 32).buffer === first.buffer)
+        XCTAssertNotNil(retainedOwner)
+        let second = try XCTUnwrap(lease).allocate(length: 32)
+        XCTAssertTrue(second.buffer === first.buffer)
+        XCTAssertNotEqual(second.offset, first.offset)
+        XCTAssertEqual(first.contents.load(as: UInt32.self), 99)
+        let final = try makeCommandBuffer()
+        lease?.retain(untilCompleted: final)
+        lease = nil
+        XCTAssertNotNil(retainedOwner)
+        complete(final)
+        XCTAssertNil(retainedOwner)
+    }
+
     private var device: MTLDevice!
     private var commandQueue: MTLCommandQueue!
 

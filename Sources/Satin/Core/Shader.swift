@@ -86,13 +86,29 @@ open class Shader {
         var configuration: ShaderConfiguration?
         var pipeline: MTLRenderPipelineState?
         var pipelineError: Error?
+        var usage: PipelineResourceUsage?
+        var shadowUsage: PipelineResourceUsage?
         var shadowPipeline: MTLRenderPipelineState?
         var shadowPipelineError: Error?
     }
 
-    /// The states, in the order their contexts were first seen, and each context's position among
-    /// them, indexed by `Context.index` (-1 for none): a draw finds its pipelines with two array
-    /// reads, without hashing.
+    /// The most recent pipeline resolution and its immutable binding usage.
+    private var lastResolvedPipeline: MTLRenderPipelineState?
+    private var lastResolvedUsage: PipelineResourceUsage?
+
+    private func resolved(_ pipeline: MTLRenderPipelineState?, usage: PipelineResourceUsage?) -> MTLRenderPipelineState? {
+        lastResolvedPipeline = pipeline
+        lastResolvedUsage = usage
+        return pipeline
+    }
+
+    /// Identity-check the actual returned pipeline: getPipeline overrides may substitute an
+    /// unreflected state. Those keep their bindings instead of inheriting stale metadata.
+    func resourceUsage(for pipeline: MTLRenderPipelineState) -> PipelineResourceUsage? {
+        lastResolvedPipeline === pipeline ? lastResolvedUsage : nil
+    }
+
+    /// States in context order, with positions indexed by Context.index: no draw-time hashing.
     private var contextStates: [ContextState] = []
     private var contextStatePositions: [Int] = []
 
@@ -116,6 +132,8 @@ open class Shader {
 
     /// Forgets every context's configuration and pipelines.
     func clearContextStates() {
+        lastResolvedPipeline = nil
+        lastResolvedUsage = nil
         contextStates.removeAll()
         contextStatePositions.removeAll()
     }
@@ -128,7 +146,9 @@ open class Shader {
     /// The pipeline already compiled for `context`, or nil if none has been yet.
     public func pipeline(for context: Context, shadow: Bool) -> MTLRenderPipelineState? {
         guard let position = contextStatePosition(for: context) else { return nil }
-        return shadow ? contextStates[position].shadowPipeline : contextStates[position].pipeline
+        return shadow
+            ? resolved(contextStates[position].shadowPipeline, usage: contextStates[position].shadowUsage)
+            : resolved(contextStates[position].pipeline, usage: contextStates[position].usage)
     }
 
     /// What selects a layout variant: plain values, so finding one compares them in turn without
@@ -152,6 +172,7 @@ open class Shader {
         let configuration: ShaderConfiguration
         var pipeline: MTLRenderPipelineState?
         var reflection: MTLRenderPipelineReflection?
+        var usage: PipelineResourceUsage?
         /// Compiling it failed; it isn't tried again until the variants are cleared.
         var failed = false
     }
@@ -655,7 +676,7 @@ open class Shader {
             break
         }
         if let existingVariantIndex {
-            if let pipeline = layoutVariants[existingVariantIndex].pipeline { return pipeline }
+            if let pipeline = layoutVariants[existingVariantIndex].pipeline { return resolved(pipeline, usage: layoutVariants[existingVariantIndex].usage) }
             if layoutVariants[existingVariantIndex].failed { return nil }
         }
 
@@ -692,11 +713,15 @@ open class Shader {
             // Unbounded, as ShaderPipelineCache is: variants grow only with the distinct layouts this
             // shader is drawn with, not with geometries.
             layoutVariants[variantIndex].pipeline = pipeline
+            let usage = shadow
+                ? ShaderPipelineCache.shadowUsage(configuration: variantConfiguration, pipeline: pipeline)
+                : reflection.map(PipelineResourceUsage.init)
+            layoutVariants[variantIndex].usage = usage
             if let reflection {
                 layoutVariants[variantIndex].reflection = reflection
                 addBindings(from: reflection)
             }
-            return pipeline
+            return resolved(pipeline, usage: usage)
         } catch {
             print("\(label) Shader Pipeline (layout variant): \(error.localizedDescription)")
             if variantIndex < layoutVariants.count {
@@ -748,6 +773,7 @@ open class Shader {
             // Compiling may have cleared every context's state (a configuration change).
             let position = contextStatePositionAddingIfNeeded(for: renderContext)
             contextStates[position].pipeline = result.pipeline
+            contextStates[position].usage = result.reflection.map(PipelineResourceUsage.init)
             if pipelineReflection == nil {
                 pipelineReflection = result.reflection
             }
@@ -788,9 +814,14 @@ open class Shader {
               castShadow
         else { return }
         do {
-            let shadowPipeline = try ShaderPipelineCache.getShadowPipeline(configuration: getConfiguration(renderContext: renderContext))
+            let renderConfiguration = getConfiguration(renderContext: renderContext)
+            let savedConfiguration = configuration
+            configuration = renderConfiguration
+            defer { configuration = savedConfiguration }
+            let shadowPipeline = try makeShadowPipeline()
             let position = contextStatePositionAddingIfNeeded(for: renderContext)
             contextStates[position].shadowPipeline = shadowPipeline
+            contextStates[position].shadowUsage = shadowPipeline.flatMap { ShaderPipelineCache.shadowUsage(configuration: renderConfiguration, pipeline: $0) }
             shadowPipelineError = nil
             contextStates[position].shadowPipelineError = nil
         }

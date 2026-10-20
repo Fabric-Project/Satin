@@ -7,6 +7,31 @@ import XCTest
 /// custom draw finishes a packet without a built-in draw call, double-sided transparent renderables
 /// record all front-culled draws before all back-culled ones, and storage is leased per draw.
 final class PacketEncodingTests: XCTestCase {
+    func testCopyOnRecordPreservesExternalBufferBytesAndOffset() throws {
+        let arena = FrameArena(device: device)
+        let lease = arena.lease(frame: .zero)
+        let storage = PacketStoragePool().lease()
+        let recorder = PacketRecorder(storage: storage, lease: lease)
+        let source = try XCTUnwrap(device.makeBuffer(length: 512, options: .storageModeShared))
+        source.contents().advanced(by: 256).storeBytes(of: UInt32(42), as: UInt32.self)
+        beginRecording(storage)
+        storage.beginMaterial()
+        storage.setPipeline(try pipeline())
+        let drawContext = MaterialDrawContext(renderContext: context, pass: .color, layout: nil, recorder: recorder)
+        drawContext.setVertexBuffer(source, offset: 256, index: .Vertices, copyOnRecord: true)
+        source.contents().advanced(by: 256).storeBytes(of: UInt32(99), as: UInt32.self)
+        drawContext.setVertexBuffer(source, offset: 256, index: .VertexUniforms)
+        storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+        storage.endRecording()
+        let bindings = vertexBufferBindings(in: storage)
+        XCTAssertEqual(bindings.count, 2)
+        let copied = storage.buffers[Int(bindings[0].index)]
+        XCTAssertFalse(copied === source)
+        XCTAssertEqual((copied.contents() + bindings[0].offset).load(as: UInt32.self), 42)
+        XCTAssertTrue(storage.buffers[Int(bindings[1].index)] === source)
+        XCTAssertEqual(bindings[1].offset, 256)
+    }
+
     private var context: Context!
     private var device: MTLDevice!
 

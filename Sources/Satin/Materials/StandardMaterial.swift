@@ -266,10 +266,10 @@ open class StandardMaterial: Material {
 
     override open func draw(in context: MaterialDrawContext) {
         super.draw(in: context)
-        if !context.isShadowPass {
-            for (index, texture) in maps.enumerated() where texture != nil {
-                context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
-            }
+        // Shadow fragments (cutouts, transmission, custom shading) can use these too. The
+        // selected pipeline's usage prunes absent maps when the packet finishes recording.
+        for (index, texture) in maps.enumerated() where texture != nil {
+            context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
         }
     }
 

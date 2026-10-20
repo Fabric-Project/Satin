@@ -107,28 +107,15 @@ open class Renderable : Object {
 
     /// Model matrices by draw ordinal: the kth occurrence of this frame pairs with the kth of the
     /// last frame this renderable was drawn in, if that was the frame before.
-    private var previousFrameModelMatrices: [simd_float4x4] = []
-    private var currentFrameModelMatrices: [simd_float4x4] = []
-    private var motionFrameNumber: Int?
+    private var motionHistory = MotionHistory<simd_float4x4>()
 
     /// Starts an occurrence of this renderable in `frame`, before any of its passes record. The
     /// first occurrence of a frame moves the last frame's samples into place; an ordinal with no
     /// sample from the frame before starts with no motion.
     func beginOccurrence(frame: FrameTime) {
-        if motionFrameNumber != frame.frameNumber {
-            if let motionFrameNumber, motionFrameNumber == frame.frameNumber - 1 {
-                swap(&previousFrameModelMatrices, &currentFrameModelMatrices)
-            } else {
-                previousFrameModelMatrices.removeAll(keepingCapacity: true)
-            }
-            currentFrameModelMatrices.removeAll(keepingCapacity: true)
-            motionFrameNumber = frame.frameNumber
-        }
-
+        motionHistory.beginOccurrence(frameNumber: frame.frameNumber)
         let modelMatrix = worldMatrix
-        let ordinal = currentFrameModelMatrices.count
-        let previousModelMatrix = ordinal < previousFrameModelMatrices.count ? previousFrameModelMatrices[ordinal] : modelMatrix
-        currentFrameModelMatrices.append(modelMatrix)
+        let previousModelMatrix = motionHistory.record(modelMatrix)
 
         occurrence = Occurrence(
             modelMatrix: modelMatrix,
@@ -141,8 +128,7 @@ open class Renderable : Object {
     /// Forgets this renderable's motion: its next occurrences draw with none. For an owner whose
     /// drawing changed in a way ordinals can't see, such as a reordered or resized set of draws.
     open func resetMotion() {
-        previousFrameModelMatrices.removeAll(keepingCapacity: true)
-        currentFrameModelMatrices.removeAll(keepingCapacity: true)
+        motionHistory.reset()
     }
 
     open var material: Material? = nil

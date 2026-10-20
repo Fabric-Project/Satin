@@ -63,7 +63,11 @@ try renderEncoder.draw(submission: submission, renderPassDescriptor: renderPassD
 
 `UniformBuffer(device:parameters:options:maxBuffersInFlight:encodesPerFrame:)` loses `encodesPerFrame`, and `encodesPerFrame` / `totalSlotCount` are gone: a uniform buffer has one slot per frame in flight.
 
-**Motion** (velocity outputs) is tracked per occurrence: the first record of an object this frame pairs with its first record last frame, and so on. If you reorder or resize what you record so that ordinals no longer match, call `resetMotion()` on the affected renderables (or `InstancedMesh`, `JointPalette`): their next draws start still.
+**Motion** (velocity outputs) is tracked per occurrence: the first record of an object this frame pairs with its first record last frame, and so on. If you reorder or resize what you record so that ordinals no longer match, call `resetMotion()` on the affected renderables (or `InstancedMesh`, `JointPalette`): their next draws start still. Call `camera.resetMotion()` after a camera cut; resetting objects does not reset camera velocity. Camera history advances only on its first use in a frame, including after a cut reset.
+
+**External buffer contents.** Recording retains bound buffers but does not freeze their bytes. Leave caller-owned buffer contents unchanged until the reading command buffer completes, or use versioned storage. The draw contexts' `setVertexBuffer` and `setFragmentBuffer` accept `copyOnRecord: true` to copy CPU-readable bytes from the supplied offset to the buffer's end into the frame arena. The default is `false`: Satin never chooses copying by size. Private GPU-only buffers require versioning or ordered GPU preparation rather than a CPU copy; managed buffers must have current CPU contents before copying.
+
+Light, shadow and projector pass data now use arena snapshots instead of advancing `StructBuffer` rings. Several draws within one command buffer cannot overwrite an earlier draw's pass data. This does not yet make `RenderSubmission` safe for encoding on another thread: the existing immediate API and its caller-thread requirements remain.
 
 ## Renderables and meshes
 
@@ -154,3 +158,31 @@ A point light records each caster once for all six faces and encodes that record
 
 `PostProcessEncoder` no longer owns a `RenderEncoder`: its `renderer` property is gone, along with the initialiser's `sortObjects`, `clearDepth`, `depthLoadAction`, `depthStoreAction`, `clearStencil`, `stencilLoadAction` and `stencilStoreAction`. Its quad always drew through `postProcessRenderer`, so those settings never reached its pass. Set clear colour, colour load and store actions and `frameBufferOnly` on `postProcessRenderer` instead. `PostProcessRenderEncoder.colorTexture` is now public: the texture a pass draws into when its descriptor supplies none (`ARBackgroundEncoder.colorTexture` returns it).
 
+
+## Recording before a command buffer exists
+
+`RenderEncoder.makeSubmissionBuilder(frame:cameras:viewports:)` freezes the views and renderer settings. Record the complete render operation on the producer, then seal it:
+
+```swift
+let builder = renderer.makeSubmissionBuilder(frame: frame, cameras: cameras, viewports: viewports)
+try builder.record(scene: scene, renderPassDescriptor: descriptor)
+let sealed = try builder.seal()
+// Other scenes/frames can now update and record before this operation encodes.
+try sealed.encode(into: commandBuffer)
+```
+
+`record` captures packets, pass bindings, private pass descriptors, shadow passes and deferred resolve inputs. `seal()` only transfers that work; it does not sample the scene again. A builder records one complete operation and seals once. A sealed submission encodes once; repeated use throws `RenderSubmission.Error.alreadyDrawn`. Sealing before recording throws `.notRecorded`. Abandoning recorded work releases its storage; encoded storage and arena contents remain leased through command-buffer completion. Keeping a consumed builder does not prolong those leases.
+
+The existing `makeSubmission` / `draw(submission:...)` and one-line `draw(...)` APIs use the same replay implementation. Their additional `record(scene:)` calls retain their existing colour-only semantics. `PostProcessRenderEncoder.seal(frame:renderPassDescriptor:mesh:cameras:viewports:viewMappings:)` records and seals a post-processing quad in one call.
+
+CPU `update()` / `onUpdate` still run while recording. GPU preparation through custom `encode(in:)` hooks needs a command buffer: schedule it separately before recording draws on the new path. The existing immediate draw APIs continue invoking those hooks automatically.
+
+Holding a Metal resource keeps its identity alive, not its contents immutable. External buffers/textures must remain unchanged until completion, or use versioned resources. Draw-context buffer setters accept explicit `copyOnRecord: true` for CPU-readable buffer snapshots; the default retains the supplied buffer. Custom commands must capture stable values. Renderer-owned output textures still follow the immediate reuse policy: callers recording distinct render-to-texture results must supply distinct targets and keep them unavailable for reuse until every GPU reader completes. Frame-level output leases and scheduling come next.
+
+## Pipeline-specific resource bindings
+
+Finished packets now keep only direct buffers, textures and samplers their resolved pipeline uses. Usage is cached from compilation reflection for each context/layout variant, including shadow variants, and rebuilt on shader reload. Binding decisions no longer borrow the colour shader's usage for a shadow pass. Separate normal/UV buffers and material uniforms disappear from a position-only shadow; a custom shadow that reads them keeps them. Texture arrays preserve every reflected element.
+
+Material, mesh and geometry draw methods gather available bindings before the packet finishes. Inspect finished packets when diagnosing bindings. Packets containing custom encoder commands keep all their bindings, because a command may change the pipeline or issue its own draw. Pipelines returned without known matching reflection also remain conservative. Existing pipeline override signatures are unchanged; base shadow setup now honours `makeShadowPipeline()` consistently with layout variants.
+
+There is no position-only shadow assumption: custom displacement, skinning, instance data, alpha-cutout fragment textures and uniforms, and future colour or monochrome cookies retain their declared resources. Pass-level light/shadow/projector bindings are unchanged. This does not add built-in alpha-cutout or coloured shadow rendering; it preserves the resource path for those features. Sampler arrays and future slots beyond the compact usage mask are intentionally conservative.

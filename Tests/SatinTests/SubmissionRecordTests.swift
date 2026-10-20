@@ -7,6 +7,86 @@ import XCTest
 /// changing it between records (as an Iterator does) gives each record its own values and motion;
 /// snapshots never cross leases, submissions or command buffers; a submission draws once.
 final class SubmissionRecordTests: XCTestCase {
+    func testPacketRecordingDoesNotRequireACommandBuffer() throws {
+        let arena = FrameArena(device: device)
+        let lease = arena.lease(frame: .zero)
+        let storage = PacketStoragePool().lease()
+        let recorder = PacketRecorder(storage: storage, lease: lease)
+        let scene = makeScene()
+        scene.mesh.beginOccurrence(frame: .zero)
+        let camera = makeCamera()
+        let packets = recorder.record(scene.mesh, renderContext: context, pass: .color, materialPass: .all,
+                                      views: [RenderView(camera: camera, viewport: [0, 0, 64, 64])])
+        XCTAssertEqual(packets.count, 1)
+        let before = try modelMatrix(of: storage.packets[packets.lowerBound], in: storage)
+        scene.mesh.position = [10, 0, 0]
+        scene.mesh.update()
+        XCTAssertEqual(try modelMatrix(of: storage.packets[packets.lowerBound], in: storage), before)
+    }
+
+    func testPassBindingsKeepTheirBytesAcrossMoreDrawsThanTheOldRing() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 16, height: 16))
+        let light = PointLight(context: context, color: [1, 0, 0])
+        let scene = makeScene()
+        scene.root.add(light)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        var snapshots: [(FrameArena.Slice, [UInt8])] = []
+        for index in 0 ..< Satin.maxBuffersInFlight + 2 {
+            light.color = [Float(index + 1), 0, 0]
+            let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+            try encoder.draw(submission: submission, renderPassDescriptor: MTLRenderPassDescriptor(), scene: scene.root)
+            let slice = try XCTUnwrap(submission.recorder.passBindings.lights)
+            snapshots.append((slice, Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length))))
+        }
+        for (slice, expected) in snapshots {
+            XCTAssertEqual(Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length)), expected)
+        }
+        XCTAssertNotEqual(snapshots.first?.1, snapshots.last?.1)
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed)
+    }
+
+    func testShadowAndProjectorSnapshotsSurviveLaterDrawsAndRemovedLights() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 16, height: 16))
+        let light = SpotLight(context: context, color: .one)
+        light.castShadow = true
+        light.shadow.resolution = (16, 16)
+        light.projectionTexture = device.makeTexture(descriptor: .texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false))
+        let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: PhysicalMaterial(context: context))
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        let root = Object(context: context, label: "Lit", [mesh, light])
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        var snapshots: [(FrameArena.Slice, [UInt8])] = []
+        for index in 0 ..< Satin.maxBuffersInFlight + 2 {
+            light.position = [Float(index), 2, 3]
+            light.shadow.bias = Float(index) * 0.001
+            light.projectionTransform.columns.2.x = Float(index) * 0.1
+            let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+            try encoder.draw(submission: submission, renderPassDescriptor: MTLRenderPassDescriptor(), scene: root)
+            let bindings = submission.recorder.passBindings
+            for slice in [bindings.shadowData, bindings.shadowMatrices, bindings.projectorMatrices, bindings.projectorTransforms] {
+                let slice = try XCTUnwrap(slice)
+                snapshots.append((slice, Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length))))
+            }
+        }
+        let empty = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        try encoder.draw(submission: empty, renderPassDescriptor: MTLRenderPassDescriptor(), scene: Object(context: context))
+        XCTAssertNil(empty.recorder.passBindings.lights)
+        XCTAssertNil(empty.recorder.passBindings.shadowData)
+        XCTAssertNil(empty.recorder.passBindings.projectorMatrices)
+        XCTAssertTrue(empty.recorder.passBindings.shadowTextures.isEmpty)
+        for (slice, expected) in snapshots {
+            XCTAssertEqual(Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length)), expected)
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed)
+    }
+
     private var device: MTLDevice!
     private var context: Context!
     private var commandQueue: MTLCommandQueue!

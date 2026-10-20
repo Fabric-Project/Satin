@@ -47,11 +47,7 @@ public class InstancedMesh: Mesh {
 
     // Motion: instance matrices by snapshot ordinal, the kth snapshot of a frame pairing with the
     // kth of the frame before when the instance count is the same; flat, ordinal × count.
-    private var previousFrameInstanceMatrices: [simd_float4x4] = []
-    private var currentFrameInstanceMatrices: [simd_float4x4] = []
-    private var previousFrameInstanceCount = 0
-    private var currentFrameInstanceCount = 0
-    private var instanceMotionFrameNumber: Int?
+    private var motionHistory = MotionHistory<simd_float4x4>()
 
     // The current occurrence's snapshot, reused by each of its passes.
     private var instanceSnapshotLeaseToken: UInt64 = 0
@@ -121,8 +117,8 @@ public class InstancedMesh: Mesh {
 
     override public func resetMotion() {
         super.resetMotion()
-        previousFrameInstanceMatrices.removeAll(keepingCapacity: true)
-        currentFrameInstanceMatrices.removeAll(keepingCapacity: true)
+        motionHistory.reset()
+        instanceSnapshot = nil
     }
 
 
@@ -138,36 +134,16 @@ public class InstancedMesh: Mesh {
             return instanceSnapshot
         }
 
-        let frameNumber = recorder.frame.frameNumber
-        if instanceMotionFrameNumber != frameNumber {
-            if let instanceMotionFrameNumber, instanceMotionFrameNumber == frameNumber - 1 {
-                swap(&previousFrameInstanceMatrices, &currentFrameInstanceMatrices)
-                previousFrameInstanceCount = currentFrameInstanceCount
-            } else {
-                previousFrameInstanceMatrices.removeAll(keepingCapacity: true)
-                previousFrameInstanceCount = 0
-            }
-            currentFrameInstanceMatrices.removeAll(keepingCapacity: true)
-            instanceMotionFrameNumber = frameNumber
-        }
-
         let count = instanceMatricesUniforms.count
-        // A different instance count than last frame starts every instance still.
-        if !currentFrameInstanceMatrices.isEmpty, currentFrameInstanceCount != count {
-            currentFrameInstanceMatrices.removeAll(keepingCapacity: true)
-        }
-        currentFrameInstanceCount = count
-        let ordinalStart = currentFrameInstanceMatrices.count
-        let hasPrevious = previousFrameInstanceCount == count && ordinalStart + count <= previousFrameInstanceMatrices.count
+        motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: count)
 
         let slice = recorder.allocate(length: MemoryLayout<InstanceMatrixUniforms>.stride * count)
         let uniforms = slice.contents.bindMemory(to: InstanceMatrixUniforms.self, capacity: count)
         for index in 0 ..< count {
             var instance = instanceMatricesUniforms[index]
             let current = instance.modelMatrix
-            instance.previousModelMatrix = hasPrevious ? previousFrameInstanceMatrices[ordinalStart + index] : current
+            instance.previousModelMatrix = motionHistory.record(current)
             uniforms[index] = instance
-            currentFrameInstanceMatrices.append(current)
         }
 
         let snapshot = (buffer: slice.buffer, offset: slice.offset)

@@ -125,4 +125,43 @@ final class MotionHistoryTests: XCTestCase {
         XCTAssertEqual(camera.previousViewProjectionMatrix(frame: frame1), first)
         XCTAssertEqual(camera.previousViewProjectionMatrix(frame: frame1), first, "every pass in a frame reads the same previous value")
     }
+
+    func testCameraCutResetsMotionEvenWithinTheCurrentFrame() {
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        _ = camera.previousViewProjectionMatrix(frame: frame0)
+        camera.position = [100, 0, 5]
+        _ = camera.previousViewProjectionMatrix(frame: frame1)
+        camera.resetMotion()
+        let cut = camera.viewProjectionMatrix
+        XCTAssertEqual(camera.previousViewProjectionMatrix(frame: frame1), cut)
+        camera.position = [101, 0, 5]
+        XCTAssertEqual(camera.previousViewProjectionMatrix(frame: frame1), cut)
+        XCTAssertEqual(camera.previousViewProjectionMatrix(frame: frame2), cut)
+    }
+
+    func testDroppingAnOccurrencePreservesSurvivingOrdinals() {
+        let mesh = makeMesh()
+        for x: Float in [1, 10, 100] {
+            mesh.position = [x, 0, 0]
+            mesh.beginOccurrence(frame: frame0)
+        }
+        for (current, previous): (Float, Float) in [(2, 1), (11, 10)] {
+            mesh.position = [current, 0, 0]
+            mesh.beginOccurrence(frame: frame1)
+            XCTAssertEqual(mesh.occurrence.previousModelMatrix, translation(previous))
+        }
+    }
+
+    func testGroupedHistoryRejectsChangedCountsAndSkippedFrames() {
+        var history = MotionHistory<Int>()
+        history.beginOccurrence(frameNumber: 0, sampleCount: 2)
+        XCTAssertEqual(history.record(1), 1)
+        XCTAssertEqual(history.record(2), 2)
+        history.beginOccurrence(frameNumber: 1, sampleCount: 1)
+        XCTAssertEqual(history.record(10), 10)
+        history.beginOccurrence(frameNumber: 2, sampleCount: 1)
+        XCTAssertEqual(history.record(11), 10)
+        history.beginOccurrence(frameNumber: 4, sampleCount: 1)
+        XCTAssertEqual(history.record(12), 12)
+    }
 }

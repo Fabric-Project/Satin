@@ -27,7 +27,24 @@ public class Shadow {
 
     public var enabled = true
     public var autoUpdate = true
-    public var needsUpdate = true
+    private var dirty = true
+    private var recordedUpdate: ShadowUpdateCompletion?
+    public var needsUpdate: Bool {
+        get { dirty && !(recordedUpdate?.isComplete ?? false) }
+        set {
+            dirty = newValue
+            if newValue { recordedUpdate = nil }
+        }
+    }
+
+    /// Repeated recordings of one dirty generation share a completion token. The producer reads
+    /// it; GPU completion mutates only the token, never this scene-owned Shadow.
+    func recordingCompletion() -> ShadowUpdateCompletion {
+        if let recordedUpdate { return recordedUpdate }
+        let completion = ShadowUpdateCompletion()
+        recordedUpdate = completion
+        return completion
+    }
 
     public var strength: Float = 1.0
     public var bias: Float = 0.00001
@@ -120,5 +137,15 @@ public class Shadow {
     func endPass(_ renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.endEncoding()
         renderEncoderState.end()
+    }
+}
+
+/// A generation of a shadow map, valid only after its GPU writes succeeded. It owns no Shadow.
+final class ShadowUpdateCompletion {
+    private let lock = UnfairLock()
+    private var completed = false
+    var isComplete: Bool { lock.sync { completed } }
+    func complete(succeeded: Bool) {
+        if succeeded { lock.sync { completed = true } }
     }
 }

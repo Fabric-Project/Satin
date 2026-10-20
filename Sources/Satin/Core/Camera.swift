@@ -134,24 +134,23 @@ open class Camera: Object {
 
     /// The view-projection at the frame this camera was last drawn from, and the one before it, so
     /// every renderable and pass in a frame reads the same previous value.
-    private var motionFrameNumber: Int?
-    private var motionViewProjectionMatrix = matrix_identity_float4x4
+    private var motionHistory = MotionHistory<simd_float4x4>()
     private var motionPreviousViewProjectionMatrix = matrix_identity_float4x4
 
     /// The view-projection this camera had in the frame before `frame`, or its current one when it
     /// wasn't drawn from then. Advances once per frame, on the first draw of that frame.
     public func previousViewProjectionMatrix(frame: FrameTime) -> simd_float4x4 {
-        if motionFrameNumber != frame.frameNumber {
-            let current = viewProjectionMatrix
-            if let motionFrameNumber, motionFrameNumber == frame.frameNumber - 1 {
-                motionPreviousViewProjectionMatrix = motionViewProjectionMatrix
-            } else {
-                motionPreviousViewProjectionMatrix = current
-            }
-            motionViewProjectionMatrix = current
-            motionFrameNumber = frame.frameNumber
+        if motionHistory.frameNumber != frame.frameNumber {
+            motionHistory.beginOccurrence(frameNumber: frame.frameNumber)
+            motionPreviousViewProjectionMatrix = motionHistory.record(viewProjectionMatrix)
         }
         return motionPreviousViewProjectionMatrix
+    }
+
+    /// Forgets camera motion after a cut. The next use samples the current view-projection,
+    /// including when a cut happens after an earlier use in the same frame.
+    public func resetMotion() {
+        motionHistory.reset()
     }
 
     public init(context: Context, label: String = "Camera") {

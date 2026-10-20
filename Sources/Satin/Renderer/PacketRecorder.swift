@@ -24,6 +24,44 @@ struct RecordToken: Equatable {
     let recordIndex: Int
 }
 
+/// Pass-wide data belongs to the recording, never to an advancing StructBuffer ring.
+struct RenderPassBindings {
+    var lights: FrameArena.Slice?
+    var bindsLights = false
+    var shadowData: FrameArena.Slice?
+    var shadowMatrices: FrameArena.Slice?
+    var projectorMatrices: FrameArena.Slice?
+    var projectorTransforms: FrameArena.Slice?
+    var shadowTextures: [MTLTexture?] = []
+    var projectorTextures: [MTLTexture?] = []
+
+    func apply(to state: RenderEncoderState) {
+        if bindsLights, let lights { state.setPassFragmentBuffer(lights.buffer, offset: lights.offset, index: .Lighting) }
+        func bind(_ slice: FrameArena.Slice?, at index: FragmentBufferIndex) {
+            guard let slice else { return }
+            state.setPassFragmentBuffer(slice.buffer, offset: slice.offset, index: index)
+            state.renderEncoder.useResource(slice.buffer, usage: .read, stages: .fragment)
+        }
+        bind(shadowData, at: .DirectShadows)
+        bind(shadowMatrices, at: .DirectShadowMatrices)
+        bind(projectorMatrices, at: .ProjectorMatrices)
+        bind(projectorTransforms, at: .ProjectorTransforms)
+        if !shadowTextures.isEmpty {
+            state.setPassFragmentTextures(shadowTextures, range: FragmentTextureIndex.DirectShadow0.rawValue ..< FragmentTextureIndex.DirectShadow0.rawValue + shadowTextures.count)
+        }
+        if !projectorTextures.isEmpty {
+            state.setPassFragmentTextures(projectorTextures, range: FragmentTextureIndex.Projector0.rawValue ..< FragmentTextureIndex.Projector0.rawValue + projectorTextures.count)
+        }
+        for texture in shadowTextures {
+            if let texture { state.renderEncoder.useResource(texture, usage: .read, stages: .fragment) }
+        }
+        for texture in projectorTextures {
+            if let texture { state.renderEncoder.useResource(texture, usage: .read, stages: .fragment) }
+        }
+    }
+
+}
+
 /// Records renderables into the packets of one draw, and encodes them. A render event is one
 /// occurrence of a renderable in one pass invocation (the colour pass, a shadow light, a point-shadow
 /// face): it gets its own vertex uniforms, written from that pass's views and the occurrence's
@@ -44,19 +82,33 @@ public final class PacketRecorder {
     /// The view spacing in use for separately encoded views.
     static var separateViewStride: Int { alignsViewSlots ? viewSlotStride : vertexUniformsStride }
 
+    /// Snapshot the A/B layout setting with the bytes it describes.
+    let recordedViewStride = PacketRecorder.separateViewStride
+
+    var passBindings = RenderPassBindings()
     let storage: PacketStorage
     let frame: FrameTime
-    private let arena: FrameArena
-    private let commandBuffer: MTLCommandBuffer
+    private enum Allocation {
+        case lease(FrameArena.Lease)
+        case immediate(FrameArena, MTLCommandBuffer)
+    }
+    private let allocation: Allocation
 
     /// The record in progress; `beginRecord()` starts the next.
     private(set) var recordToken: RecordToken
 
     init(storage: PacketStorage, arena: FrameArena, commandBuffer: MTLCommandBuffer, frame: FrameTime) {
         self.storage = storage
-        self.arena = arena
-        self.commandBuffer = commandBuffer
+        allocation = .immediate(arena, commandBuffer)
         self.frame = frame
+        recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: 0)
+    }
+
+    /// Producer recording path: allocation and snapshots do not need a command buffer.
+    init(storage: PacketStorage, lease: FrameArena.Lease) {
+        self.storage = storage
+        allocation = .lease(lease)
+        frame = lease.frame
         recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: 0)
     }
 
@@ -67,13 +119,43 @@ public final class PacketRecorder {
 
     /// `length` bytes valid until this draw's command buffer completes, for a snapshot.
     func allocate(length: Int) -> FrameArena.Slice {
-        arena.allocate(length: length, alignment: 256, commandBuffer: commandBuffer)
+        switch allocation {
+            case let .lease(lease): return lease.allocate(length: length)
+            case let .immediate(arena, commandBuffer): return arena.allocate(length: length, commandBuffer: commandBuffer)
+        }
+    }
+
+    /// Copies pass data at its stride, into storage unique to this recording.
+    func snapshot<Sample>(_ values: [Sample]) -> FrameArena.Slice? {
+        guard !values.isEmpty else { return nil }
+        let slice = allocate(length: MemoryLayout<Sample>.stride * values.count)
+        values.withUnsafeBytes { bytes in
+            if let source = bytes.baseAddress {
+                slice.contents.copyMemory(from: source, byteCount: bytes.count)
+            }
+        }
+        return slice
+    }
+
+    /// Opt-in snapshot for CPU-readable external data. By default bindings retain their buffer
+    /// and the caller must leave its bytes unchanged until completion. Copying preserves all
+    /// bytes from the binding offset onward, with a new aligned binding offset in the arena.
+    func bufferBinding(_ buffer: MTLBuffer, offset: Int, copyOnRecord: Bool) -> (buffer: MTLBuffer, offset: Int) {
+        guard copyOnRecord else { return (buffer, offset) }
+        precondition(buffer.storageMode != .private && buffer.storageMode != .memoryless, "copyOnRecord requires CPU-readable storage")
+        precondition(offset >= 0 && offset < buffer.length, "Buffer offset must be inside the buffer")
+        let slice = allocate(length: buffer.length - offset)
+        slice.contents.copyMemory(from: buffer.contents() + offset, byteCount: slice.length)
+        return (slice.buffer, slice.offset)
     }
 
     /// Keeps `owner` alive until this draw's command buffer completes, or its arena region is
     /// reclaimed if the command buffer is never committed.
     func retainUntilCompleted(_ owner: AnyObject) {
-        arena.retainUntilCompleted(owner, commandBuffer: commandBuffer)
+        switch allocation {
+            case let .lease(lease): lease.retain(owner)
+            case let .immediate(arena, commandBuffer): arena.retainUntilCompleted(owner, commandBuffer: commandBuffer)
+        }
     }
 
     /// Records one render event of `renderable` and returns the packets it produced: none when it
@@ -95,7 +177,7 @@ public final class PacketRecorder {
         let vertexUniforms = writeVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
-            viewStride: isAmplified ? Self.vertexUniformsStride : Self.separateViewStride,
+            viewStride: isAmplified ? Self.vertexUniformsStride : recordedViewStride,
             views: views
         )
 
@@ -140,7 +222,7 @@ public final class PacketRecorder {
     /// Encodes the packets at `packetIndices` into `state`, as their render event's view
     /// `viewIndex`: the first, unless the event was recorded for several views.
     func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int = 0) where PacketIndices.Element == Int {
-        storage.encode(packetIndices, into: state, viewIndex: viewIndex)
+        storage.encode(packetIndices, into: state, viewOffset: viewIndex * recordedViewStride)
     }
 
     /// One `VertexUniforms` per view, `viewStride` apart, in an arena slice valid until the command

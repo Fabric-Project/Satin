@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CF4500000000000000000003 /* SealedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000004 /* SealedSubmission.swift */; };
+		CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000006 /* PipelineResourceUsage.swift */; };
+		CF4500000000000000000001 /* MotionHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000002 /* MotionHistory.swift */; };
 		1B01F15D2FAFB8ED00C88561 /* Object+Flatten.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */; };
 		1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2852F9692FB00DE68DE /* RenderLayer.swift */; };
 		1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */; };
@@ -314,6 +317,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		CF4500000000000000000004 /* SealedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SealedSubmission.swift; sourceTree = "<group>"; };
+		CF4500000000000000000006 /* PipelineResourceUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineResourceUsage.swift; sourceTree = "<group>"; };
+		CF4500000000000000000002 /* MotionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionHistory.swift; sourceTree = "<group>"; };
 		1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Object+Flatten.swift"; sourceTree = "<group>"; };
 		1B35E2852F9692FB00DE68DE /* RenderLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderLayer.swift; sourceTree = "<group>"; };
 		1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurJumpFloodMaterial.swift; sourceTree = "<group>"; };
@@ -994,6 +1000,9 @@
 				66D7DEAD2C06A24B00B5A6C8 /* RenderList.swift */,
 				7F1A00000000000000000005 /* RenderCollection.swift */,
 				7F1A0000000000000000000B /* FrameArena.swift */,
+				CF4500000000000000000002 /* MotionHistory.swift */,
+				CF4500000000000000000004 /* SealedSubmission.swift */,
+				CF4500000000000000000006 /* PipelineResourceUsage.swift */,
 				7F1A0000000000000000000D /* RenderDestination.swift */,
 				7F1A0000000000000000000F /* DrawRecording.swift */,
 				7F1A00000000000000000015 /* DrawPacket.swift */,
@@ -1503,6 +1512,9 @@
 				7F1A00000000000000000004 /* SceneIndex.swift in Sources */,
 				7F1A00000000000000000006 /* RenderCollection.swift in Sources */,
 				7F1A0000000000000000000C /* FrameArena.swift in Sources */,
+				CF4500000000000000000001 /* MotionHistory.swift in Sources */,
+				CF4500000000000000000003 /* SealedSubmission.swift in Sources */,
+				CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */,
 				7F1A0000000000000000000E /* RenderDestination.swift in Sources */,
 				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
 				7F1A00000000000000000016 /* DrawPacket.swift in Sources */,

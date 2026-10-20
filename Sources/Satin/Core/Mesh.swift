@@ -202,18 +202,13 @@ open class Mesh: Renderable {
 
     // MARK: - Binding
 
-    /// Binds the render event's vertex uniforms to the stages `material`'s shader reads them in.
-    /// Called after the material records, so its pipeline, and with it which stages read them, is
-    /// known. Repeat bindings across submeshes are skipped when the draws encode.
+    /// Records both stages before packet pruning selects what the resolved pipeline reads.
+    /// Unreflected pipelines and custom commands retain both, including custom shadow fragments.
     func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) {
-        guard let shader = material.shader else { return }
+        guard material.shader != nil else { return }
         let vertexUniforms = context.vertexUniforms
-        if shader.vertexWantsVertexUniforms {
-            context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
-        }
-        if shader.fragmentWantsVertexUniforms {
-            context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
-        }
+        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
     }
 
     // MARK: - Update

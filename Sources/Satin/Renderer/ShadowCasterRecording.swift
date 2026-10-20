@@ -42,11 +42,19 @@ final class ShadowCasterRecording {
 
     /// Draws `shadows`' maps from `renderables`' casters into `recorder`'s draw.
     func draw(_ shadows: ContiguousArray<Shadow>, context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
+        let state = RenderEncoderState()
+        for pass in prepare(shadows, context: context, renderables: renderables, recorder: recorder) {
+            pass.encode(into: commandBuffer, recorder: recorder, state: state)
+        }
+    }
+
+    func prepare(_ shadows: ContiguousArray<Shadow>, context: Context, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) -> [RecordedRenderPass] {
+        var result: [RecordedRenderPass] = []
         batch.removeAll(keepingCapacity: true)
         var batchViewCount = 0
         for shadow in shadows {
             if !batch.isEmpty, batchViewCount + shadow.passCount > Self.maximumViewsPerRecording {
-                drawBatch(context: context, commandBuffer: commandBuffer, renderables: renderables, recorder: recorder)
+                prepareBatch(context: context, renderables: renderables, recorder: recorder, result: &result)
                 batch.removeAll(keepingCapacity: true)
                 batchViewCount = 0
             }
@@ -54,12 +62,13 @@ final class ShadowCasterRecording {
             batchViewCount += shadow.passCount
         }
         if !batch.isEmpty {
-            drawBatch(context: context, commandBuffer: commandBuffer, renderables: renderables, recorder: recorder)
+            prepareBatch(context: context, renderables: renderables, recorder: recorder, result: &result)
         }
         batch.removeAll(keepingCapacity: true)
+        return result
     }
 
-    private func drawBatch(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
+    private func prepareBatch(context: Context, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder, result: inout [RecordedRenderPass]) {
         passes.removeAll(keepingCapacity: true)
         views.removeAll(keepingCapacity: true)
         frusta.removeAll(keepingCapacity: true)
@@ -108,22 +117,32 @@ final class ShadowCasterRecording {
         }
 
         for (index, pass) in passes.enumerated() {
-            guard let renderEncoder = pass.shadow.beginPass(pass.passIndex, context: context, commandBuffer: commandBuffer) else { continue }
-            let state = pass.shadow.renderEncoderState
+            guard let texture = pass.shadow.passTexture(pass.passIndex) else { continue }
+            let descriptor = MTLRenderPassDescriptor()
+            descriptor.defaultRasterSampleCount = context.sampleCount
+            descriptor.depthAttachment.texture = texture
+            descriptor.depthAttachment.loadAction = .clear
+            descriptor.depthAttachment.storeAction = .store
+            descriptor.depthAttachment.clearDepth = 0
+            descriptor.renderTargetWidth = texture.width
+            descriptor.renderTargetHeight = texture.height
+            let viewport = MTLViewport(originX: 0, originY: 0, width: Double(texture.width), height: Double(texture.height), znear: 0, zfar: 1)
+            let label = pass.shadow.passCount > 1 ? "\(pass.shadow.label) Shadow Encoder \(pass.passIndex)" : pass.shadow.label + " Shadow Encoder"
+            var planned = RecordedRenderPass(descriptor: descriptor, label: label, viewports: [viewport])
             for caster in casters where caster.passes & (UInt64(1) << UInt64(index)) != 0 {
                 if caster.servesEveryView {
-                    recorder.encode(caster.packets, into: state, viewIndex: index)
+                    planned.commands.append(.range(caster.packets, viewIndex: index))
                 } else {
                     let packets = recorder.record(caster.renderable, renderContext: context, pass: .shadow, materialPass: .all, views: [views[index]])
-                    recorder.encode(packets, into: state)
+                    planned.commands.append(.range(packets, viewIndex: 0))
                 }
             }
-            pass.shadow.endPass(renderEncoder)
+            if pass.passIndex == pass.shadow.passCount - 1 {
+                planned.shadowCompletion = pass.shadow.recordingCompletion()
+            }
+            result.append(planned)
         }
 
-        for shadow in batch {
-            shadow.needsUpdate = false
-        }
         casters.removeAll(keepingCapacity: true)
         passes.removeAll(keepingCapacity: true)
     }

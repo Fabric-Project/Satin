@@ -37,31 +37,9 @@ open class PostProcessRenderEncoder {
         }
     }
 
-    private struct RenderPassDescriptorState {
-        let colorTexture: MTLTexture?
-        let colorResolveTexture: MTLTexture?
-        let colorLoadAction: MTLLoadAction
-        let colorStoreAction: MTLStoreAction
-        let colorClearColor: MTLClearColor
-        let depthTexture: MTLTexture?
-        let depthResolveTexture: MTLTexture?
-        let depthLoadAction: MTLLoadAction
-        let depthStoreAction: MTLStoreAction
-        let depthClearDepth: Double
-        let stencilTexture: MTLTexture?
-        let stencilResolveTexture: MTLTexture?
-        let stencilLoadAction: MTLLoadAction
-        let stencilStoreAction: MTLStoreAction
-        let stencilClearStencil: UInt32
-        let renderTargetWidth: Int
-        let renderTargetHeight: Int
-    }
-
     /// Per-draw storage: the mesh's vertex uniforms in the arena, its packets in leased storage.
     private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
     private let packetStoragePool = PacketStoragePool()
-    /// The state of the pass, reused by each draw.
-    private let renderEncoderState = RenderEncoderState()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
     /// The texture a pass draws into when its descriptor supplies none.
@@ -214,102 +192,42 @@ open class PostProcessRenderEncoder {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping] = []
     ) {
+        let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
+                                       viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
+        do { try sealed.encode(into: commandBuffer) }
+        catch { assertionFailure("A newly prepared postprocess submission was already encoded: \(error)") }
+    }
+
+    /// Captures a postprocess pass without a command buffer. Custom GPU preparation must be
+    /// scheduled separately before this pass; draw(...) retains its automatic immediate hooks.
+    public func seal(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
+                     cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) -> SealedSubmission {
+        prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
+                          viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: nil)
+    }
+
+    private func prepareSubmission(frame: FrameTime, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
+                                   cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping],
+                                   preparationCommandBuffer: MTLCommandBuffer?) -> SealedSubmission {
         let renderContext = fastRenderContext()
-        let simdViewports = viewports.map(\.float4)
-
-        for camera in cameras {
-            camera.update()
+        let lease = frameArena.lease(frame: frame)
+        let recorder = PacketRecorder(storage: packetStoragePool.lease(), lease: lease)
+        for camera in cameras { camera.update() }
+        let views = cameras.enumerated().map { index, camera in
+            RenderView(camera: camera, viewport: viewports.isEmpty ? .zero : viewports[min(index, viewports.count - 1)].float4, frame: frame)
         }
-
-        let storage = packetStoragePool.lease()
-        defer { packetStoragePool.returnStorage(storage) }
-        let recorder = PacketRecorder(storage: storage, arena: frameArena, commandBuffer: commandBuffer, frame: frame)
-        var views: [RenderView] = []
-        for (index, camera) in cameras.enumerated() {
-            let viewport = simdViewports.isEmpty ? simd_float4.zero : simdViewports[min(index, simdViewports.count - 1)]
-            views.append(RenderView(camera: camera, viewport: viewport, frame: frame))
-        }
-
         mesh.update()
-        mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
+        if let commandBuffer = preparationCommandBuffer {
+            mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
+        }
         mesh.beginOccurrence(frame: frame)
-        // One amplified draw covers every view.
         let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)
-
-        let descriptorState = saveState(renderPassDescriptor)
-        defer { restoreState(descriptorState, to: renderPassDescriptor) }
-
-        prepare(renderPassDescriptor)
-
-        guard let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-        renderCommandEncoder.label = label
-        renderEncoderState.begin(renderEncoder: renderCommandEncoder, renderPassDescriptor: renderPassDescriptor)
-
-        if context.vertexAmplificationCount > 1 {
-            var mappings = viewMappings
-            if mappings.isEmpty {
-                mappings = (0..<context.vertexAmplificationCount).map {
-                    MTLVertexAmplificationViewMapping(
-                        viewportArrayIndexOffset: UInt32($0),
-                        renderTargetArrayIndexOffset: UInt32($0)
-                    )
-                }
-            }
-            renderEncoderState.setPassVertexAmplification(count: context.vertexAmplificationCount, viewMappings: mappings)
-        }
-
-        if !viewports.isEmpty {
-            renderEncoderState.setPassViewports(viewports)
-        }
-
-        recorder.encode(packets, into: renderEncoderState)
-        renderCommandEncoder.endEncoding()
-        renderEncoderState.end()
-    }
-
-    private func saveState(_ renderPassDescriptor: MTLRenderPassDescriptor) -> RenderPassDescriptorState {
-        let colorAttachment = colorAttachment(renderPassDescriptor)
-        return RenderPassDescriptorState(
-            colorTexture: colorAttachment.texture,
-            colorResolveTexture: colorAttachment.resolveTexture,
-            colorLoadAction: colorAttachment.loadAction,
-            colorStoreAction: colorAttachment.storeAction,
-            colorClearColor: colorAttachment.clearColor,
-            depthTexture: renderPassDescriptor.depthAttachment.texture,
-            depthResolveTexture: renderPassDescriptor.depthAttachment.resolveTexture,
-            depthLoadAction: renderPassDescriptor.depthAttachment.loadAction,
-            depthStoreAction: renderPassDescriptor.depthAttachment.storeAction,
-            depthClearDepth: renderPassDescriptor.depthAttachment.clearDepth,
-            stencilTexture: renderPassDescriptor.stencilAttachment.texture,
-            stencilResolveTexture: renderPassDescriptor.stencilAttachment.resolveTexture,
-            stencilLoadAction: renderPassDescriptor.stencilAttachment.loadAction,
-            stencilStoreAction: renderPassDescriptor.stencilAttachment.storeAction,
-            stencilClearStencil: renderPassDescriptor.stencilAttachment.clearStencil,
-            renderTargetWidth: renderPassDescriptor.renderTargetWidth,
-            renderTargetHeight: renderPassDescriptor.renderTargetHeight
-        )
-    }
-
-    private func restoreState(_ state: RenderPassDescriptorState, to renderPassDescriptor: MTLRenderPassDescriptor) {
-        let colorAttachment = colorAttachment(renderPassDescriptor)
-        colorAttachment.texture = state.colorTexture
-        colorAttachment.resolveTexture = state.colorResolveTexture
-        colorAttachment.loadAction = state.colorLoadAction
-        colorAttachment.storeAction = state.colorStoreAction
-        colorAttachment.clearColor = state.colorClearColor
-
-        renderPassDescriptor.depthAttachment.texture = state.depthTexture
-        renderPassDescriptor.depthAttachment.resolveTexture = state.depthResolveTexture
-        renderPassDescriptor.depthAttachment.loadAction = state.depthLoadAction
-        renderPassDescriptor.depthAttachment.storeAction = state.depthStoreAction
-        renderPassDescriptor.depthAttachment.clearDepth = state.depthClearDepth
-        renderPassDescriptor.stencilAttachment.texture = state.stencilTexture
-        renderPassDescriptor.stencilAttachment.resolveTexture = state.stencilResolveTexture
-        renderPassDescriptor.stencilAttachment.loadAction = state.stencilLoadAction
-        renderPassDescriptor.stencilAttachment.storeAction = state.stencilStoreAction
-        renderPassDescriptor.stencilAttachment.clearStencil = state.stencilClearStencil
-        renderPassDescriptor.renderTargetWidth = state.renderTargetWidth
-        renderPassDescriptor.renderTargetHeight = state.renderTargetHeight
+        let descriptor = inputDescriptor.copy() as! MTLRenderPassDescriptor
+        prepare(descriptor)
+        var pass = RecordedRenderPass(descriptor: descriptor, label: label, viewports: viewports,
+                                      amplificationCount: context.vertexAmplificationCount, viewMappings: viewMappings)
+        pass.commands.append(.range(packets, viewIndex: 0))
+        return SealedSubmission(frame: frame, recorder: recorder, lease: lease, pool: packetStoragePool, passes: [pass])
     }
 
     private func prepare(_ renderPassDescriptor: MTLRenderPassDescriptor) {

@@ -105,14 +105,18 @@ final class DrawRecordingTests: XCTestCase {
         XCTAssertTrue(storage.commands.contains { if case .fragmentSampler(_, .Custom0) = $0 { return true } else { return false } })
     }
 
-    func testStandardMaterialRecordsItsMapsOnlyOutsideShadowPasses() throws {
+    func testStandardMaterialPrunesMapsFromItsDepthOnlyShadowPipeline() throws {
         let material = StandardMaterial(context: context)
+        material.castShadow = true
         material.setTexture(try makeTexture(), type: .baseColor)
         material.update()
 
         func recordsMaps(_ pass: RenderPass) throws -> Bool {
             let (drawContext, storage) = try makeRecording(pass: pass)
             material.draw(in: drawContext.materialContext(layout: nil))
+            // Materials gather resources first; the selected pipeline prunes the finished packet.
+            storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+            storage.endRecording()
             return storage.commands.contains { if case .fragmentPBRTexture = $0 { return true } else { return false } }
         }
 

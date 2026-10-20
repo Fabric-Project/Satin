@@ -50,9 +50,7 @@ public final class JointPalette {
 
     // Motion: poses by palette draw ordinal, the kth snapshot of a frame pairing with the kth of
     // the frame before; flat, ordinal × jointCount.
-    private var previousFramePoses: [simd_float4x4] = []
-    private var currentFramePoses: [simd_float4x4] = []
-    private var motionFrameNumber: Int?
+    private var motionHistory = MotionHistory<simd_float4x4>()
 
     // The snapshot of the current record, reused by every mesh drawing this palette in it.
     private var snapshotRecordToken: RecordToken?
@@ -84,8 +82,9 @@ public final class JointPalette {
 
     /// Forgets this palette's motion: its next snapshots draw with none.
     public func resetMotion() {
-        previousFramePoses.removeAll(keepingCapacity: true)
-        currentFramePoses.removeAll(keepingCapacity: true)
+        motionHistory.reset()
+        snapshotRecordToken = nil
+        snapshotBinding = nil
     }
 
     /// The pose as it is now, with each joint's previous matrix, in `recorder`'s arena: taken once per
@@ -96,25 +95,12 @@ public final class JointPalette {
             return snapshotBinding
         }
 
-        let frameNumber = recorder.frame.frameNumber
-        if motionFrameNumber != frameNumber {
-            if let motionFrameNumber, motionFrameNumber == frameNumber - 1 {
-                swap(&previousFramePoses, &currentFramePoses)
-            } else {
-                previousFramePoses.removeAll(keepingCapacity: true)
-            }
-            currentFramePoses.removeAll(keepingCapacity: true)
-            motionFrameNumber = frameNumber
-        }
-
-        let ordinalStart = currentFramePoses.count
-        let hasPrevious = ordinalStart + jointCount <= previousFramePoses.count
+        motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: jointCount)
         let slice = recorder.allocate(length: MemoryLayout<SkinJoint>.stride * jointCount)
         let joints = slice.contents.bindMemory(to: SkinJoint.self, capacity: jointCount)
         for jointIndex in 0 ..< jointCount {
             let current = matrices[jointIndex]
-            joints[jointIndex] = SkinJoint(current: current, previous: hasPrevious ? previousFramePoses[ordinalStart + jointIndex] : current)
-            currentFramePoses.append(current)
+            joints[jointIndex] = SkinJoint(current: current, previous: motionHistory.record(current))
         }
 
         let binding = (buffer: slice.buffer, offset: slice.offset)
