@@ -364,6 +364,10 @@ open class RenderEncoder {
     /// Records each frame's shadow casters once for every shadow pass.
     private let shadowCasterRecording = ShadowCasterRecording()
     private var shadowsToDraw = ContiguousArray<Shadow>()
+    /// The shadows the latest recordings cleaned, by record token, so abandoning one marks them
+    /// dirty again. Producer-only, and only the last few: an abandon comes soon after its seal.
+    private var cleanedShadows = ContiguousArray<(recordToken: UInt64, shadows: ContiguousArray<Shadow>)>()
+    private static let abandonableRecordingCount = 8
     /// The draw in progress: set for the length of `draw`.
     private var recorder: PacketRecorder?
     /// The renderables of a scene being recorded into a submission, reused across records.
@@ -605,16 +609,9 @@ open class RenderEncoder {
     /// Shadow passes run before the main scene pass. Surface materials render first according to
     /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
     public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) throws {
-        let submission = makeSubmission(frame: frame, commandBuffer: commandBuffer, cameras: cameras, viewports: viewports)
-        try draw(submission: submission, renderPassDescriptor: renderPassDescriptor, scene: scene, viewMappings: viewMappings)
-    }
-
-    /// A submission for one rendering operation, made before anything is updated or recorded: its
-    /// views are the cameras as they are now. Record scenes into it, then draw it once.
-    public func makeSubmission(frame: FrameTime, commandBuffer: MTLCommandBuffer, cameras: [Camera], viewports: [MTLViewport]) -> RenderSubmission {
         let builder = makeSubmissionBuilder(frame: frame, cameras: cameras, viewports: viewports)
-        builder.lease.retain(untilCompleted: commandBuffer)
-        return RenderSubmission(builder: builder, commandBuffer: commandBuffer)
+        try builder.record(scene: scene, renderPassDescriptor: renderPassDescriptor, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
+        try builder.seal().encode(into: commandBuffer)
     }
 
     /// Creates a producer-only operation with frozen views and renderer settings. Record its scene
@@ -630,8 +627,18 @@ open class RenderEncoder {
                                  configuration: activeConfiguration ?? configuration, cameras: cameras, viewports: viewports, pool: packetStoragePool)
     }
 
-    func retainUntilCompleted(_ owner: AnyObject, commandBuffer: MTLCommandBuffer) {
-        frameArena.retainUntilCompleted(owner, commandBuffer: commandBuffer)
+    /// Gives up `sealed` without encoding it: what it holds is released, and the shadows its
+    /// recording cleaned are marked to draw again, since their passes will never run. Call it on the
+    /// producer, for a submission sealed within its last few recordings, instead of dropping it.
+    public func abandon(_ sealed: SealedSubmission) {
+        guard sealed.discard() else { return }
+        for index in cleanedShadows.indices where cleanedShadows[index].recordToken == sealed.recordToken {
+            for shadow in cleanedShadows[index].shadows {
+                shadow.needsUpdate = true
+            }
+            cleanedShadows.remove(at: index)
+            return
+        }
     }
 
     /// Throws when an attachment `renderPassDescriptor` supplies doesn't have the destination's pixel
@@ -641,43 +648,31 @@ open class RenderEncoder {
         if let expected = destination.colorPixelFormats.first, expected != .invalid {
             for texture in [colorAttachment?.texture, colorAttachment?.resolveTexture] {
                 if let texture, texture.pixelFormat != expected {
-                    throw RenderSubmission.Error.destinationMismatch(attachment: "color", expected: expected, found: texture.pixelFormat)
+                    throw SubmissionError.destinationMismatch(attachment: "color", expected: expected, found: texture.pixelFormat)
                 }
             }
         }
         if destination.depthPixelFormat != .invalid {
             for texture in [renderPassDescriptor.depthAttachment.texture, renderPassDescriptor.depthAttachment.resolveTexture] {
                 if let texture, texture.pixelFormat != destination.depthPixelFormat {
-                    throw RenderSubmission.Error.destinationMismatch(attachment: "depth", expected: destination.depthPixelFormat, found: texture.pixelFormat)
+                    throw SubmissionError.destinationMismatch(attachment: "depth", expected: destination.depthPixelFormat, found: texture.pixelFormat)
                 }
             }
         }
         if destination.stencilPixelFormat != .invalid, destination.depthPixelFormat != .depth32Float_stencil8 {
             for texture in [renderPassDescriptor.stencilAttachment.texture, renderPassDescriptor.stencilAttachment.resolveTexture] {
                 if let texture, texture.pixelFormat != destination.stencilPixelFormat {
-                    throw RenderSubmission.Error.destinationMismatch(attachment: "stencil", expected: destination.stencilPixelFormat, found: texture.pixelFormat)
+                    throw SubmissionError.destinationMismatch(attachment: "stencil", expected: destination.stencilPixelFormat, found: texture.pixelFormat)
                 }
             }
         }
     }
 
-    /// Updates and records `scene`, then encodes it and everything recorded into `submission`: per
-    /// render layer, the scene's own draws, then each `record(scene:)` in call order. Consumes the
-    /// submission.
-    public func draw(submission: RenderSubmission, renderPassDescriptor: MTLRenderPassDescriptor, scene: Object, viewMappings: [MTLVertexAmplificationViewMapping] = []) throws {
-        guard submission.encoder === self else { throw RenderSubmission.Error.foreignEncoder }
-        try submission.builder.record(scene: scene, renderPassDescriptor: renderPassDescriptor,
-                                      viewMappings: viewMappings, preparationCommandBuffer: submission.commandBuffer)
-        let sealed = try submission.builder.seal()
-        try sealed.encode(into: submission.commandBuffer)
-    }
-
     func prepare(builder submission: SubmissionBuilder, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor,
               scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil) throws -> [RecordedRenderPass] {
-        guard submission.encoder === self else { throw RenderSubmission.Error.foreignEncoder }
-        guard !submission.isConsumed else { throw RenderSubmission.Error.alreadyDrawn }
+        guard !submission.isConsumed else { throw SubmissionError.alreadyDrawn }
         try validate(inputDescriptor, against: submission.destination)
-        let renderPassDescriptor = inputDescriptor.copy() as! MTLRenderPassDescriptor
+        let renderPassDescriptor = inputDescriptor.privateCopy()
         preparedPasses.removeAll(keepingCapacity: true)
         preparingViews = submission.views
 
@@ -726,6 +721,10 @@ open class RenderEncoder {
                 shadowsToDraw.append(light.shadow)
             }
             preparedPasses.append(contentsOf: shadowCasterRecording.prepare(shadowsToDraw, context: context, renderables: renderCollection.shadowCasters, recorder: recorder))
+            if !shadowsToDraw.isEmpty {
+                if cleanedShadows.count == Self.abandonableRecordingCount { cleanedShadows.removeFirst() }
+                cleanedShadows.append((recordToken: recorder.storage.leaseToken, shadows: shadowsToDraw))
+            }
             shadowsToDraw.removeAll(keepingCapacity: true)
         }
 

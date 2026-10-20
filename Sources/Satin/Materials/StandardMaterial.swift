@@ -266,8 +266,9 @@ open class StandardMaterial: Material {
 
     override open func draw(in context: MaterialDrawContext) {
         super.draw(in: context)
-        // Shadow fragments (cutouts, transmission, custom shading) can use these too. The
-        // selected pipeline's usage prunes absent maps when the packet finishes recording.
+        // The default depth-only shadow needs no maps. Unknown/custom shadow fragments keep
+        // maps available for cutouts/transmission instead of borrowing colour-stage assumptions.
+        if context.isShadowPass, context.storage.recordingPipelineUsage?.fragment.textures.isEmpty == true { return }
         for (index, texture) in maps.enumerated() where texture != nil {
             context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
         }

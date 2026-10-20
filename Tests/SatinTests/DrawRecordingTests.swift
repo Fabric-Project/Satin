@@ -22,8 +22,7 @@ final class DrawRecordingTests: XCTestCase {
     /// A context recording into a freshly leased storage, as one renderable's recording in `pass`.
     private func makeRecording(pass: RenderPass) throws -> (context: RenderableDrawContext, storage: PacketStorage) {
         let storage = pool.lease()
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let recorder = PacketRecorder(storage: storage, arena: arena, commandBuffer: commandBuffer, frame: .zero)
+        let recorder = PacketRecorder(storage: storage, lease: arena.lease(frame: .zero))
         storage.beginRecording(cullMode: .back, windingOrder: .counterClockwise, triangleFillMode: .fill, renderOrder: 0, debugLabel: "Test")
         let vertexUniformsBuffer = try XCTUnwrap(context.device.makeBuffer(length: 4096))
         let drawContext = RenderableDrawContext(
@@ -105,7 +104,7 @@ final class DrawRecordingTests: XCTestCase {
         XCTAssertTrue(storage.commands.contains { if case .fragmentSampler(_, .Custom0) = $0 { return true } else { return false } })
     }
 
-    func testStandardMaterialPrunesMapsFromItsDepthOnlyShadowPipeline() throws {
+    func testStandardMaterialSkipsMapsForItsKnownDepthOnlyShadowPipeline() throws {
         let material = StandardMaterial(context: context)
         material.castShadow = true
         material.setTexture(try makeTexture(), type: .baseColor)
@@ -114,7 +113,7 @@ final class DrawRecordingTests: XCTestCase {
         func recordsMaps(_ pass: RenderPass) throws -> Bool {
             let (drawContext, storage) = try makeRecording(pass: pass)
             material.draw(in: drawContext.materialContext(layout: nil))
-            // Materials gather resources first; the selected pipeline prunes the finished packet.
+            // Finish the packet, as a geometry does after the material records its bindings.
             storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
             storage.endRecording()
             return storage.commands.contains { if case .fragmentPBRTexture = $0 { return true } else { return false } }
@@ -124,15 +123,15 @@ final class DrawRecordingTests: XCTestCase {
         XCTAssertFalse(try recordsMaps(.shadow))
     }
 
-    func testASubclassCustomCommandIsRecordedAfterSupersBindings() throws {
-        let material = CustomCommandMaterial(context: context)
+    func testASubclassBindingIsRecordedAfterSupersBindings() throws {
+        let material = ExtraBindingMaterial(context: context)
         material.update()
         let (drawContext, storage) = try makeRecording(pass: .color)
 
         material.draw(in: drawContext.materialContext(layout: nil))
 
         XCTAssertTrue(storage.commands.dropLast().contains { if case .fragmentBuffer = $0 { return true } else { return false } }, "super's bindings come first")
-        guard case .custom = storage.commands.last else { return XCTFail("the subclass's custom command is the last recorded command") }
+        guard case .fragmentBuffer(_, _, .Custom0) = storage.commands.last else { return XCTFail("the subclass's binding is the last recorded command") }
     }
 
     func testRecordedUniformsAreASnapshotAndAChangeTakesANewOne() throws {
@@ -165,11 +164,11 @@ final class DrawRecordingTests: XCTestCase {
 
     func testResetClearsPacketsAndCommands() throws {
         let (drawContext, storage) = try makeRecording(pass: .color)
-        drawContext.addCustomCommand { _ in }
+        drawContext.setVertexBuffer(try XCTUnwrap(context.device.makeBuffer(length: 16)), index: .Custom0)
         storage.reset()
         XCTAssertTrue(storage.commands.isEmpty)
         XCTAssertTrue(storage.packets.isEmpty)
-        XCTAssertTrue(storage.customCommands.isEmpty)
+        XCTAssertTrue(storage.buffers.isEmpty)
     }
 
     // MARK: - Geometry Customization
@@ -177,8 +176,7 @@ final class DrawRecordingTests: XCTestCase {
     /// Records `mesh` once in the colour pass, as an encoder does.
     private func record(_ mesh: Mesh) throws -> PacketStorage {
         let storage = pool.lease()
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let recorder = PacketRecorder(storage: storage, arena: arena, commandBuffer: commandBuffer, frame: .zero)
+        let recorder = PacketRecorder(storage: storage, lease: arena.lease(frame: .zero))
         mesh.update()
         mesh.beginOccurrence(frame: .zero)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
@@ -244,15 +242,17 @@ final class DrawRecordingTests: XCTestCase {
     }
 }
 
-/// Records one custom command after the material's own bindings, as a subclass customising its
-/// encoding does.
-final class CustomCommandMaterial: BasicColorMaterial {
+/// Binds one buffer of its own after the material's bindings, as a subclass customising its
+/// recording does.
+final class ExtraBindingMaterial: BasicColorMaterial {
     // The shader is found by class name: draw with BasicColor's.
     override var prefix: String { "BasicColor" }
 
+    private lazy var extra: MTLBuffer? = context.device.makeBuffer(length: 16)
+
     override func draw(in context: MaterialDrawContext) {
         super.draw(in: context)
-        context.addCustomCommand { _ in }
+        if let extra { context.setFragmentBuffer(extra, index: .Custom0) }
     }
 }
 

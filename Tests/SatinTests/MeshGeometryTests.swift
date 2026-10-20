@@ -33,9 +33,8 @@ final class MeshGeometryTests: XCTestCase {
     /// The packets a double-sided, uncullled mesh of `submeshMaterials` records in the colour pass.
     private func recordDoubleSided(submeshMaterials: [Material]) throws -> (cullModes: [MTLCullMode], storage: PacketStorage) {
         let device = context.device
-        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
         let storage = PacketStoragePool().lease()
-        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
         let geometry = BoxGeometry(context: context)
         geometry.update()
         let elements = try XCTUnwrap(geometry.elementBuffer)

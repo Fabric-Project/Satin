@@ -59,7 +59,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
 - [x] Buffer & Texture Compute Systems make running compute kernels a breeze.
 - [x] Generators for BRDF LUT, Image Based Lighting (HDR -> Specular & Diffuse IBL Textures)
 - [x] Fast raycasting via Bounding Volume Hierachies (very helpful to see what you clicked or tapped on).
-- [x] Hooks for custom Metal rendering: custom commands and draws recorded from a renderable's, material's or geometry's `draw(in:)`, Buffer & Texture Computes' preCompute, etc
+- [x] Hooks for custom Metal rendering: typed bindings and draws (buffers for every stage, tessellation factors, patch and mesh-threadgroup draws) recorded from a renderable's, material's or geometry's `draw(in:)`, Buffer & Texture Computes' preCompute, etc
 - [x] Hooks for custom rendering via the Renderable protocol
 - [x] FileWatcher for checking if a resource or shader file has changed.
 - [x] Platform specific examples for iOS / AR Kit integration

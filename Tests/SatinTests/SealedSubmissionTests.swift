@@ -74,6 +74,84 @@ final class SealedSubmissionTests: XCTestCase {
         XCTAssertNotEqual(bytes(firstTarget), bytes(secondTarget))
     }
 
+    func testExternalBytesCopiedOnRecordSurviveAnOverwriteBeforeEncoding() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((32, 32))
+        let external = try XCTUnwrap(device.makeBuffer(length: 256, options: .storageModeShared))
+        external.contents().storeBytes(of: simd_float4(1, 0, 0, 1), as: simd_float4.self)
+        let externalMaterial = ExternalColorMaterial(context: context)
+        externalMaterial.colors = external
+        let referenceMaterial = BasicColorMaterial(context: context)
+        referenceMaterial.set("Color", simd_float4(1, 0, 0, 1))
+        let externalMesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: externalMaterial)
+        let referenceMesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: referenceMaterial)
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let viewport = MTLViewport(originX: 0, originY: 0, width: 32, height: 32, znear: 0, zfar: 1)
+        let externalTarget = try target()
+        let referenceTarget = try target()
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = externalTarget
+        let sealed = try seal(encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [viewport]),
+                              descriptor: descriptor, scene: Object(context: context, label: "External", [externalMesh]))
+        descriptor.colorAttachments[0].texture = referenceTarget
+        let reference = try seal(encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [viewport]),
+                                 descriptor: descriptor, scene: Object(context: context, label: "Reference", [referenceMesh]))
+
+        // Overwritten after sealing, before anything is encoded: the recording copied its bytes.
+        external.contents().storeBytes(of: simd_float4(0, 0, 1, 1), as: simd_float4.self)
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        try sealed.encode(into: commandBuffer)
+        try reference.encode(into: commandBuffer)
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed)
+        XCTAssertEqual(bytes(externalTarget), bytes(referenceTarget), "the box draws red, the colour when it was recorded")
+    }
+
+    /// Renders `scene` sealed into its own target and returns it, encoded later by the caller.
+    private func sealColor(_ encoder: RenderEncoder, scene: Object, camera: Camera) throws -> (sealed: SealedSubmission, target: MTLTexture) {
+        let viewport = MTLViewport(originX: 0, originY: 0, width: 32, height: 32, znear: 0, zfar: 1)
+        let target = try target()
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = target
+        let sealed = try seal(encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [viewport]), descriptor: descriptor, scene: scene)
+        return (sealed, target)
+    }
+
+    private func encodeAndWait(_ sealed: [SealedSubmission]) throws {
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        for submission in sealed { try submission.encode(into: commandBuffer) }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed)
+    }
+
+    func testObjectsRemovedAndReleasedAfterSealingStillDrawInWhatWasSealed() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((32, 32))
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let scene = Object(context: context, label: "Scene")
+        do {
+            let material = BasicColorMaterial(context: context)
+            material.set("Color", simd_float4(1, 0, 0, 1))
+            scene.add(Mesh(context: context, geometry: BoxGeometry(context: context), material: material))
+        }
+        let (sealed, removedTarget) = try sealColor(encoder, scene: scene, camera: camera)
+
+        // B removes the mesh; nothing else holds it, its material or its geometry.
+        scene.removeAll()
+        let (afterRemoval, emptyTarget) = try sealColor(encoder, scene: scene, camera: camera)
+
+        let referenceMaterial = BasicColorMaterial(context: context)
+        referenceMaterial.set("Color", simd_float4(1, 0, 0, 1))
+        let reference = Object(context: context, label: "Reference", [Mesh(context: context, geometry: BoxGeometry(context: context), material: referenceMaterial)])
+        let (referenceSealed, referenceTarget) = try sealColor(encoder, scene: reference, camera: camera)
+
+        try encodeAndWait([afterRemoval, sealed, referenceSealed])
+        XCTAssertEqual(bytes(removedTarget), bytes(referenceTarget), "A draws the box it sealed")
+        XCTAssertNotEqual(bytes(emptyTarget), bytes(referenceTarget), "B draws without it")
+    }
+
     func testShadowPassesAndDeferredResolveStayFrozen() throws {
         for lightKind in 0 ..< 3 {
             let encoder = RenderEncoder(context: context)
@@ -156,51 +234,22 @@ final class SealedSubmissionTests: XCTestCase {
         XCTAssertNotEqual(images[1], images[2])
     }
 
-    func testConsumedAliasesDoNotKeepCompletionOwnersAlive() throws {
-        final class Owner {}
-        let encoder = RenderEncoder(context: context)
-        encoder.resize((32, 32))
-        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [])
-        weak var owner: Owner?
-        do {
-            let value = Owner()
-            owner = value
-            builder.retainUntilCompleted(value)
-        }
-        let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: Object(context: context))
-        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
-        try sealed.encode(into: commandBuffer)
-        XCTAssertNotNil(owner)
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        XCTAssertNil(owner)
-        withExtendedLifetime((builder, sealed)) {}
-    }
-
-    func testAbandonedSealedWorkReleasesOwnersWithBuilderAliasAlive() throws {
-        final class Owner {}
+    func testAbandonedSealedWorkReturnsItsStorageWithoutEncoding() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((32, 32))
         let camera = PerspectiveCamera(context: context)
-        let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [])
-        weak var owner: Owner?
-        do {
-            let value = Owner()
-            owner = value
-            builder.retainUntilCompleted(value)
+        let before = encoder.packetStoragePool.availableCount
+        try autoreleasepool {
+            let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [])
+            let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: Object(context: context))
+            withExtendedLifetime(sealed) {}
         }
-        var sealed: SealedSubmission? = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: Object(context: context))
-        XCTAssertNotNil(owner)
-        withExtendedLifetime(sealed) {}
-        sealed = nil
-        XCTAssertNil(owner)
-        withExtendedLifetime(builder) {}
+        XCTAssertEqual(encoder.packetStoragePool.availableCount, before + 1)
     }
 
-    func testAbandonedRecordingDoesNotMarkAnUnrenderedStaticShadowClean() throws {
-        let encoder = RenderEncoder(context: context)
-        encoder.resize((32, 32))
+    // MARK: - Static shadows: clean when recorded, dirty again only if the producer abandons
+
+    private func staticShadowScene() -> (scene: Object, light: SpotLight) {
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: PhysicalMaterial(context: context))
         mesh.castShadow = true
         mesh.receiveShadow = true
@@ -208,14 +257,36 @@ final class SealedSubmissionTests: XCTestCase {
         light.castShadow = true
         light.shadow.autoUpdate = false
         light.shadow.resolution = (16, 16)
-        let scene = Object(context: context, label: "Unsubmitted", [mesh, light])
-        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        do {
-            let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [])
-            let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: scene)
-            withExtendedLifetime(sealed) {}
+        return (Object(context: context, label: "Static shadow", [mesh, light]), light)
+    }
+
+    func testAStaticShadowIsCleanOnceItsPassesAreRecorded() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((32, 32))
+        let (scene, light) = staticShadowScene()
+        XCTAssertTrue(light.shadow.shouldRender)
+
+        let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [PerspectiveCamera(context: context)], viewports: [])
+        let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: scene)
+
+        XCTAssertFalse(light.shadow.shouldRender, "the producer recorded its passes: nothing is left to render")
+        withExtendedLifetime(sealed) {}
+    }
+
+    func testAbandoningASealedSubmissionMarksItsShadowsDirtyAgain() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((32, 32))
+        let (scene, light) = staticShadowScene()
+        let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [PerspectiveCamera(context: context)], viewports: [])
+        let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: scene)
+
+        encoder.abandon(sealed)
+
+        XCTAssertTrue(light.shadow.shouldRender, "its passes will never run, so the next frame renders the map")
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        XCTAssertThrowsError(try sealed.encode(into: commandBuffer), "an abandoned submission can't be encoded") { error in
+            XCTAssertEqual(error as? SubmissionError, .alreadyDrawn)
         }
-        XCTAssertTrue(light.shadow.shouldRender, "No GPU work was submitted, so the map is still dirty")
     }
 
     func testEncodedButUncommittedWorkReturnsItsPacketStorage() throws {
@@ -231,20 +302,17 @@ final class SealedSubmissionTests: XCTestCase {
         }
         XCTAssertEqual(encoder.packetStoragePool.availableCount, before + 1)
     }
+}
 
-    func testOldShadowCompletionCannotCleanANewerDirtyGeneration() {
-        let light = SpotLight(context: context, color: .one)
-        let shadow = light.shadow
-        shadow.autoUpdate = false
-        let first = shadow.recordingCompletion()
-        XCTAssertTrue(first === shadow.recordingCompletion(), "pending recordings of one generation share completion")
-        shadow.needsUpdate = true
-        let second = shadow.recordingCompletion()
-        first.complete(succeeded: true)
-        XCTAssertTrue(shadow.needsUpdate)
-        second.complete(succeeded: false)
-        XCTAssertTrue(shadow.needsUpdate)
-        second.complete(succeeded: true)
-        XCTAssertFalse(shadow.needsUpdate)
+/// BasicColor whose material uniforms come from a caller-owned buffer, copied when recorded.
+final class ExternalColorMaterial: BasicColorMaterial {
+    // The shader is found by class name: draw with BasicColor's.
+    override var prefix: String { "BasicColor" }
+
+    var colors: MTLBuffer?
+
+    override func draw(in context: MaterialDrawContext) {
+        super.draw(in: context)
+        if let colors { context.setFragmentBuffer(colors, index: .MaterialUniforms, copyOnRecordLength: colors.length) }
     }
 }

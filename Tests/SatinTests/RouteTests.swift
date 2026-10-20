@@ -46,7 +46,7 @@ final class RouteTests: XCTestCase {
     private func recordedPacketCounts(_ encoder: RenderEncoder, mesh: Mesh) throws -> [Int] {
         let camera = PerspectiveCamera(context: encoder.context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = encoder.makeSubmission(frame: .zero, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+        let submission = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
         try submission.record(scene: Object(context: encoder.context, label: "Routed", [mesh]))
 
         var counts = [Int](repeating: 0, count: 5)

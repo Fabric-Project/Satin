@@ -222,7 +222,7 @@ open class PostProcessRenderEncoder {
         }
         mesh.beginOccurrence(frame: frame)
         let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)
-        let descriptor = inputDescriptor.copy() as! MTLRenderPassDescriptor
+        let descriptor = inputDescriptor.privateCopy()
         prepare(descriptor)
         var pass = RecordedRenderPass(descriptor: descriptor, label: label, viewports: viewports,
                                       amplificationCount: context.vertexAmplificationCount, viewMappings: viewMappings)

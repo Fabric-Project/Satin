@@ -34,8 +34,9 @@ final class SubmissionRecordTests: XCTestCase {
         var snapshots: [(FrameArena.Slice, [UInt8])] = []
         for index in 0 ..< Satin.maxBuffersInFlight + 2 {
             light.color = [Float(index + 1), 0, 0]
-            let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-            try encoder.draw(submission: submission, renderPassDescriptor: MTLRenderPassDescriptor(), scene: scene.root)
+            let submission = try makeSubmission(encoder, camera: makeCamera())
+            try submission.record(scene: scene.root, renderPassDescriptor: MTLRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+            try submission.seal().encode(into: commandBuffer)
             let slice = try XCTUnwrap(submission.recorder.passBindings.lights)
             snapshots.append((slice, Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length))))
         }
@@ -65,16 +66,18 @@ final class SubmissionRecordTests: XCTestCase {
             light.position = [Float(index), 2, 3]
             light.shadow.bias = Float(index) * 0.001
             light.projectionTransform.columns.2.x = Float(index) * 0.1
-            let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-            try encoder.draw(submission: submission, renderPassDescriptor: MTLRenderPassDescriptor(), scene: root)
+            let submission = try makeSubmission(encoder, camera: makeCamera())
+            try submission.record(scene: root, renderPassDescriptor: MTLRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+            try submission.seal().encode(into: commandBuffer)
             let bindings = submission.recorder.passBindings
             for slice in [bindings.shadowData, bindings.shadowMatrices, bindings.projectorMatrices, bindings.projectorTransforms] {
                 let slice = try XCTUnwrap(slice)
                 snapshots.append((slice, Array(UnsafeRawBufferPointer(start: slice.contents, count: slice.length))))
             }
         }
-        let empty = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-        try encoder.draw(submission: empty, renderPassDescriptor: MTLRenderPassDescriptor(), scene: Object(context: context))
+        let empty = try makeSubmission(encoder, camera: makeCamera())
+        try empty.record(scene: Object(context: context), renderPassDescriptor: MTLRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try empty.seal().encode(into: commandBuffer)
         XCTAssertNil(empty.recorder.passBindings.lights)
         XCTAssertNil(empty.recorder.passBindings.shadowData)
         XCTAssertNil(empty.recorder.passBindings.projectorMatrices)
@@ -117,9 +120,8 @@ final class SubmissionRecordTests: XCTestCase {
         return camera
     }
 
-    private func makeSubmission(_ encoder: RenderEncoder, frame: FrameTime = .zero, camera: Camera, commandBuffer: MTLCommandBuffer? = nil) throws -> RenderSubmission {
-        let commandBuffer = try commandBuffer ?? XCTUnwrap(commandQueue.makeCommandBuffer())
-        return encoder.makeSubmission(frame: frame, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+    private func makeSubmission(_ encoder: RenderEncoder, frame: FrameTime = .zero, camera: Camera) throws -> SubmissionBuilder {
+        encoder.makeSubmissionBuilder(frame: frame, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
     }
 
     /// The buffer and offset a packet binds at `slot` in the vertex stage (vertex uniforms) or
@@ -149,7 +151,7 @@ final class SubmissionRecordTests: XCTestCase {
         return Array(UnsafeRawBufferPointer(start: uniforms.buffer.contents() + uniforms.offset, count: size))
     }
 
-    private func recordedPackets(_ submission: RenderSubmission) -> [DrawPacket] {
+    private func recordedPackets(_ submission: SubmissionBuilder) -> [DrawPacket] {
         let storage = submission.recorder.storage
         return storage.runs.filter(\.isRecorded).flatMap { storage.packets[$0.packets] }
     }
@@ -288,28 +290,24 @@ final class SubmissionRecordTests: XCTestCase {
         let scene = makeScene()
         let camera = makeCamera()
         let size = scene.material.parameters.size
-        let sharedCommandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let first = try makeSubmission(encoder, camera: camera)
+        let second = try makeSubmission(encoder, camera: camera)
 
-        for secondCommandBuffer in [sharedCommandBuffer, try XCTUnwrap(commandQueue.makeCommandBuffer())] {
-            let first = try makeSubmission(encoder, camera: camera, commandBuffer: sharedCommandBuffer)
-            let second = try makeSubmission(encoder, camera: camera, commandBuffer: secondCommandBuffer)
+        scene.material.color = [1, 0, 0, 1]
+        try first.record(scene: scene.root)
+        // Unchanged, then changed: neither may reuse the first submission's slice.
+        try second.record(scene: scene.root)
+        scene.material.color = [0, 1, 0, 1]
+        try second.record(scene: scene.root)
 
-            scene.material.color = [1, 0, 0, 1]
-            try first.record(scene: scene.root)
-            // Unchanged, then changed: neither may reuse the first submission's slice.
-            try second.record(scene: scene.root)
-            scene.material.color = [0, 1, 0, 1]
-            try second.record(scene: scene.root)
-
-            let firstPacket = try XCTUnwrap(recordedPackets(first).first)
-            let secondPackets = recordedPackets(second)
-            XCTAssertEqual(secondPackets.count, 2)
-            let firstBinding = try XCTUnwrap(binding(of: firstPacket, in: first.recorder.storage, fragmentSlot: .MaterialUniforms))
-            let unchangedBinding = try XCTUnwrap(binding(of: secondPackets[0], in: second.recorder.storage, fragmentSlot: .MaterialUniforms))
-            XCTAssertFalse(firstBinding.buffer === unchangedBinding.buffer && firstBinding.offset == unchangedBinding.offset, "another lease takes its own snapshot")
-            XCTAssertNotEqual(try materialBytes(of: firstPacket, in: first.recorder.storage, size: size),
-                              try materialBytes(of: secondPackets[1], in: second.recorder.storage, size: size), "each binds its own values")
-        }
+        let firstPacket = try XCTUnwrap(recordedPackets(first).first)
+        let secondPackets = recordedPackets(second)
+        XCTAssertEqual(secondPackets.count, 2)
+        let firstBinding = try XCTUnwrap(binding(of: firstPacket, in: first.recorder.storage, fragmentSlot: .MaterialUniforms))
+        let unchangedBinding = try XCTUnwrap(binding(of: secondPackets[0], in: second.recorder.storage, fragmentSlot: .MaterialUniforms))
+        XCTAssertFalse(firstBinding.buffer === unchangedBinding.buffer && firstBinding.offset == unchangedBinding.offset, "another lease takes its own snapshot")
+        XCTAssertNotEqual(try materialBytes(of: firstPacket, in: first.recorder.storage, size: size),
+                          try materialBytes(of: secondPackets[1], in: second.recorder.storage, size: size), "each binds its own values")
     }
 
     func testAPaletteSnapshotsOncePerRecordAndPairsByOrdinal() throws {
@@ -377,7 +375,7 @@ final class SubmissionRecordTests: XCTestCase {
         encoder.resize((width: 64, height: 64))
         let scene = makeScene()
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        let submission = try makeSubmission(encoder, camera: makeCamera())
         try submission.record(scene: scene.root)
         let available = encoder.packetStoragePool.availableCount
 
@@ -387,7 +385,8 @@ final class SubmissionRecordTests: XCTestCase {
         let target = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
         let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = target
-        try encoder.draw(submission: submission, renderPassDescriptor: renderPassDescriptor, scene: Object(context: context))
+        try submission.record(scene: Object(context: context), renderPassDescriptor: renderPassDescriptor, preparationCommandBuffer: commandBuffer)
+        try submission.seal().encode(into: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
@@ -446,10 +445,11 @@ final class SubmissionRecordTests: XCTestCase {
         encoder.resize((width: 64, height: 64))
         encoder.clearColor = MTLClearColor(red: 0, green: 0, blue: 1, alpha: 1)
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        let submission = try makeSubmission(encoder, camera: makeCamera())
 
         let changer = EncoderChangingObject(context: context, encoder: encoder, clearColor: MTLClearColor(red: 1, green: 0, blue: 0, alpha: 1))
-        try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: changer)
+        try submission.record(scene: changer, renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try submission.seal().encode(into: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
@@ -463,43 +463,24 @@ final class SubmissionRecordTests: XCTestCase {
         let encoder = RenderEncoder(context: context)
         encoder.resize((width: 64, height: 64))
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        let submission = try makeSubmission(encoder, camera: makeCamera())
         try submission.record(scene: makeScene().root)
         let recordedPacketCount = submission.recorder.storage.packets.count
         let available = encoder.packetStoragePool.availableCount
 
-        XCTAssertThrowsError(try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(pixelFormat: .rgba16Float), scene: makeScene().root)) { error in
-            XCTAssertEqual(error as? RenderSubmission.Error, .destinationMismatch(attachment: "color", expected: .bgra8Unorm, found: .rgba16Float))
+        XCTAssertThrowsError(try submission.record(scene: makeScene().root, renderPassDescriptor: makeRenderPassDescriptor(pixelFormat: .rgba16Float), preparationCommandBuffer: commandBuffer)) { error in
+            XCTAssertEqual(error as? SubmissionError, .destinationMismatch(attachment: "color", expected: .bgra8Unorm, found: .rgba16Float))
         }
         XCTAssertFalse(submission.isConsumed, "a rejected submission stays usable")
         XCTAssertEqual(submission.recorder.storage.packets.count, recordedPacketCount, "and nothing was updated or recorded")
         XCTAssertEqual(encoder.packetStoragePool.availableCount, available, "nor its lease returned")
 
-        try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
+        try submission.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try submission.seal().encode(into: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         XCTAssertNil(commandBuffer.error)
         XCTAssertTrue(submission.isConsumed, "it draws with a matching descriptor")
-    }
-
-    func testAnotherEncodersSubmissionIsRejectedBeforeAnyWork() throws {
-        let owner = RenderEncoder(context: context)
-        owner.resize((width: 64, height: 64))
-        let other = RenderEncoder(context: context)
-        other.resize((width: 64, height: 64))
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(owner, camera: makeCamera(), commandBuffer: commandBuffer)
-
-        XCTAssertThrowsError(try other.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))) { error in
-            XCTAssertEqual(error as? RenderSubmission.Error, .foreignEncoder)
-        }
-        XCTAssertFalse(submission.isConsumed, "a rejected submission stays usable")
-
-        try owner.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-        XCTAssertNil(commandBuffer.error)
-        XCTAssertTrue(submission.isConsumed, "it draws on the encoder that made it")
     }
 
     func testAMismatchedRenderTargetLeavesTheDescriptorAsItWas() throws {
@@ -522,7 +503,7 @@ final class SubmissionRecordTests: XCTestCase {
                 let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
 
                 XCTAssertThrowsError(try draw(renderPassDescriptor, commandBuffer)) { error in
-                    guard case .destinationMismatch = error as? RenderSubmission.Error else {
+                    guard case .destinationMismatch = error as? SubmissionError else {
                         return XCTFail("expected a destination mismatch, got \(error)")
                     }
                 }
@@ -532,75 +513,54 @@ final class SubmissionRecordTests: XCTestCase {
         }
     }
 
-    func testADrawnSubmissionRejectsASecondDrawAndAnotherRecord() throws {
-        let encoder = RenderEncoder(context: context)
-        encoder.resize((width: 64, height: 64))
-        let submission = try makeSubmission(encoder, camera: makeCamera())
-        try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
-
-        XCTAssertThrowsError(try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))) { error in
-            XCTAssertEqual(error as? RenderSubmission.Error, .alreadyDrawn)
-        }
-        XCTAssertThrowsError(try submission.record(scene: makeScene().root)) { error in
-            XCTAssertEqual(error as? RenderSubmission.Error, .alreadyDrawn)
-        }
-    }
-
-    func testSubmissionsOnOneCommandBufferEncodeInDrawOrder() throws {
+    func testASealedBuilderRejectsASecondSealAndAnotherRecord() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((width: 64, height: 64))
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let sink = CapturedValueSink()
-        let material = CapturingMaterial(context: context)
-        material.sink = sink
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        try submission.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+
+        try submission.seal().encode(into: commandBuffer)
+
+        XCTAssertThrowsError(try submission.seal()) { error in
+            XCTAssertEqual(error as? SubmissionError, .alreadyDrawn)
+        }
+        XCTAssertThrowsError(try submission.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor())) { error in
+            XCTAssertEqual(error as? SubmissionError, .alreadyDrawn)
+        }
+        XCTAssertThrowsError(try submission.record(scene: makeScene().root)) { error in
+            XCTAssertEqual(error as? SubmissionError, .alreadyDrawn)
+        }
+    }
+
+    func testSubmissionsKeepTheirOwnRecordsWhateverOrderTheyAreRecordedIn() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 64, height: 64))
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let material = BasicColorMaterial(context: context)
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: material)
         let root = Object(context: context, label: "Ordered", [mesh])
         mesh.update()
 
-        let first = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-        let second = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-        material.capturedValue = 2
+        let first = try makeSubmission(encoder, camera: makeCamera())
+        let second = try makeSubmission(encoder, camera: makeCamera())
+        material.color = [2, 0, 0, 1]
         try second.record(scene: root)
-        material.capturedValue = 1
+        material.color = [1, 0, 0, 1]
         try first.record(scene: root)
 
-        try encoder.draw(submission: first, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
-        try encoder.draw(submission: second, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
+        try first.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try first.seal().encode(into: commandBuffer)
+        try second.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try second.seal().encode(into: commandBuffer)
+        let firstRecorded = recordedColorRed(in: first.recorder.storage)
+        let secondRecorded = recordedColorRed(in: second.recorder.storage)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
         XCTAssertNil(commandBuffer.error)
-        XCTAssertEqual(sink.values, [1, 2], "each submission encodes when it is drawn, whatever order they were recorded in")
-    }
-
-    func testRetainUntilCompletedKeepsAnOwnerUntilItsCommandBufferCompletes() throws {
-        final class Owner {}
-        let encoder = RenderEncoder(context: context)
-        encoder.resize((width: 64, height: 64))
-        weak var completedOwner: Owner?
-        weak var abandonedOwner: Owner?
-
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
-        do {
-            let owner = Owner()
-            completedOwner = owner
-            submission.retainUntilCompleted(owner)
-        }
-        try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
-        XCTAssertNotNil(completedOwner, "kept alive while the command buffer is in flight")
-        complete(commandBuffer)
-        XCTAssertNil(completedOwner, "and released once it completes")
-
-        try autoreleasepool {
-            let abandoned = try makeSubmission(encoder, camera: makeCamera())
-            let owner = Owner()
-            abandonedOwner = owner
-            abandoned.retainUntilCompleted(owner)
-        }
-        // Reclaiming happens on the arena's next allocation.
-        _ = try makeSubmission(encoder, camera: makeCamera()).encodingContext.allocate(length: 16)
-        XCTAssertNil(abandonedOwner, "an abandoned command buffer's owners are released when its region is reclaimed")
+        XCTAssertEqual(firstRecorded, [1], "each submission draws what was recorded into it")
+        XCTAssertEqual(secondRecorded, [2])
     }
 }
 

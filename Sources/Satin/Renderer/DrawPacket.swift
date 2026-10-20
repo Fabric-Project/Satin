@@ -28,11 +28,14 @@ struct DrawPacket {
     var debugLabelIndex: Int32
 }
 
-/// A packet's draw call. `custom` means one of its custom commands issued the draw.
+/// A packet's draw call, as data: vertices, indices, tessellation patches or mesh-shader threadgroups.
 enum PacketDrawCall {
     case primitives(MTLPrimitiveType, vertexStart: Int, vertexCount: Int, instanceCount: Int)
     case indexedPrimitives(MTLPrimitiveType, indexCount: Int, indexType: MTLIndexType, indexBufferIndex: Int32, indexBufferOffset: Int, instanceCount: Int)
-    case custom
+    case patches(controlPointCount: Int, patchCount: Int, instanceCount: Int)
+    /// `controlPointIndexBufferIndex` is into the storage's buffers.
+    case indexedPatches(controlPointCount: Int, patchCount: Int, controlPointIndexBufferIndex: Int32, instanceCount: Int)
+    case meshThreadgroups(MTLSize, threadsPerObjectThreadgroup: MTLSize, threadsPerMeshThreadgroup: MTLSize)
 }
 
 /// One recorded command, in the order it was recorded. References are indices into the storage's
@@ -51,7 +54,12 @@ enum PacketCommand {
     case fragmentTexture(textureIndex: Int32, slot: FragmentTextureIndex)
     case fragmentPBRTexture(textureIndex: Int32, type: PBRTextureType)
     case fragmentSampler(samplerIndex: Int32, slot: FragmentSamplerIndex)
-    case custom(commandIndex: Int32)
+    // Mesh-shader stages.
+    case objectBuffer(bufferIndex: Int32, offset: Int, slot: ObjectBufferIndex)
+    case meshBuffer(bufferIndex: Int32, offset: Int, slot: MeshBufferIndex)
+    case perViewObjectBuffer(bufferIndex: Int32, offset: Int, slot: ObjectBufferIndex)
+    case perViewMeshBuffer(bufferIndex: Int32, offset: Int, slot: MeshBufferIndex)
+    case tessellationFactorBuffer(bufferIndex: Int32, offset: Int, instanceStride: Int)
 }
 
 // MARK: - Storage
@@ -75,12 +83,15 @@ final class PacketStorage {
 
     private(set) var tables = PacketTables()
 
+    /// The encoder state this storage's submission encodes with, reused with the storage so encoding
+    /// allocates none. A storage is leased to one submission at a time, which encodes once.
+    let encoderState = RenderEncoderState()
+
     var runs: ContiguousArray<PacketTables.PacketRun> { tables.runs }
     var packets: ContiguousArray<DrawPacket> { tables.packets }
     var packetCount: Int { tables.packets.count }
     var commands: ContiguousArray<PacketCommand> { tables.commands }
     var buffers: ContiguousArray<MTLBuffer> { tables.buffers }
-    var customCommands: ContiguousArray<(MTLRenderCommandEncoder) -> Void> { tables.customCommands }
 
     func reset() { tables.reset() }
 
@@ -97,6 +108,8 @@ final class PacketStorage {
 
     func beginMaterial() { tables.beginMaterial() }
     func endRecording() { tables.endRecording() }
+    var recordingPipelineUsage: PipelineResourceUsage? { tables.pendingPipelineUsage }
+
     func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage? = nil) { tables.setPipeline(pipeline, usage: usage) }
 
     func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
@@ -127,8 +140,16 @@ final class PacketStorage {
         tables.appendFragmentSampler(sampler, slot: slot)
     }
 
-    func appendCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
-        tables.appendCustomCommand(command)
+    func appendObjectBuffer(_ buffer: MTLBuffer, offset: Int, slot: ObjectBufferIndex) {
+        tables.appendObjectBuffer(buffer, offset: offset, slot: slot)
+    }
+
+    func appendMeshBuffer(_ buffer: MTLBuffer, offset: Int, slot: MeshBufferIndex) {
+        tables.appendMeshBuffer(buffer, offset: offset, slot: slot)
+    }
+
+    func appendTessellationFactorBuffer(_ buffer: MTLBuffer, offset: Int, instanceStride: Int) {
+        tables.appendTessellationFactorBuffer(buffer, offset: offset, instanceStride: instanceStride)
     }
 
     /// The index buffer of an indexed draw is kept with the other buffers.
@@ -142,12 +163,6 @@ final class PacketStorage {
     /// bindings by the captured byte offset.
     func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewOffset: Int = 0) where PacketIndices.Element == Int {
         tables.encode(packetIndices, into: state, viewOffset: viewOffset)
-    }
-
-    /// Whether `packets` encode correctly for any view of their render event: none runs a custom
-    /// command, which may have captured the event's vertex uniforms for its first view.
-    func packetsServeEveryView(_ packets: Range<Int>) -> Bool {
-        tables.packetsServeEveryView(packets)
     }
 
     func pipeline(ofPacketAt packetIndex: Int) -> MTLRenderPipelineState {
@@ -184,7 +199,6 @@ struct PacketTables {
     private(set) var samplers = ContiguousArray<MTLSamplerState>()
     private(set) var pipelines = ContiguousArray<MTLRenderPipelineState>()
     private(set) var depthStencilStates = ContiguousArray<MTLDepthStencilState>()
-    private(set) var customCommands = ContiguousArray<(MTLRenderCommandEncoder) -> Void>()
 #if DEBUG
     private(set) var debugLabels = ContiguousArray<String>()
 #endif
@@ -197,7 +211,6 @@ struct PacketTables {
         var samplers = 0
         var pipelines = 0
         var depthStencilStates = 0
-        var customCommands = 0
     }
 
     // The packet being built.
@@ -207,7 +220,7 @@ struct PacketTables {
     /// The first buffer entry of the recording in progress: a buffer appended again in the same
     /// recording reuses its entry, never one from an earlier recording.
     private var recordingBufferStart = 0
-    private var pendingPipelineUsage: PipelineResourceUsage?
+    private(set) var pendingPipelineUsage: PipelineResourceUsage?
     private var pendingPipelineIndex: Int32 = -1
     private var pendingDepthStencilStateIndex: Int32 = -1
     private var pendingSetsDepthState = false
@@ -235,7 +248,6 @@ struct PacketTables {
         samplers.removeAll(keepingCapacity: true)
         pipelines.removeAll(keepingCapacity: true)
         depthStencilStates.removeAll(keepingCapacity: true)
-        customCommands.removeAll(keepingCapacity: true)
 #if DEBUG
         debugLabels.removeAll(keepingCapacity: true)
 #endif
@@ -281,8 +293,7 @@ struct PacketTables {
             textures: ownStart.textures,
             samplers: ownStart.samplers,
             pipelines: ownStart.pipelines,
-            depthStencilStates: ownStart.depthStencilStates,
-            customCommands: ownStart.customCommands
+            depthStencilStates: ownStart.depthStencilStates
         ))
         prefixLength = nil
     }
@@ -294,8 +305,7 @@ struct PacketTables {
             textures: textures.count,
             samplers: samplers.count,
             pipelines: pipelines.count,
-            depthStencilStates: depthStencilStates.count,
-            customCommands: customCommands.count
+            depthStencilStates: depthStencilStates.count
         )
         pendingPipelineIndex = -1
         pendingPipelineUsage = nil
@@ -314,7 +324,6 @@ struct PacketTables {
         samplers.removeSubrange(marks.samplers...)
         pipelines.removeSubrange(marks.pipelines...)
         depthStencilStates.removeSubrange(marks.depthStencilStates...)
-        customCommands.removeSubrange(marks.customCommands...)
     }
 
     mutating func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage?) {
@@ -387,9 +396,26 @@ struct PacketTables {
         commands.append(.fragmentSampler(samplerIndex: Int32(samplers.count - 1), slot: slot))
     }
 
-    mutating func appendCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
-        customCommands.append(command)
-        commands.append(.custom(commandIndex: Int32(customCommands.count - 1)))
+    mutating func appendObjectBuffer(_ buffer: MTLBuffer, offset: Int, slot: ObjectBufferIndex) {
+        let bufferIndex = appendBuffer(buffer)
+        if isRecordingVertexUniforms(buffer, offset: offset) {
+            commands.append(.perViewObjectBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        } else {
+            commands.append(.objectBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        }
+    }
+
+    mutating func appendMeshBuffer(_ buffer: MTLBuffer, offset: Int, slot: MeshBufferIndex) {
+        let bufferIndex = appendBuffer(buffer)
+        if isRecordingVertexUniforms(buffer, offset: offset) {
+            commands.append(.perViewMeshBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        } else {
+            commands.append(.meshBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        }
+    }
+
+    mutating func appendTessellationFactorBuffer(_ buffer: MTLBuffer, offset: Int, instanceStride: Int) {
+        commands.append(.tessellationFactorBuffer(bufferIndex: appendBuffer(buffer), offset: offset, instanceStride: instanceStride))
     }
 
     private mutating func textureIndex(_ texture: MTLTexture?) -> Int32 {
@@ -407,15 +433,6 @@ struct PacketTables {
             return
         }
 
-        let unprunedEnd = commands.count
-        let sharedCount = prefixLength ?? 0
-        for commandIndex in packetCommandStart ..< packetCommandStart + sharedCount {
-            commands.append(commands[commandIndex])
-        }
-        let commandEnd = pruneBindings(in: packetCommandStart ..< unprunedEnd)
-        for offset in 0 ..< sharedCount { commands[commandEnd + offset] = commands[unprunedEnd + offset] }
-        commands.removeSubrange((commandEnd + sharedCount)...)
-
         packets.append(DrawPacket(
             pipelineIndex: pendingPipelineIndex,
             depthStencilStateIndex: pendingDepthStencilStateIndex,
@@ -427,26 +444,17 @@ struct PacketTables {
             triangleFillMode: recordingTriangleFillMode,
             renderOrder: recordingRenderOrder,
             commandStart: Int32(packetCommandStart),
-            commandCount: Int32(commandEnd - packetCommandStart),
+            commandCount: Int32(commands.count - packetCommandStart),
             drawCall: drawCall,
             debugLabelIndex: recordingDebugLabelIndex
         ))
 
-        packetCommandStart = commandEnd
-        startOwnCommands()
-    }
-
-    /// Custom commands can replace the pipeline or issue their own draws. Preserve their entire
-    /// packet, including the shared prefix, rather than infer what an opaque closure will read.
-    private mutating func pruneBindings(in range: Range<Int>) -> Int {
-        guard let usage = pendingPipelineUsage else { return range.upperBound }
-        for index in range { if case .custom = commands[index] { return range.upperBound } }
-        var destination = range.lowerBound
-        for index in range where usage.uses(commands[index]) {
-            if destination != index { commands[destination] = commands[index] }
-            destination += 1
+        let finishedStart = packetCommandStart
+        packetCommandStart = commands.count
+        for commandIndex in finishedStart ..< finishedStart + (prefixLength ?? 0) {
+            commands.append(commands[commandIndex])
         }
-        return destination
+        startOwnCommands()
     }
 
     // MARK: Encoding
@@ -459,24 +467,12 @@ struct PacketTables {
         }
     }
 
-    mutating func packetsServeEveryView(_ packetRange: Range<Int>) -> Bool {
-        for packetIndex in packetRange {
-            let packet = packets[packetIndex]
-            for commandIndex in Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount) {
-                if case .custom = commands[commandIndex] { return false }
-            }
-        }
-        return true
-    }
-
     private mutating func encode(_ packet: DrawPacket, into state: RenderEncoderState, viewOffset: Int) {
         let renderEncoder = state.renderEncoder
 #if DEBUG
         renderEncoder.pushDebugGroup(debugLabels[Int(packet.debugLabelIndex)])
         defer { renderEncoder.popDebugGroup() }
 #endif
-        // After a custom command, the pass is put back before this packet sets its own state.
-        state.beginPacket()
         state.cullMode = packet.cullMode
         state.windingOrder = packet.windingOrder
         state.triangleFillMode = packet.triangleFillMode
@@ -506,11 +502,16 @@ struct PacketTables {
                 state.setFragmentPBRTexture(texture(at: textureIndex), type: type)
             case let .fragmentSampler(samplerIndex, slot):
                 renderEncoder.setFragmentSamplerState(samplers[Int(samplerIndex)], index: slot.rawValue)
-            case let .custom(commandIndex):
-                customCommands[Int(commandIndex)](renderEncoder)
-                // A custom command may set anything: forget what the encoder is known to hold.
-                // What it set holds for the rest of this packet; the next one starts from the pass.
-                state.invalidate()
+            case let .objectBuffer(bufferIndex, offset, slot):
+                renderEncoder.setObjectBuffer(buffers[Int(bufferIndex)], offset: offset, index: slot.rawValue)
+            case let .meshBuffer(bufferIndex, offset, slot):
+                renderEncoder.setMeshBuffer(buffers[Int(bufferIndex)], offset: offset, index: slot.rawValue)
+            case let .perViewObjectBuffer(bufferIndex, offset, slot):
+                renderEncoder.setObjectBuffer(buffers[Int(bufferIndex)], offset: offset + viewOffset, index: slot.rawValue)
+            case let .perViewMeshBuffer(bufferIndex, offset, slot):
+                renderEncoder.setMeshBuffer(buffers[Int(bufferIndex)], offset: offset + viewOffset, index: slot.rawValue)
+            case let .tessellationFactorBuffer(bufferIndex, offset, instanceStride):
+                renderEncoder.setTessellationFactorBuffer(buffers[Int(bufferIndex)], offset: offset, instanceStride: instanceStride)
             }
         }
 
@@ -526,8 +527,17 @@ struct PacketTables {
                 indexBufferOffset: indexBufferOffset,
                 instanceCount: instanceCount
             )
-        case .custom:
-            break
+        case let .patches(controlPointCount, patchCount, instanceCount):
+            renderEncoder.drawPatches(numberOfPatchControlPoints: controlPointCount, patchStart: 0, patchCount: patchCount,
+                                      patchIndexBuffer: nil, patchIndexBufferOffset: 0, instanceCount: instanceCount, baseInstance: 0)
+        case let .indexedPatches(controlPointCount, patchCount, controlPointIndexBufferIndex, instanceCount):
+            renderEncoder.drawIndexedPatches(numberOfPatchControlPoints: controlPointCount, patchStart: 0, patchCount: patchCount,
+                                             patchIndexBuffer: nil, patchIndexBufferOffset: 0,
+                                             controlPointIndexBuffer: buffers[Int(controlPointIndexBufferIndex)], controlPointIndexBufferOffset: 0,
+                                             instanceCount: instanceCount, baseInstance: 0)
+        case let .meshThreadgroups(threadgroups, threadsPerObjectThreadgroup, threadsPerMeshThreadgroup):
+            renderEncoder.drawMeshThreadgroups(threadgroups, threadsPerObjectThreadgroup: threadsPerObjectThreadgroup,
+                                               threadsPerMeshThreadgroup: threadsPerMeshThreadgroup)
         }
     }
 

@@ -72,7 +72,7 @@ final class CullingTests: XCTestCase {
         let encoder = RenderEncoder(context: context)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = encoder.makeSubmission(frame: .zero, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+        let submission = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
         try submission.record(scene: Object(context: context, label: "Scene", [mesh]))
         return submission.recorder.storage.runs.reduce(0) { $0 + $1.packets.count }
     }
@@ -119,9 +119,8 @@ final class CullingTests: XCTestCase {
         XCTAssertEqual(PacketRecorder.viewSlotStride % 256, 0)
         XCTAssertGreaterThanOrEqual(PacketRecorder.viewSlotStride, PacketRecorder.vertexUniformsStride)
 
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let storage = PacketStoragePool().lease()
-        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: context.device), commandBuffer: commandBuffer, frame: .zero)
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: context.device).lease(frame: .zero))
         let mesh = makeMesh(at: .zero)
         mesh.beginOccurrence(frame: .zero)
         let cameras = [
@@ -184,21 +183,24 @@ final class CullingTests: XCTestCase {
         XCTAssertEqual(caster.shadowDraws, 0, "outside every face's far plane")
     }
 
-    func testACasterWithACustomCommandIsRecordedPerFace() throws {
+    func testRecordingPerFaceRecordsACasterOnceForEachFace() throws {
+        PointShadow.recordsCastersOnceForAllFaces = false
+        defer { PointShadow.recordsCastersOnceForAllFaces = true }
         let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
-        caster.addsShadowCustomCommand = true
         caster.frustumCulled = false
 
         try draw(makePointLightScene(caster: caster))
 
-        XCTAssertEqual(caster.shadowDraws, 1 + 6, "the shared recording, then one per face")
+        XCTAssertEqual(caster.shadowDraws, 6)
     }
 
     /// The same lit, point-shadowed scene, its caster recorded once for every face or once per
     /// face, renders the same pixels.
     func testRecordingOnceForEveryFaceShadowsExactlyAsRecordingPerFace() throws {
         func render(perFace: Bool, castsShadow: Bool = true) throws -> RGBAImage {
-            try VisualTestHarness.render(size: [96, 96]) { renderer, camera in
+            PointShadow.recordsCastersOnceForAllFaces = !perFace
+            defer { PointShadow.recordsCastersOnceForAllFaces = true }
+            return try VisualTestHarness.render(size: [96, 96]) { renderer, camera in
                 let context = renderer.context
                 let light = PointLight(context: context, color: [1, 1, 1], intensity: 6, radius: 30)
                 light.position = [0.5, 2.5, 0.5]
@@ -209,7 +211,6 @@ final class CullingTests: XCTestCase {
                 floor.receiveShadow = true
                 let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: StandardMaterial(context: context))
                 caster.castShadow = castsShadow
-                caster.addsShadowCustomCommand = perFace
                 return (scene: Object(context: context, label: "Scene", [light, floor, caster]), camera: camera)
             }
         }
@@ -223,18 +224,13 @@ final class CullingTests: XCTestCase {
     }
 }
 
-/// Counts its shadow-pass recordings; can add a no-op custom command to them, which makes a point
-/// light record it per face.
+/// Counts its shadow-pass recordings.
 private final class DrawCountingMesh: Mesh {
     var shadowDraws = 0
-    var addsShadowCustomCommand = false
 
     override func draw(in context: RenderableDrawContext) {
         if context.pass == .shadow {
             shadowDraws += 1
-            if addsShadowCustomCommand {
-                context.addCustomCommand { _ in }
-            }
         }
         super.draw(in: context)
     }

@@ -453,7 +453,8 @@ open class Material: Codable {
 
     /// Records what drawing with this material needs for one draw: its pipeline for the pass and
     /// layout, depth state, uniforms, buffers and textures. Subclasses add their own bindings and
-    /// call `super`; state the context doesn't model goes through `context.addCustomCommand`.
+    /// call `super`, through the context's typed bindings (object, mesh and tessellation stages
+    /// included).
     open func draw(in context: MaterialDrawContext) {
         let shadow = context.isShadowPass
         // Read once for the whole draw: a class property read is a checked access each time.
@@ -464,21 +465,26 @@ open class Material: Codable {
         // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
         // a layout variant's included, and the bindings below are made from that.
         let pipeline = shader.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
-        recordUniforms(in: context)
+        let usage = pipeline.flatMap { shader.resourceUsage(for: $0) }
+        recordUniforms(in: context, shader: shader, shadow: shadow, usage: usage)
         recordDepthState(in: context, shadow: shadow)
-        recordBuffers(in: context)
-        recordTextures(in: context)
+        recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
+        recordTextures(in: context, shader: shader, conservative: shadow || usage == nil)
         if let pipeline {
-            context.setPipeline(pipeline, usage: shader.resourceUsage(for: pipeline))
+            context.setPipeline(pipeline, usage: usage)
         }
     }
 
-    private func recordUniforms(in context: MaterialDrawContext) {
+    private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool, usage: PipelineResourceUsage?) {
         guard let uniforms = uniformsBinding(in: context) else { return }
-        // Gather before pruning: custom commands may substitute another pipeline. A reflected
-        // packet without custom commands keeps only what its actual pipeline reads at finish.
-        context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
-        context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+
+        if shader.vertexWantsMaterialUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.MaterialUniforms.rawValue) ?? true) {
+            context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+        }
+
+        if (!shadow && shader.fragmentWantsMaterialUniforms) || (usage?.fragment.buffers.contains(FragmentBufferIndex.MaterialUniforms.rawValue) ?? true) {
+            context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+        }
     }
 
     /// This material's uniforms as they are now, in the draw's arena: the slice its draws bind,
@@ -519,39 +525,58 @@ open class Material: Codable {
         )
     }
 
-    private func recordBuffers(in context: MaterialDrawContext) {
-        for slot in vertexBufferSlots.indices {
-            guard let index = VertexBufferIndex(rawValue: slot) else { continue }
+    private func recordBuffers(in context: MaterialDrawContext, shader: Shader, conservative: Bool) {
+        let vertexIndices = shader.vertexBufferBindingIsUsed
+        let vertexCount = conservative ? vertexBufferSlots.count : vertexIndices.count
+        for position in 0 ..< vertexCount {
+            guard let index = conservative ? VertexBufferIndex(rawValue: position) : vertexIndices[position] else { continue }
+            let slot = index.rawValue
+            guard slot < vertexBufferSlots.count else { continue }
             if let uniformBuffer = vertexBufferSlots[slot].uniformBuffer {
-                context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
+                // Ring slots are rewritten in place: the recording keeps its own copy.
+                context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
             } else if let structBuffer = vertexBufferSlots[slot].structBuffer {
-                context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
+                context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                                        copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
             } else if let buffer = vertexBufferSlots[slot].buffer {
                 context.setVertexBuffer(buffer, offset: 0, index: index)
             }
         }
 
-        for slot in fragmentBufferSlots.indices {
-            guard let index = FragmentBufferIndex(rawValue: slot) else { continue }
+        let fragmentIndices = shader.fragmentBufferBindingIsUsed
+        let fragmentCount = conservative ? fragmentBufferSlots.count : fragmentIndices.count
+        for position in 0 ..< fragmentCount {
+            guard let index = conservative ? FragmentBufferIndex(rawValue: position) : fragmentIndices[position] else { continue }
+            let slot = index.rawValue
+            guard slot < fragmentBufferSlots.count else { continue }
             if let uniformBuffer = fragmentBufferSlots[slot].uniformBuffer {
-                context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index)
+                context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
             } else if let structBuffer = fragmentBufferSlots[slot].structBuffer {
-                context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index)
+                context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                                          copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
             } else if let buffer = fragmentBufferSlots[slot].buffer {
                 context.setFragmentBuffer(buffer, offset: 0, index: index)
             }
         }
     }
 
-    private func recordTextures(in context: MaterialDrawContext) {
-        for slot in vertexTextureSlots.indices {
-            if let index = VertexTextureIndex(rawValue: slot), let texture = vertexTextureSlots[slot] {
+    private func recordTextures(in context: MaterialDrawContext, shader: Shader, conservative: Bool) {
+        let vertexIndices = shader.vertexTextureBindingIsUsed
+        let vertexCount = conservative ? vertexTextureSlots.count : vertexIndices.count
+        for position in 0 ..< vertexCount {
+            guard let index = conservative ? VertexTextureIndex(rawValue: position) : vertexIndices[position] else { continue }
+            let slot = index.rawValue
+            if slot < vertexTextureSlots.count, let texture = vertexTextureSlots[slot] {
                 context.setVertexTexture(texture, index: index)
             }
         }
 
-        for slot in fragmentTextureSlots.indices {
-            if let index = FragmentTextureIndex(rawValue: slot), let texture = fragmentTextureSlots[slot] {
+        let fragmentIndices = shader.fragmentTextureBindingIsUsed
+        let fragmentCount = conservative ? fragmentTextureSlots.count : fragmentIndices.count
+        for position in 0 ..< fragmentCount {
+            guard let index = conservative ? FragmentTextureIndex(rawValue: position) : fragmentIndices[position] else { continue }
+            let slot = index.rawValue
+            if slot < fragmentTextureSlots.count, let texture = fragmentTextureSlots[slot] {
                 context.setFragmentTexture(texture, index: index)
             }
         }

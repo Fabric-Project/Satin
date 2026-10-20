@@ -186,9 +186,12 @@ Model loading now collapses object hierarchies which do not have meshes, reducin
 Satin 2.0 records each draw into plain-data render packets and encodes them per pass, in place of objects encoding themselves into the live encoder. See [MIGRATION.md](MIGRATION.md) for every API change.
 
 * Drawing takes the frame being drawn (`draw(frame:…)`) and throws on a mismatched or misused submission. Renderers' `update(frame:)` overrides must call `super` first.
-* Rendering a scene more than once a frame uses one `RenderSubmission` with a `record(scene:)` per iteration, replacing repeated encoding. Each record snapshots its transforms, uniforms, instances and joint palettes.
+* Rendering a scene more than once a frame uses one `SubmissionBuilder` with a `record(scene:)` per iteration, replacing repeated encoding; `RenderSubmission` and `draw(submission:)` are gone. Each record snapshots its transforms, uniforms, instances and joint palettes.
 * Motion vectors are tracked per occurrence of an object, so iterated and recorded draws get correct velocity.
-* Customisation goes through `draw(in:)` on renderables, materials and geometry, with custom commands that last for their own draw; `preDraw` and `onBind` are gone.
+* Customisation goes through `draw(in:)` on renderables, materials and geometry, recording typed bindings and draws (vertex, fragment, object and mesh stage buffers, tessellation factors, patch and mesh-threadgroup draws); `preDraw`, `onBind` and custom command closures are gone.
+* Recorded work is self-contained: values, frame-arena slices and Metal resources. `retainUntilCompleted(_:)` is gone, and completion never touches a scene object.
+* `Shadow.needsUpdate` clears when the shadow's passes are recorded; `RenderEncoder.abandon(_:)` releases sealed work that will never be encoded and marks its shadows dirty again.
+* `RenderEncoderState` drops its pass-state restore machinery (`invalidate()` and the other `begin` variants).
 * GPU work per frame goes through `encode(in: EncodingContext)`, writing to per-frame arena slices so repeated encodes never overwrite each other.
 
 ## Model Loading

@@ -202,13 +202,19 @@ open class Mesh: Renderable {
 
     // MARK: - Binding
 
-    /// Records both stages before packet pruning selects what the resolved pipeline reads.
-    /// Unreflected pipelines and custom commands retain both, including custom shadow fragments.
+    /// Binds the render event's vertex uniforms to the stages `material`'s shader reads them in.
+    /// Called after the material records, so its pipeline, and with it which stages read them, is
+    /// known. Repeat bindings across submeshes are skipped when the draws encode.
     func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) {
-        guard material.shader != nil else { return }
+        guard let shader = material.shader else { return }
         let vertexUniforms = context.vertexUniforms
-        context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
-        context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        let usage = context.storage.recordingPipelineUsage
+        if shader.vertexWantsVertexUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.VertexUniforms.rawValue) ?? true) {
+            context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        }
+        if shader.fragmentWantsVertexUniforms || (usage?.fragment.buffers.contains(FragmentBufferIndex.VertexUniforms.rawValue) ?? true) {
+            context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+        }
     }
 
     // MARK: - Update

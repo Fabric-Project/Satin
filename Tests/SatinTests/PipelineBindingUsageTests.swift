@@ -46,11 +46,11 @@ final class PipelineBindingUsageTests: XCTestCase {
         }
     }
 
-    func testDefaultShadowPrunesUnusedSeparateAttributesAndMaterialUniforms() {
+    func testDefaultShadowKeepsConservativeGeometryBindingsWithoutPacketPruning() {
         let mesh = Mesh(context: context, geometry: geometry(), material: PhysicalMaterial(context: context))
         let (recorder, packets) = record(mesh, pass: .shadow)
         XCTAssertEqual(packets.count, 1)
-        XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .VertexUniforms]))
+        XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .Normal, .Texcoord, .MaterialUniforms, .VertexUniforms]))
         let color = record(mesh, pass: .color, recorder: recorder)
         let slots = vertexSlots(commands(color.0, color.1))
         XCTAssertTrue(slots.contains(.Normal), "pruning a shadow must not alter colour usage")
@@ -100,17 +100,21 @@ final class PipelineBindingUsageTests: XCTestCase {
         XCTAssertTrue(slots.contains(.Normal))
         XCTAssertTrue(slots.contains(.MaterialUniforms))
         XCTAssertTrue(slots.contains(.Custom0), "a shadow-only buffer must not depend on colour reflection")
-        XCTAssertFalse(slots.contains(.Texcoord))
+        XCTAssertTrue(slots.contains(.Texcoord), "geometry binding is conservative again")
         let textures: [VertexTextureIndex] = recorded.compactMap { if case let .vertexTexture(_,slot) = $0 { return slot }; return nil }
-        XCTAssertEqual(textures, [.Custom0], "keep the sampled displacement texture, prune the unused one")
+        XCTAssertEqual(textures, [.Custom0, .Custom1], "shadow custom resources remain conservative without packet pruning")
         _ = record(Mesh(context: context, geometry: geometry(), material: material), pass: .color, recorder: recorder)
         let again = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow, recorder: recorder)
         XCTAssertTrue(vertexSlots(commands(again.0, again.1)).contains(.Custom0))
         let source = try String(contentsOf: shader.pipelineURL, encoding: .utf8)
-        try source.replacing("in.normal *", with: "float3(0,0,1) *").write(to: shader.pipelineURL, atomically: true, encoding: .utf8)
+        try source.replacing("+ offset", with: "+ 0.0").write(to: shader.pipelineURL, atomically: true, encoding: .utf8)
         shader.reloadFromSource()
-        let reloaded = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
-        XCTAssertFalse(vertexSlots(commands(reloaded.0, reloaded.1)).contains(.Normal), "reload must rebuild usage too")
+        let reloadedMesh = Mesh(context: context, geometry: geometry(), material: material)
+        let reloaded = record(reloadedMesh, pass: .shadow)
+        XCTAssertTrue(vertexSlots(commands(reloaded.0, reloaded.1)).contains(.Custom0), "registered custom shadow buffers stay available")
+        let pipeline = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: true, layout: reloadedMesh.drawLayout))
+        let usage = try XCTUnwrap(shader.resourceUsage(for: pipeline))
+        XCTAssertFalse(usage.vertex.buffers.contains(VertexBufferIndex.Custom0.rawValue), "reload must rebuild cached requirements")
     }
 
     func testShadowFallbackToColourVertexKeepsItsRequiredResources() throws {
@@ -127,7 +131,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         material.set(try XCTUnwrap(device.makeBuffer(length: 256, options: .storageModeShared)), index: VertexBufferIndex.Custom0)
         let (recorder, packets) = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
         XCTAssertEqual(packets.count, 1)
-        XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .Normal, .Custom0]))
+        XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .Normal, .Texcoord, .Custom0]))
     }
 
     func testTextureArraysKeepEveryUsedElementAndDropUnrelatedTextures() throws {
@@ -147,7 +151,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         XCTAssertEqual(textures, [.Custom0, .Custom1])
     }
 
-    func testPruningOnePacketPreservesTheSharedPrefixForOtherPipelines() throws {
+    func testDirectPacketFinishingPreservesTheSharedPrefixForOtherPipelines() throws {
         let material = PhysicalMaterial(context: context)
         let mesh = Mesh(context: context, geometry: geometry(), material: material)
         mesh.castShadow = true
@@ -181,7 +185,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         let slots = storage.packets.map { packet in
             vertexSlots(Array(storage.commands[Int(packet.commandStart)..<Int(packet.commandStart + packet.commandCount)]))
         }
-        XCTAssertEqual(slots[0], [])
+        XCTAssertEqual(slots[0], [.Custom0], "packet finishing no longer scans and compacts bindings")
         XCTAssertEqual(slots[1], [.Custom0], "a later pipeline still receives the original prefix")
         XCTAssertEqual(slots[2], [.Custom0], "an unreflected pipeline remains conservative")
     }
@@ -265,22 +269,5 @@ final class PipelineBindingUsageTests: XCTestCase {
         XCTAssertEqual(depths[0], 0, accuracy: 0.001, "transparent texels must not cast a square")
         XCTAssertEqual(depths[1], 0.5, accuracy: 0.001, "opaque texels must still write shadow depth")
         XCTAssertGreaterThanOrEqual(shader.shadowBuilds, 2)
-    }
-
-    private final class CustomCommandMesh: Mesh {
-        override func draw(in context: RenderableDrawContext) {
-            context.addCustomCommand { _ in }
-            super.draw(in: context)
-        }
-    }
-
-    func testCustomEncoderCommandsRemainConservative() {
-        let mesh = CustomCommandMesh(context: context, geometry: geometry(), material: PhysicalMaterial(context: context))
-        let (recorder, packets) = record(mesh, pass: .shadow)
-        XCTAssertEqual(packets.count, 1)
-        let slots = vertexSlots(commands(recorder, packets))
-        XCTAssertTrue(slots.contains(.Normal))
-        XCTAssertTrue(slots.contains(.Texcoord))
-        XCTAssertTrue(slots.contains(.MaterialUniforms))
     }
 }

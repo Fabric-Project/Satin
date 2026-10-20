@@ -88,26 +88,15 @@ public final class PacketRecorder {
     var passBindings = RenderPassBindings()
     let storage: PacketStorage
     let frame: FrameTime
-    private enum Allocation {
-        case lease(FrameArena.Lease)
-        case immediate(FrameArena, MTLCommandBuffer)
-    }
-    private let allocation: Allocation
+    private let lease: FrameArena.Lease
 
     /// The record in progress; `beginRecord()` starts the next.
     private(set) var recordToken: RecordToken
 
-    init(storage: PacketStorage, arena: FrameArena, commandBuffer: MTLCommandBuffer, frame: FrameTime) {
-        self.storage = storage
-        allocation = .immediate(arena, commandBuffer)
-        self.frame = frame
-        recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: 0)
-    }
-
-    /// Producer recording path: allocation and snapshots do not need a command buffer.
+    /// Allocation and snapshots come from the frame's lease: recording needs no command buffer.
     init(storage: PacketStorage, lease: FrameArena.Lease) {
         self.storage = storage
-        allocation = .lease(lease)
+        self.lease = lease
         frame = lease.frame
         recordToken = RecordToken(leaseToken: storage.leaseToken, recordIndex: 0)
     }
@@ -119,10 +108,7 @@ public final class PacketRecorder {
 
     /// `length` bytes valid until this draw's command buffer completes, for a snapshot.
     func allocate(length: Int) -> FrameArena.Slice {
-        switch allocation {
-            case let .lease(lease): return lease.allocate(length: length)
-            case let .immediate(arena, commandBuffer): return arena.allocate(length: length, commandBuffer: commandBuffer)
-        }
+        lease.allocate(length: length)
     }
 
     /// Copies pass data at its stride, into storage unique to this recording.
@@ -137,25 +123,16 @@ public final class PacketRecorder {
         return slice
     }
 
-    /// Opt-in snapshot for CPU-readable external data. By default bindings retain their buffer
-    /// and the caller must leave its bytes unchanged until completion. Copying preserves all
-    /// bytes from the binding offset onward, with a new aligned binding offset in the arena.
-    func bufferBinding(_ buffer: MTLBuffer, offset: Int, copyOnRecord: Bool) -> (buffer: MTLBuffer, offset: Int) {
-        guard copyOnRecord else { return (buffer, offset) }
+    /// Opt-in snapshot for CPU-readable external data. By default (nil) bindings retain their
+    /// buffer and the caller must leave its bytes unchanged until completion. Copying preserves
+    /// `copyOnRecordLength` bytes from the binding offset, at a new aligned offset in the arena.
+    func bufferBinding(_ buffer: MTLBuffer, offset: Int, copyOnRecordLength: Int?) -> (buffer: MTLBuffer, offset: Int) {
+        guard let length = copyOnRecordLength else { return (buffer, offset) }
         precondition(buffer.storageMode != .private && buffer.storageMode != .memoryless, "copyOnRecord requires CPU-readable storage")
-        precondition(offset >= 0 && offset < buffer.length, "Buffer offset must be inside the buffer")
-        let slice = allocate(length: buffer.length - offset)
-        slice.contents.copyMemory(from: buffer.contents() + offset, byteCount: slice.length)
+        precondition(offset >= 0 && length > 0 && offset + length <= buffer.length, "The copied range must be inside the buffer")
+        let slice = allocate(length: length)
+        slice.contents.copyMemory(from: buffer.contents() + offset, byteCount: length)
         return (slice.buffer, slice.offset)
-    }
-
-    /// Keeps `owner` alive until this draw's command buffer completes, or its arena region is
-    /// reclaimed if the command buffer is never committed.
-    func retainUntilCompleted(_ owner: AnyObject) {
-        switch allocation {
-            case let .lease(lease): lease.retain(owner)
-            case let .immediate(arena, commandBuffer): arena.retainUntilCompleted(owner, commandBuffer: commandBuffer)
-        }
     }
 
     /// Records one render event of `renderable` and returns the packets it produced: none when it

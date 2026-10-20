@@ -81,13 +81,9 @@ open class TessellationMesh: Mesh {
         context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
         material.draw(in: context.materialContext(layout: nil))
 
-        // Captured now: the draw binds the factors encoded for it, whatever is encoded later.
+        // Recorded now: the draw binds the factors encoded for it, whatever is encoded later.
         if let encodedFactors {
-            let factorsBuffer = encodedFactors.buffer
-            let factorsOffset = encodedFactors.offset
-            context.addCustomCommand { renderEncoder in
-                renderEncoder.setTessellationFactorBuffer(factorsBuffer, offset: factorsOffset, instanceStride: 0)
-            }
+            context.setTessellationFactorBuffer(encodedFactors.buffer, offset: encodedFactors.offset)
         }
 
         geometry.draw(in: context.geometryContext(instanceCount: instanceCount))

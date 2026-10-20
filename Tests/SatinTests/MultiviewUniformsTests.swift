@@ -10,9 +10,8 @@ final class MultiviewUniformsTests: XCTestCase {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         guard device.supportsVertexAmplificationCount(2) else { throw XCTSkip("Vertex amplification is unavailable") }
         let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float, vertexAmplificationCount: 2)
-        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
         let storage = PacketStoragePool().lease()
-        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
 
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
         mesh.update()

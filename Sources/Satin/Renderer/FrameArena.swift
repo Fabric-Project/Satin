@@ -7,7 +7,6 @@ import Metal
 
 /// Shared transient GPU storage. A producer lease can record before any command buffer exists.
 /// It stays alive through every segment that reads it, and while the producer can append work.
-/// Immediate callers retain the command-buffer adapter below until they adopt frame leases.
 final class FrameArena {
     struct Slice {
         let buffer: MTLBuffer
@@ -23,8 +22,8 @@ final class FrameArena {
         init(buffer: MTLBuffer) { self.buffer = buffer }
     }
 
-    /// The only shared mutable allocation state. Leases do not retain the arena or its region
-    /// table, so dropping an arena with an abandoned command buffer cannot form a retain cycle.
+    /// The only shared mutable allocation state. Leases do not retain the arena, so dropping an
+    /// arena while work is in flight cannot form a retain cycle.
     fileprivate final class Pool {
         private let device: MTLDevice
         private let maximumChunkLength: Int
@@ -68,7 +67,7 @@ final class FrameArena {
         }
     }
 
-    /// Allocation and owner registration are producer-only. Completion handlers only release
+    /// Allocation is producer-only. Completion handlers only release
     /// their hold; they never mutate an active lease. Earlier slices are never overwritten.
     final class Lease {
         let frame: FrameTime
@@ -82,11 +81,6 @@ final class FrameArena {
         func allocate(length: Int, alignment: Int = 256) -> Slice {
             guard let contents else { preconditionFailure("Recording has finished") }
             return contents.allocate(length: length, alignment: alignment)
-        }
-
-        func retain(_ owner: AnyObject) {
-            guard let contents else { preconditionFailure("Recording has finished") }
-            contents.retainedOwners.append(owner)
         }
 
         func retain(untilCompleted commandBuffer: MTLCommandBuffer) {
@@ -107,7 +101,6 @@ final class FrameArena {
         private final class Contents {
             let pool: Pool
             var chunks: [Chunk] = []
-            var retainedOwners: [AnyObject] = []
             init(pool: Pool) { self.pool = pool }
             deinit { pool.recycle(chunks) }
 
@@ -129,19 +122,7 @@ final class FrameArena {
         }
     }
 
-    private final class Region {
-        weak var commandBuffer: MTLCommandBuffer?
-        var lease: Lease?
-        var completed = false
-        init(commandBuffer: MTLCommandBuffer, lease: Lease) {
-            self.commandBuffer = commandBuffer
-            self.lease = lease
-        }
-    }
-
     private let pool: Pool
-    private var activeRegions: [Region] = []
-    private let lock = UnfairLock()
     var chunkCount: Int { pool.chunkCount }
 
     init(device: MTLDevice, initialChunkLength: Int = 256 * 1024, maximumChunkLength: Int = 4 * 1024 * 1024, label: String = "Satin Frame Arena") {
@@ -150,68 +131,5 @@ final class FrameArena {
 
     func lease(frame: FrameTime) -> Lease {
         Lease(pool: pool, frame: frame)
-    }
-
-    // MARK: - Immediate compatibility
-
-    /// Allocate before commit. The command buffer owns this adapter region until completion;
-    /// an uncommitted command buffer's region is reclaimed on the next allocation.
-    func allocate(length: Int, alignment: Int = 256, commandBuffer: MTLCommandBuffer) -> Slice {
-        immediateLease(for: commandBuffer).allocate(length: length, alignment: alignment)
-    }
-
-    func allocate<Sample>(_ value: Sample, commandBuffer: MTLCommandBuffer) -> Slice {
-        var value = value
-        let slice = allocate(length: MemoryLayout<Sample>.stride, alignment: max(MemoryLayout<Sample>.alignment, 256), commandBuffer: commandBuffer)
-        withUnsafeBytes(of: &value) { bytes in
-            if let source = bytes.baseAddress { slice.contents.copyMemory(from: source, byteCount: bytes.count) }
-        }
-        return slice
-    }
-
-    func allocate<Sample>(_ values: UnsafeBufferPointer<Sample>, commandBuffer: MTLCommandBuffer) -> Slice {
-        let length = MemoryLayout<Sample>.stride * values.count
-        let slice = allocate(length: length, alignment: max(MemoryLayout<Sample>.alignment, 256), commandBuffer: commandBuffer)
-        if let source = values.baseAddress, length > 0 { slice.contents.copyMemory(from: source, byteCount: length) }
-        return slice
-    }
-
-    func retainUntilCompleted(_ owner: AnyObject, commandBuffer: MTLCommandBuffer) {
-        immediateLease(for: commandBuffer).retain(owner)
-    }
-
-    private func immediateLease(for commandBuffer: MTLCommandBuffer) -> Lease {
-        if let region = activeRegions.last, region.commandBuffer === commandBuffer, let lease = region.lease { return lease }
-        for region in activeRegions where region.commandBuffer === commandBuffer {
-            if let lease = region.lease { return lease }
-            preconditionFailure("Cannot allocate after command-buffer completion")
-        }
-        reclaimFinishedRegions()
-        let lease = lease(frame: .zero)
-        let region = Region(commandBuffer: commandBuffer, lease: lease)
-        activeRegions.append(region)
-        commandBuffer.addCompletedHandler { _ in
-            let released: Lease? = self.lock.sync {
-                region.completed = true
-                let lease = region.lease
-                region.lease = nil
-                return lease
-            }
-            withExtendedLifetime(released) {}
-        }
-        return lease
-    }
-
-    private func reclaimFinishedRegions() {
-        var released: [Region] = []
-        lock.sync {
-            activeRegions.removeAll { region in
-                guard region.completed || region.commandBuffer == nil else { return false }
-                released.append(region)
-                return true
-            }
-        }
-        // Releasing an abandoned region can run arbitrary owner deinits.
-        released.removeAll()
     }
 }

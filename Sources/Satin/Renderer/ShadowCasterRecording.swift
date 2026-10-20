@@ -10,9 +10,8 @@ import simd
 /// directional light's one) is a view, each caster is recorded once for all of them, and each pass
 /// encodes it as its own view, skipping the passes its world bounds can't reach.
 ///
-/// A caster whose recording can't serve every view (it runs a custom command, which may have
-/// captured the first view's uniforms, or the context amplifies, so its views are laid out for the
-/// shaders) is recorded again for each pass it reaches. Views are recorded in batches of at most
+/// When the context amplifies, a recording's views are laid out for the shaders, not per pass, so
+/// each caster is recorded again for each pass it reaches. Views are recorded in batches of at most
 /// `maximumViewsPerRecording`, whole shadows at a time, to bound each recording's uniforms.
 final class ShadowCasterRecording {
     static let maximumViewsPerRecording = 32
@@ -39,14 +38,6 @@ final class ShadowCasterRecording {
     private var views: [RenderView] = []
     private var frusta = ContiguousArray<ViewFrustum>()
     private var casters = ContiguousArray<Caster>()
-
-    /// Draws `shadows`' maps from `renderables`' casters into `recorder`'s draw.
-    func draw(_ shadows: ContiguousArray<Shadow>, context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
-        let state = RenderEncoderState()
-        for pass in prepare(shadows, context: context, renderables: renderables, recorder: recorder) {
-            pass.encode(into: commandBuffer, recorder: recorder, state: state)
-        }
-    }
 
     func prepare(_ shadows: ContiguousArray<Shadow>, context: Context, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) -> [RecordedRenderPass] {
         var result: [RecordedRenderPass] = []
@@ -109,7 +100,7 @@ final class ShadowCasterRecording {
                     packets: packets,
                     passes: reached,
                     // Amplified uniforms are contiguous for the shaders, not laid out per pass.
-                    servesEveryView: context.vertexAmplificationCount <= 1 && recorder.storage.packetsServeEveryView(packets)
+                    servesEveryView: context.vertexAmplificationCount <= 1
                 ))
             } else {
                 casters.append(Caster(renderable: renderable, packets: 0 ..< 0, passes: reached, servesEveryView: false))
@@ -137,10 +128,12 @@ final class ShadowCasterRecording {
                     planned.commands.append(.range(packets, viewIndex: 0))
                 }
             }
-            if pass.passIndex == pass.shadow.passCount - 1 {
-                planned.shadowCompletion = pass.shadow.recordingCompletion()
-            }
             result.append(planned)
+        }
+
+        // Recorded: nothing is left to draw. A producer abandoning this recording marks it again.
+        for shadow in batch {
+            shadow.needsUpdate = false
         }
 
         casters.removeAll(keepingCapacity: true)

@@ -12,6 +12,9 @@ import simd
 open class BindableBuffer {
     public let buffer: MTLBuffer
     public internal(set) var offset = 0
+    /// The bytes the last update wrote at `offset`: what a draw recorded now copies, so a ring
+    /// that wraps before that draw encodes can't change it. 0 before any update.
+    public internal(set) var contentLength = 0
 
     public init(buffer: MTLBuffer) {
         self.buffer = buffer
@@ -34,6 +37,7 @@ public final class StructBuffer<T>: BindableBuffer {
     public func update(data: [T]) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
+        contentLength = MemoryLayout<T>.size * data.count
         _ = data.withUnsafeBytes { dataPtr in
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }
@@ -42,6 +46,7 @@ public final class StructBuffer<T>: BindableBuffer {
     public func update(data: ContiguousArray<T>) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
+        contentLength = MemoryLayout<T>.size * data.count
         _ = data.withUnsafeBytes { dataPtr in
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }

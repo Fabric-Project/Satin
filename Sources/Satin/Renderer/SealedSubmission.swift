@@ -1,9 +1,21 @@
 import Metal
 import simd
 
-/// Producer-only recording. GPU preparation is separate: callers using custom encode(in:) hooks
-/// must schedule that work before recording the draws which read it. The immediate draw API does
-/// this automatically. Sealing consumes the builder; retained aliases cannot record again.
+/// One rendering operation of one `RenderEncoder`, recorded on the producer: a frame and the views
+/// it draws from, fixed when the builder is made, before anything is updated or recorded.
+///
+/// `record(scene:)` captures a scene as it is at that moment (its objects' transforms, materials'
+/// uniforms, instances and poses, snapshotted into the frame arena), so changing the scene afterwards,
+/// as an Iterator does between iterations, doesn't alter what was recorded. Those records draw in
+/// the colour passes only, as they never cast shadows. `record(scene:renderPassDescriptor:)` then
+/// updates and records the operation's own scene and plans every pass: per render layer, its own
+/// draws, then each record in call order. `seal()` hands that work over without sampling the scene
+/// again.
+///
+/// The encoder's settings (rendering mode, outputs, sorting, clear and load/store actions) are
+/// frozen when the builder is made, and so is its destination: the encoder's pixel formats. A
+/// record rejected before doing any work (a descriptor not matching the destination) leaves the
+/// builder usable. One released without sealing gives its storage back.
 public final class SubmissionBuilder {
     let encoder: RenderEncoder
     let recorder: PacketRecorder
@@ -41,34 +53,31 @@ public final class SubmissionBuilder {
         if !isConsumed { pool.returnStorage(recorder.storage) }
     }
 
-    /// Captures the scene and its complete pass plan now. GPU preparation is scheduled
-    /// separately; seal() only transfers this already-recorded work.
-    public func record(scene: Object, renderPassDescriptor: MTLRenderPassDescriptor,
-                       viewMappings: [MTLVertexAmplificationViewMapping] = []) throws {
-        try record(scene: scene, renderPassDescriptor: renderPassDescriptor, viewMappings: viewMappings, preparationCommandBuffer: nil)
+    /// Records `scene` as it is now, drawn in this operation's colour passes after its own scene.
+    /// Neither updates nor encodes it: do both first. Call before `record(scene:renderPassDescriptor:)`.
+    public func record(scene: Object) throws {
+        guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
+        encoder.record(scene: scene, into: self)
     }
 
-    func record(scene: Object, renderPassDescriptor: MTLRenderPassDescriptor,
-                viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer?) throws {
-        guard !isConsumed, recordedPasses == nil else { throw RenderSubmission.Error.alreadyDrawn }
+    /// Updates and records the operation's own scene and its complete pass plan now. With a
+    /// `preparationCommandBuffer`, the scene's GPU preparation (`encode(in:)`) is encoded into it
+    /// first; without one, schedule that work before the command buffer this is encoded into.
+    public func record(scene: Object, renderPassDescriptor: MTLRenderPassDescriptor,
+                       viewMappings: [MTLVertexAmplificationViewMapping] = [], preparationCommandBuffer: MTLCommandBuffer? = nil) throws {
+        guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
         recordedPasses = try encoder.prepare(builder: self, renderPassDescriptor: renderPassDescriptor, scene: scene,
                                             viewMappings: viewMappings, preparationCommandBuffer: preparationCommandBuffer)
     }
 
-    /// Legacy submission records are colour-only additions to the primary scene's passes.
-    func recordAdditional(scene: Object) throws {
-        guard !isConsumed, recordedPasses == nil else { throw RenderSubmission.Error.alreadyDrawn }
-        encoder.record(scene: scene, into: self)
-    }
-
-    public func retainUntilCompleted(_ owner: AnyObject) {
-        precondition(!isConsumed, "The builder has been sealed")
-        lease.retain(owner)
+    /// For GPU preparation (`encode(in:)`) of what this operation records, into `commandBuffer`.
+    public func encodingContext(commandBuffer: MTLCommandBuffer) -> EncodingContext {
+        EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder)
     }
 
     public func seal() throws -> SealedSubmission {
-        guard !isConsumed else { throw RenderSubmission.Error.alreadyDrawn }
-        guard let passes = recordedPasses else { throw RenderSubmission.Error.notRecorded }
+        guard !isConsumed else { throw SubmissionError.alreadyDrawn }
+        guard let passes = recordedPasses else { throw SubmissionError.notRecorded }
         isConsumed = true
         recordedPasses = nil
         return SealedSubmission(builder: self, passes: passes)
@@ -76,10 +85,13 @@ public final class SubmissionBuilder {
 
 }
 
-/// Immutable recorded work. Resource contents follow the versioning/copyOnRecord contract; custom
-/// commands must capture stable values. No scene, camera or RenderEncoder is consulted by encode.
+/// Immutable recorded work, self-contained: values, frame-arena slices and Metal resources only.
+/// Resource contents follow the versioning/copyOnRecordLength contract. No scene, camera or
+/// RenderEncoder is consulted by encode, and completion never reaches back into one.
 public final class SealedSubmission {
     public let frame: FrameTime
+    /// Identifies the recording to its producer, for `RenderEncoder.abandon(_:)`.
+    let recordToken: UInt64
     private let passes: [RecordedRenderPass]
     private let recorder: PacketRecorder
     private let lease: FrameArena.Lease
@@ -92,6 +104,7 @@ public final class SealedSubmission {
     }
 
     init(frame: FrameTime, recorder: PacketRecorder, lease: FrameArena.Lease, pool: PacketStoragePool, passes: [RecordedRenderPass]) {
+        recordToken = recorder.storage.leaseToken
         self.frame = frame
         self.recorder = recorder
         self.lease = lease
@@ -106,9 +119,24 @@ public final class SealedSubmission {
         }
     }
 
+    /// Gives the recording up unencoded, releasing what it holds; encoding it afterwards throws.
+    /// Returns false when it was already encoded or discarded.
+    @discardableResult
+    func discard() -> Bool {
+        let wasPending: Bool = lock.sync {
+            guard !encoded else { return false }
+            encoded = true
+            return true
+        }
+        guard wasPending else { return false }
+        lease.finishRecording()
+        pool.returnStorage(recorder.storage)
+        return true
+    }
+
     public func encode(into commandBuffer: MTLCommandBuffer) throws {
         try lock.sync {
-            guard !encoded else { throw RenderSubmission.Error.alreadyDrawn }
+            guard !encoded else { throw SubmissionError.alreadyDrawn }
             encoded = true
         }
         lease.retain(untilCompleted: commandBuffer)
@@ -116,8 +144,7 @@ public final class SealedSubmission {
         let storage = recorder.storage
         let pool = pool
         commandBuffer.addCompletedHandler { _ in pool.returnStorage(storage) }
-        let state = RenderEncoderState()
-        for pass in passes { pass.encode(into: commandBuffer, recorder: recorder, state: state) }
+        for pass in passes { pass.encode(into: commandBuffer, recorder: recorder, state: storage.encoderState) }
     }
 }
 
@@ -136,12 +163,11 @@ struct RecordedRenderPass {
     let viewMappings: [MTLVertexAmplificationViewMapping]
     let bindings: RenderPassBindings
     var commands: [Command] = []
-    var shadowCompletion: ShadowUpdateCompletion?
 
     init(descriptor: MTLRenderPassDescriptor, label: String, viewports: [MTLViewport],
          amplificationCount: Int = 1, viewMappings: [MTLVertexAmplificationViewMapping] = [],
          bindings: RenderPassBindings = RenderPassBindings()) {
-        self.descriptor = descriptor.copy() as! MTLRenderPassDescriptor
+        self.descriptor = descriptor.privateCopy()
         self.label = label
         self.viewports = viewports
         self.amplificationCount = amplificationCount
@@ -154,7 +180,7 @@ struct RecordedRenderPass {
     func encode(into commandBuffer: MTLCommandBuffer, recorder: PacketRecorder, state: RenderEncoderState) {
         guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else { return }
         encoder.label = label
-        state.begin(renderEncoder: encoder, renderPassDescriptor: descriptor)
+        state.begin(renderEncoder: encoder)
         if !viewports.isEmpty { state.setPassViewports(viewports) }
         if amplificationCount > 1 { state.setPassVertexAmplification(count: amplificationCount, viewMappings: viewMappings) }
         bindings.apply(to: state)
@@ -164,11 +190,9 @@ struct RecordedRenderPass {
                     recorder.encode(indices, into: state, viewIndex: viewIndex)
                 case let .range(range, viewIndex): recorder.encode(range, into: state, viewIndex: viewIndex)
                 case let .tileClear(pipeline, size):
-                    state.beginInternalDraw()
                     state.pipeline = pipeline
                     encoder.dispatchThreadsPerTile(size)
                 case let .tileBlend(pipeline, depth):
-                    state.beginInternalDraw()
                     state.pipeline = pipeline
                     state.depthStencilState = depth
                     state.cullMode = MTLCullMode.none
@@ -177,8 +201,15 @@ struct RecordedRenderPass {
         }
         encoder.endEncoding()
         state.end()
-        if let shadowCompletion {
-            commandBuffer.addCompletedHandler { completed in shadowCompletion.complete(succeeded: completed.status == .completed) }
+    }
+}
+
+extension MTLRenderPassDescriptor {
+    /// A copy the caller can't change afterwards. `copy()` of a render pass descriptor is always one.
+    func privateCopy() -> MTLRenderPassDescriptor {
+        guard let copy = copy() as? MTLRenderPassDescriptor else {
+            preconditionFailure("MTLRenderPassDescriptor.copy() returned another type")
         }
+        return copy
     }
 }

@@ -196,4 +196,49 @@ final class ObjectTests: XCTestCase {
         XCTAssertEqual(simd_length(child.worldOrientation.vector), 1, accuracy: 1e-5, "No division by the zero scale")
         XCTAssertEqual(simd_distance(child.worldOrientation.act([1, 0, 0]), turn.act([1, 0, 0])), 0, accuracy: 1e-5, "The collapsed axis keeps the parent's direction")
     }
+
+    private func isFinite(_ matrix: simd_float4x4) -> Bool {
+        [matrix.columns.0, matrix.columns.1, matrix.columns.2, matrix.columns.3].allSatisfy { column in
+            column.x.isFinite && column.y.isFinite && column.z.isFinite && column.w.isFinite
+        }
+    }
+
+    func testLookingAlongTheUpDirectionGivesAnOrthonormalTransform() throws {
+        guard let context = makeContext() else { return }
+        for target: simd_float3 in [[0, 0, 0], [0, 10, 0]] {
+            let object = Object(context: context)
+            object.position = [0, 5, 0]
+            object.lookAt(target: target)
+            let matrix = object.localMatrix
+            XCTAssertTrue(isFinite(matrix), "looking at \(target) along the up direction")
+            let axes = [matrix.columns.0, matrix.columns.1, matrix.columns.2].map { simd_make_float3($0) }
+            for axis in axes { XCTAssertEqual(simd_length(axis), 1, accuracy: 1e-5) }
+            XCTAssertEqual(simd_dot(axes[0], axes[1]), 0, accuracy: 1e-5)
+            XCTAssertEqual(simd_dot(axes[1], axes[2]), 0, accuracy: 1e-5)
+            XCTAssertEqual(simd_distance(axes[2], simd_normalize(target - object.position)), 0, accuracy: 1e-5, "it still faces the target")
+        }
+    }
+
+    func testACameraLookingStraightDownStaysFinite() throws {
+        guard let context = makeContext() else { return }
+        let camera = PerspectiveCamera(context: context, position: [0, 5, 0], near: 0.1, far: 100, fov: 30)
+        camera.lookAt(target: .zero)
+        XCTAssertTrue(isFinite(camera.viewProjectionMatrix))
+        // A camera's z axis points away from what it sees.
+        XCTAssertEqual(simd_distance(camera.worldForwardDirection, [0, 1, 0]), 0, accuracy: 1e-5, "it faces the target")
+    }
+
+    func testLightsAimedStraightDownCastFiniteShadows() throws {
+        guard let context = makeContext() else { return }
+        let spotLight = SpotLight(context: context, color: [1, 1, 1])
+        let directionalLight = DirectionalLight(context: context, color: [1, 1, 1])
+        for light: Light in [spotLight, directionalLight] {
+            light.castShadow = true
+            light.position = [0, 5, 0]
+            light.lookAt(target: .zero)
+            light.shadow.update(light: light)
+            XCTAssertTrue(isFinite(light.shadow.camera.viewProjectionMatrix), "\(light.label)'s shadow camera")
+        }
+        XCTAssertTrue(isFinite(spotLight.projectorMatrix), "the spotlight's projector")
+    }
 }

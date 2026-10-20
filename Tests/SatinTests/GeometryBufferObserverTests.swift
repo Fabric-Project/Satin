@@ -48,6 +48,20 @@ final class GeometryBufferObserverTests: XCTestCase {
 
     // MARK: - Lifetime
 
+    func testAGeometryBeingDestroyedSendsNoUpdate() throws {
+        var geometry: Geometry? = BoxGeometry(context: context)
+        let positions = makePositions(extent: 1)
+        try XCTUnwrap(geometry).addAttribute(positions, for: .Position)
+        XCTAssertNotNil(geometry?.elementBuffer, "it has indices to let go of too")
+        let counter = UpdateCounter(try XCTUnwrap(geometry))
+
+        geometry = nil
+
+        XCTAssertEqual(counter.count, 0, "no subscriber is handed a geometry mid-deinit")
+        positions.data = [.zero, .one]
+        XCTAssertEqual(counter.count, 0, "and a buffer that outlives it no longer reaches it")
+    }
+
     func testReplacingAnAttributeStopsNotificationsFromTheOldOne() {
         let geometry = Geometry(context: context)
         let original = makePositions(extent: 1)

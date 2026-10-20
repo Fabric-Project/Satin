@@ -48,8 +48,11 @@ open class Shader {
                 }
             }
             else if binding.type == .texture {
-                if let bindingIndex = VertexTextureIndex(rawValue: binding.index), !vertexTextureBindingIsUsed.contains(bindingIndex) {
-                    vertexTextureBindingIsUsed.append(bindingIndex)
+                let length = (binding as? MTLTextureBinding)?.arrayLength ?? 1
+                for slot in binding.index ..< binding.index + max(length, 1) {
+                    if let bindingIndex = VertexTextureIndex(rawValue: slot), !vertexTextureBindingIsUsed.contains(bindingIndex) {
+                        vertexTextureBindingIsUsed.append(bindingIndex)
+                    }
                 }
             }
         }
@@ -67,8 +70,11 @@ open class Shader {
                 }
             }
             else if binding.type == .texture {
-                if let bindingIndex = FragmentTextureIndex(rawValue: binding.index), !fragmentTextureBindingIsUsed.contains(bindingIndex) {
-                    fragmentTextureBindingIsUsed.append(bindingIndex)
+                let length = (binding as? MTLTextureBinding)?.arrayLength ?? 1
+                for slot in binding.index ..< binding.index + max(length, 1) {
+                    if let bindingIndex = FragmentTextureIndex(rawValue: slot), !fragmentTextureBindingIsUsed.contains(bindingIndex) {
+                        fragmentTextureBindingIsUsed.append(bindingIndex)
+                    }
                 }
             }
         }

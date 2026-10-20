@@ -135,7 +135,7 @@ open class Renderable : Object {
     open var materials: [Material] = []
 
     /// Records this renderable's draw for one render event: its bindings, material and geometry
-    /// draws, and any custom commands. Recorded values are captured, so later changes don't affect
+    /// draws. Recorded values are captured, so later changes don't affect
     /// this draw. Recording no draw call means it doesn't draw in this pass.
     open func draw(in context: RenderableDrawContext) {
         fatalError("Subclasses must implement this method")

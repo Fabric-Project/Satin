@@ -69,8 +69,7 @@ final class RenderContextRegistryTests: XCTestCase {
         let vertexUniformsBuffer = try XCTUnwrap(device.makeBuffer(length: 4096))
         func recordsAlbedo() -> Bool {
             let storage = PacketStoragePool().lease()
-            guard let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else { return false }
-            let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: .zero)
+            let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
             storage.beginRecording(cullMode: .back, windingOrder: .counterClockwise, triangleFillMode: .fill, renderOrder: 0, debugLabel: "Test")
             let drawContext = RenderableDrawContext(
                 renderContext: context,

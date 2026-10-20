@@ -28,17 +28,17 @@ public struct MaterialDrawContext {
 
     public var isShadowPass: Bool { pass == .shadow }
 
-    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
-    /// It copies bytes from `offset` to the end; the default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+    /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
+    /// that many bytes from `offset` are copied into the frame. The default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
-    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
-    /// It copies bytes from `offset` to the end; the default retains without copying.
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecord: Bool = false) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+    /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
+    /// that many bytes from `offset` are copied into the frame. The default retains without copying.
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
@@ -58,12 +58,19 @@ public struct MaterialDrawContext {
         storage.appendFragmentSampler(sampler, slot: index)
     }
 
-    /// Runs `command` on the live encoder when this draw executes, after what was recorded before it.
-    /// It runs later, not now: copy what it uses into locals before recording it, since reading
-    /// through `self` when it runs sees the object as it is then. What it sets holds for this draw
-    /// only (see `RenderEncoderState`).
-    public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
-        storage.appendCustomCommand(command)
+    /// Binds `buffer` for a mesh-shader pipeline's object stage.
+    public func setObjectBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: ObjectBufferIndex) {
+        storage.appendObjectBuffer(buffer, offset: offset, slot: index)
+    }
+
+    /// Binds `buffer` for a mesh-shader pipeline's mesh stage.
+    public func setMeshBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: MeshBufferIndex) {
+        storage.appendMeshBuffer(buffer, offset: offset, slot: index)
+    }
+
+    /// Binds the tessellation factors a patch draw reads.
+    public func setTessellationFactorBuffer(_ buffer: MTLBuffer, offset: Int = 0, instanceStride: Int = 0) {
+        storage.appendTessellationFactorBuffer(buffer, offset: offset, instanceStride: instanceStride)
     }
 
     func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage? = nil) {
@@ -98,10 +105,10 @@ public struct GeometryDrawContext {
     }
     var storage: PacketStorage { recorder.storage }
 
-    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
-    /// It copies bytes from `offset` to the end; the default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+    /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
+    /// that many bytes from `offset` are copied into the frame. The default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
@@ -125,19 +132,38 @@ public struct GeometryDrawContext {
         ))
     }
 
-    /// Runs `command` on the live encoder when this draw executes, to set state the context does not
-    /// model. Copy what it uses into locals before recording it: it runs later, not now. What it
-    /// sets holds for this draw only (see `RenderEncoderState`).
-    public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
-        storage.appendCustomCommand(command)
+    /// Binds `buffer` for a mesh-shader pipeline's object stage.
+    public func setObjectBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: ObjectBufferIndex) {
+        storage.appendObjectBuffer(buffer, offset: offset, slot: index)
     }
 
-    /// Finishes the draw with `draw`, a command that issues the draw call itself, such as
-    /// tessellation patches. Copy what it uses into locals before recording it. What it sets holds
-    /// for this draw only (see `RenderEncoderState`).
-    public func addCustomDraw(_ draw: @escaping (MTLRenderCommandEncoder) -> Void) {
-        storage.appendCustomCommand(draw)
-        storage.finishPacket(drawCall: .custom)
+    /// Binds `buffer` for a mesh-shader pipeline's mesh stage.
+    public func setMeshBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: MeshBufferIndex) {
+        storage.appendMeshBuffer(buffer, offset: offset, slot: index)
+    }
+
+    /// Binds the tessellation factors a patch draw reads.
+    public func setTessellationFactorBuffer(_ buffer: MTLBuffer, offset: Int = 0, instanceStride: Int = 0) {
+        storage.appendTessellationFactorBuffer(buffer, offset: offset, instanceStride: instanceStride)
+    }
+
+    /// Finishes the draw with `patchCount` tessellation patches of `controlPointCount` control points.
+    public func drawPatches(controlPointCount: Int, patchCount: Int, instanceCount: Int) {
+        storage.finishPacket(drawCall: .patches(controlPointCount: controlPointCount, patchCount: patchCount, instanceCount: instanceCount))
+    }
+
+    /// Finishes the draw with indexed tessellation patches, their control points indexed by
+    /// `controlPointIndexBuffer`.
+    public func drawIndexedPatches(controlPointCount: Int, patchCount: Int, controlPointIndexBuffer: MTLBuffer, instanceCount: Int) {
+        let indexBufferIndex = storage.appendIndexBuffer(controlPointIndexBuffer)
+        storage.finishPacket(drawCall: .indexedPatches(controlPointCount: controlPointCount, patchCount: patchCount,
+                                                       controlPointIndexBufferIndex: indexBufferIndex, instanceCount: instanceCount))
+    }
+
+    /// Finishes the draw with a mesh-shader dispatch of `threadgroups`.
+    public func drawMeshThreadgroups(_ threadgroups: MTLSize, threadsPerObjectThreadgroup: MTLSize, threadsPerMeshThreadgroup: MTLSize) {
+        storage.finishPacket(drawCall: .meshThreadgroups(threadgroups, threadsPerObjectThreadgroup: threadsPerObjectThreadgroup,
+                                                         threadsPerMeshThreadgroup: threadsPerMeshThreadgroup))
     }
 
     /// Binds `palette`'s snapshot for this record at the joint-matrices index.
@@ -148,7 +174,7 @@ public struct GeometryDrawContext {
 }
 
 /// What a renderable's `draw(in:)` records for one render event: it composes its material's and
-/// geometry's draws, and may add bindings and custom commands of its own. Everything recorded before
+/// geometry's draws, and may add bindings of its own. Everything recorded before
 /// its first material is shared by every draw it makes in this event.
 public struct RenderableDrawContext {
     public let renderContext: Context
@@ -176,32 +202,38 @@ public struct RenderableDrawContext {
                             elements: elements, jointPalette: nil, recorder: recorder)
     }
 
-    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
-    /// It copies bytes from `offset` to the end; the default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecord: Bool = false) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+    /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
+    /// that many bytes from `offset` are copied into the frame. The default retains without copying.
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
-    /// Set `copyOnRecord` for CPU-readable data that will change before this draw completes.
-    /// It copies bytes from `offset` to the end; the default retains without copying.
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecord: Bool = false) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecord: copyOnRecord)
+    /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
+    /// that many bytes from `offset` are copied into the frame. The default retains without copying.
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) {
+        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
-    /// Runs `command` on the live encoder when this draw executes, after what was recorded before it.
-    /// Copy what it uses into locals before recording it: it runs later, not now. What it sets
-    /// holds for this draw only (see `RenderEncoderState`).
-    public func addCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
-        storage.appendCustomCommand(command)
+    /// Binds `buffer` for a mesh-shader pipeline's object stage.
+    public func setObjectBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: ObjectBufferIndex) {
+        storage.appendObjectBuffer(buffer, offset: offset, slot: index)
     }
 
-    /// Finishes the draw with `draw`, a command that issues the draw call itself, such as a
-    /// mesh-shader dispatch. Copy what it uses into locals before recording it. What it sets holds
-    /// for this draw only (see `RenderEncoderState`).
-    public func addCustomDraw(_ draw: @escaping (MTLRenderCommandEncoder) -> Void) {
-        storage.appendCustomCommand(draw)
-        storage.finishPacket(drawCall: .custom)
+    /// Binds `buffer` for a mesh-shader pipeline's mesh stage.
+    public func setMeshBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: MeshBufferIndex) {
+        storage.appendMeshBuffer(buffer, offset: offset, slot: index)
+    }
+
+    /// Binds the tessellation factors a patch draw reads.
+    public func setTessellationFactorBuffer(_ buffer: MTLBuffer, offset: Int = 0, instanceStride: Int = 0) {
+        storage.appendTessellationFactorBuffer(buffer, offset: offset, instanceStride: instanceStride)
+    }
+
+    /// Finishes the draw with a mesh-shader dispatch of `threadgroups`.
+    public func drawMeshThreadgroups(_ threadgroups: MTLSize, threadsPerObjectThreadgroup: MTLSize, threadsPerMeshThreadgroup: MTLSize) {
+        storage.finishPacket(drawCall: .meshThreadgroups(threadgroups, threadsPerObjectThreadgroup: threadsPerObjectThreadgroup,
+                                                         threadsPerMeshThreadgroup: threadsPerMeshThreadgroup))
     }
 }

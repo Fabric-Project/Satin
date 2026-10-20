@@ -351,10 +351,9 @@ final class SkeletalAnimationTests: XCTestCase {
     /// `palette` as drawn in `frame`: its snapshot's current and previous matrices, read back.
     private func drawnJoints(_ palette: JointPalette, frame: FrameTime) throws -> [SkinJoint] {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
-        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
         let storage = snapshotPool.lease()
         defer { snapshotPool.returnStorage(storage) }
-        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: device), commandBuffer: commandBuffer, frame: frame)
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: frame))
         let snapshot = palette.snapshot(recorder: recorder)
         let joints = (snapshot.buffer.contents() + snapshot.offset).bindMemory(to: SkinJoint.self, capacity: palette.jointCount)
         return Array(UnsafeBufferPointer(start: joints, count: palette.jointCount))

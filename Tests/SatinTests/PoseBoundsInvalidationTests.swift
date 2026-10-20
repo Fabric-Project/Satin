@@ -39,7 +39,7 @@ final class PoseBoundsInvalidationTests: XCTestCase {
         let encoder = RenderEncoder(context: context)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100)
         let commandBuffer = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
-        let submission = encoder.makeSubmission(frame: .zero, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 16, height: 16, znear: 0, zfar: 1)])
+        let submission = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 16, height: 16, znear: 0, zfar: 1)])
         try submission.record(scene: mesh)
         XCTAssertGreaterThan(submission.recorder.storage.packetCount, 0)
     }

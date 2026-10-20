@@ -469,17 +469,21 @@ open class Geometry {
     }
 
     public func removeAttributes() {
-        if let bufferObserverStorage {
-            for attribute in bufferAttributes.values {
-                attribute.observers.remove(bufferObserverStorage)
-            }
-            for attribute in interleavedAttributes.values {
-                attribute.parent.observers.remove(bufferObserverStorage)
-            }
-        }
+        stopObservingAttributeBuffers()
         vertexAttributes.removeAll()
         bufferAttributes.removeAll()
         interleavedAttributes.removeAll()
+    }
+
+    /// Unregisters from the buffers behind every attribute.
+    private func stopObservingAttributeBuffers() {
+        guard let bufferObserverStorage else { return }
+        for attribute in bufferAttributes.values {
+            attribute.observers.remove(bufferObserverStorage)
+        }
+        for attribute in interleavedAttributes.values {
+            attribute.parent.observers.remove(bufferObserverStorage)
+        }
     }
 
     /// Unregisters from the buffer behind `attribute`, a removed or replaced attribute, unless
@@ -856,20 +860,15 @@ open class Geometry {
 
     deinit {
         if let posedBVH { freeBVH(posedBVH) }
-        removeAttributes()
-
-        vertexAttributes.removeAll()
-        vertexBuffers.removeAll()
-        vertexBufferOffsets.removeAll()
-
+        // Only unregister: clearing the attributes or element buffer would run their observers,
+        // which send `onUpdate` with a geometry that is being destroyed.
+        stopObservingAttributeBuffers()
         if let elementBuffer, let bufferObserverStorage {
             elementBuffer.observers.remove(bufferObserverStorage)
         }
         // Any buffer that outlives this geometry is unregistered above; a stray reference to the
         // observer now finds no geometry.
         bufferObserverStorage?.geometry = nil
-        elementBuffer = nil
-        indexBuffer = nil
     }
 
     // MARK: - Buffer Changes

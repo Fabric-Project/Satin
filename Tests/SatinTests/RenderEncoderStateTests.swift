@@ -3,21 +3,14 @@ import Metal
 import simd
 import XCTest
 
-/// Custom commands: what a custom command changes holds for its own draw, and from the next packet
-/// on Satin puts back what it manages (packet state, bindings, pass state) and resets what it
-/// doesn't (scissor, stencil reference, blend colour, visibility) to the pass default, before its
-/// own internal draws (the alpha-OIT resolve) too.
+/// The encoder state: one per owner, reused pass to pass. Each pass starts knowing nothing, repeated
+/// bindings are skipped, a nil depth-stencil state is sent as the default state object, and ending
+/// a pass lets go of everything it bound.
 final class RenderEncoderStateTests: XCTestCase {
     private var device: MTLDevice!
-    private let size = SIMD2<Int>(64, 64)
 
     override func setUpWithError() throws {
         device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
-    }
-
-    private func makeContext(alphaOit: Bool = false) throws -> Context {
-        if alphaOit, !device.supportsFamily(.apple4) { throw XCTSkip("image-block OIT needs Apple4") }
-        return Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float, alphaOitEnabled: alphaOit)
     }
 
     /// A 1×1 texture of `color` (RGBA bytes).
@@ -29,295 +22,67 @@ final class RenderEncoderStateTests: XCTestCase {
         return texture
     }
 
-    /// A quad covering the whole view of the harness camera, drawn in scene order.
-    private func makeQuad(context: Context, material: Material, label: String, renderOrder: Int = 0) -> Mesh {
-        let quad = Mesh(context: context, label: label, geometry: QuadGeometry(context: context, size: 10), material: material)
-        quad.cullMode = .back
-        quad.renderOrder = renderOrder
-        return quad
-    }
-
-    /// Renders `quads` in order: by render order, unless they share one (one alpha-OIT accumulation).
-    private func render(context: Context, _ quads: [Mesh], sharingRenderOrder: Bool = false) throws -> RGBAImage {
-        if !sharingRenderOrder {
-            for (order, quad) in quads.enumerated() { quad.renderOrder = order }
-        }
-        return try VisualTestHarness.render(context: context, size: size) { _, camera in
-            (scene: Object(context: context, label: "Quads", quads), camera: camera)
-        }
-    }
-
-    /// The RGBA bytes at the centre of `image`.
-    private func centre(_ image: RGBAImage) -> [UInt8] {
-        let index = ((image.height / 2) * image.width + image.width / 2) * 4
-        return Array(image.pixels[index ..< index + 4])
-    }
-
     private let red: [UInt8] = [255, 0, 0, 255]
-    private let blue: [UInt8] = [0, 0, 255, 255]
-
-    // MARK: - Packet State
-
-    func testACustomTextureHoldsForItsOwnDraw() throws {
-        let context = try makeContext()
-        let material = TextureOverridingMaterial(context: context, texture: try makeTexture(red))
-        material.overrideTexture = try makeTexture(blue)
-
-        let image = try render(context: context, [makeQuad(context: context, material: material, label: "Overriding")])
-
-        XCTAssertEqual(centre(image), blue, "the custom command's texture is what its own draw samples")
-    }
-
-    func testAPacketAfterACustomTextureBindsItsOwnAgain() throws {
-        let context = try makeContext()
-        let redTexture = try makeTexture(red)
-        let overriding = TextureOverridingMaterial(context: context, texture: redTexture)
-        overriding.overrideTexture = try makeTexture(blue)
-        let plain = BasicTextureMaterial(context: context, texture: redTexture)
-
-        let image = try render(context: context, [
-            makeQuad(context: context, material: overriding, label: "Overriding"),
-            makeQuad(context: context, material: plain, label: "Plain"),
-        ])
-
-        XCTAssertEqual(centre(image), red, "the second quad binds the red texture it recorded, not the cached one the command replaced")
-    }
-
-    func testAPacketAfterACustomCullModeSetsItsOwnAgain() throws {
-        let context = try makeContext()
-        let culling = CullOverridingMaterial(context: context, color: [0, 1, 0, 1])
-        let plain = BasicColorMaterial(context: context, color: [1, 0, 0, 1])
-
-        let image = try render(context: context, [
-            makeQuad(context: context, material: culling, label: "Culling"),
-            makeQuad(context: context, material: plain, label: "Plain"),
-        ])
-
-        XCTAssertEqual(centre(image), red, "the second quad culls back faces as it recorded, so it draws")
-    }
-
-    // MARK: - Unmanaged State
-
-    func testAPacketAfterACustomScissorDrawsTheWholeTarget() throws {
-        let context = try makeContext()
-        let scissoring = ScissoringMaterial(context: context, color: [0, 1, 0, 1])
-        let plain = BasicColorMaterial(context: context, color: [1, 0, 0, 1])
-
-        let image = try render(context: context, [
-            makeQuad(context: context, material: scissoring, label: "Scissoring"),
-            makeQuad(context: context, material: plain, label: "Plain"),
-        ])
-
-        XCTAssertEqual(centre(image), red, "the scissor is reset to the whole target for the next packet")
-    }
-
-    // MARK: - Pass State
-
-    func testTheNextPacketRestoresSingleViewAmplificationAfterACustomCommand() throws {
-        try assertSingleViewAmplificationIsRestored(beforeInternalDraw: false)
-    }
-
-    func testAnInternalDrawRestoresSingleViewAmplificationAfterACustomCommand() throws {
-        try assertSingleViewAmplificationIsRestored(beforeInternalDraw: true)
-    }
-
-    /// Counts vertex invocations separately for each amplification ID. The custom command enables
-    /// two views; the following Satin draw must execute only view zero of the original one-view pass.
-    private func assertSingleViewAmplificationIsRestored(beforeInternalDraw: Bool) throws {
-        guard device.supportsVertexAmplificationCount(2) else {
-            throw XCTSkip("The device does not support two vertex amplifications")
-        }
-        let library = try device.makeLibrary(source: """
-        #include <metal_stdlib>
-        using namespace metal;
-        vertex void countAmplifications(ushort amplificationIndex [[amplification_id]],
-                                        device atomic_uint *counts [[buffer(0)]]) {
-            atomic_fetch_add_explicit(counts + amplificationIndex, 1u, memory_order_relaxed);
-        }
-        """, options: nil)
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.vertexFunction = try XCTUnwrap(library.makeFunction(name: "countAmplifications"))
-        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        pipelineDescriptor.isRasterizationEnabled = false
-        pipelineDescriptor.maxVertexAmplificationCount = 2
-        let pipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        let counts = try XCTUnwrap(device.makeBuffer(length: 2 * MemoryLayout<UInt32>.stride, options: .storageModeShared))
-        counts.contents().initializeMemory(as: UInt32.self, repeating: 0, count: 2)
-        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let pass = try makePass(commandBuffer)
-        let state = RenderEncoderState()
-        state.begin(renderEncoder: pass.encoder, renderPassDescriptor: pass.descriptor)
-        state.setPassViewport(MTLViewport(originX: 0, originY: 0, width: 4, height: 4, znear: 0, zfar: 1))
-
-        // The effect of a custom command, followed by the invalidation packet replay performs.
-        var mappings = [
-            MTLVertexAmplificationViewMapping(viewportArrayIndexOffset: 0, renderTargetArrayIndexOffset: 0),
-            MTLVertexAmplificationViewMapping(viewportArrayIndexOffset: 0, renderTargetArrayIndexOffset: 0),
-        ]
-        pass.encoder.setVertexAmplificationCount(2, viewMappings: &mappings)
-        state.invalidate()
-        if beforeInternalDraw {
-            state.beginInternalDraw()
-        } else {
-            state.beginPacket()
-        }
-        state.pipeline = pipeline
-        state.setVertexBuffer(counts, offset: 0, index: .Vertices)
-        pass.encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        pass.encoder.endEncoding()
-        state.end()
-        commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-
-        XCTAssertEqual(commandBuffer.status, .completed, "\(String(describing: commandBuffer.error))")
-        let invocations = counts.contents().bindMemory(to: UInt32.self, capacity: 2)
-        XCTAssertEqual(invocations[0], 3, "the original view executes once")
-        XCTAssertEqual(invocations[1], 0, "the custom command's extra view does not execute in the next draw")
-    }
-
-    func testAPacketAfterACustomCommandOverwritingLightingIsLitAsBefore() throws {
-        let context = try makeContext()
-
-        func renderLit(overwritingLighting: Bool) throws -> [UInt8] {
-            let light = DirectionalLight(context: context, color: [1, 1, 1], intensity: 1.5)
-            light.position = [0, 0, 5]
-            light.lookAt(target: .zero)
-            let first = LightingOverwritingMaterial(context: context, color: [0, 1, 0, 1])
-            first.overwritesLighting = overwritingLighting
-            let lit = BasicDiffuseMaterial(context: context, color: [1, 0, 0, 1])
-            let image = try VisualTestHarness.render(context: context, size: size) { _, camera in
-                (scene: Object(context: context, label: "Lit", [
-                    light,
-                    makeQuad(context: context, material: first, label: "First", renderOrder: 0),
-                    makeQuad(context: context, material: lit, label: "Lit", renderOrder: 1),
-                ]), camera: camera)
-            }
-            return centre(image)
-        }
-
-        XCTAssertEqual(try renderLit(overwritingLighting: true), try renderLit(overwritingLighting: false),
-                       "the pass's light data is bound again before the next packet")
-    }
-
-    // MARK: - Internal Draws
-
-    func testTheOitResolveCoversTheWholeTargetAfterACustomScissor() throws {
-        let context = try makeContext(alphaOit: true)
-        let covering = BasicColorMaterial(context: context, color: [1, 0, 0, 0.5], blending: .alpha)
-        let scissoring = ScissoringMaterial(context: context, color: [0, 1, 0, 0.5])
-        scissoring.blending = .alpha
-
-        // Same render order: one accumulation, resolved once after the scissoring packet.
-        let image = try render(context: context, [
-            makeQuad(context: context, material: covering, label: "Covering"),
-            makeQuad(context: context, material: scissoring, label: "Scissoring"),
-        ], sharingRenderOrder: true)
-
-        XCTAssertGreaterThan(centre(image)[0], 64, "the resolve composites the covering quad at the centre, outside the scissor")
-    }
-
-    // MARK: - Invalidation
-
-    func testInvalidatingForgetsEveryCachedStateWithoutIssuingAny() throws {
-        let context = try makeContext()
-        let material = BasicColorMaterial(context: context)
-        material.update()
-        let pipeline = try XCTUnwrap(material.getPipeline(renderContext: context, shadow: false))
-        let target = try XCTUnwrap(device.makeTexture(descriptor: {
-            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 4, height: 4, mipmapped: false)
-            descriptor.usage = [.renderTarget]
-            descriptor.storageMode = .private
-            return descriptor
-        }()))
-        let depthTarget = try XCTUnwrap(device.makeTexture(descriptor: {
-            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float, width: 4, height: 4, mipmapped: false)
-            descriptor.usage = [.renderTarget]
-            descriptor.storageMode = .private
-            return descriptor
-        }()))
-        // Attachments matching the pipeline's: color and the context's depth format.
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-        renderPassDescriptor.colorAttachments[0].texture = target
-        renderPassDescriptor.depthAttachment.texture = depthTarget
-        // Held for the test: a command buffer doesn't keep its queue alive.
-        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let renderEncoder = try XCTUnwrap(commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor))
-        defer { renderEncoder.endEncoding() }
-
-        let state = RenderEncoderState()
-        state.begin(renderEncoder: renderEncoder, renderTargetSize: (width: 4, height: 4))
-        state.pipeline = pipeline
-        state.cullMode = .back
-        // Nil is sent as the default state object: setDepthStencilState(nil) crashes the AGX driver.
-        state.depthStencilState = nil
-        state.depthBias = nil
-        state.setFragmentTexture(try makeTexture(red), index: .Custom0)
-        XCTAssertTrue(state.pipeline === pipeline)
-        XCTAssertTrue(state.depthStencilStateIsKnown)
-        XCTAssertTrue(state.depthBiasIsKnown)
-        XCTAssertTrue(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
-
-        state.invalidate()
-
-        XCTAssertNil(state.pipeline, "unknown: the next packet's pipeline is set again")
-        XCTAssertNil(state.cullMode)
-        XCTAssertFalse(state.depthStencilStateIsKnown, "a nil depth-stencil state is set again too")
-        XCTAssertFalse(state.depthBiasIsKnown)
-        XCTAssertFalse(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
-        XCTAssertTrue(state.passStateNeedsRestore)
-        state.beginPacket()
-        XCTAssertFalse(state.passStateNeedsRestore, "restored once, at the next packet")
-    }
-
-    // MARK: - Reuse
 
     /// A render target and encoder for one pass: returned so the caller decides when they go.
-    private func makePass(_ commandBuffer: MTLCommandBuffer) throws -> (encoder: MTLRenderCommandEncoder, descriptor: MTLRenderPassDescriptor) {
+    private func makePass(_ commandBuffer: MTLCommandBuffer) throws -> MTLRenderCommandEncoder {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 4, height: 4, mipmapped: false)
         descriptor.usage = [.renderTarget]
         descriptor.storageMode = .private
         let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
-        return (try XCTUnwrap(commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)), renderPassDescriptor)
+        return try XCTUnwrap(commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor))
+    }
+
+    func testANilDepthStencilStateIsSentAsTheDefaultObject() throws {
+        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
+        let encoder = try makePass(commandBuffer)
+        defer { encoder.endEncoding() }
+        let state = RenderEncoderState()
+        state.begin(renderEncoder: encoder)
+
+        // setDepthStencilState(nil) crashes the AGX driver: nil is known, and sent as an object.
+        state.depthStencilState = nil
+        state.depthBias = nil
+
+        XCTAssertTrue(state.depthStencilStateIsKnown)
+        XCTAssertTrue(state.depthBiasIsKnown)
+        state.end()
     }
 
     func testAReusedStateStartsEachPassClean() throws {
-        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
         let state = RenderEncoderState()
         let texture = try makeTexture(red)
 
         let first = try makePass(commandBuffer)
-        state.begin(renderEncoder: first.encoder, renderPassDescriptor: first.descriptor)
+        state.begin(renderEncoder: first)
         state.setFragmentTexture(texture, index: .Custom0)
         XCTAssertTrue(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
-        first.encoder.endEncoding()
+        first.endEncoding()
         state.end()
 
         let second = try makePass(commandBuffer)
-        state.begin(renderEncoder: second.encoder, renderPassDescriptor: second.descriptor)
+        state.begin(renderEncoder: second)
         XCTAssertFalse(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue),
                        "the second pass binds its first texture even when it equals the first pass's last")
-        second.encoder.endEncoding()
+        second.endEncoding()
         state.end()
     }
 
     func testBeginningAnotherPassClearsStateEvenWithoutAnExplicitStateEnd() throws {
-        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
         let state = RenderEncoderState()
         let first = try makePass(commandBuffer)
-        state.begin(renderEncoder: first.encoder, renderPassDescriptor: first.descriptor)
+        state.begin(renderEncoder: first)
         state.setFragmentTexture(try makeTexture(red), index: .Custom0)
-        first.encoder.endEncoding()
+        first.endEncoding()
 
         let second = try makePass(commandBuffer)
-        state.begin(renderEncoder: second.encoder, renderPassDescriptor: second.descriptor)
+        state.begin(renderEncoder: second)
 
         XCTAssertFalse(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
-        second.encoder.endEncoding()
+        second.endEncoding()
         state.end()
     }
 
@@ -327,71 +92,20 @@ final class RenderEncoderStateTests: XCTestCase {
         weak var releasedBuffer: MTLBuffer?
 
         try autoreleasepool {
-            let commandQueue = try XCTUnwrap(device.makeCommandQueue())
-            let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            let pass = try makePass(commandBuffer)
+            let commandBuffer = try XCTUnwrap(device.makeCommandQueue()?.makeCommandBuffer())
+            let encoder = try makePass(commandBuffer)
             let buffer = try XCTUnwrap(device.makeBuffer(length: 256))
-            releasedEncoder = pass.encoder
+            releasedEncoder = encoder
             releasedBuffer = buffer
-            state.begin(renderEncoder: pass.encoder, renderPassDescriptor: pass.descriptor)
+            state.begin(renderEncoder: encoder)
             state.setVertexBuffer(buffer, offset: 0, index: .Vertices)
             state.setPassFragmentBuffer(buffer, offset: 0, index: .Lighting)
-            pass.encoder.endEncoding()
+            encoder.endEncoding()
             state.end()
         }
 
         XCTAssertFalse(state.holdsPass, "the state keeps no encoder or binding after its pass")
         XCTAssertNil(releasedEncoder, "nothing in the state keeps the finished encoder")
         XCTAssertNil(releasedBuffer, "or the pass's buffers")
-    }
-}
-
-/// Binds `overrideTexture` at the texture slot its shader samples, after its own bindings.
-private final class TextureOverridingMaterial: BasicTextureMaterial {
-    override var prefix: String { "BasicTexture" }
-    var overrideTexture: MTLTexture?
-
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        guard let overrideTexture else { return }
-        context.addCustomCommand { renderEncoder in
-            renderEncoder.setFragmentTexture(overrideTexture, index: FragmentTextureIndex.Custom0.rawValue)
-        }
-    }
-}
-
-/// Culls front faces in its own draw, so it draws nothing facing the camera.
-private final class CullOverridingMaterial: BasicColorMaterial {
-    override var prefix: String { "BasicColor" }
-
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        context.addCustomCommand { renderEncoder in renderEncoder.setCullMode(.front) }
-    }
-}
-
-/// Scissors its own draw to the target's top-left pixel.
-private final class ScissoringMaterial: BasicColorMaterial {
-    override var prefix: String { "BasicColor" }
-
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        context.addCustomCommand { renderEncoder in
-            renderEncoder.setScissorRect(MTLScissorRect(x: 0, y: 0, width: 1, height: 1))
-        }
-    }
-}
-
-/// Overwrites the pass's light data with zeros in its own draw, when `overwritesLighting`.
-private final class LightingOverwritingMaterial: BasicColorMaterial {
-    override var prefix: String { "BasicColor" }
-    var overwritesLighting = false
-
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        guard overwritesLighting, let zeros = context.renderContext.device.makeBuffer(length: 4096) else { return }
-        context.addCustomCommand { renderEncoder in
-            renderEncoder.setFragmentBuffer(zeros, offset: 0, index: FragmentBufferIndex.Lighting.rawValue)
-        }
     }
 }

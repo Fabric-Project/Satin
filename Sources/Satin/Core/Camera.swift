@@ -8,6 +8,10 @@
 
 import simd
 
+#if SWIFT_PACKAGE
+import SatinCore
+#endif
+
 open class Camera: Object {
     // MARK: - View
 
@@ -206,16 +210,17 @@ open class Camera: Object {
 
     override public func lookAt(target: simd_float3, up: simd_float3 = Satin.worldUpDirection, local: Bool = true) {
         if local {
-            let zAxis = simd_normalize(position - target)
-            let xAxis = simd_normalize(simd_cross(up, zAxis))
-            let yAxis = simd_normalize(simd_cross(zAxis, xAxis))
-            orientation = simd_quatf(simd_float3x3(xAxis, yAxis, zAxis))
+            orientation = lookAtOrientation(eye: position, target: target, up: up)
         }
         else {
-            let zAxis = simd_normalize(worldPosition - target)
-            let xAxis = simd_normalize(simd_cross(up, zAxis))
-            let yAxis = simd_normalize(simd_cross(zAxis, xAxis))
-            worldOrientation = simd_quatf(simd_float3x3(xAxis, yAxis, zAxis))
+            worldOrientation = lookAtOrientation(eye: worldPosition, target: target, up: up)
         }
+    }
+
+    /// A camera's z axis points away from what it looks at, so this is `lookAtMatrix3f` with eye and
+    /// target swapped, which also keeps looking straight along `up` finite.
+    private func lookAtOrientation(eye: simd_float3, target: simd_float3, up: simd_float3) -> simd_quatf {
+        let matrix = lookAtMatrix3f(target, eye, up)
+        return simd_quatf(simd_float3x3(simd_make_float3(matrix.columns.0), simd_make_float3(matrix.columns.1), simd_make_float3(matrix.columns.2)))
     }
 }

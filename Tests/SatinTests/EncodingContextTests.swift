@@ -4,8 +4,8 @@ import simd
 import XCTest
 
 /// Encoding contexts: encoding and drawing see the submission's one view snapshot, every encoding
-/// writes its own arena slice (tessellation factors included), and custom commands bind the values
-/// they captured when recorded.
+/// writes its own arena slice (tessellation factors included), and each record binds the values it
+/// was recorded with.
 final class EncodingContextTests: XCTestCase {
     private var device: MTLDevice!
     private var context: Context!
@@ -23,12 +23,11 @@ final class EncodingContextTests: XCTestCase {
         return camera
     }
 
-    private func makeSubmission(_ encoder: RenderEncoder, camera: Camera, commandBuffer: MTLCommandBuffer? = nil) throws -> RenderSubmission {
-        let commandBuffer = try commandBuffer ?? XCTUnwrap(commandQueue.makeCommandBuffer())
-        return encoder.makeSubmission(frame: .zero, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+    private func makeSubmission(_ encoder: RenderEncoder, camera: Camera) throws -> SubmissionBuilder {
+        encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
     }
 
-    private func recordedPackets(_ submission: RenderSubmission) -> [DrawPacket] {
+    private func recordedPackets(_ submission: SubmissionBuilder) -> [DrawPacket] {
         let storage = submission.recorder.storage
         return storage.runs.filter(\.isRecorded).flatMap { storage.packets[$0.packets] }
     }
@@ -47,6 +46,7 @@ final class EncodingContextTests: XCTestCase {
 
     func testEncodingAndDrawingSeeTheSubmissionsViewSnapshot() throws {
         let encoder = RenderEncoder(context: context)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let camera = makeCamera(x: 0)
         let submission = try makeSubmission(encoder, camera: camera)
         let viewAtCreation = camera.viewMatrix
@@ -57,7 +57,7 @@ final class EncodingContextTests: XCTestCase {
         let mesh = ViewRecordingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
         let root = Object(context: context, label: "Encoded", [mesh])
         mesh.update()
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         try submission.record(scene: root)
 
         XCTAssertEqual(mesh.encodedViewMatrix, viewAtCreation, "encoding sees the view as it was when the submission was made")
@@ -69,8 +69,9 @@ final class EncodingContextTests: XCTestCase {
 
     func testTwoEncodingsBeforeEitherDrawWriteDistinctSlices() throws {
         let encoder = RenderEncoder(context: context)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let submission = try makeSubmission(encoder, camera: makeCamera())
-        let encodingContext = submission.encodingContext
+        let encodingContext = submission.encodingContext(commandBuffer: commandBuffer)
 
         let first = encodingContext.allocate(length: 64)
         let second = encodingContext.allocate(length: 64)
@@ -96,11 +97,12 @@ final class EncodingContextTests: XCTestCase {
 
     func testTessellatingWritesEachEncodingsFactorsToItsOwnSlice() throws {
         let encoder = RenderEncoder(context: context)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: true)
 
-        mesh.encode(in: submission.encodingContext)
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 2)
         let first = try XCTUnwrap(tessellator.destinations.first)
@@ -112,13 +114,14 @@ final class EncodingContextTests: XCTestCase {
 
     func testTurningTessellationOffFreezesTheFactorsOnce() throws {
         let encoder = RenderEncoder(context: context)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: true)
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         mesh.tessellate = false
-        mesh.encode(in: submission.encodingContext)
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 2, "one dispatch to freeze, then none")
         let frozen = try XCTUnwrap(tessellator.destinations.last)
@@ -128,11 +131,12 @@ final class EncodingContextTests: XCTestCase {
 
     func testAMeshStartingUntessellatedFreezesOnItsFirstEncoding() throws {
         let encoder = RenderEncoder(context: context)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: false)
 
-        mesh.encode(in: submission.encodingContext)
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 1)
         XCTAssertNotNil(mesh.encodedFactors)
@@ -141,15 +145,15 @@ final class EncodingContextTests: XCTestCase {
     func testALaterFreezeNeverOverwritesAnEarlierOnesFactors() throws {
         let encoder = RenderEncoder(context: context)
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: false)
 
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         let firstFrozen = try XCTUnwrap(mesh.encodedFactors?.buffer)
         mesh.tessellate = true
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         mesh.tessellate = false
-        mesh.encode(in: submission.encodingContext)
+        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         let secondFrozen = try XCTUnwrap(mesh.encodedFactors?.buffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
@@ -174,30 +178,31 @@ final class EncodingContextTests: XCTestCase {
 
     // MARK: - Captured Values
 
-    func testACustomCommandBindsTheValueItCapturedWhenRecorded() throws {
+    func testEachRecordBindsTheValuesItWasRecordedWith() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((width: 64, height: 64))
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        let submission = try makeSubmission(encoder, camera: makeCamera(), commandBuffer: commandBuffer)
+        let submission = try makeSubmission(encoder, camera: makeCamera())
 
-        let sink = CapturedValueSink()
-        let material = CapturingMaterial(context: context)
-        material.sink = sink
+        let material = BasicColorMaterial(context: context)
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: material)
         let root = Object(context: context, label: "Captured", [mesh])
         mesh.update()
 
-        material.capturedValue = 1
+        material.color = [1, 0, 0, 1]
         try submission.record(scene: root)
-        material.capturedValue = 2
+        material.color = [2, 0, 0, 1]
         try submission.record(scene: root)
-        material.capturedValue = 3
+        material.color = [3, 0, 0, 1]
 
-        try encoder.draw(submission: submission, renderPassDescriptor: makeRenderPassDescriptor(), scene: Object(context: context))
+        try submission.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor(), preparationCommandBuffer: commandBuffer)
+        try submission.seal().encode(into: commandBuffer)
+        // Read before completion returns the storage.
+        let recorded = recordedColorRed(in: submission.recorder.storage)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 
-        XCTAssertEqual(sink.values, [1, 2], "each record binds the value it captured, not the material's value when it encodes")
+        XCTAssertEqual(recorded, [1, 2], "each record binds the value it captured, not the material's value when it encodes")
     }
 
     private func makeRenderPassDescriptor() throws -> MTLRenderPassDescriptor {
@@ -221,24 +226,16 @@ private final class ViewRecordingMesh: Mesh {
 }
 
 /// Where captured values land when their commands run.
-final class CapturedValueSink {
-    var values: [Float] = []
-}
-
-/// Records a custom command that reports the value it captured.
-final class CapturingMaterial: BasicColorMaterial {
-    // The shader is found by class name: draw with BasicColor's.
-    override var prefix: String { "BasicColor" }
-
-    var capturedValue: Float = 0
-    var sink: CapturedValueSink?
-
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        // Copied into locals now: the command runs when the packet encodes.
-        guard context.pass == .color, let sink else { return }
-        let value = capturedValue
-        context.addCustomCommand { _ in sink.values.append(value) }
+/// The red channel of the colour each packet of `storage` binds in its material uniforms, in
+/// recorded order: what each record snapshotted.
+func recordedColorRed(in storage: PacketStorage) -> [Float] {
+    storage.packets.compactMap { packet in
+        for command in storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)] {
+            if case let .fragmentBuffer(bufferIndex, offset, .MaterialUniforms) = command {
+                return (storage.buffers[Int(bufferIndex)].contents() + offset).load(as: Float.self)
+            }
+        }
+        return nil
     }
 }
 

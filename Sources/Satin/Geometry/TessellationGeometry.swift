@@ -81,38 +81,14 @@ public final class TessellationGeometry: Geometry {
         )
     }
 
-    /// Records its bindings, then its patches: a draw call the contexts don't model.
+    /// Records its bindings, then its patches.
     override public func draw(in context: GeometryDrawContext) {
         recordBindings(in: context)
-        let controlPointsPerPatch = self.controlPointsPerPatch
-        let patchCount = self.patchCount
-        let instanceCount = context.instanceCount
         if let indexBuffer {
-            context.addCustomDraw { renderEncoder in
-                renderEncoder.drawIndexedPatches(
-                    numberOfPatchControlPoints: controlPointsPerPatch,
-                    patchStart: 0,
-                    patchCount: patchCount,
-                    patchIndexBuffer: nil,
-                    patchIndexBufferOffset: 0,
-                    controlPointIndexBuffer: indexBuffer,
-                    controlPointIndexBufferOffset: 0,
-                    instanceCount: instanceCount,
-                    baseInstance: 0
-                )
-            }
+            context.drawIndexedPatches(controlPointCount: controlPointsPerPatch, patchCount: patchCount,
+                                       controlPointIndexBuffer: indexBuffer, instanceCount: context.instanceCount)
         } else {
-            context.addCustomDraw { renderEncoder in
-                renderEncoder.drawPatches(
-                    numberOfPatchControlPoints: controlPointsPerPatch,
-                    patchStart: 0,
-                    patchCount: patchCount,
-                    patchIndexBuffer: nil,
-                    patchIndexBufferOffset: 0,
-                    instanceCount: instanceCount,
-                    baseInstance: 0
-                )
-            }
+            context.drawPatches(controlPointCount: controlPointsPerPatch, patchCount: patchCount, instanceCount: context.instanceCount)
         }
     }
 }

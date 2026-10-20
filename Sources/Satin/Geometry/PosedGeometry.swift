@@ -36,8 +36,7 @@ open class PosedGeometry: Geometry {
     }
 
     /// Stops listening before `source` is released: stored properties go in declaration order, so
-    /// a source this view alone owns would otherwise deinitialise, and announce its removed
-    /// attributes, to a subscription still capturing this half-destroyed view.
+    /// the subscription would otherwise outlive the start of this view's destruction.
     deinit {
         sourceSubscription?.cancel()
     }
