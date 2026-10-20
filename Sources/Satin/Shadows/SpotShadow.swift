@@ -74,14 +74,6 @@ public final class SpotShadow: Shadow {
         camera = PerspectiveCamera(context: context, label: "\(label) Camera", position: .zero, near: 0.01, far: 100.0, fov: 90.0)
     }
 
-    private var viewport: MTLViewport {
-        MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0)
-    }
-
-    private var viewportFloat4: simd_float4 {
-        simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
-    }
-
     override public func update(light: Object) {
         guard let light = light as? SpotLight, let camera = camera as? PerspectiveCamera else {
             needsUpdate = true
@@ -98,40 +90,11 @@ public final class SpotShadow: Shadow {
         needsUpdate = true
     }
 
-    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
-        guard enabled else { return }
-
+    override func prepareForDrawing(context: Context) {
         if device == nil {
             device = context.device
         }
         setupTexture()
-
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
-        renderPassDescriptor.depthAttachment.texture = texture
-        renderPassDescriptor.depthAttachment.loadAction = .clear
-        renderPassDescriptor.depthAttachment.storeAction = .store
-        renderPassDescriptor.depthAttachment.clearDepth = 0.0
-        renderPassDescriptor.renderTargetWidth = resolution.width
-        renderPassDescriptor.renderTargetHeight = resolution.height
-
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-
-        renderEncoder.label = label + " Shadow Encoder"
-        renderEncoderState.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
-        renderEncoderState.setPassViewport(viewport)
-
-        let shadowViews = [RenderView(camera: camera, viewport: viewportFloat4, frame: recorder.frame)]
-        let frustum = ViewFrustum(viewProjectionMatrix: shadowViews[0].viewProjectionMatrix)
-        for renderable in renderables where renderable.castShadow {
-            guard !renderable.frustumCulled || frustum.mayContain(renderable.worldBounds) else { continue }
-            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: shadowViews)
-            recorder.encode(packets, into: renderEncoderState)
-        }
-
-        renderEncoder.endEncoding()
-        renderEncoderState.end()
-        needsUpdate = false
     }
 
     private func setupTexture() {

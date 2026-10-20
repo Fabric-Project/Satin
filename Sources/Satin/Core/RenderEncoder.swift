@@ -360,6 +360,9 @@ open class RenderEncoder {
     let packetStoragePool = PacketStoragePool()
     /// The state of whichever of this encoder's passes is encoding: one at a time, reused.
     private let passEncoderState = RenderEncoderState()
+    /// Records each frame's shadow casters once for every shadow pass.
+    private let shadowCasterRecording = ShadowCasterRecording()
+    private var shadowsToDraw = ContiguousArray<Shadow>()
     /// The draw in progress: set for the length of `draw`.
     private var recorder: PacketRecorder?
     /// The renderables of a scene being recorded into a submission, reused across records.
@@ -717,13 +720,14 @@ open class RenderEncoder {
             arrayLength = max(arrayLength, Int(viewMapping.renderTargetArrayIndexOffset) + 1)
         }
 
-        // render objects that cast shadows into the depth textures
+        // Every shadow drawn this frame records each caster once, for all their passes.
         if !renderCollection.shadowCasters.isEmpty, !renderCollection.shadowReceivers.isEmpty {
-            for light in renderCollection.lights where light.castShadow {
-                if light.shadow.shouldRender {
-                    light.shadow.draw(context: context, commandBuffer: commandBuffer, renderables: renderCollection.shadowCasters, recorder: recorder)
-                }
+            shadowsToDraw.removeAll(keepingCapacity: true)
+            for light in renderCollection.lights where light.castShadow && light.shadow.shouldRender {
+                shadowsToDraw.append(light.shadow)
             }
+            shadowCasterRecording.draw(shadowsToDraw, context: context, commandBuffer: commandBuffer, renderables: renderCollection.shadowCasters, recorder: recorder)
+            shadowsToDraw.removeAll(keepingCapacity: true)
         }
 
         recordScene(recorder: recorder, views: submission.views)

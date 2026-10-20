@@ -29,9 +29,20 @@ struct RecordToken: Equatable {
 /// face): it gets its own vertex uniforms, written from that pass's views and the occurrence's
 /// model matrices, which the renderable took once with `beginOccurrence(frame:)` before any pass.
 /// Materials, instances and palettes snapshot what they draw with into the same arena.
-final class PacketRecorder {
+public final class PacketRecorder {
     /// The distance between one view's `VertexUniforms` and the next in a render event's slice.
     static let vertexUniformsStride = MemoryLayout<VertexUniforms>.stride
+
+    /// The distance between views of an event recorded for several views without amplification,
+    /// each encoded in its own pass: every view starts on a 256-byte boundary, as a single-view
+    /// event's uniforms do. Amplified views stay contiguous, as the shaders index them by view.
+    static let viewSlotStride = (vertexUniformsStride + 255) / 256 * 256
+
+    // TEMPORARY A/B (remove after measuring): false packs separately encoded views contiguously.
+    public nonisolated(unsafe) static var alignsViewSlots = true
+
+    /// The view spacing in use for separately encoded views.
+    static var separateViewStride: Int { alignsViewSlots ? viewSlotStride : vertexUniformsStride }
 
     let storage: PacketStorage
     let frame: FrameTime
@@ -80,9 +91,11 @@ final class PacketRecorder {
 
         // Every view gets its uniforms: the amplified views of one pass, or the views of a
         // multi-view shadow, each encoded in its own pass from this one recording.
+        let isAmplified = renderContext.vertexAmplificationCount > 1
         let vertexUniforms = writeVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
+            viewStride: isAmplified ? Self.vertexUniformsStride : Self.separateViewStride,
             views: views
         )
 
@@ -130,34 +143,34 @@ final class PacketRecorder {
         storage.encode(packetIndices, into: state, viewIndex: viewIndex)
     }
 
-    /// One `VertexUniforms` per view, contiguous, in an arena slice valid until the command buffer
-    /// completes. A pass with fewer views than the context's repeats its last view.
-    private func writeVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, views: [RenderView]) -> VertexUniformsBinding {
-        let slice = allocate(length: Self.vertexUniformsStride * viewCount)
-        let uniforms = slice.contents.bindMemory(to: VertexUniforms.self, capacity: viewCount)
+    /// One `VertexUniforms` per view, `viewStride` apart, in an arena slice valid until the command
+    /// buffer completes. A pass with fewer views than the context's repeats its last view.
+    private func writeVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
+        let slice = allocate(length: viewStride * (viewCount - 1) + Self.vertexUniformsStride)
         let modelMatrix = occurrence.modelMatrix
         let previousModelMatrix = occurrence.previousModelMatrix
         for viewIndex in 0 ..< viewCount {
+            let uniforms = (slice.contents + viewIndex * viewStride).bindMemory(to: VertexUniforms.self, capacity: 1)
             let view = views[min(viewIndex, views.count - 1)]
             let viewProjectionMatrix = view.viewProjectionMatrix
             let previousViewProjectionMatrix = view.previousViewProjectionMatrix
             let modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix
 
-            uniforms[viewIndex].modelMatrix = modelMatrix
-            uniforms[viewIndex].viewMatrix = view.viewMatrix
-            uniforms[viewIndex].modelViewMatrix = view.viewMatrix * modelMatrix
-            uniforms[viewIndex].projectionMatrix = view.projectionMatrix
-            uniforms[viewIndex].viewProjectionMatrix = viewProjectionMatrix
-            uniforms[viewIndex].modelViewProjectionMatrix = modelViewProjectionMatrix
-            uniforms[viewIndex].inverseModelViewProjectionMatrix = modelViewProjectionMatrix.inverse
-            uniforms[viewIndex].inverseViewMatrix = view.inverseViewMatrix
-            uniforms[viewIndex].normalMatrix = occurrence.normalMatrix
-            uniforms[viewIndex].viewport = view.viewport
-            uniforms[viewIndex].worldCameraPosition = view.worldPosition
-            uniforms[viewIndex].worldCameraViewDirection = view.viewDirection
-            uniforms[viewIndex].previousModelMatrix = previousModelMatrix
-            uniforms[viewIndex].previousViewProjectionMatrix = previousViewProjectionMatrix
-            uniforms[viewIndex].previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
+            uniforms.pointee.modelMatrix = modelMatrix
+            uniforms.pointee.viewMatrix = view.viewMatrix
+            uniforms.pointee.modelViewMatrix = view.viewMatrix * modelMatrix
+            uniforms.pointee.projectionMatrix = view.projectionMatrix
+            uniforms.pointee.viewProjectionMatrix = viewProjectionMatrix
+            uniforms.pointee.modelViewProjectionMatrix = modelViewProjectionMatrix
+            uniforms.pointee.inverseModelViewProjectionMatrix = modelViewProjectionMatrix.inverse
+            uniforms.pointee.inverseViewMatrix = view.inverseViewMatrix
+            uniforms.pointee.normalMatrix = occurrence.normalMatrix
+            uniforms.pointee.viewport = view.viewport
+            uniforms.pointee.worldCameraPosition = view.worldPosition
+            uniforms.pointee.worldCameraViewDirection = view.viewDirection
+            uniforms.pointee.previousModelMatrix = previousModelMatrix
+            uniforms.pointee.previousViewProjectionMatrix = previousViewProjectionMatrix
+            uniforms.pointee.previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
         }
         return VertexUniformsBinding(buffer: slice.buffer, offset: slice.offset)
     }

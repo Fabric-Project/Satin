@@ -9,6 +9,7 @@
 #if os(iOS)
 
 import ARKit
+import Combine
 import Metal
 import MetalKit
 import MetalPerformanceShaders
@@ -242,7 +243,9 @@ final class Model: Object {
     }
 }
 
-final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
+final class ARPBRRenderer: BaseRenderer {
+    private var materialUpdateSubscription: AnyCancellable?
+
     class PostMaterial: SourceMaterial {
         public var grainIntensity: Float = 0.0 {
             didSet {
@@ -360,7 +363,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
-        model.material.delegate = self
+        materialUpdateSubscription = model.material.updatedPublisher.sink { material in
+            print("Material Updated: \(material.label)")
+        }
 
         renderer.setClearColor(.zero)
         renderer.depthStoreAction = .store
@@ -475,10 +480,6 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 #else
         return 2.0 * simd_make_float2(Float(point.x / size.width), 1.0 - Float(point.y / size.height)) - 1.0
 #endif
-    }
-
-    func updated(material: Material) {
-        print("Material Updated: \(material.label)")
     }
 
     func createTexture(_ label: String, _ pixelFormat: MTLPixelFormat, _ textureScale: Int) -> MTLTexture? {

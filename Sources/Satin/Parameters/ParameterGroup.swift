@@ -33,6 +33,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public var label = ""
     public private(set) var params: [any Parameter] = [] {
         didSet {
+            structureRevision &+= 1
             _updateSize = true
             _updateStride = true
             _updateAlignment = true
@@ -41,7 +42,13 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
         }
     }
 
-    public var paramsMap: [String: any Parameter] = [:]
+    public var paramsMap: [String: any Parameter] = [:] {
+        didSet { structureRevision &+= 1 }
+    }
+
+    /// Advances whenever a parameter is added, removed or replaced, so a parameter found by name
+    /// can be kept and used while it is unchanged.
+    public private(set) var structureRevision: UInt64 = 0
 
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 

@@ -35,7 +35,6 @@ public class ARPostProcessEncoder: PostProcessEncoder {
     public init(label: String, context: Context, session: ARSession) {
         self.session = session
         super.init(label: label, context: context, material: ARPostMaterial(context: context))
-        renderer.colorLoadAction = .load
         postProcessRenderer.colorLoadAction = .load
     }
 

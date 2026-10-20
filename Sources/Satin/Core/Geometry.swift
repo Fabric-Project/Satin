@@ -221,7 +221,8 @@ open class Geometry {
     open var pieces: GeometryPieces? { storedPieces }
     private var storedPieces: GeometryPieces?
     /// The uniform weights `setPieces` last wrote, to recognise them when the pieces regroup.
-    private weak var pieceJointWeights: Float4BufferAttribute?
+    /// Strong: replaced by the next `setPieces`; no side table on the attribute.
+    private var pieceJointWeights: Float4BufferAttribute?
 
     /// Divides the geometry into `pieces` and gives each vertex its lowest-level piece's index as
     /// its joint (see `GeometryPieces`), so a palette with a matrix per piece moves each on its
@@ -733,9 +734,10 @@ open class Geometry {
     open var skinningSource: Geometry { self }
 
     private var posedBVH: BVH?
-    private weak var posedBVHPalette: JointPalette?
+    // Strong: each is the palette in use, replaced when it changes; no side table on palettes.
+    private var posedBVHPalette: JointPalette?
     private var posedBVHPoseVersion = -1
-    private weak var boundsPalette: JointPalette?
+    private var boundsPalette: JointPalette?
     private var boundsPoseVersion = -1
     private var jointRestBoundsCache: [Bounds]?
 

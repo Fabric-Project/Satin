@@ -170,7 +170,7 @@ final class ARBloomRenderer: BaseRenderer {
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
 
-        postProcessor.renderer.colorLoadAction = .load
+        postProcessor.postProcessRenderer.colorLoadAction = .load
 
         postProcessor.draw(
             frame: frameTime,

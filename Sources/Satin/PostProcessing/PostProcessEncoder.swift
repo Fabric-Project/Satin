@@ -9,10 +9,11 @@ import Foundation
 import Metal
 import simd
 
+/// Draws one full-screen quad with its material: a post-processing pass. Its pass's load and store
+/// settings live on `postProcessRenderer`.
 open class PostProcessEncoder {
     public var label = "Post" {
         didSet {
-            renderer.label = label + " RenderEncoder"
             postProcessRenderer.label = label + " PostProcessRenderEncoder"
             mesh.label = label + " Mesh"
             scene.label = label + " Scene"
@@ -24,49 +25,23 @@ open class PostProcessEncoder {
     public let mesh: Mesh
     public let camera: OrthographicCamera
 
-    public let renderer: RenderEncoder
     public let postProcessRenderer: PostProcessRenderEncoder
 
     public init(
         label: String = "Post Processor",
         context: Context,
         material: Material? = nil,
-        sortObjects: Bool = true,
         colorPixelFormat: MTLPixelFormat? = nil,
         depthPixelFormat: MTLPixelFormat? = nil,
         stencilPixelFormat: MTLPixelFormat? = nil,
         clearColor: simd_float4 = .init(0, 0, 0, 1),
         colorLoadAction: MTLLoadAction = .clear,
         colorStoreAction: MTLStoreAction = .store,
-        clearDepth: Double = 0,
-        depthLoadAction: MTLLoadAction = .clear,
-        depthStoreAction: MTLStoreAction = .store,
-        clearStencil: UInt32 = 0,
-        stencilLoadAction: MTLLoadAction = .clear,
-        stencilStoreAction: MTLStoreAction = .dontCare,
         frameBufferOnly: Bool = true
     ) {
         self.label = label
         self.context = context
         camera = OrthographicCamera(context: context)
-        renderer = RenderEncoder(
-            label: label + " RenderEncoder",
-            context: context,
-            colorPixelFormat: colorPixelFormat ?? context.colorPixelFormat,
-            depthPixelFormat: depthPixelFormat ?? context.depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat ?? context.stencilPixelFormat,
-            sortObjects: sortObjects,
-            clearColor: clearColor,
-            colorLoadAction: colorLoadAction,
-            colorStoreAction: colorStoreAction,
-            clearDepth: clearDepth,
-            depthLoadAction: depthLoadAction,
-            depthStoreAction: depthStoreAction,
-            clearStencil: clearStencil,
-            stencilLoadAction: stencilLoadAction,
-            stencilStoreAction: stencilStoreAction,
-            frameBufferOnly: frameBufferOnly
-        )
         postProcessRenderer = PostProcessRenderEncoder(
             label: label + " PostProcessRenderEncoder",
             context: context,
@@ -137,7 +112,6 @@ open class PostProcessEncoder {
     }
 
     open func resize(size: (width: Float, height: Float), scaleFactor: Float) {
-        renderer.resize(size)
         postProcessRenderer.resize(size)
     }
 }

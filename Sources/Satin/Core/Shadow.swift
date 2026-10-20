@@ -10,6 +10,10 @@ import Foundation
 import Metal
 import simd
 
+#if SWIFT_PACKAGE
+import SatinCore
+#endif
+
 public class Shadow {
     public var label: String
     public var texture: MTLTexture? = nil
@@ -64,9 +68,57 @@ public class Shadow {
         enabled && (autoUpdate || needsUpdate)
     }
     
-    /// Records and encodes the casters among `renderables` into this shadow's map, from the light's
-    /// view, into `recorder`'s draw.
-    func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
-        fatalError("Subclasses must overload")
+    // MARK: - Passes
+
+    // A shadow draws one depth pass per view: a point light's six faces, otherwise one. Its
+    // casters are recorded once for every pass of every shadow drawn in a frame (see
+    // `ShadowCasterRecording`), and each pass encodes them as its own view.
+
+    /// How many passes, and views, this shadow draws.
+    var passCount: Int { 1 }
+
+    /// The camera pass `passIndex` sees from.
+    func passCamera(_ passIndex: Int) -> Camera { camera }
+
+    /// The depth texture pass `passIndex` draws into.
+    func passTexture(_ passIndex: Int) -> MTLTexture? { texture }
+
+    /// Makes what the passes draw into, before any pass begins.
+    func prepareForDrawing(context: Context) {}
+
+    /// Whether a caster within `bounds` may reach any of this shadow's passes, beyond what each
+    /// pass's frustum says: a point light's far planes. True when it can't tell.
+    func mayReach(_ bounds: Bounds) -> Bool { true }
+
+    /// The viewport every pass draws with: the whole map.
+    var passViewport: simd_float4 {
+        simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
+    }
+
+    /// Starts pass `passIndex`: an encoder clearing its depth texture, with the pass's viewport
+    /// set through `renderEncoderState`. Nil when there is nothing to draw into.
+    func beginPass(_ passIndex: Int, context: Context, commandBuffer: MTLCommandBuffer) -> MTLRenderCommandEncoder? {
+        guard let depthTexture = passTexture(passIndex) else { return nil }
+
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
+        renderPassDescriptor.depthAttachment.texture = depthTexture
+        renderPassDescriptor.depthAttachment.loadAction = .clear
+        renderPassDescriptor.depthAttachment.storeAction = .store
+        renderPassDescriptor.depthAttachment.clearDepth = 0.0
+        renderPassDescriptor.renderTargetWidth = resolution.width
+        renderPassDescriptor.renderTargetHeight = resolution.height
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return nil }
+        renderEncoder.label = passCount > 1 ? "\(label) Shadow Encoder \(passIndex)" : label + " Shadow Encoder"
+        renderEncoderState.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+        renderEncoderState.setPassViewport(MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0))
+        return renderEncoder
+    }
+
+    /// Ends the pass `beginPass` started.
+    func endPass(_ renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.endEncoding()
+        renderEncoderState.end()
     }
 }

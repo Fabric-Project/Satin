@@ -10,10 +10,6 @@ import Combine
 import Metal
 import simd
 
-public protocol MaterialDelegate: AnyObject {
-    func updated(material: Material)
-}
-
 public struct DepthBias: Codable, Equatable {
     var bias: Float
     var slope: Float
@@ -148,8 +144,8 @@ open class Material: Codable {
     }
 
     public internal(set) var isClone = false
-    public weak var delegate: MaterialDelegate?
 
+    /// Sends the material whenever its shader's parameters are replaced after the first time.
     public let updatedPublisher = PassthroughSubject<Material, Never>()
 
     public let context: Context
@@ -431,7 +427,6 @@ open class Material: Codable {
 
             if !isInitialParameters {
                 self.updatedPublisher.send(self)
-                self.delegate?.updated(material: self)
             }
         }
     }
@@ -461,20 +456,25 @@ open class Material: Codable {
     /// call `super`; state the context doesn't model goes through `context.addCustomCommand`.
     open func draw(in context: MaterialDrawContext) {
         let shadow = context.isShadowPass
+        // Read once for the whole draw: a class property read is a checked access each time.
+        guard let shader else {
+            recordDepthState(in: context, shadow: shadow)
+            return
+        }
         // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
         // a layout variant's included, and the bindings below are made from that.
-        let pipeline = shader?.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
-        recordUniforms(in: context, shadow: shadow)
+        let pipeline = shader.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
+        recordUniforms(in: context, shader: shader, shadow: shadow)
         recordDepthState(in: context, shadow: shadow)
-        recordBuffers(in: context)
-        recordTextures(in: context)
+        recordBuffers(in: context, shader: shader)
+        recordTextures(in: context, shader: shader)
         if let pipeline {
             context.setPipeline(pipeline)
         }
     }
 
-    private func recordUniforms(in context: MaterialDrawContext, shadow: Bool) {
-        guard let shader, let uniforms = uniformsBinding(in: context) else { return }
+    private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool) {
+        guard let uniforms = uniformsBinding(in: context) else { return }
 
         if shader.vertexWantsMaterialUniforms {
             context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
@@ -523,9 +523,7 @@ open class Material: Codable {
         )
     }
 
-    private func recordBuffers(in context: MaterialDrawContext) {
-        guard let shader else { return }
-
+    private func recordBuffers(in context: MaterialDrawContext, shader: Shader) {
         for index in shader.vertexBufferBindingIsUsed {
             let slot = index.rawValue
             guard slot < vertexBufferSlots.count else { continue }
@@ -551,9 +549,7 @@ open class Material: Codable {
         }
     }
 
-    private func recordTextures(in context: MaterialDrawContext) {
-        guard let shader else { return }
-
+    private func recordTextures(in context: MaterialDrawContext, shader: Shader) {
         for index in shader.vertexTextureBindingIsUsed {
             let slot = index.rawValue
             if slot < vertexTextureSlots.count, let texture = vertexTextureSlots[slot] {
@@ -766,7 +762,6 @@ open class Material: Codable {
     }
 
     deinit {
-        delegate = nil
         shader = nil
     }
 
@@ -788,7 +783,6 @@ open class Material: Codable {
         clone.lighting = lighting
         clone.lightCount = lightCount
 
-        clone.delegate = delegate
         clone.parameters = parameters.clone()
 
         clone.onUpdate = onUpdate

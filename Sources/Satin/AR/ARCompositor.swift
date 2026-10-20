@@ -54,13 +54,9 @@ public class ARCompositor: ARPostProcessEncoder {
 
         mesh.material = ARCompositorMaterial(context: context)
 
-        renderer.setClearColor(.zero)
-
-        renderer.colorLoadAction = .clear
-        renderer.colorStoreAction = .store
-
-        renderer.depthLoadAction = .clear
-        renderer.depthStoreAction = .store
+        postProcessRenderer.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        postProcessRenderer.colorLoadAction = .clear
+        postProcessRenderer.colorStoreAction = .store
     }
 }
 

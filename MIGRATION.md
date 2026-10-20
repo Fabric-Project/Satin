@@ -85,6 +85,9 @@ try renderEncoder.draw(submission: submission, renderPassDescriptor: renderPassD
 | `setMinimumEncodesPerFrame(_:)` | Nothing (see "Rendering a scene more than once a frame"). |
 | `Shader.pipelines`, `shadowPipelines`, `configurations` | `Shader.pipeline(for:shadow:)`. |
 
+
+`MaterialDelegate` and `Material.delegate` are removed: subscribe to `Material.updatedPublisher`, which sends the same event.
+
 ## Geometry
 
 - `encode(_ commandBuffer:)` → `encode(in: EncodingContext)` on `Object`, `Mesh`, `Submesh`, `Geometry` and `Material`. The context carries the command buffer, the frame, the views, and `allocate(length:)` for per-encode GPU output. Work that only touches the CPU belongs in `update()`.
@@ -143,3 +146,8 @@ A renderable that draws outside its geometry's bounds must opt out with `frustum
 ## Point-light shadows
 
 A point light records each caster once for all six faces and encodes that recording in each face it reaches, as that face's view: binding the render event's `vertexUniforms` (from `RenderableDrawContext`) through `setVertexBuffer` / `setFragmentBuffer` follows the face being drawn. A caster whose shadow recording runs a custom command is recorded per face as before, because the command may have captured the first face's uniforms.
+
+## Post-processing
+
+`PostProcessEncoder` no longer owns a `RenderEncoder`: its `renderer` property is gone, along with the initialiser's `sortObjects`, `clearDepth`, `depthLoadAction`, `depthStoreAction`, `clearStencil`, `stencilLoadAction` and `stencilStoreAction`. Its quad always drew through `postProcessRenderer`, so those settings never reached its pass. Set clear colour, colour load and store actions and `frameBufferOnly` on `postProcessRenderer` instead. `PostProcessRenderEncoder.colorTexture` is now public: the texture a pass draws into when its descriptor supplies none (`ARBackgroundEncoder.colorTexture` returns it).
+

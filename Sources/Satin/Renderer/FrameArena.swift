@@ -147,8 +147,10 @@ final class FrameArena {
 
         let region = Region(commandBuffer: commandBuffer)
         activeRegions.append(region)
-        commandBuffer.addCompletedHandler { [weak self] _ in
-            self?.complete(region)
+        // Strong: the arena outlives the command buffers it allocates for, and needs no side table.
+        // The handler is released with the command buffer, completed or not, so this is no cycle.
+        commandBuffer.addCompletedHandler { _ in
+            self.complete(region)
         }
         return region
     }

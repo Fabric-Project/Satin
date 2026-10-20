@@ -64,7 +64,8 @@ open class PostProcessRenderEncoder {
     private let renderEncoderState = RenderEncoderState()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
-    private var colorTexture: MTLTexture?
+    /// The texture a pass draws into when its descriptor supplies none.
+    public private(set) var colorTexture: MTLTexture?
     private var colorMultisampleTexture: MTLTexture?
 
     private func colorAttachment(_ renderPassDescriptor: MTLRenderPassDescriptor) -> MTLRenderPassColorAttachmentDescriptor {

@@ -110,7 +110,8 @@ open class Mesh: Renderable {
     }
 
     var geometrySubscription: AnyCancellable?
-    private weak var boundsJointPalette: JointPalette?
+    // Strong: it is the palette in use, replaced when the geometry's changes; no side table.
+    private var boundsJointPalette: JointPalette?
     private var boundsObserver: MeshBoundsObserver?
 
     public internal(set) var submeshes: [Submesh] = []
@@ -278,7 +279,8 @@ open class Mesh: Renderable {
     /// pass, or for itself, its material, vertex uniforms, then its geometry's `draw(in:)` (over the
     /// submesh's indices for a submesh). Nothing to draw records nothing.
     func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
-        guard instanceCount > 0, geometry.hasVertexBuffers else { return }
+        // Read once for the whole draw: a class property read is a checked access each time.
+        guard let geometry = self.geometry, instanceCount > 0, geometry.hasVertexBuffers else { return }
 
         // The material may be shared with meshes of another layout: pick the pipeline for ours.
         let layout = drawLayout

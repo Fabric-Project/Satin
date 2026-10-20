@@ -256,9 +256,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         super.init(
             label: "Bokeh Depth Of Field",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
     }
 

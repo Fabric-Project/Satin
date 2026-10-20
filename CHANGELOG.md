@@ -206,7 +206,12 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 ## Culling and Shadow Recording
 
 * Passes skip renderables whose world bounds are wholly outside their views: colour views, shadow cameras and each point-light face. `Renderable.frustumCulled` (default `true`) opts out, for shaders that draw beyond the geometry's bounds.
-* A point light records each caster once for all six faces instead of once per face, and encodes it per face as that face's view.
+* Shadows record each caster once for every shadow pass of the frame (all lights, a point light's six faces each) instead of once per pass, and each pass encodes it as its own view.
+* `ParameterGroup.structureRevision` advances when parameters are added, removed or replaced; `StandardMaterial` uses it to write the environment intensity and texture transforms the renderer sets every frame without a lookup by name.
+
+## Post-Processing
+
+* `PostProcessEncoder` no longer creates and resizes a `RenderEncoder` it never drew with. Settings that were made on that encoder, and so ignored (`ARBloomRenderer`'s and `ARCompositor`'s load actions, `ARBackgroundEncoder`'s clear colour and texture), now apply to the pass that draws.
 
 ## Bug Fixes
 

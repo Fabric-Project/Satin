@@ -75,7 +75,33 @@ open class StandardMaterial: Material {
             get("Environment Intensity", as: FloatParameter.self)!.value
         }
         set {
-            set("Environment Intensity", newValue)
+            // The renderer sets it every frame: through the parameter found once, not by name.
+            resolveFrameParameters()
+            if let environmentIntensityParameter {
+                environmentIntensityParameter.value = newValue
+            } else {
+                set("Environment Intensity", newValue)
+            }
+        }
+    }
+
+    // MARK: - Parameters Set Every Frame
+
+    // The parameters the renderer writes every frame, found by name once per parameter
+    // structure: `ParameterGroup.structureRevision` says when to find them again.
+    private var frameParameterGroup: ParameterGroup?
+    private var frameParameterStructureRevision: UInt64 = 0
+    private var environmentIntensityParameter: FloatParameter?
+    private var texcoordParameters = [Float4x4Parameter?](repeating: nil, count: PBRTextureType.count)
+
+    private func resolveFrameParameters() {
+        let parameters = self.parameters
+        guard parameters !== frameParameterGroup || parameters.structureRevision != frameParameterStructureRevision else { return }
+        frameParameterGroup = parameters
+        frameParameterStructureRevision = parameters.structureRevision
+        environmentIntensityParameter = parameters.get("Environment Intensity", as: FloatParameter.self)
+        for type in PBRTextureType.orderedCases {
+            texcoordParameters[type.index] = parameters.get(type.texcoordParameterName, as: Float4x4Parameter.self)
         }
     }
 
@@ -148,7 +174,13 @@ open class StandardMaterial: Material {
     }
 
     public func setTextureTransform(_ transform: simd_float4x4, type: PBRTextureType) {
-        set(type.texcoordParameterName, transform)
+        // The renderer sets the environment maps' every frame: through the parameter found once.
+        resolveFrameParameters()
+        if let parameter = texcoordParameters[type.index] {
+            parameter.value = transform
+        } else {
+            set(type.texcoordParameterName, transform)
+        }
     }
 
     public func setTexcoordTransform(_ transform: simd_float4x4, type: PBRTextureType) {

@@ -70,9 +70,7 @@ final class MotionBlurRenderer: BaseRenderer {
     lazy var compositor = PostProcessEncoder(
         label: "Compositor",
         context: defaultContext,
-        material: compositorMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
+        material: compositorMaterial
     )
 
     // MARK: - Scene

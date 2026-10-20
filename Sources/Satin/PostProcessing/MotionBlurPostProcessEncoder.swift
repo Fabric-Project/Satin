@@ -81,25 +81,20 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         motionBlurMaterial = MotionBlurMaterial(context: blurContext)
         let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat)
         tileMaxMaterial = MotionBlurTileMaxMaterial(context: tileMaxContext)
-        tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial,
-                                            depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+        tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial)
         // One material and encoder per pass, so each keeps its own uniforms within a frame.
         let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat)
         let jumpFloodMaterials = (0 ..< Self.jumpFloodPassCount).map { _ in MotionBlurJumpFloodMaterial(context: pointerContext) }
         self.jumpFloodMaterials = jumpFloodMaterials
         jumpFloodEncoders = jumpFloodMaterials.enumerated().map { pass, material in
-            PostProcessEncoder(label: "Motion Blur Jump Flood \(pass)", context: pointerContext, material: material,
-                               depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+            PostProcessEncoder(label: "Motion Blur Jump Flood \(pass)", context: pointerContext, material: material)
         }
         neighborMaxMaterial = MotionBlurNeighborMaxMaterial(context: pointerContext)
-        neighborMaxEncoder = PostProcessEncoder(label: "Motion Blur Neighbor Max", context: pointerContext, material: neighborMaxMaterial,
-                                                depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+        neighborMaxEncoder = PostProcessEncoder(label: "Motion Blur Neighbor Max", context: pointerContext, material: neighborMaxMaterial)
         super.init(
             label: "Motion Blur",
             context: blurContext,
-            material: motionBlurMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: motionBlurMaterial
         )
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device)
     }

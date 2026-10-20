@@ -28,16 +28,12 @@ final class SeparablePostProcessEncoder {
         horizontalProcessor = PostProcessEncoder(
             label: label + " Horizontal",
             context: context,
-            material: horizontalMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: horizontalMaterial
         )
         verticalProcessor = PostProcessEncoder(
             label: label + " Vertical",
             context: context,
-            material: verticalMaterial ?? horizontalMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: verticalMaterial ?? horizontalMaterial
         )
     }
 

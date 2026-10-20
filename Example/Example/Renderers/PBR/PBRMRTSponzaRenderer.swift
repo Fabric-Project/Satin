@@ -200,8 +200,9 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
 
     override func setup() throws {
         
-        PointShadow.recordsCastersOnceForAllFaces = false
-        
+        PointShadow.recordsCastersOnceForAllFaces = true
+        PacketRecorder.alignsViewSlots = true
+
         loadHdri()
         setupSponzaScene()
         setupLights()
@@ -373,7 +374,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         }
 
         // Sponza is static: meshes sharing a material merge, for far fewer draws per pass.
-        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader, mergeStaticMeshes: false) else {
+        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader, mergeStaticMeshes: true) else {
             print("Failed to load Sponza scene at \(url.path)")
             return
         }

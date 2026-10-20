@@ -148,33 +148,25 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         prefilterProcessor = PostProcessEncoder(
             label: "SSAO Prefilter",
             context: depthContext,
-            material: prefilterMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: prefilterMaterial
         )
 
         denoiseProcessor = PostProcessEncoder(
             label: "SSAO Denoise",
             context: aoContext,
-            material: denoiseMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: denoiseMaterial
         )
 
         compositeProcessor = PostProcessEncoder(
             label: "SSAO Composite",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
 
         super.init(
             label: "SSAO",
             context: aoContext,
-            material: ssaoMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: ssaoMaterial
         )
 
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device) ?? makeFallbackBlueNoiseTexture(device: context.device)

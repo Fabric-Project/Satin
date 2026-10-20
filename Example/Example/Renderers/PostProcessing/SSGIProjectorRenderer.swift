@@ -126,9 +126,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
     private lazy var compositor = PostProcessEncoder(
         label: "SSGI Projector Compositor",
         context: defaultContext,
-        material: compositorMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
+        material: compositorMaterial
     )
 
     private lazy var textureLoader = MTKTextureLoader(device: device)

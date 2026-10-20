@@ -97,41 +97,11 @@ public final class DirectionalShadow: Shadow {
         needsUpdate = true
     }
 
-    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
-        guard enabled else { return }
-
+    override func prepareForDrawing(context: Context) {
         setupTexture()
-
-        if self.device == nil {
-            self.device = context.device
+        if device == nil {
+            device = context.device
         }
-
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-
-        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
-        renderPassDescriptor.depthAttachment.texture = texture
-        renderPassDescriptor.depthAttachment.loadAction = .clear
-        renderPassDescriptor.depthAttachment.storeAction = .store
-        renderPassDescriptor.depthAttachment.clearDepth = 0.0
-        renderPassDescriptor.renderTargetWidth = resolution.width
-        renderPassDescriptor.renderTargetHeight = resolution.height
-
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
-        else { return }
-
-        renderEncoder.label = label + " Shadow Encoder"
-        renderEncoderState.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
-        renderEncoderState.setPassViewport(viewport)
-        let shadowViews = [RenderView(camera: camera, viewport: _viewport, frame: recorder.frame)]
-        let frustum = ViewFrustum(viewProjectionMatrix: shadowViews[0].viewProjectionMatrix)
-        for renderable in renderables where renderable.castShadow {
-            guard !renderable.frustumCulled || frustum.mayContain(renderable.worldBounds) else { continue }
-            let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: shadowViews)
-            recorder.encode(packets, into: renderEncoderState)
-        }
-        renderEncoder.endEncoding()
-        renderEncoderState.end()
-        needsUpdate = false
     }
 
     private func setupTexture() {

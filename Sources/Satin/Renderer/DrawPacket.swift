@@ -38,9 +38,10 @@ enum PacketDrawCall {
 /// One recorded command, in the order it was recorded. References are indices into the storage's
 /// arrays; a texture index of -1 binds nil.
 ///
-/// The per-view cases bind the render event's own vertex uniforms: one `VertexUniforms` per view,
-/// contiguous. Encoded for view k, their offset moves on by k strides, so one recording serves each
-/// view of a multi-view shadow (a point light's faces) in its own pass.
+/// The per-view cases bind the render event's own vertex uniforms: one `VertexUniforms` per view.
+/// Encoded for view k, their offset moves on by k of `PacketRecorder.separateViewStride`, so one
+/// recording serves each view of a multi-view shadow (a point light's faces) in its own pass.
+/// Amplified events are only ever encoded as view 0: their shaders index the views themselves.
 enum PacketCommand {
     case vertexBuffer(bufferIndex: Int32, offset: Int, slot: VertexBufferIndex)
     case fragmentBuffer(bufferIndex: Int32, offset: Int, slot: FragmentBufferIndex)
@@ -432,7 +433,7 @@ struct PacketTables {
     /// Replays the packets at `packetIndices` into `state`, each its state, its commands in
     /// recorded order, then its draw call.
     mutating func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int) where PacketIndices.Element == Int {
-        let viewOffset = viewIndex * PacketRecorder.vertexUniformsStride
+        let viewOffset = viewIndex * PacketRecorder.separateViewStride
         for packetIndex in packetIndices {
             encode(packets[packetIndex], into: state, viewOffset: viewOffset)
         }

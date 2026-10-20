@@ -149,9 +149,7 @@ final class SSGICornellBoxRenderer: BaseRenderer {
     private lazy var compositor = PostProcessEncoder(
         label: "SSGI Cornell Box Compositor",
         context: defaultContext,
-        material: compositorMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
+        material: compositorMaterial
     )
 
     override func setup() throws {

@@ -91,25 +91,19 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         blurProcessor = PostProcessEncoder(
             label: "SSGI Denoise",
             context: ssgiContext,
-            material: blurMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: blurMaterial
         )
 
         compositeProcessor = PostProcessEncoder(
             label: "SSGI Composite",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
 
         super.init(
             label: "SSGI",
             context: ssgiContext,
-            material: ssgiMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: ssgiMaterial
         )
 
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device)

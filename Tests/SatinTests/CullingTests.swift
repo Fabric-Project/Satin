@@ -115,6 +115,39 @@ final class CullingTests: XCTestCase {
         return Object(context: context, label: "Scene", [light, floor, caster])
     }
 
+    func testSeparatelyEncodedViewsEachStartOnA256ByteBoundary() throws {
+        XCTAssertEqual(PacketRecorder.viewSlotStride % 256, 0)
+        XCTAssertGreaterThanOrEqual(PacketRecorder.viewSlotStride, PacketRecorder.vertexUniformsStride)
+
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let storage = PacketStoragePool().lease()
+        let recorder = PacketRecorder(storage: storage, arena: FrameArena(device: context.device), commandBuffer: commandBuffer, frame: .zero)
+        let mesh = makeMesh(at: .zero)
+        mesh.beginOccurrence(frame: .zero)
+        let cameras = [
+            PerspectiveCamera(context: context, position: [-1, 0, 5], near: 0.1, far: 100, fov: 30),
+            PerspectiveCamera(context: context, position: [1, 0, 5], near: 0.1, far: 100, fov: 30),
+            PerspectiveCamera(context: context, position: [0, 1, 5], near: 0.1, far: 100, fov: 30),
+        ]
+
+        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: [0, 0, 64, 64]) })
+
+        XCTAssertFalse(packets.isEmpty)
+        let packet = storage.packets[packets.lowerBound]
+        let binding = storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)].compactMap { command -> (bufferIndex: Int32, offset: Int)? in
+            if case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command { return (bufferIndex, offset) }
+            return nil
+        }.first
+        let vertexUniforms = try XCTUnwrap(binding)
+        XCTAssertEqual(vertexUniforms.offset % 256, 0)
+        let contents = storage.buffers[Int(vertexUniforms.bufferIndex)].contents() + vertexUniforms.offset
+        // viewMatrix follows modelMatrix in each view's VertexUniforms.
+        for (view, camera) in cameras.enumerated() {
+            let viewMatrix = (contents + view * PacketRecorder.separateViewStride + MemoryLayout<simd_float4x4>.stride).load(as: simd_float4x4.self)
+            XCTAssertEqual(viewMatrix, camera.viewMatrix, "view \(view) sits at its own aligned slot")
+        }
+    }
+
     func testAPointLightRecordsEachCasterOnceForAllItsFaces() throws {
         let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
         caster.position = [0, -1, 0]
@@ -122,6 +155,24 @@ final class CullingTests: XCTestCase {
         try draw(makePointLightScene(caster: caster))
 
         XCTAssertEqual(caster.shadowDraws, 1, "one recording serves every face it reaches")
+    }
+
+    func testEveryShadowOfAFrameSharesOneRecordingOfACaster() throws {
+        let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
+        caster.frustumCulled = false
+        let scene = makePointLightScene(caster: caster)
+        let secondPoint = PointLight(context: context, color: [1, 1, 1], intensity: 10, radius: 20)
+        secondPoint.position = [3, 0, 0]
+        secondPoint.castShadow = true
+        let spot = SpotLight(context: context, color: [1, 1, 1], intensity: 10, radius: 20, angleInner: 10, angleOuter: 30)
+        spot.position = [0, 4, 0]
+        spot.castShadow = true
+        scene.add(secondPoint)
+        scene.add(spot)
+
+        try draw(scene)
+
+        XCTAssertEqual(caster.shadowDraws, 1, "two point lights' twelve faces and a spot light encode one recording")
     }
 
     func testAPointLightSkipsACasterBeyondItsReach() throws {
