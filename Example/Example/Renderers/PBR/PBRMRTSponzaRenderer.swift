@@ -374,7 +374,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         }
 
         // Sponza is static: meshes sharing a material merge, for far fewer draws per pass.
-        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader, mergeStaticMeshes: true) else {
+        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader, mergeStaticMeshes: true, mergeCells:16) else {
             print("Failed to load Sponza scene at \(url.path)")
             return
         }

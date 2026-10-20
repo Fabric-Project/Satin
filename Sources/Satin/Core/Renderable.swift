@@ -47,7 +47,16 @@ open class Renderable : Object {
         }
     }
 
-    open var opaque: Bool { material!.blending == .disabled }
+    /// Whether its own material draws opaque; a renderable whose submeshes carry the materials,
+    /// and so has none of its own, counts as opaque.
+    open var opaque: Bool { (material?.blending ?? .disabled) == .disabled }
+
+    /// Whether any material this renderable draws in `materialPass` blends: a double-sided,
+    /// uncullled renderable that does is recorded back faces first, then front faces.
+    func drawsTransparent(in materialPass: MaterialPass) -> Bool {
+        guard let material else { return false }
+        return material.blending != .disabled && materialPass.includes(material)
+    }
     
     open var doubleSided: Bool = false
 

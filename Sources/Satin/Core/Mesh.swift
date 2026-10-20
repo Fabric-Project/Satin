@@ -92,7 +92,7 @@ open class Mesh: Renderable {
     }
 
 
-    open var geometry: Geometry! {
+    open var geometry: Geometry {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
@@ -131,7 +131,9 @@ open class Mesh: Renderable {
 
     // MARK: - Decode
 
+    /// A decoded mesh starts with an empty geometry; its setup gives it the mesh's context.
     public required init(from decoder: Decoder) throws {
+        geometry = Geometry(context: try decoder.requireSatinContext(typeName: String(describing: Self.self)))
         try super.init(from: decoder)
     }
 
@@ -159,9 +161,6 @@ open class Mesh: Renderable {
     }
 
     open func setupGeometry() {
-        if geometry == nil {
-            geometry = Geometry(context: context)
-        }
         // A geometry swapped in under an existing material (as Fabric's Mesh node does) must
         // take effect now as the materials' default vertex layout.
         // The subscription below only sees later changes.
@@ -280,7 +279,8 @@ open class Mesh: Renderable {
     /// submesh's indices for a submesh). Nothing to draw records nothing.
     func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
         // Read once for the whole draw: a class property read is a checked access each time.
-        guard let geometry = self.geometry, instanceCount > 0, geometry.hasVertexBuffers else { return }
+        let geometry = self.geometry
+        guard instanceCount > 0, geometry.hasVertexBuffers else { return }
 
         // The material may be shared with meshes of another layout: pick the pipeline for ours.
         let layout = drawLayout
@@ -298,6 +298,19 @@ open class Mesh: Renderable {
             recordVertexUniforms(in: context, for: material)
             geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
         }
+    }
+
+    /// A mesh whose submeshes carry the materials asks them: any visible submesh blending in
+    /// `materialPass` orders the whole recording. Opaque submeshes in the same pass are then drawn
+    /// as two culled halves, the same pixels as one uncullled draw.
+    override func drawsTransparent(in materialPass: MaterialPass) -> Bool {
+        guard !submeshes.isEmpty else { return super.drawsTransparent(in: materialPass) }
+        for submesh in submeshes where submesh.visible {
+            if let material = submesh.material, material.blending != .disabled, materialPass.includes(material) {
+                return true
+            }
+        }
+        return false
     }
 
     private func materialMatchesCurrentPass(_ material: Material, in context: RenderableDrawContext) -> Bool {

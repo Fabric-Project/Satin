@@ -22,8 +22,9 @@ final class LoaderMergingTests: XCTestCase {
         url = try XCTUnwrap(Bundle.module.url(forResource: "loader_merging", withExtension: "usda"))
     }
 
-    private func loadMeshes(merging: Bool) throws -> [Mesh] {
-        let model = try XCTUnwrap(loadAsset(url: url, context: context, textureLoader: textureLoader, mergeStaticMeshes: merging))
+    /// One cell merges across the whole model, as the cases in the fixture expect.
+    private func loadMeshes(merging: Bool, cells: Int = 1) throws -> [Mesh] {
+        let model = try XCTUnwrap(loadAsset(url: url, context: context, textureLoader: textureLoader, mergeStaticMeshes: merging, mergeCells: cells))
         return model.getChildren().compactMap { $0 as? Mesh }
     }
 
@@ -52,6 +53,17 @@ final class LoaderMergingTests: XCTestCase {
         XCTAssertEqual(p.worldMatrix, joined[0].worldMatrix)
     }
 
+    func testMergingStaysWithinEachCellOfTheGrid() throws {
+        // The candidates span x -3 ... 1.8, the longest side: three cells of 1.6. P and Q share the
+        // first cell; R's centre is in the second and Z's in the third, so they stay apart.
+        let merged = try loadMeshes(merging: true, cells: 3)
+        XCTAssertEqual(merged.map(\.label).sorted(), ["P", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"])
+
+        let separate = try loadMeshes(merging: false)
+        let p = try mesh("P", in: merged)
+        XCTAssertEqual(p.geometry.vertexCount, try mesh("P", in: separate).geometry.vertexCount + mesh("Q", in: separate).geometry.vertexCount)
+    }
+
     func testMergingIsDeterministic() throws {
         let first = try loadMeshes(merging: true)
         let second = try loadMeshes(merging: true)
@@ -64,7 +76,7 @@ final class LoaderMergingTests: XCTestCase {
         func render(merging: Bool) throws -> RGBAImage {
             try VisualTestHarness.render(size: [160, 96]) { renderer, camera in
                 let context = renderer.context
-                let model = loadAsset(url: self.url, context: context, textureLoader: MTKTextureLoader(device: context.device), mergeStaticMeshes: merging)
+                let model = loadAsset(url: self.url, context: context, textureLoader: MTKTextureLoader(device: context.device), mergeStaticMeshes: merging, mergeCells: 1)
                     ?? Object(context: context, label: "Missing")
                 let light = DirectionalLight(context: context, color: [1, 1, 1], intensity: 2)
                 light.position = [1, 2, 4]

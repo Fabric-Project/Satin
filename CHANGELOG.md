@@ -195,7 +195,7 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 * Meshes loaded from one asset share a material when their source materials are identical, and each texture loads once per set of loading options.
 * Culling follows the asset's sidedness instead of drawing back faces everywhere; mirrored meshes keep their winding correct.
-* `mergeStaticMeshes` (off by default) joins loaded meshes that draw exactly alike (one material, cull mode, vertex layout and world transform; opaque and static) into one mesh each, copying vertices as they are: fewer draws, the same pixels.
+* `mergeStaticMeshes` (off by default) joins loaded meshes that draw exactly alike (one material, cull mode, vertex layout and world transform; opaque and static) into one mesh each, copying vertices as they are: fewer draws, the same pixels. Merging stays within each cell of a grid over the model (`mergeCells` along its longest side, 4 by default), by the centre of each mesh's bounds, which keeps merged meshes mostly local so culling can skip more of them.
 
 ## Transform Revisions
 

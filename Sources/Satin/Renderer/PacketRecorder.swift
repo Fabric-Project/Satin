@@ -101,7 +101,7 @@ public final class PacketRecorder {
 
         // A double-sided transparent renderable is recorded twice, culling front faces and then back
         // faces, so all its back faces draw before its front faces, every submesh in each.
-        if pass == .color, renderable.doubleSided, renderable.cullMode == .none, renderable.opaque == false {
+        if pass == .color, renderable.doubleSided, renderable.cullMode == .none, renderable.drawsTransparent(in: materialPass) {
             recordOnce(renderable, cullMode: .front, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
             recordOnce(renderable, cullMode: .back, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
         } else {

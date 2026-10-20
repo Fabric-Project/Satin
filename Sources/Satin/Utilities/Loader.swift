@@ -30,17 +30,19 @@ public struct LoadedAsset {
 /// the model several times; instance matrices apply in each mesh's own space.
 ///
 /// `mergeStaticMeshes` joins meshes that draw alike into one mesh each (see
-/// `mergeStaticMeshes(_:context:textureLoader:record:)`): fewer draws, the same pixels, but the
+/// `mergeStaticMeshes(_:cellsAlongLongestSide:context:textureLoader:record:)`), only within each of a
+/// grid of `mergeCells` cells along the model's longest side, so culling can still skip what is
+/// out of view; 1 merges across the whole model. Fewer draws, the same pixels, but the
 /// joined meshes no longer exist on their own. Ignored when `instanced`.
-public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, instanced: Bool = false, mergeStaticMeshes: Bool = false) -> LoadedAsset {
-    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false, instanced: instanced, mergeStaticMeshes: mergeStaticMeshes)
+public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, instanced: Bool = false, mergeStaticMeshes: Bool = false, mergeCells: Int = 4) -> LoadedAsset {
+    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false, instanced: instanced, mergeStaticMeshes: mergeStaticMeshes, mergeCells: mergeCells)
 }
 
 /// Loads a model as its meshes, each placed by its world transform, posed at the start of its
-/// animation. Only that pose is read from the animation. `mergeStaticMeshes` as for
-/// `loadAnimatedAsset`.
-public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, mergeStaticMeshes: Bool = false) -> Object? {
-    Object.flatten(loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: true, mergeStaticMeshes: mergeStaticMeshes).root)
+/// animation. Only that pose is read from the animation. `mergeStaticMeshes` and `mergeCells` as
+/// for `loadAnimatedAsset`.
+public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, mergeStaticMeshes: Bool = false, mergeCells: Int = 4) -> Object? {
+    Object.flatten(loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: true, mergeStaticMeshes: mergeStaticMeshes, mergeCells: mergeCells).root)
 }
 
 /// What one pass over an asset's objects collects for skinning and animation.
@@ -59,7 +61,7 @@ struct AssetLoadRecord {
 
 /// The model's hierarchy and animation, posed at its start. `startPoseOnly` reads just that
 /// pose, for a model that will not be animated.
-func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool, instanced: Bool = false, mergeStaticMeshes merges: Bool = false) -> LoadedAsset {
+func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool, instanced: Bool = false, mergeStaticMeshes merges: Bool = false, mergeCells: Int = 4) -> LoadedAsset {
     let asset = MDLAsset(url: url)
     if textureLoader != nil { asset.loadTextures() }
 
@@ -69,7 +71,7 @@ func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoa
                       textureLoader: textureLoader, instanced: instanced, mergesStaticMeshes: merges && !instanced,
                       underAnimation: false, record: &record)
     // Candidates are static, so their world transforms are final once the hierarchy is built.
-    mergeStaticMeshes(record.mergeCandidates, context: context, textureLoader: textureLoader, record: record)
+    mergeStaticMeshes(record.mergeCandidates, cellsAlongLongestSide: mergeCells, context: context, textureLoader: textureLoader, record: record)
 
     let assetTimeRange = asset.endTime > asset.startTime ? asset.startTime ... asset.endTime : nil
     // Objects first: animated objects take their start pose before skeletons take theirs.
@@ -412,18 +414,24 @@ struct MergeCandidate {
 /// each vertex and the matrix it is drawn with are unchanged, and only opaque meshes join, whose
 /// result doesn't depend on draw order. (Exactly coplanar, overlapping surfaces of different
 /// materials can tie in depth either way; draw order decides those.)
-func mergeStaticMeshes(_ candidates: [MergeCandidate], context: Context, textureLoader: MTKTextureLoader?, record: AssetLoadRecord) {
-    var groups: [(members: [MergeCandidate], vertexCount: Int)] = []
-    for candidate in candidates {
+///
+/// Groups never span cells of a grid laid over the candidates' world bounds, `cellsAlongLongestSide`
+/// cells along the longest side and as many cells of that size along the others. A candidate falls
+/// in the cell holding its bounds' centre: merged meshes stay mostly local, which helps culling, but
+/// a mesh can extend past its cell, so this is a locality heuristic, not a bound.
+func mergeStaticMeshes(_ candidates: [MergeCandidate], cellsAlongLongestSide: Int, context: Context, textureLoader: MTKTextureLoader?, record: AssetLoadRecord) {
+    let cells = mergeCells(of: candidates, cellsAlongLongestSide: cellsAlongLongestSide)
+    var groups: [(members: [MergeCandidate], vertexCount: Int, cell: SIMD3<Int32>)] = []
+    for (candidateIndex, candidate) in candidates.enumerated() {
         var joined = false
-        for groupIndex in groups.indices where groups[groupIndex].members[0].drawsAlike(candidate) {
+        for groupIndex in groups.indices where groups[groupIndex].cell == cells[candidateIndex] && groups[groupIndex].members[0].drawsAlike(candidate) {
             guard candidate.mdlMesh.vertexCount <= Int(UInt32.max) - groups[groupIndex].vertexCount else { continue }
             groups[groupIndex].members.append(candidate)
             groups[groupIndex].vertexCount += candidate.mdlMesh.vertexCount
             joined = true
             break
         }
-        if !joined { groups.append((members: [candidate], vertexCount: candidate.mdlMesh.vertexCount)) }
+        if !joined { groups.append((members: [candidate], vertexCount: candidate.mdlMesh.vertexCount, cell: cells[candidateIndex])) }
     }
 
     for group in groups {
@@ -435,6 +443,32 @@ func mergeStaticMeshes(_ candidates: [MergeCandidate], context: Context, texture
         for member in members.dropFirst() {
             member.placeholder.removeFromParent()
         }
+    }
+}
+
+/// The grid cell each of `candidates` falls in, by the centre of its world bounds.
+private func mergeCells(of candidates: [MergeCandidate], cellsAlongLongestSide: Int) -> [SIMD3<Int32>] {
+    var worldBounds: [Bounds] = []
+    worldBounds.reserveCapacity(candidates.count)
+    var modelBounds = createBounds()
+    for candidate in candidates {
+        let box = candidate.mdlMesh.boundingBox
+        let bounds = transformBounds(Bounds(min: box.minBounds, max: box.maxBounds), candidate.placeholder.worldMatrix)
+        worldBounds.append(bounds)
+        modelBounds = mergeBounds(modelBounds, bounds)
+    }
+
+    let extent = modelBounds.max - modelBounds.min
+    let longestSide = max(extent.x, extent.y, extent.z)
+    guard cellsAlongLongestSide > 1, longestSide.isFinite, longestSide > 0 else {
+        return [SIMD3<Int32>](repeating: .zero, count: candidates.count)
+    }
+    let cellSize = longestSide / Float(cellsAlongLongestSide)
+    let lastCell = SIMD3<Float>(repeating: Float(cellsAlongLongestSide - 1))
+    return worldBounds.map { bounds in
+        let centre = (bounds.min + bounds.max) * 0.5
+        let cell = simd_clamp(((centre - modelBounds.min) / cellSize).rounded(.down), .zero, lastCell)
+        return SIMD3<Int32>(cell, rounding: .towardZero)
     }
 }
 

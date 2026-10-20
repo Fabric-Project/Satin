@@ -23,7 +23,8 @@ open class Submesh {
     private var _updateIndexBuffer = true
 
     var material: Material?
-    var geometry: Geometry!
+    /// Its indices: an elements-only geometry drawn over the mesh's vertices.
+    let geometry: Geometry
 
     /// A range of indices into the vertices of the mesh it is added to, drawn with its own material.
     /// The mesh passes its vertex geometry and draw layout in, so a submesh keeps no reference to it.

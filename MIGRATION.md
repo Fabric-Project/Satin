@@ -97,6 +97,9 @@ try renderEncoder.draw(submission: submission, renderPassDescriptor: renderPassD
 - `JointPalette(device:jointCount:maxBuffersInFlight:encodesPerFrame:)` → `JointPalette(jointCount:)`. `buffer`, `offset`, `index` and `joints` are gone; `matrices` holds the pose. `update(matrices:)` and `reset(matrices:)` are unchanged at the call site.
 - Tessellation: `TessellationProcessor.factorsBuffer` is gone. A `Tessellator` writes to `factorsDestination` (set by `TessellationMesh` per encode). Turning `tessellate` off freezes the factors into a buffer of their own.
 
+
+`Mesh.geometry` is a `Geometry`, no longer `Geometry!`: every mesh has one, a decoded mesh an empty geometry of its context. Drop `?` and `!` where you read it. `BindableBuffer.buffer` is a `let` set by `init(buffer:)`, no longer `MTLBuffer!`. `Renderable.opaque` no longer traps for a renderable without a material of its own (a mesh whose submeshes carry the materials): it counts as opaque.
+
 ## Transforms, cameras and lights: revisions instead of publishers
 
 Transform changes no longer push through the hierarchy. A change bumps the object's `localRevision`; world-derived values (world matrices, world bounds, camera views, light data, instance uniforms) check `worldRevision` when read, and `worldRevision` itself validates against the ancestors when read. Descendant changes still mark ancestor bounds dirty, so a parent's `bounds` / `worldBounds` read sees a child's change at once. `update()` and `onUpdate` still run every frame.
@@ -123,7 +126,7 @@ Custom camera subclasses override `computeProjectionMatrix()` and call `projecti
 
 ### Merging static meshes
 
-`loadAsset` and `loadAnimatedAsset` take `mergeStaticMeshes` (default `false`). When set, meshes that draw exactly alike join into one: the same material, cull mode, vertex layout and world transform, opaque, unskinned, unanimated (no animated transform on the mesh or above it), with one triangle submesh and no children. The merged mesh takes the first member's name and place; the other members are removed, so code that looks meshes up by name, or moves one on its own, must load without merging. Vertices are copied as they are, never transformed, so the model renders the same pixels with fewer draws. Ignored with `instanced`.
+`loadAsset` and `loadAnimatedAsset` take `mergeStaticMeshes` (default `false`). When set, meshes that draw exactly alike join into one: the same material, cull mode, vertex layout and world transform, opaque, unskinned, unanimated (no animated transform on the mesh or above it), with one triangle submesh and no children. The merged mesh takes the first member's name and place; the other members are removed, so code that looks meshes up by name, or moves one on its own, must load without merging. Vertices are copied as they are, never transformed, so the model renders the same pixels with fewer draws. Ignored with `instanced`. `mergeCells` (default 4) splits merging by a grid of that many cells along the model's longest side, by the centre of each mesh's bounds, which keeps merged meshes mostly local (a mesh can still extend past its cell); 1 merges across the whole model.
 
 ## Custom commands
 
