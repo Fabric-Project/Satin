@@ -21,286 +21,30 @@ import Metal
 ///
 /// `invalidate()` forgets everything without issuing a call; `beginPacket()` and
 /// `beginInternalDraw()` do the putting back, once, after an invalidation.
+///
+/// One state serves every pass of its owner, one at a time: `begin(renderEncoder:…)` starts a pass
+/// knowing nothing, and `end()`, right after the encoder's `endEncoding()`, lets go of the encoder
+/// and everything bound, keeping only the capacity of its tables. Everything it knows lives in one
+/// `KnownState` value, and each setter is one call on it.
 public final class RenderEncoderState {
-    public let renderEncoder: MTLRenderCommandEncoder
+    private var known = KnownState()
 
-    private struct BufferBinding {
-        let buffer: MTLBuffer
-        let offset: Int
+    /// The encoder of the pass in progress, between `begin` and `end`.
+    public var renderEncoder: MTLRenderCommandEncoder { known.encoder }
+
+    init() {}
+
+    /// Starts a pass on `renderEncoder` rendering into a target of `renderTargetSize`, knowing
+    /// nothing the encoder holds.
+    func begin(renderEncoder: MTLRenderCommandEncoder, renderTargetSize: (width: Int, height: Int)) {
+        known.begin(renderEncoder: renderEncoder, renderTargetSize: renderTargetSize)
     }
 
-    // MARK: Packet State
-
-    // Each known value is nil when unknown; setting one issues the call when it differs or is
-    // unknown. Nil is never sent for these.
-    private var knownCullMode: MTLCullMode?
-    private var knownWindingOrder: MTLWinding?
-    private var knownTriangleFillMode: MTLTriangleFillMode?
-    private var knownPipeline: MTLRenderPipelineState?
-    private var knownDepthClipMode: MTLDepthClipMode?
-    // Nil is a real value for these two (no depth-stencil state, no bias), so each has a flag.
-    private var knownDepthStencilState: MTLDepthStencilState?
-    private(set) var depthStencilStateIsKnown = false
-    private var knownDepthBias: DepthBias?
-    private(set) var depthBiasIsKnown = false
-
-    public var cullMode: MTLCullMode? {
-        get { knownCullMode }
-        set {
-            guard let newValue, newValue != knownCullMode else { return }
-            renderEncoder.setCullMode(newValue)
-            knownCullMode = newValue
-        }
-    }
-
-    public var windingOrder: MTLWinding? {
-        get { knownWindingOrder }
-        set {
-            guard let newValue, newValue != knownWindingOrder else { return }
-            renderEncoder.setFrontFacing(newValue)
-            knownWindingOrder = newValue
-        }
-    }
-
-    public var triangleFillMode: MTLTriangleFillMode? {
-        get { knownTriangleFillMode }
-        set {
-            guard let newValue, newValue != knownTriangleFillMode else { return }
-            renderEncoder.setTriangleFillMode(newValue)
-            knownTriangleFillMode = newValue
-        }
-    }
-
-    public var pipeline: MTLRenderPipelineState? {
-        get { knownPipeline }
-        set {
-            guard let newValue, newValue !== knownPipeline else { return }
-            renderEncoder.setRenderPipelineState(newValue)
-            knownPipeline = newValue
-        }
-    }
-
-    /// Nil is the encoder's default: no depth test, no depth writes. It is never sent as nil (the
-    /// AGX driver crashes on `setDepthStencilState(nil)`), but as that default's state object.
-    public var depthStencilState: MTLDepthStencilState? {
-        get { knownDepthStencilState }
-        set {
-            guard !depthStencilStateIsKnown || newValue !== knownDepthStencilState else { return }
-            guard let state = newValue ?? defaultDepthStencilState else { return }
-            renderEncoder.setDepthStencilState(state)
-            knownDepthStencilState = newValue
-            depthStencilStateIsKnown = true
-        }
-    }
-
-    /// The encoder's default depth-stencil state, made the first time a packet asks for none.
-    private lazy var defaultDepthStencilState: MTLDepthStencilState? =
-        renderEncoder.device.makeDepthStencilState(descriptor: MTLDepthStencilDescriptor())
-
-    public var depthClipMode: MTLDepthClipMode? {
-        get { knownDepthClipMode }
-        set {
-            guard let newValue, newValue != knownDepthClipMode else { return }
-            #if !targetEnvironment(simulator)
-            renderEncoder.setDepthClipMode(newValue)
-            #endif
-            knownDepthClipMode = newValue
-        }
-    }
-
-    public var depthBias: DepthBias? {
-        get { knownDepthBias }
-        set {
-            guard !depthBiasIsKnown || newValue != knownDepthBias else { return }
-            if let newValue {
-                renderEncoder.setDepthBias(newValue.bias, slopeScale: newValue.slope, clamp: newValue.clamp)
-            } else {
-                renderEncoder.setDepthBias(0.0, slopeScale: 0.0, clamp: 0.0)
-            }
-            knownDepthBias = newValue
-            depthBiasIsKnown = true
-        }
-    }
-
-    // MARK: Pass State
-
-    // What the pass set, by slot, put back after a custom command: plain arrays, no hashing.
-    private var passFragmentBuffers = [BufferBinding?](repeating: nil, count: 31)
-    private var passFragmentTextures = [TextureBinding?](repeating: nil, count: 31)
-    private var passViewports: [MTLViewport] = []
-    private var passVertexAmplificationCount = 1
-    private var passViewMappings: [MTLVertexAmplificationViewMapping] = []
-    /// The scissor a pass starts with: the whole target.
-    private let passScissorRect: MTLScissorRect
-    /// Set by `invalidate()`: the pass state and the unmanaged state are put back at the next
-    /// packet or internal draw.
-    private(set) var passStateNeedsRestore = false
-
-    /// Sets the pass's viewports.
-    public func setPassViewports(_ viewports: [MTLViewport]) {
-        passViewports = viewports
-        renderEncoder.setViewports(viewports)
-    }
-
-    /// Sets the pass's viewport.
-    public func setPassViewport(_ viewport: MTLViewport) {
-        setPassViewports([viewport])
-    }
-
-    /// Sets the pass's vertex amplification.
-    public func setPassVertexAmplification(count: Int, viewMappings: [MTLVertexAmplificationViewMapping]) {
-        passVertexAmplificationCount = count
-        passViewMappings = viewMappings
-        var mappings = viewMappings
-        renderEncoder.setVertexAmplificationCount(count, viewMappings: &mappings)
-    }
-
-    /// Binds a fragment buffer every packet of the pass shares, such as its light data.
-    public func setPassFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
-        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &passFragmentBuffers, at: index.rawValue)
-        setFragmentBuffer(buffer, offset: offset, index: index)
-    }
-
-    /// Binds fragment textures every packet of the pass shares, such as its shadow maps, from
-    /// `range.lowerBound`.
-    public func setPassFragmentTextures(_ textures: [MTLTexture?], range: Range<Int>) {
-        for (slot, texture) in zip(range, textures) {
-            Self.store(TextureBinding(texture: texture), in: &passFragmentTextures, at: slot)
-            setFragmentTexture(texture, slot: slot)
-        }
-    }
-
-    /// Forgets everything the encoder is known to hold, after a custom command may have changed
-    /// any of it. Issues no call: the next packet or internal draw sets what it needs.
-    public func invalidate() {
-        knownCullMode = nil
-        knownWindingOrder = nil
-        knownTriangleFillMode = nil
-        knownPipeline = nil
-        knownDepthClipMode = nil
-        knownDepthStencilState = nil
-        depthStencilStateIsKnown = false
-        knownDepthBias = nil
-        depthBiasIsKnown = false
-        for slot in vertexBufferBindings.indices { vertexBufferBindings[slot] = nil }
-        for slot in fragmentBufferBindings.indices { fragmentBufferBindings[slot] = nil }
-        for slot in vertexTextureBindings.indices { vertexTextureBindings[slot] = nil }
-        for slot in fragmentTextureBindings.indices { fragmentTextureBindings[slot] = nil }
-        passStateNeedsRestore = true
-    }
-
-    /// Starts a packet: after a custom command, puts the pass back first.
-    public func beginPacket() {
-        restorePassStateIfNeeded()
-    }
-
-    /// Starts a draw Satin issues itself, such as the alpha-OIT resolve: after a custom command,
-    /// puts the pass back first.
-    public func beginInternalDraw() {
-        restorePassStateIfNeeded()
-    }
-
-    private func restorePassStateIfNeeded() {
-        guard passStateNeedsRestore else { return }
-        passStateNeedsRestore = false
-
-        if !passViewports.isEmpty {
-            renderEncoder.setViewports(passViewports)
-        }
-        if passVertexAmplificationCount > 1 {
-            var mappings = passViewMappings
-            renderEncoder.setVertexAmplificationCount(passVertexAmplificationCount, viewMappings: &mappings)
-        }
-        for (slot, binding) in passFragmentBuffers.enumerated() {
-            if let binding, let index = FragmentBufferIndex(rawValue: slot) {
-                setFragmentBuffer(binding.buffer, offset: binding.offset, index: index)
-            }
-        }
-        for (slot, binding) in passFragmentTextures.enumerated() {
-            if let binding {
-                setFragmentTexture(binding.texture, slot: slot)
-            }
-        }
-
-        // State Satin never sets, back to the pass default.
-        renderEncoder.setScissorRect(passScissorRect)
-        renderEncoder.setStencilReferenceValue(0)
-        renderEncoder.setBlendColor(red: 0, green: 0, blue: 0, alpha: 0)
-        renderEncoder.setVisibilityResultMode(.disabled, offset: 0)
-    }
-
-    // MARK: Bindings
-
-    private struct TextureBinding {
-        let texture: MTLTexture?
-    }
-
-    // What each Metal argument slot holds, indexed by slot: nil when this state hasn't set it.
-    // Arrays sized to the slots Satin binds (they grow if a higher slot is used), so checking a
-    // binding is an array read rather than a hash.
-    private var vertexBufferBindings = [BufferBinding?](repeating: nil, count: 31)
-    private var fragmentBufferBindings = [BufferBinding?](repeating: nil, count: 31)
-    private var vertexTextureBindings = [TextureBinding?](repeating: nil, count: 31)
-    /// Fragment textures by slot, whether set by index or as a PBR map: both name the same slots.
-    private var fragmentTextureBindings = [TextureBinding?](repeating: nil, count: 31)
-
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, index: VertexBufferIndex) {
-        let slot = index.rawValue
-        if Self.binding(vertexBufferBindings, at: slot).map({ $0.buffer === buffer && $0.offset == offset }) == true { return }
-        renderEncoder.setVertexBuffer(buffer, offset: offset, index: slot)
-        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &vertexBufferBindings, at: slot)
-    }
-
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
-        let slot = index.rawValue
-        if Self.binding(fragmentBufferBindings, at: slot).map({ $0.buffer === buffer && $0.offset == offset }) == true { return }
-        renderEncoder.setFragmentBuffer(buffer, offset: offset, index: slot)
-        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &fragmentBufferBindings, at: slot)
-    }
-
-    public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
-        setFragmentTexture(texture, slot: type.index)
-    }
-
-    public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
-        let slot = index.rawValue
-        if Self.binding(vertexTextureBindings, at: slot).map({ $0.texture === texture }) == true { return }
-        renderEncoder.setVertexTexture(texture, index: slot)
-        Self.store(TextureBinding(texture: texture), in: &vertexTextureBindings, at: slot)
-    }
-
-    public func setFragmentTexture(_ texture: MTLTexture?, index: FragmentTextureIndex) {
-        setFragmentTexture(texture, slot: index.rawValue)
-    }
-
-    private func setFragmentTexture(_ texture: MTLTexture?, slot: Int) {
-        if Self.binding(fragmentTextureBindings, at: slot).map({ $0.texture === texture }) == true { return }
-        renderEncoder.setFragmentTexture(texture, index: slot)
-        Self.store(TextureBinding(texture: texture), in: &fragmentTextureBindings, at: slot)
-    }
-
-    private static func binding<Binding>(_ bindings: [Binding?], at slot: Int) -> Binding? {
-        slot < bindings.count ? bindings[slot] : nil
-    }
-
-    private static func store<Binding>(_ binding: Binding, in bindings: inout [Binding?], at slot: Int) {
-        if slot >= bindings.count {
-            bindings.append(contentsOf: repeatElement(nil, count: slot - bindings.count + 1))
-        }
-        bindings[slot] = binding
-    }
-
-    /// A state for a pass rendering into a target of `renderTargetSize`.
-    init(renderEncoder: MTLRenderCommandEncoder, renderTargetSize: (width: Int, height: Int)) {
-        self.renderEncoder = renderEncoder
-        passScissorRect = MTLScissorRect(x: 0, y: 0, width: renderTargetSize.width, height: renderTargetSize.height)
-    }
-
-    /// A state for a pass encoding with `renderPassDescriptor`: its target is the first attachment
-    /// it supplies, or its render target size.
-    convenience init(renderEncoder: MTLRenderCommandEncoder, renderPassDescriptor: MTLRenderPassDescriptor) {
+    /// Starts a pass encoding with `renderPassDescriptor`: its target is the first attachment it
+    /// supplies, or its render target size.
+    func begin(renderEncoder: MTLRenderCommandEncoder, renderPassDescriptor: MTLRenderPassDescriptor) {
         let texture = renderPassDescriptor.colorAttachments[0].texture ?? renderPassDescriptor.depthAttachment.texture
-        self.init(
+        begin(
             renderEncoder: renderEncoder,
             renderTargetSize: (
                 width: texture?.width ?? renderPassDescriptor.renderTargetWidth,
@@ -309,8 +53,409 @@ public final class RenderEncoderState {
         )
     }
 
+    /// Ends the pass, after its encoder's `endEncoding()`: holds no encoder or binding until the next.
+    func end() {
+        known.end()
+    }
+
+    /// Whether the state holds anything of a pass: its encoder, or any state object or binding.
+    var holdsPass: Bool { known.holdsPass }
+
+    // MARK: Packet State
+
+    public var cullMode: MTLCullMode? {
+        get { known.cullMode }
+        set { known.setCullMode(newValue) }
+    }
+
+    public var windingOrder: MTLWinding? {
+        get { known.windingOrder }
+        set { known.setWindingOrder(newValue) }
+    }
+
+    public var triangleFillMode: MTLTriangleFillMode? {
+        get { known.triangleFillMode }
+        set { known.setTriangleFillMode(newValue) }
+    }
+
+    public var pipeline: MTLRenderPipelineState? {
+        get { known.pipeline }
+        set { known.setPipeline(newValue) }
+    }
+
+    /// Nil is the encoder's default: no depth test, no depth writes. It is never sent as nil (the
+    /// AGX driver crashes on `setDepthStencilState(nil)`), but as that default's state object.
+    public var depthStencilState: MTLDepthStencilState? {
+        get { known.depthStencilState }
+        set { known.setDepthStencilState(newValue) }
+    }
+
+    var depthStencilStateIsKnown: Bool { known.depthStencilStateIsKnown }
+
+    public var depthClipMode: MTLDepthClipMode? {
+        get { known.depthClipMode }
+        set { known.setDepthClipMode(newValue) }
+    }
+
+    public var depthBias: DepthBias? {
+        get { known.depthBias }
+        set { known.setDepthBias(newValue) }
+    }
+
+    var depthBiasIsKnown: Bool { known.depthBiasIsKnown }
+
+    // MARK: Pass State
+
+    /// Set by `invalidate()`: the pass state and the unmanaged state are put back at the next
+    /// packet or internal draw.
+    var passStateNeedsRestore: Bool { known.passStateNeedsRestore }
+
+    /// Sets the pass's viewports.
+    public func setPassViewports(_ viewports: [MTLViewport]) {
+        known.setPassViewports(viewports)
+    }
+
+    /// Sets the pass's viewport.
+    public func setPassViewport(_ viewport: MTLViewport) {
+        known.setPassViewports(CollectionOfOne(viewport))
+    }
+
+    /// Sets the pass's vertex amplification.
+    public func setPassVertexAmplification(count: Int, viewMappings: [MTLVertexAmplificationViewMapping]) {
+        known.setPassVertexAmplification(count: count, viewMappings: viewMappings)
+    }
+
+    /// Binds a fragment buffer every packet of the pass shares, such as its light data.
+    public func setPassFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
+        known.setPassFragmentBuffer(buffer, offset: offset, slot: index.rawValue)
+    }
+
+    /// Binds fragment textures every packet of the pass shares, such as its shadow maps, from
+    /// `range.lowerBound`.
+    public func setPassFragmentTextures(_ textures: [MTLTexture?], range: Range<Int>) {
+        known.setPassFragmentTextures(textures, range: range)
+    }
+
+    /// Forgets everything the encoder is known to hold, after a custom command may have changed
+    /// any of it. Issues no call: the next packet or internal draw sets what it needs.
+    public func invalidate() {
+        known.invalidate()
+    }
+
+    /// Starts a packet: after a custom command, puts the pass back first.
+    public func beginPacket() {
+        known.restorePassStateIfNeeded()
+    }
+
+    /// Starts a draw Satin issues itself, such as the alpha-OIT resolve: after a custom command,
+    /// puts the pass back first.
+    public func beginInternalDraw() {
+        known.restorePassStateIfNeeded()
+    }
+
+    // MARK: Bindings
+
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, index: VertexBufferIndex) {
+        known.setVertexBuffer(buffer, offset: offset, slot: index.rawValue)
+    }
+
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, index: FragmentBufferIndex) {
+        known.setFragmentBuffer(buffer, offset: offset, slot: index.rawValue)
+    }
+
+    public func setFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+        known.setFragmentTexture(texture, slot: type.index)
+    }
+
+    public func setVertexTexture(_ texture: MTLTexture?, index: VertexTextureIndex) {
+        known.setVertexTexture(texture, slot: index.rawValue)
+    }
+
+    public func setFragmentTexture(_ texture: MTLTexture?, index: FragmentTextureIndex) {
+        known.setFragmentTexture(texture, slot: index.rawValue)
+    }
+
     /// Whether this state knows the fragment texture at `slot`.
     func hasKnownFragmentTexture(at slot: Int) -> Bool {
+        known.hasKnownFragmentTexture(at: slot)
+    }
+}
+
+// MARK: - Known State
+
+/// Everything a `RenderEncoderState` knows of its pass, mutated in place: inside its methods every
+/// field access is static.
+private struct KnownState {
+    struct BufferBinding {
+        let buffer: MTLBuffer
+        let offset: Int
+    }
+
+    struct TextureBinding {
+        let texture: MTLTexture?
+    }
+
+    /// Slots Satin binds; a table grows if a higher slot is used.
+    static let slotCount = 31
+
+    private var renderEncoder: MTLRenderCommandEncoder?
+
+    var encoder: MTLRenderCommandEncoder {
+        guard let renderEncoder else { preconditionFailure("RenderEncoderState used outside a pass") }
+        return renderEncoder
+    }
+
+    // Each known value is nil when unknown; setting one issues the call when it differs or is
+    // unknown. Nil is never sent for these.
+    private(set) var cullMode: MTLCullMode?
+    private(set) var windingOrder: MTLWinding?
+    private(set) var triangleFillMode: MTLTriangleFillMode?
+    private(set) var pipeline: MTLRenderPipelineState?
+    private(set) var depthClipMode: MTLDepthClipMode?
+    // Nil is a real value for these two (no depth-stencil state, no bias), so each has a flag.
+    private(set) var depthStencilState: MTLDepthStencilState?
+    private(set) var depthStencilStateIsKnown = false
+    private(set) var depthBias: DepthBias?
+    private(set) var depthBiasIsKnown = false
+
+    /// The device's default depth-stencil state, made the first time a packet asks for none. It
+    /// belongs to the device, not the pass, so it outlives `end()`.
+    private var defaultDepthStencilState: MTLDepthStencilState?
+
+    // What the pass set, by slot, put back after a custom command: plain tables, no hashing.
+    private var passFragmentBuffers = ContiguousArray<BufferBinding?>(repeating: nil, count: KnownState.slotCount)
+    private var passFragmentTextures = ContiguousArray<TextureBinding?>(repeating: nil, count: KnownState.slotCount)
+    // Plain arrays (of values, so no bridging checks): Metal takes them as they are.
+    private var passViewports: [MTLViewport] = []
+    private var passVertexAmplificationCount = 1
+    private var passViewMappings: [MTLVertexAmplificationViewMapping] = []
+    /// The scissor a pass starts with: the whole target.
+    private var passScissorRect = MTLScissorRect(x: 0, y: 0, width: 0, height: 0)
+    private(set) var passStateNeedsRestore = false
+
+    // What each Metal argument slot holds, indexed by slot: nil when this pass hasn't set it.
+    private var vertexBufferBindings = ContiguousArray<BufferBinding?>(repeating: nil, count: KnownState.slotCount)
+    private var fragmentBufferBindings = ContiguousArray<BufferBinding?>(repeating: nil, count: KnownState.slotCount)
+    private var vertexTextureBindings = ContiguousArray<TextureBinding?>(repeating: nil, count: KnownState.slotCount)
+    /// Fragment textures by slot, whether set by index or as a PBR map: both name the same slots.
+    private var fragmentTextureBindings = ContiguousArray<TextureBinding?>(repeating: nil, count: KnownState.slotCount)
+
+    // MARK: Passes
+
+    mutating func begin(renderEncoder: MTLRenderCommandEncoder, renderTargetSize: (width: Int, height: Int)) {
+        // `end()` already releases and clears the previous pass. Still reset an unfinished
+        // state when a caller begins another pass without explicitly ending this state first.
+        if self.renderEncoder != nil { forgetPass() }
+        self.renderEncoder = renderEncoder
+        passStateNeedsRestore = false
+        passScissorRect = MTLScissorRect(x: 0, y: 0, width: renderTargetSize.width, height: renderTargetSize.height)
+    }
+
+    mutating func end() {
+        forgetPass()
+    }
+
+    var holdsPass: Bool {
+        renderEncoder != nil || pipeline != nil || depthStencilState != nil
+            || vertexBufferBindings.contains { $0 != nil } || fragmentBufferBindings.contains { $0 != nil }
+            || vertexTextureBindings.contains { $0 != nil } || fragmentTextureBindings.contains { $0 != nil }
+            || passFragmentBuffers.contains { $0 != nil } || passFragmentTextures.contains { $0 != nil }
+    }
+
+    /// Lets go of the encoder and everything the pass set, keeping the tables' capacity.
+    private mutating func forgetPass() {
+        renderEncoder = nil
+        forgetEncoderState()
+        Self.clear(&passFragmentBuffers)
+        Self.clear(&passFragmentTextures)
+        passViewports.removeAll(keepingCapacity: true)
+        passVertexAmplificationCount = 1
+        passViewMappings.removeAll(keepingCapacity: true)
+        passStateNeedsRestore = false
+    }
+
+    /// Forgets what the encoder holds, without issuing a call.
+    private mutating func forgetEncoderState() {
+        cullMode = nil
+        windingOrder = nil
+        triangleFillMode = nil
+        pipeline = nil
+        depthClipMode = nil
+        depthStencilState = nil
+        depthStencilStateIsKnown = false
+        depthBias = nil
+        depthBiasIsKnown = false
+        Self.clear(&vertexBufferBindings)
+        Self.clear(&fragmentBufferBindings)
+        Self.clear(&vertexTextureBindings)
+        Self.clear(&fragmentTextureBindings)
+    }
+
+    // MARK: Packet State
+
+    mutating func setCullMode(_ newValue: MTLCullMode?) {
+        guard let newValue, newValue != cullMode else { return }
+        encoder.setCullMode(newValue)
+        cullMode = newValue
+    }
+
+    mutating func setWindingOrder(_ newValue: MTLWinding?) {
+        guard let newValue, newValue != windingOrder else { return }
+        encoder.setFrontFacing(newValue)
+        windingOrder = newValue
+    }
+
+    mutating func setTriangleFillMode(_ newValue: MTLTriangleFillMode?) {
+        guard let newValue, newValue != triangleFillMode else { return }
+        encoder.setTriangleFillMode(newValue)
+        triangleFillMode = newValue
+    }
+
+    mutating func setPipeline(_ newValue: MTLRenderPipelineState?) {
+        guard let newValue, newValue !== pipeline else { return }
+        encoder.setRenderPipelineState(newValue)
+        pipeline = newValue
+    }
+
+    mutating func setDepthStencilState(_ newValue: MTLDepthStencilState?) {
+        guard !depthStencilStateIsKnown || newValue !== depthStencilState else { return }
+        let encoder = self.encoder
+        if newValue == nil, defaultDepthStencilState == nil {
+            defaultDepthStencilState = encoder.device.makeDepthStencilState(descriptor: MTLDepthStencilDescriptor())
+        }
+        guard let state = newValue ?? defaultDepthStencilState else { return }
+        encoder.setDepthStencilState(state)
+        depthStencilState = newValue
+        depthStencilStateIsKnown = true
+    }
+
+    mutating func setDepthClipMode(_ newValue: MTLDepthClipMode?) {
+        guard let newValue, newValue != depthClipMode else { return }
+        #if !targetEnvironment(simulator)
+        encoder.setDepthClipMode(newValue)
+        #endif
+        depthClipMode = newValue
+    }
+
+    mutating func setDepthBias(_ newValue: DepthBias?) {
+        guard !depthBiasIsKnown || newValue != depthBias else { return }
+        if let newValue {
+            encoder.setDepthBias(newValue.bias, slopeScale: newValue.slope, clamp: newValue.clamp)
+        } else {
+            encoder.setDepthBias(0.0, slopeScale: 0.0, clamp: 0.0)
+        }
+        depthBias = newValue
+        depthBiasIsKnown = true
+    }
+
+    // MARK: Pass State
+
+    mutating func setPassViewports<Viewports: Collection>(_ viewports: Viewports) where Viewports.Element == MTLViewport {
+        // Copied into the state's own array, so its capacity is reused from pass to pass.
+        passViewports.removeAll(keepingCapacity: true)
+        passViewports.append(contentsOf: viewports)
+        encoder.setViewports(passViewports)
+    }
+
+    mutating func setPassVertexAmplification(count: Int, viewMappings: [MTLVertexAmplificationViewMapping]) {
+        passVertexAmplificationCount = count
+        passViewMappings.removeAll(keepingCapacity: true)
+        passViewMappings.append(contentsOf: viewMappings)
+        var mappings = viewMappings
+        encoder.setVertexAmplificationCount(count, viewMappings: &mappings)
+    }
+
+    mutating func setPassFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: Int) {
+        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &passFragmentBuffers, at: slot)
+        setFragmentBuffer(buffer, offset: offset, slot: slot)
+    }
+
+    mutating func setPassFragmentTextures(_ textures: [MTLTexture?], range: Range<Int>) {
+        for (slot, texture) in zip(range, textures) {
+            Self.store(TextureBinding(texture: texture), in: &passFragmentTextures, at: slot)
+            setFragmentTexture(texture, slot: slot)
+        }
+    }
+
+    mutating func invalidate() {
+        forgetEncoderState()
+        passStateNeedsRestore = true
+    }
+
+    mutating func restorePassStateIfNeeded() {
+        guard passStateNeedsRestore else { return }
+        passStateNeedsRestore = false
+        let encoder = self.encoder
+
+        if !passViewports.isEmpty {
+            encoder.setViewports(passViewports)
+        }
+        if passVertexAmplificationCount > 1 {
+            var mappings = passViewMappings
+            encoder.setVertexAmplificationCount(passVertexAmplificationCount, viewMappings: &mappings)
+        } else {
+            encoder.setVertexAmplificationCount(1, viewMappings: nil)
+        }
+        for slot in passFragmentBuffers.indices {
+            if let binding = passFragmentBuffers[slot] {
+                setFragmentBuffer(binding.buffer, offset: binding.offset, slot: slot)
+            }
+        }
+        for slot in passFragmentTextures.indices {
+            if let binding = passFragmentTextures[slot] {
+                setFragmentTexture(binding.texture, slot: slot)
+            }
+        }
+
+        // State Satin never sets, back to the pass default.
+        encoder.setScissorRect(passScissorRect)
+        encoder.setStencilReferenceValue(0)
+        encoder.setBlendColor(red: 0, green: 0, blue: 0, alpha: 0)
+        encoder.setVisibilityResultMode(.disabled, offset: 0)
+    }
+
+    // MARK: Bindings
+
+    mutating func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, slot: Int) {
+        if let binding = Self.binding(vertexBufferBindings, at: slot), binding.buffer === buffer, binding.offset == offset { return }
+        encoder.setVertexBuffer(buffer, offset: offset, index: slot)
+        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &vertexBufferBindings, at: slot)
+    }
+
+    mutating func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: Int) {
+        if let binding = Self.binding(fragmentBufferBindings, at: slot), binding.buffer === buffer, binding.offset == offset { return }
+        encoder.setFragmentBuffer(buffer, offset: offset, index: slot)
+        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &fragmentBufferBindings, at: slot)
+    }
+
+    mutating func setVertexTexture(_ texture: MTLTexture?, slot: Int) {
+        if let binding = Self.binding(vertexTextureBindings, at: slot), binding.texture === texture { return }
+        encoder.setVertexTexture(texture, index: slot)
+        Self.store(TextureBinding(texture: texture), in: &vertexTextureBindings, at: slot)
+    }
+
+    mutating func setFragmentTexture(_ texture: MTLTexture?, slot: Int) {
+        if let binding = Self.binding(fragmentTextureBindings, at: slot), binding.texture === texture { return }
+        encoder.setFragmentTexture(texture, index: slot)
+        Self.store(TextureBinding(texture: texture), in: &fragmentTextureBindings, at: slot)
+    }
+
+    func hasKnownFragmentTexture(at slot: Int) -> Bool {
         Self.binding(fragmentTextureBindings, at: slot) != nil
+    }
+
+    private static func binding<Binding>(_ bindings: ContiguousArray<Binding?>, at slot: Int) -> Binding? {
+        slot < bindings.count ? bindings[slot] : nil
+    }
+
+    private static func store<Binding>(_ binding: Binding, in bindings: inout ContiguousArray<Binding?>, at slot: Int) {
+        if slot >= bindings.count {
+            bindings.append(contentsOf: repeatElement(nil, count: slot - bindings.count + 1))
+        }
+        bindings[slot] = binding
+    }
+
+    private static func clear<Binding>(_ bindings: inout ContiguousArray<Binding?>) {
+        for slot in bindings.indices { bindings[slot] = nil }
     }
 }

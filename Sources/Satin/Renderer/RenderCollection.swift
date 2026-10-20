@@ -16,11 +16,12 @@ final class RenderCollection {
         let environment: IBLEnvironment?
     }
 
-    private(set) var objects: [CollectedObject] = []
-    private(set) var lights: [Light] = []
-    private(set) var lightReceivers: [Renderable] = []
-    private(set) var shadowCasters: [Renderable] = []
-    private(set) var shadowReceivers: [Renderable] = []
+    // Contiguous: never bridged, so reads skip the NSArray checks.
+    private(set) var objects = ContiguousArray<CollectedObject>()
+    private(set) var lights = ContiguousArray<Light>()
+    private(set) var lightReceivers = ContiguousArray<Renderable>()
+    private(set) var shadowCasters = ContiguousArray<Renderable>()
+    private(set) var shadowReceivers = ContiguousArray<Renderable>()
 
     /// The render layers holding at least one renderable this pass, ascending. A layer emptied since
     /// an earlier pass is not in it.
@@ -96,7 +97,7 @@ final class RenderCollection {
 
     /// The renderables of `renderLayer` this pass, sorted by render order or in collection order. A
     /// layer with none, such as one holding only scheduled commands, gives an empty list.
-    func renderables(renderLayer: Int, sorted: Bool) -> [Renderable] {
+    func renderables(renderLayer: Int, sorted: Bool) -> ContiguousArray<Renderable> {
         renderList(renderLayer: renderLayer)?.getRenderables(sorted: sorted) ?? []
     }
 }

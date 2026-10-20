@@ -211,7 +211,7 @@ open class Object: Codable {
         worldValidationWalkCount += 1
         #endif
         let parent = self.parent
-        let parentIdentity = parent.map { ObjectIdentifier($0) }
+        let parentIdentity = parentIdentifier
         let parentRevision = parent?.worldRevision ?? 0
         if !worldIsDerived || parentIdentity != worldParentIdentity || parentLinkRevision != worldParentLinkRevision
             || parentRevision != worldParentRevision || localRevision != worldLocalRevision
@@ -416,13 +416,20 @@ open class Object: Codable {
 
     // MARK: - Parent & Children
 
-     weak var parent: Object? {
+    /// The object whose `children` hold this one. Checked `unowned`, so a parent needs no side
+    /// table: the parent clears it when it lets this object go and as it deallocates, so it never
+    /// outlives its target.
+    unowned var parent: Object? {
         didSet {
+            parentIdentifier = parent.map(ObjectIdentifier.init)
             parentLinkRevision &+= 1
             Object.transformEpoch &+= 1
             updateWorldBounds = true
         }
     }
+
+    /// The parent's identity, compared without loading the parent (as a deallocating parent must).
+    private var parentIdentifier: ObjectIdentifier?
 
     /// The objects this one contains, in order. Assigning it, or changing it in place, updates scene
     /// membership the same way `add` and `remove` do.
@@ -435,7 +442,10 @@ open class Object: Codable {
             let previousIdentifiers = Set(previousChildren.map(ObjectIdentifier.init))
             let newIdentifiers = Set(newValue.map(ObjectIdentifier.init))
             for child in previousChildren where !newIdentifiers.contains(ObjectIdentifier(child)) {
-                child.containers[ObjectIdentifier(self)] = nil
+                child.removeContainer(ObjectIdentifier(self))
+                if child.parentIdentifier == ObjectIdentifier(self) {
+                    child.parent = nil
+                }
             }
             for child in newValue where !previousIdentifiers.contains(ObjectIdentifier(child)) {
                 registerAsContainer(of: child)
@@ -449,13 +459,16 @@ open class Object: Codable {
 
     // MARK: - Scene Structure
 
-    private struct WeakContainer {
-        weak var object: Object?
+    /// An object whose `children` contain this one. Checked `unowned`, so a container needs no side
+    /// table: a container removes its link when it lets this object go and as it deallocates.
+    private struct ContainerLink {
+        unowned let object: Object
+        let identifier: ObjectIdentifier
     }
 
-    /// Every object whose `children` contain this one, by identity: its parent, and any object it
-    /// was attached to. Structure changes travel up through these.
-    private var containers: [ObjectIdentifier: WeakContainer] = [:]
+    /// Every object whose `children` contain this one, once each: its parent, and any object it
+    /// was attached to. Structure changes travel up through these. A handful at most: a scan.
+    private var containers = ContiguousArray<ContainerLink>()
 
     /// Advances whenever this object's subtree changes structure.
     private(set) var structureRevision: UInt64 = 0
@@ -476,8 +489,16 @@ open class Object: Codable {
     }
 
     private func registerAsContainer(of child: Object) {
-        child.containers = child.containers.filter { $0.value.object != nil }
-        child.containers[ObjectIdentifier(self)] = WeakContainer(object: self)
+        let identifier = ObjectIdentifier(self)
+        for link in child.containers where link.identifier == identifier { return }
+        child.containers.append(ContainerLink(object: self, identifier: identifier))
+    }
+
+    private func removeContainer(_ identifier: ObjectIdentifier) {
+        for index in containers.indices where containers[index].identifier == identifier {
+            containers.remove(at: index)
+            return
+        }
     }
 
     private func childrenDidChange() {
@@ -493,12 +514,8 @@ open class Object: Codable {
         structureRevision &+= 1
         cachedSceneIndex = nil
 
-        for (identifier, container) in containers {
-            if let containerObject = container.object {
-                containerObject.structureDidChange(token: token)
-            } else {
-                containers[identifier] = nil
-            }
+        for link in containers {
+            link.object.structureDidChange(token: token)
         }
     }
 
@@ -520,7 +537,17 @@ open class Object: Codable {
 
     // MARK: - Deinit
 
-    deinit {}
+    /// Clears every link a child holds to this object, without loading it: nothing it contains
+    /// keeps an `unowned` link to it.
+    deinit {
+        let identifier = ObjectIdentifier(self)
+        for child in _children {
+            child.removeContainer(identifier)
+            if child.parentIdentifier == identifier {
+                child.parent = nil
+            }
+        }
+    }
 
     // MARK: - CodingKeys
 
@@ -650,7 +677,7 @@ open class Object: Codable {
 
         _children.remove(at: childIndex)
         if !_children.contains(where: { $0 === child }) {
-            child.containers[ObjectIdentifier(self)] = nil
+            child.removeContainer(ObjectIdentifier(self))
         }
         childrenDidChange()
     }

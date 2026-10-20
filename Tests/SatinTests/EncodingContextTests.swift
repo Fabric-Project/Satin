@@ -35,7 +35,7 @@ final class EncodingContextTests: XCTestCase {
 
     private func viewMatrix(of packet: DrawPacket, in storage: PacketStorage) -> simd_float4x4? {
         for command in storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)] {
-            if case let .vertexBuffer(bufferIndex, offset, .VertexUniforms) = command {
+            if case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command {
                 // viewMatrix follows modelMatrix in VertexUniforms.
                 return (storage.buffers[Int(bufferIndex)].contents() + offset + MemoryLayout<simd_float4x4>.stride).load(as: simd_float4x4.self)
             }

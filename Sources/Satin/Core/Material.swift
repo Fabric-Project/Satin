@@ -176,22 +176,34 @@ open class Material: Codable {
 
     public var directShadowCount: Int {
         get { renderingConfiguration.directShadowCount }
-        set { renderingConfiguration.directShadowCount = newValue }
+        set {
+            guard renderingConfiguration.directShadowCount != newValue else { return }
+            renderingConfiguration.directShadowCount = newValue
+        }
     }
 
     public var directShadowTextureCount: Int {
         get { renderingConfiguration.directShadowTextureCount }
-        set { renderingConfiguration.directShadowTextureCount = newValue }
+        set {
+            guard renderingConfiguration.directShadowTextureCount != newValue else { return }
+            renderingConfiguration.directShadowTextureCount = newValue
+        }
     }
 
     public var projectorCount: Int {
         get { renderingConfiguration.projectorCount }
-        set { renderingConfiguration.projectorCount = newValue }
+        set {
+            guard renderingConfiguration.projectorCount != newValue else { return }
+            renderingConfiguration.projectorCount = newValue
+        }
     }
 
     public var lightCount: Int {
         get { renderingConfiguration.lightCount }
-        set { renderingConfiguration.lightCount = newValue }
+        set {
+            guard renderingConfiguration.lightCount != newValue else { return }
+            renderingConfiguration.lightCount = newValue
+        }
     }
 
     public var blending: Blending {
@@ -402,8 +414,9 @@ open class Material: Codable {
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
         var receivedInitialParameters = false
-        parametersSubscription = shader.parametersPublisher.sink { [weak self] newParameters in
-            guard let self else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        parametersSubscription = shader.parametersPublisher.sink { [unowned self] newParameters in
 
             let isInitialParameters = !receivedInitialParameters
             receivedInitialParameters = true

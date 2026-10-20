@@ -65,7 +65,7 @@ open class Camera: Object {
 
     /// Subclasses call this when one of their projection inputs changes value. Rebuilding the
     /// projection never calls it.
-    func projectionInputsDidChange() {
+    public final func projectionInputsDidChange() {
         projectionInputsRevision &+= 1
         projectionRevision &+= 1
     }

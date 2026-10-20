@@ -33,6 +33,21 @@ public final class JointPalette {
     /// Changes whenever the pose does: for posed bounds and raycasts to know when to rebuild.
     public private(set) var poseVersion = 0
 
+    /// Meshes whose cached bounds depend on this pose. The mesh owns its relay and unregisters
+    /// before deinitializing; the relay's checked back reference never owns the mesh.
+    private var boundsObservers = ContiguousArray<MeshBoundsObserver>()
+
+    func addBoundsObserver(_ observer: MeshBoundsObserver) {
+        guard !boundsObservers.contains(where: { $0 === observer }) else { return }
+        boundsObservers.append(observer)
+    }
+
+    func removeBoundsObserver(_ observer: MeshBoundsObserver) {
+        if let index = boundsObservers.firstIndex(where: { $0 === observer }) {
+            boundsObservers.remove(at: index)
+        }
+    }
+
     // Motion: poses by palette draw ordinal, the kth snapshot of a frame pairing with the kth of
     // the frame before; flat, ordinal × jointCount.
     private var previousFramePoses: [simd_float4x4] = []
@@ -54,6 +69,11 @@ public final class JointPalette {
             matrices[jointIndex] = jointIndex < newMatrices.count ? newMatrices[jointIndex] : matrix_identity_float4x4
         }
         poseVersion &+= 1
+        // Pose changes are descendant bounds changes: invalidate meshes and their ancestors now,
+        // even when a callback or GPU preparation changes the pose after Mesh.update().
+        for observer in boundsObservers {
+            observer.mesh?.updateBounds = true
+        }
     }
 
     /// Sets a pose with no motion: its next snapshots report none.

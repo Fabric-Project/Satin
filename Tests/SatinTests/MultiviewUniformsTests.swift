@@ -29,7 +29,7 @@ final class MultiviewUniformsTests: XCTestCase {
         let packet = storage.packets[packets.lowerBound]
         let commands = storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)]
         let binding = commands.compactMap { command -> (bufferIndex: Int32, offset: Int)? in
-            if case let .vertexBuffer(bufferIndex, offset, .VertexUniforms) = command { return (bufferIndex, offset) }
+            if case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command { return (bufferIndex, offset) }
             return nil
         }.first
         let vertexUniforms = try XCTUnwrap(binding, "the mesh binds its event's vertex uniforms")

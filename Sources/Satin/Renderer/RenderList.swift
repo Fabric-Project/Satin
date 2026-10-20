@@ -15,8 +15,9 @@ final class RenderList {
         renderables.isEmpty
     }
 
-    private var renderables: [Renderable] = []
-    private var sortedRenderables: [Renderable] = []
+    // Contiguous: never bridged, so reads skip the NSArray checks.
+    private var renderables = ContiguousArray<Renderable>()
+    private var sortedRenderables = ContiguousArray<Renderable>()
     private var sortedRenderablesAreCurrent = false
 
     public func append(_ renderable: Renderable) {
@@ -30,7 +31,7 @@ final class RenderList {
         sortedRenderablesAreCurrent = false
     }
 
-    public func getRenderables(sorted: Bool) -> [Renderable] {
+    public func getRenderables(sorted: Bool) -> ContiguousArray<Renderable> {
         guard sorted else { return renderables }
 
         if !sortedRenderablesAreCurrent {

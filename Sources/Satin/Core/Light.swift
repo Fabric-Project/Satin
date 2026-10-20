@@ -29,7 +29,11 @@ public class Light: Object {
     }
     
     public var castShadow: Bool = false // { fatalError("Subclasses must overload") }
-    public var shadow: Shadow
+    public var shadow: Shadow {
+        didSet {
+            if shadow !== oldValue { viewKey = nil }
+        }
+    }
     
     /// Advances when a property feeding the light's data or views changes: colour, intensity,
     /// and a subclass's own (radius, angles, projection). Its transform has `worldRevision`.

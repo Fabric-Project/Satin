@@ -98,7 +98,7 @@ public final class SpotShadow: Shadow {
         needsUpdate = true
     }
 
-    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
+    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
         guard enabled else { return }
 
         if device == nil {
@@ -118,16 +118,19 @@ public final class SpotShadow: Shadow {
         guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
 
         renderEncoder.label = label + " Shadow Encoder"
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+        renderEncoderState.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
         renderEncoderState.setPassViewport(viewport)
 
         let shadowViews = [RenderView(camera: camera, viewport: viewportFloat4, frame: recorder.frame)]
+        let frustum = ViewFrustum(viewProjectionMatrix: shadowViews[0].viewProjectionMatrix)
         for renderable in renderables where renderable.castShadow {
+            guard !renderable.frustumCulled || frustum.mayContain(renderable.worldBounds) else { continue }
             let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: shadowViews)
             recorder.encode(packets, into: renderEncoderState)
         }
 
         renderEncoder.endEncoding()
+        renderEncoderState.end()
         needsUpdate = false
     }
 

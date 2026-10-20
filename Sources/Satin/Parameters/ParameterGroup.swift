@@ -80,10 +80,9 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public func append(_ param: some Parameter) {
         params.append(param)
         paramsMap[param.label] = param
-        paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
-            guard let self = self
-//                  let param 
-            else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        paramSubscriptions[param.label] = param.valuePublisher.sink { [unowned self] _ in
             self._updateData = true
 //            self.objectWillChange.send()
 //            self.parameterUpdatedPublisher.send(param)

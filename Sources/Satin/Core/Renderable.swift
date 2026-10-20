@@ -62,6 +62,12 @@ open class Renderable : Object {
 
     open var castShadow = false
 
+    /// Whether a pass may skip this renderable when its world bounds are wholly outside the pass's
+    /// views (each colour view, each shadow camera or point-light face). Set it false when a shader
+    /// moves vertices beyond the geometry's bounds (displacement, billboards) or the bounds don't
+    /// cover what is drawn. Bounds that are empty or not finite are never culled.
+    public var frustumCulled = true
+
 
     open var cullMode: MTLCullMode = .back
 

@@ -34,6 +34,9 @@ public class Shadow {
     public var resolutionPublisher = PassthroughSubject<Shadow, Never>()
     public var dataPublisher = PassthroughSubject<Shadow, Never>()
 
+    /// The state of the shadow's render pass, reused by each pass it encodes.
+    let renderEncoderState = RenderEncoderState()
+
     
     init(context: Context, label: String) {
         self.label = label
@@ -63,7 +66,7 @@ public class Shadow {
     
     /// Records and encodes the casters among `renderables` into this shadow's map, from the light's
     /// view, into `recorder`'s draw.
-    func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
+    func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
         fatalError("Subclasses must overload")
     }
 }

@@ -111,7 +111,7 @@ open class Mesh: Renderable {
 
     var geometrySubscription: AnyCancellable?
     private weak var boundsJointPalette: JointPalette?
-    private var boundsPoseVersion = -1
+    private var boundsObserver: MeshBoundsObserver?
 
     public internal(set) var submeshes: [Submesh] = []
     {
@@ -137,6 +137,10 @@ open class Mesh: Renderable {
     // MARK: - Deinit
 
     deinit {
+        if let boundsObserver {
+            boundsJointPalette?.removeBoundsObserver(boundsObserver)
+            boundsObserver.mesh = nil
+        }
         cleanupGeometrySubscriber()
     }
 
@@ -161,8 +165,11 @@ open class Mesh: Renderable {
         // take effect now as the materials' default vertex layout.
         // The subscription below only sees later changes.
         configureMaterials(for: geometry)
-        geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
-            guard let self = self else { return }
+        observeBoundsPalette()
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        geometrySubscription = geometry.onUpdate.sink { [unowned self] geo in
+            self.observeBoundsPalette()
             self.updateBounds = true
             self.configureMaterials(for: geo)
         }
@@ -213,18 +220,28 @@ open class Mesh: Renderable {
 
     override open func update() {
         geometry.update()
-        // A pose change moves a skinned mesh's bounds without any geometry update.
-        if geometry.isSkinned, let jointPalette = geometry.jointPalette,
-           jointPalette !== boundsJointPalette || jointPalette.poseVersion != boundsPoseVersion {
-            boundsJointPalette = jointPalette
-            boundsPoseVersion = jointPalette.poseVersion
-            updateBounds = true
-        }
+        observeBoundsPalette()
         material?.update()
         for submesh in submeshes {
             submesh.update()
         }
         super.update()
+    }
+
+    /// Follow palette replacement as well as its pose changes. Ordinary meshes allocate no relay.
+    private func observeBoundsPalette() {
+        let palette = geometry.boundsPaletteDependency
+        guard palette !== boundsJointPalette else { return }
+        if let boundsObserver {
+            boundsJointPalette?.removeBoundsObserver(boundsObserver)
+        }
+        boundsJointPalette = palette
+        if let palette {
+            let observer = boundsObserver ?? MeshBoundsObserver(mesh: self)
+            boundsObserver = observer
+            palette.addBoundsObserver(observer)
+        }
+        updateBounds = true
     }
 
     override open func encode(in context: EncodingContext) {
@@ -366,5 +383,15 @@ open class Mesh: Renderable {
         }
 
         return results.count > 0
+    }
+}
+
+/// A palette's bounds notification reaches a mesh without keeping it alive or adding a weak
+/// reference to it. The mesh unregisters and clears the relay before its stored properties go.
+final class MeshBoundsObserver {
+    unowned var mesh: Mesh?
+
+    init(mesh: Mesh) {
+        self.mesh = mesh
     }
 }

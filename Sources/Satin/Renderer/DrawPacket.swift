@@ -8,11 +8,11 @@ import Metal
 // MARK: - Packets
 
 /// One draw call, recorded: the state it needs, the range of commands that bind its resources, and
-/// the call itself. Plain data: references are indices into its `PacketStorage`'s reference arrays,
+/// the call itself. Plain data: references are indices into its `PacketTables`' reference arrays,
 /// so storing and clearing packets does no reference counting.
 struct DrawPacket {
     var pipelineIndex: Int32
-    /// Into `PacketStorage.depthStencilStates`; -1 when the draw sets no depth state.
+    /// Into `PacketTables.depthStencilStates`; -1 when the draw sets no depth state.
     var depthStencilStateIndex: Int32
     var setsDepthState: Bool
     var depthBias: DepthBias?
@@ -24,7 +24,7 @@ struct DrawPacket {
     var commandStart: Int32
     var commandCount: Int32
     var drawCall: PacketDrawCall
-    /// Into `PacketStorage.debugLabels` in debug builds; -1 otherwise.
+    /// Into `PacketTables.debugLabels` in debug builds; -1 otherwise.
     var debugLabelIndex: Int32
 }
 
@@ -37,9 +37,15 @@ enum PacketDrawCall {
 
 /// One recorded command, in the order it was recorded. References are indices into the storage's
 /// arrays; a texture index of -1 binds nil.
+///
+/// The per-view cases bind the render event's own vertex uniforms: one `VertexUniforms` per view,
+/// contiguous. Encoded for view k, their offset moves on by k strides, so one recording serves each
+/// view of a multi-view shadow (a point light's faces) in its own pass.
 enum PacketCommand {
     case vertexBuffer(bufferIndex: Int32, offset: Int, slot: VertexBufferIndex)
     case fragmentBuffer(bufferIndex: Int32, offset: Int, slot: FragmentBufferIndex)
+    case perViewVertexBuffer(bufferIndex: Int32, offset: Int, slot: VertexBufferIndex)
+    case perViewFragmentBuffer(bufferIndex: Int32, offset: Int, slot: FragmentBufferIndex)
     case vertexTexture(textureIndex: Int32, slot: VertexTextureIndex)
     case fragmentTexture(textureIndex: Int32, slot: FragmentTextureIndex)
     case fragmentPBRTexture(textureIndex: Int32, type: PBRTextureType)
@@ -58,11 +64,107 @@ enum PacketCommand {
 /// geometry bindings into each submesh's packet). Each material starts a packet without a pipeline;
 /// a draw call finishes it, or abandons it if no pipeline was set. `endRecording` drops anything
 /// recorded after the last draw call.
+///
+/// Everything recorded lives in one `PacketTables` value, and each operation is one call on it: one
+/// checked access to the storage per operation, however many fields it touches.
 final class PacketStorage {
     /// Unique across every storage of every encoder, for the life of the process: snapshot caches
     /// (material uniforms, instances, palettes) key on it, so one never reuses another lease's slice.
     fileprivate(set) var leaseToken: UInt64 = 0
 
+    private(set) var tables = PacketTables()
+
+    var runs: ContiguousArray<PacketTables.PacketRun> { tables.runs }
+    var packets: ContiguousArray<DrawPacket> { tables.packets }
+    var packetCount: Int { tables.packets.count }
+    var commands: ContiguousArray<PacketCommand> { tables.commands }
+    var buffers: ContiguousArray<MTLBuffer> { tables.buffers }
+    var customCommands: ContiguousArray<(MTLRenderCommandEncoder) -> Void> { tables.customCommands }
+
+    func reset() { tables.reset() }
+
+    func appendRun(renderLayer: Int, routeIndex: Int, packets: Range<Int>, isRecorded: Bool) {
+        tables.appendRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded)
+    }
+
+    // MARK: Recording
+
+    /// `vertexUniforms` is the render event's own: a binding of exactly it records as per-view.
+    func beginRecording(cullMode: MTLCullMode, windingOrder: MTLWinding, triangleFillMode: MTLTriangleFillMode, renderOrder: Int, vertexUniforms: VertexUniformsBinding? = nil, debugLabel: @autoclosure () -> String) {
+        tables.beginRecording(cullMode: cullMode, windingOrder: windingOrder, triangleFillMode: triangleFillMode, renderOrder: renderOrder, vertexUniforms: vertexUniforms, debugLabel: debugLabel())
+    }
+
+    func beginMaterial() { tables.beginMaterial() }
+    func endRecording() { tables.endRecording() }
+    func setPipeline(_ pipeline: MTLRenderPipelineState) { tables.setPipeline(pipeline) }
+
+    func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
+        tables.setDepthStencilState(depthStencilState, bias: bias, clipMode: clipMode)
+    }
+
+    func appendVertexBuffer(_ buffer: MTLBuffer, offset: Int, slot: VertexBufferIndex) {
+        tables.appendVertexBuffer(buffer, offset: offset, slot: slot)
+    }
+
+    func appendFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: FragmentBufferIndex) {
+        tables.appendFragmentBuffer(buffer, offset: offset, slot: slot)
+    }
+
+    func appendVertexTexture(_ texture: MTLTexture?, slot: VertexTextureIndex) {
+        tables.appendVertexTexture(texture, slot: slot)
+    }
+
+    func appendFragmentTexture(_ texture: MTLTexture?, slot: FragmentTextureIndex) {
+        tables.appendFragmentTexture(texture, slot: slot)
+    }
+
+    func appendFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+        tables.appendFragmentPBRTexture(texture, type: type)
+    }
+
+    func appendFragmentSampler(_ sampler: MTLSamplerState, slot: FragmentSamplerIndex) {
+        tables.appendFragmentSampler(sampler, slot: slot)
+    }
+
+    func appendCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
+        tables.appendCustomCommand(command)
+    }
+
+    /// The index buffer of an indexed draw is kept with the other buffers.
+    func appendIndexBuffer(_ buffer: MTLBuffer) -> Int32 { tables.appendBuffer(buffer) }
+
+    func finishPacket(drawCall: PacketDrawCall) { tables.finishPacket(drawCall: drawCall) }
+
+    // MARK: Encoding
+
+    /// Replays the packets at `packetIndices`, in order, into `state`, binding view `viewIndex`'s
+    /// vertex uniforms.
+    func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int = 0) where PacketIndices.Element == Int {
+        tables.encode(packetIndices, into: state, viewIndex: viewIndex)
+    }
+
+    /// Whether `packets` encode correctly for any view of their render event: none runs a custom
+    /// command, which may have captured the event's vertex uniforms for its first view.
+    func packetsServeEveryView(_ packets: Range<Int>) -> Bool {
+        tables.packetsServeEveryView(packets)
+    }
+
+    func pipeline(ofPacketAt packetIndex: Int) -> MTLRenderPipelineState {
+        tables.pipelines[Int(tables.packets[packetIndex].pipelineIndex)]
+    }
+
+    func renderOrder(ofPacketAt packetIndex: Int) -> Int {
+        tables.packets[packetIndex].renderOrder
+    }
+}
+
+/// A `PacketStorage`'s recorded packets, commands and references, and the cursor of the recording in
+/// progress. A value, mutated in place: inside its methods every field access is static.
+///
+/// Every method is `mutating`, reads included: a non-mutating call, on the storage's property or on
+/// `self` inside another method, takes a copy of the whole value, a retain and release of every
+/// table per call. A mutating one works on the tables in place.
+struct PacketTables {
     /// One renderable's packets for one route, in the order recorded: a draw's own scene, and each
     /// `record(scene:)` into its submission.
     struct PacketRun {
@@ -73,23 +175,17 @@ final class PacketStorage {
         let isRecorded: Bool
     }
 
-    private(set) var runs: [PacketRun] = []
-
-    func appendRun(renderLayer: Int, routeIndex: Int, packets: Range<Int>, isRecorded: Bool) {
-        guard !packets.isEmpty else { return }
-        runs.append(PacketRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded))
-    }
-
-    private(set) var packets: [DrawPacket] = []
-    private(set) var commands: [PacketCommand] = []
-    private(set) var buffers: [MTLBuffer] = []
-    private(set) var textures: [MTLTexture] = []
-    private(set) var samplers: [MTLSamplerState] = []
-    private(set) var pipelines: [MTLRenderPipelineState] = []
-    private(set) var depthStencilStates: [MTLDepthStencilState] = []
-    private(set) var customCommands: [(MTLRenderCommandEncoder) -> Void] = []
+    private(set) var runs = ContiguousArray<PacketRun>()
+    private(set) var packets = ContiguousArray<DrawPacket>()
+    private(set) var commands = ContiguousArray<PacketCommand>()
+    private(set) var buffers = ContiguousArray<MTLBuffer>()
+    private(set) var textures = ContiguousArray<MTLTexture>()
+    private(set) var samplers = ContiguousArray<MTLSamplerState>()
+    private(set) var pipelines = ContiguousArray<MTLRenderPipelineState>()
+    private(set) var depthStencilStates = ContiguousArray<MTLDepthStencilState>()
+    private(set) var customCommands = ContiguousArray<(MTLRenderCommandEncoder) -> Void>()
 #if DEBUG
-    private(set) var debugLabels: [String] = []
+    private(set) var debugLabels = ContiguousArray<String>()
 #endif
 
     /// How much of each array a point in recording had used, to roll back to.
@@ -107,6 +203,9 @@ final class PacketStorage {
     private var packetCommandStart = 0
     private var ownStart = Marks()
     private var prefixLength: Int?
+    /// The first buffer entry of the recording in progress: a buffer appended again in the same
+    /// recording reuses its entry, never one from an earlier recording.
+    private var recordingBufferStart = 0
     private var pendingPipelineIndex: Int32 = -1
     private var pendingDepthStencilStateIndex: Int32 = -1
     private var pendingSetsDepthState = false
@@ -117,8 +216,15 @@ final class PacketStorage {
     private var recordingTriangleFillMode: MTLTriangleFillMode = .fill
     private var recordingRenderOrder = 0
     private var recordingDebugLabelIndex: Int32 = -1
+    /// The recording's own vertex uniforms, by identity and offset, to record their bindings as
+    /// per-view.
+    private var recordingVertexUniformsBuffer: ObjectIdentifier?
+    private var recordingVertexUniformsOffset = 0
 
-    func reset() {
+    /// How far back a buffer append looks for an entry to reuse.
+    private static let bufferReuseWindow = 16
+
+    mutating func reset() {
         runs.removeAll(keepingCapacity: true)
         packets.removeAll(keepingCapacity: true)
         commands.removeAll(keepingCapacity: true)
@@ -133,9 +239,16 @@ final class PacketStorage {
 #endif
     }
 
+    mutating func appendRun(renderLayer: Int, routeIndex: Int, packets: Range<Int>, isRecorded: Bool) {
+        guard !packets.isEmpty else { return }
+        runs.append(PacketRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded))
+    }
+
     // MARK: Recording
 
-    func beginRecording(cullMode: MTLCullMode, windingOrder: MTLWinding, triangleFillMode: MTLTriangleFillMode, renderOrder: Int, debugLabel: @autoclosure () -> String) {
+    mutating func beginRecording(cullMode: MTLCullMode, windingOrder: MTLWinding, triangleFillMode: MTLTriangleFillMode, renderOrder: Int, vertexUniforms: VertexUniformsBinding?, debugLabel: @autoclosure () -> String) {
+        recordingVertexUniformsBuffer = vertexUniforms.map { ObjectIdentifier($0.buffer) }
+        recordingVertexUniformsOffset = vertexUniforms?.offset ?? 0
         recordingCullMode = cullMode
         recordingWindingOrder = windingOrder
         recordingTriangleFillMode = triangleFillMode
@@ -145,19 +258,20 @@ final class PacketStorage {
         recordingDebugLabelIndex = Int32(debugLabels.count - 1)
 #endif
         packetCommandStart = commands.count
+        recordingBufferStart = buffers.count
         prefixLength = nil
         startOwnCommands()
     }
 
     /// A material is about to record: the packet's own commands start here, without a pipeline.
-    func beginMaterial() {
+    mutating func beginMaterial() {
         if prefixLength == nil {
             prefixLength = commands.count - packetCommandStart
         }
         startOwnCommands()
     }
 
-    func endRecording() {
+    mutating func endRecording() {
         // Anything recorded after the last draw call draws nothing.
         rollBack(to: Marks(
             commands: packetCommandStart,
@@ -171,7 +285,7 @@ final class PacketStorage {
         prefixLength = nil
     }
 
-    private func startOwnCommands() {
+    private mutating func startOwnCommands() {
         ownStart = Marks(
             commands: commands.count,
             buffers: buffers.count,
@@ -188,7 +302,9 @@ final class PacketStorage {
         pendingDepthClipMode = nil
     }
 
-    private func rollBack(to marks: Marks) {
+    /// Removes every entry and command at or after `marks`. A kept command only references entries
+    /// that existed when it was recorded, so it never loses one.
+    private mutating func rollBack(to marks: Marks) {
         commands.removeSubrange(marks.commands...)
         buffers.removeSubrange(marks.buffers...)
         textures.removeSubrange(marks.textures...)
@@ -198,12 +314,12 @@ final class PacketStorage {
         customCommands.removeSubrange(marks.customCommands...)
     }
 
-    func setPipeline(_ pipeline: MTLRenderPipelineState) {
+    mutating func setPipeline(_ pipeline: MTLRenderPipelineState) {
         pipelines.append(pipeline)
         pendingPipelineIndex = Int32(pipelines.count - 1)
     }
 
-    func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
+    mutating func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
         if let depthStencilState {
             depthStencilStates.append(depthStencilState)
             pendingDepthStencilStateIndex = Int32(depthStencilStates.count - 1)
@@ -215,39 +331,64 @@ final class PacketStorage {
         pendingDepthClipMode = clipMode
     }
 
-    func appendVertexBuffer(_ buffer: MTLBuffer, offset: Int, slot: VertexBufferIndex) {
-        buffers.append(buffer)
-        commands.append(.vertexBuffer(bufferIndex: Int32(buffers.count - 1), offset: offset, slot: slot))
+    mutating func appendVertexBuffer(_ buffer: MTLBuffer, offset: Int, slot: VertexBufferIndex) {
+        let bufferIndex = appendBuffer(buffer)
+        if isRecordingVertexUniforms(buffer, offset: offset) {
+            commands.append(.perViewVertexBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        } else {
+            commands.append(.vertexBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        }
     }
 
-    func appendFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: FragmentBufferIndex) {
-        buffers.append(buffer)
-        commands.append(.fragmentBuffer(bufferIndex: Int32(buffers.count - 1), offset: offset, slot: slot))
+    mutating func appendFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: FragmentBufferIndex) {
+        let bufferIndex = appendBuffer(buffer)
+        if isRecordingVertexUniforms(buffer, offset: offset) {
+            commands.append(.perViewFragmentBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        } else {
+            commands.append(.fragmentBuffer(bufferIndex: bufferIndex, offset: offset, slot: slot))
+        }
     }
 
-    func appendVertexTexture(_ texture: MTLTexture?, slot: VertexTextureIndex) {
+    private mutating func isRecordingVertexUniforms(_ buffer: MTLBuffer, offset: Int) -> Bool {
+        recordingVertexUniformsBuffer == ObjectIdentifier(buffer) && recordingVertexUniformsOffset == offset
+    }
+
+    /// The entry of `buffer`: the one it already has in this recording, if among the last few,
+    /// otherwise a new one. Commands keep their own offsets, so one entry serves every offset.
+    mutating func appendBuffer(_ buffer: MTLBuffer) -> Int32 {
+        let searchStart = max(recordingBufferStart, buffers.count - Self.bufferReuseWindow)
+        var entryIndex = buffers.count - 1
+        while entryIndex >= searchStart {
+            if buffers[entryIndex] === buffer { return Int32(entryIndex) }
+            entryIndex -= 1
+        }
+        buffers.append(buffer)
+        return Int32(buffers.count - 1)
+    }
+
+    mutating func appendVertexTexture(_ texture: MTLTexture?, slot: VertexTextureIndex) {
         commands.append(.vertexTexture(textureIndex: textureIndex(texture), slot: slot))
     }
 
-    func appendFragmentTexture(_ texture: MTLTexture?, slot: FragmentTextureIndex) {
+    mutating func appendFragmentTexture(_ texture: MTLTexture?, slot: FragmentTextureIndex) {
         commands.append(.fragmentTexture(textureIndex: textureIndex(texture), slot: slot))
     }
 
-    func appendFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+    mutating func appendFragmentPBRTexture(_ texture: MTLTexture?, type: PBRTextureType) {
         commands.append(.fragmentPBRTexture(textureIndex: textureIndex(texture), type: type))
     }
 
-    func appendFragmentSampler(_ sampler: MTLSamplerState, slot: FragmentSamplerIndex) {
+    mutating func appendFragmentSampler(_ sampler: MTLSamplerState, slot: FragmentSamplerIndex) {
         samplers.append(sampler)
         commands.append(.fragmentSampler(samplerIndex: Int32(samplers.count - 1), slot: slot))
     }
 
-    func appendCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
+    mutating func appendCustomCommand(_ command: @escaping (MTLRenderCommandEncoder) -> Void) {
         customCommands.append(command)
         commands.append(.custom(commandIndex: Int32(customCommands.count - 1)))
     }
 
-    private func textureIndex(_ texture: MTLTexture?) -> Int32 {
+    private mutating func textureIndex(_ texture: MTLTexture?) -> Int32 {
         guard let texture else { return -1 }
         textures.append(texture)
         return Int32(textures.count - 1)
@@ -255,7 +396,7 @@ final class PacketStorage {
 
     /// Finishes the packet with `drawCall`, or abandons it when no material set a pipeline. The next
     /// packet of the recording starts with a copy of the shared prefix.
-    func finishPacket(drawCall: PacketDrawCall) {
+    mutating func finishPacket(drawCall: PacketDrawCall) {
         guard pendingPipelineIndex >= 0 else {
             rollBack(to: ownStart)
             startOwnCommands()
@@ -288,8 +429,26 @@ final class PacketStorage {
 
     // MARK: Encoding
 
-    /// Replays `packet` into `state`: its state, its commands in recorded order, then its draw call.
-    func encode(_ packet: DrawPacket, into state: RenderEncoderState) {
+    /// Replays the packets at `packetIndices` into `state`, each its state, its commands in
+    /// recorded order, then its draw call.
+    mutating func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int) where PacketIndices.Element == Int {
+        let viewOffset = viewIndex * PacketRecorder.vertexUniformsStride
+        for packetIndex in packetIndices {
+            encode(packets[packetIndex], into: state, viewOffset: viewOffset)
+        }
+    }
+
+    mutating func packetsServeEveryView(_ packetRange: Range<Int>) -> Bool {
+        for packetIndex in packetRange {
+            let packet = packets[packetIndex]
+            for commandIndex in Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount) {
+                if case .custom = commands[commandIndex] { return false }
+            }
+        }
+        return true
+    }
+
+    private mutating func encode(_ packet: DrawPacket, into state: RenderEncoderState, viewOffset: Int) {
         let renderEncoder = state.renderEncoder
 #if DEBUG
         renderEncoder.pushDebugGroup(debugLabels[Int(packet.debugLabelIndex)])
@@ -314,6 +473,10 @@ final class PacketStorage {
                 state.setVertexBuffer(buffers[Int(bufferIndex)], offset: offset, index: slot)
             case let .fragmentBuffer(bufferIndex, offset, slot):
                 state.setFragmentBuffer(buffers[Int(bufferIndex)], offset: offset, index: slot)
+            case let .perViewVertexBuffer(bufferIndex, offset, slot):
+                state.setVertexBuffer(buffers[Int(bufferIndex)], offset: offset + viewOffset, index: slot)
+            case let .perViewFragmentBuffer(bufferIndex, offset, slot):
+                state.setFragmentBuffer(buffers[Int(bufferIndex)], offset: offset + viewOffset, index: slot)
             case let .vertexTexture(textureIndex, slot):
                 state.setVertexTexture(texture(at: textureIndex), index: slot)
             case let .fragmentTexture(textureIndex, slot):
@@ -347,18 +510,8 @@ final class PacketStorage {
         }
     }
 
-    /// The index buffer of an indexed draw is kept with the other buffers.
-    func appendIndexBuffer(_ buffer: MTLBuffer) -> Int32 {
-        buffers.append(buffer)
-        return Int32(buffers.count - 1)
-    }
-
-    private func texture(at index: Int32) -> MTLTexture? {
+    private mutating func texture(at index: Int32) -> MTLTexture? {
         index >= 0 ? textures[Int(index)] : nil
-    }
-
-    func pipeline(of packet: DrawPacket) -> MTLRenderPipelineState {
-        pipelines[Int(packet.pipelineIndex)]
     }
 }
 
@@ -367,7 +520,7 @@ final class PacketStorage {
 /// Storage for an encoder's draws: each draw leases one storage and returns it once encoded, so
 /// two draws in flight never share or clear each other's packets.
 final class PacketStoragePool {
-    private var available: [PacketStorage] = []
+    private var available = ContiguousArray<PacketStorage>()
 
     /// Storages returned and ready to lease.
     var availableCount: Int { available.count }

@@ -28,14 +28,19 @@ public struct LoadedAsset {
 ///
 /// `instanced` loads each mesh as an `InstancedMesh` of one instance, where it sits, to draw
 /// the model several times; instance matrices apply in each mesh's own space.
-public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, instanced: Bool = false) -> LoadedAsset {
-    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false, instanced: instanced)
+///
+/// `mergeStaticMeshes` joins meshes that draw alike into one mesh each (see
+/// `mergeStaticMeshes(_:context:textureLoader:record:)`): fewer draws, the same pixels, but the
+/// joined meshes no longer exist on their own. Ignored when `instanced`.
+public func loadAnimatedAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, instanced: Bool = false, mergeStaticMeshes: Bool = false) -> LoadedAsset {
+    loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: false, instanced: instanced, mergeStaticMeshes: mergeStaticMeshes)
 }
 
 /// Loads a model as its meshes, each placed by its world transform, posed at the start of its
-/// animation. Only that pose is read from the animation.
-public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil) -> Object? {
-    Object.flatten(loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: true).root)
+/// animation. Only that pose is read from the animation. `mergeStaticMeshes` as for
+/// `loadAnimatedAsset`.
+public func loadAsset(url: URL, context: Context, textureLoader: MTKTextureLoader? = nil, mergeStaticMeshes: Bool = false) -> Object? {
+    Object.flatten(loadAssetHierarchy(url: url, context: context, textureLoader: textureLoader, startPoseOnly: true, mergeStaticMeshes: mergeStaticMeshes).root)
 }
 
 /// What one pass over an asset's objects collects for skinning and animation.
@@ -47,18 +52,24 @@ struct AssetLoadRecord {
     var skeletonAnchors: [ObjectIdentifier: Object] = [:]
     /// The materials and textures this load has made, shared between equivalent sources.
     let materials = LoadedMaterials()
+    /// The meshes that may merge, in load order, each standing in the hierarchy as a placeholder
+    /// until merging decides what replaces it.
+    var mergeCandidates: [MergeCandidate] = []
 }
 
 /// The model's hierarchy and animation, posed at its start. `startPoseOnly` reads just that
 /// pose, for a model that will not be animated.
-func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool, instanced: Bool = false) -> LoadedAsset {
+func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoader?, startPoseOnly: Bool, instanced: Bool = false, mergeStaticMeshes merges: Bool = false) -> LoadedAsset {
     let asset = MDLAsset(url: url)
     if textureLoader != nil { asset.loadTextures() }
 
     let root = Object(context: context, label: url.deletingPathExtension().lastPathComponent)
     var record = AssetLoadRecord()
     loadAssetChildren(parent: root, children: (0 ..< asset.count).map { asset.object(at: $0) }, context: context,
-                      textureLoader: textureLoader, instanced: instanced, record: &record)
+                      textureLoader: textureLoader, instanced: instanced, mergesStaticMeshes: merges && !instanced,
+                      underAnimation: false, record: &record)
+    // Candidates are static, so their world transforms are final once the hierarchy is built.
+    mergeStaticMeshes(record.mergeCandidates, context: context, textureLoader: textureLoader, record: record)
 
     let assetTimeRange = asset.endTime > asset.startTime ? asset.startTime ... asset.endTime : nil
     // Objects first: animated objects take their start pose before skeletons take theirs.
@@ -74,14 +85,14 @@ func loadAssetHierarchy(url: URL, context: Context, textureLoader: MTKTextureLoa
     return LoadedAsset(root: root, animation: AssetAnimation(skeletons: skeletons, objectAnimation: objectAnimation, timeRange: assetTimeRange))
 }
 
-func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?, instanced: Bool, materials: LoadedMaterials) -> Mesh {
+/// `generatesNormals` false for a mesh whose normals `generateNormals` already made.
+func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?, instanced: Bool, materials: LoadedMaterials, generatesNormals: Bool = true) -> Mesh {
     let geometry = Geometry(context: context)
     let stnMesh = instanced
         ? InstancedMesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil, count: 1)
         : Mesh(context: context, label: mdlMesh.name, geometry: geometry, material: nil)
 
-    // 0.1 appears to fix USD import issues with parts of sponza model...
-    mdlMesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.1)
+    if generatesNormals { generateNormals(mdlMesh) }
 
     let descriptor = mdlMesh.vertexDescriptor
 
@@ -271,11 +282,24 @@ func loadMesh(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoade
     return stnMesh
 }
 
+/// Normals as every loaded mesh gets them.
+func generateNormals(_ mdlMesh: MDLMesh) {
+    // 0.1 appears to fix USD import issues with parts of sponza model...
+    mdlMesh.addNormals(withAttributeNamed: MDLVertexAttributeNormal, creaseThreshold: 0.1)
+}
+
+/// `underAnimation`: an ancestor of `children` has an animated transform.
 func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, textureLoader: MTKTextureLoader?,
-                       instanced: Bool, record: inout AssetLoadRecord) {
+                       instanced: Bool, mergesStaticMeshes: Bool, underAnimation: Bool, record: inout AssetLoadRecord) {
     for child in children {
         let object: Object
-        if let mdlMesh = child as? MDLMesh {
+        let isAnimated = underAnimation || (child.transform?.keyTimes.count ?? 0) > 1
+        if mergesStaticMeshes, !isAnimated, let mdlMesh = child as? MDLMesh,
+           let candidate = MergeCandidate(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader, materials: record.materials) {
+            record.mergeCandidates.append(candidate)
+            object = candidate.placeholder
+        }
+        else if let mdlMesh = child as? MDLMesh {
             let mesh = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader, instanced: instanced, materials: record.materials)
             if mdlMesh.skeletonBinding != nil { record.skinnedMeshes.append((mesh, mdlMesh)) }
             object = mesh
@@ -294,8 +318,180 @@ func loadAssetChildren(parent: Object, children: [MDLObject], context: Context, 
         }
         parent.add(object)
         loadAssetChildren(parent: object, children: child.children.objects, context: context, textureLoader: textureLoader,
-                          instanced: instanced, record: &record)
+                          instanced: instanced, mergesStaticMeshes: mergesStaticMeshes, underAnimation: isAnimated, record: &record)
     }
+}
+
+// MARK: - Merging Static Meshes
+
+/// A mesh that may merge with others: static, unskinned, childless, one triangle submesh with an
+/// opaque material. Built only once merging decides what it joins; until then a placeholder holds
+/// its place in the hierarchy.
+struct MergeCandidate {
+    let mdlMesh: MDLMesh
+    let submesh: MDLSubmesh
+    let material: Material
+    let cullMode: MTLCullMode
+    let placeholder: Object
+    /// Whether its vertex buffers hold exactly its vertices, so they concatenate as they are.
+    /// A candidate that can't join still loads from here, as a group of one.
+    let canJoin: Bool
+
+    init?(mdlMesh: MDLMesh, context: Context, textureLoader: MTKTextureLoader?, materials: LoadedMaterials) {
+        guard mdlMesh.skeletonBinding == nil, mdlMesh.children.objects.isEmpty,
+              let submeshes = mdlMesh.submeshes, submeshes.count == 1,
+              let submesh = submeshes.object(at: 0) as? MDLSubmesh, submesh.geometryType == .triangles,
+              let mdlMaterial = submesh.material, let textureLoader
+        else { return nil }
+        let material = materials.material(for: mdlMaterial, context: context, textureLoader: textureLoader)
+        guard material.blending == .disabled else { return nil }
+
+        // Normals now, as loading would make them, so layouts compare as they will load.
+        generateNormals(mdlMesh)
+        canJoin = Self.hasConcatenableBuffers(mdlMesh)
+
+        self.mdlMesh = mdlMesh
+        self.submesh = submesh
+        self.material = material
+        cullMode = Satin.cullMode(forFaces: [mdlMaterial.materialFace])
+        placeholder = Object(context: context, label: mdlMesh.name)
+    }
+
+    /// Whether `other` draws exactly as this does: one material, cull mode, world transform and
+    /// vertex layout. Anything else, such as the draw's motion or bounds, may differ.
+    func drawsAlike(_ other: MergeCandidate) -> Bool {
+        canJoin && other.canJoin
+            && material === other.material
+            && cullMode == other.cullMode
+            && placeholder.worldMatrix == other.placeholder.worldMatrix
+            && Self.haveSameVertexLayout(mdlMesh, other.mdlMesh)
+    }
+
+    /// Whether each vertex buffer holds exactly its vertices, so buffers concatenate as they are.
+    private static func hasConcatenableBuffers(_ mdlMesh: MDLMesh) -> Bool {
+        guard mdlMesh.vertexCount > 0 else { return false }
+        for (bufferIndex, buffer) in mdlMesh.vertexBuffers.enumerated() {
+            guard bufferIndex < mdlMesh.vertexDescriptor.layouts.count,
+                  let layout = mdlMesh.vertexDescriptor.layouts[bufferIndex] as? MDLVertexBufferLayout,
+                  layout.stride > 0, buffer.length == layout.stride * mdlMesh.vertexCount
+            else { return false }
+        }
+        return true
+    }
+
+    private static func haveSameVertexLayout(_ first: MDLMesh, _ second: MDLMesh) -> Bool {
+        let firstDescriptor = first.vertexDescriptor
+        let secondDescriptor = second.vertexDescriptor
+        guard first.vertexBuffers.count == second.vertexBuffers.count,
+              firstDescriptor.attributes.count == secondDescriptor.attributes.count,
+              firstDescriptor.layouts.count == secondDescriptor.layouts.count
+        else { return false }
+        for index in 0 ..< firstDescriptor.attributes.count {
+            guard let firstAttribute = firstDescriptor.attributes[index] as? MDLVertexAttribute,
+                  let secondAttribute = secondDescriptor.attributes[index] as? MDLVertexAttribute,
+                  firstAttribute.name == secondAttribute.name, firstAttribute.format == secondAttribute.format,
+                  firstAttribute.offset == secondAttribute.offset, firstAttribute.bufferIndex == secondAttribute.bufferIndex
+            else { return false }
+        }
+        for index in 0 ..< firstDescriptor.layouts.count {
+            guard let firstLayout = firstDescriptor.layouts[index] as? MDLVertexBufferLayout,
+                  let secondLayout = secondDescriptor.layouts[index] as? MDLVertexBufferLayout,
+                  firstLayout.stride == secondLayout.stride
+            else { return false }
+        }
+        return true
+    }
+}
+
+/// Joins `candidates` that draw alike into one mesh per group, in load order: each group is
+/// built where its first member sat, from the members' vertices as they are and their indices in
+/// member order, and the other members' places are removed. A group of one loads as it would
+/// unmerged. Deterministic: the same file merges the same way.
+///
+/// Pixels stay the same: the joined meshes share material, cull mode and world transform, so
+/// each vertex and the matrix it is drawn with are unchanged, and only opaque meshes join, whose
+/// result doesn't depend on draw order. (Exactly coplanar, overlapping surfaces of different
+/// materials can tie in depth either way; draw order decides those.)
+func mergeStaticMeshes(_ candidates: [MergeCandidate], context: Context, textureLoader: MTKTextureLoader?, record: AssetLoadRecord) {
+    var groups: [(members: [MergeCandidate], vertexCount: Int)] = []
+    for candidate in candidates {
+        var joined = false
+        for groupIndex in groups.indices where groups[groupIndex].members[0].drawsAlike(candidate) {
+            guard candidate.mdlMesh.vertexCount <= Int(UInt32.max) - groups[groupIndex].vertexCount else { continue }
+            groups[groupIndex].members.append(candidate)
+            groups[groupIndex].vertexCount += candidate.mdlMesh.vertexCount
+            joined = true
+            break
+        }
+        if !joined { groups.append((members: [candidate], vertexCount: candidate.mdlMesh.vertexCount)) }
+    }
+
+    for group in groups {
+        let members = group.members
+        let mdlMesh = members.count == 1 ? members[0].mdlMesh : mergedMesh(members)
+        let mesh = loadMesh(mdlMesh: mdlMesh, context: context, textureLoader: textureLoader, instanced: false,
+                            materials: record.materials, generatesNormals: false)
+        replace(members[0].placeholder, with: mesh)
+        for member in members.dropFirst() {
+            member.placeholder.removeFromParent()
+        }
+    }
+}
+
+/// One mesh of `members`' vertices, buffer by buffer in member order, and their indices, each
+/// member's moved past the vertices before it. Named and bound as the first member.
+private func mergedMesh(_ members: [MergeCandidate]) -> MDLMesh {
+    let first = members[0]
+    var vertexBuffers: [MDLMeshBuffer] = []
+    for bufferIndex in first.mdlMesh.vertexBuffers.indices {
+        var data = Data()
+        for member in members {
+            let buffer = member.mdlMesh.vertexBuffers[bufferIndex]
+            let map = buffer.map()
+            data.append(map.bytes.assumingMemoryBound(to: UInt8.self), count: buffer.length)
+        }
+        vertexBuffers.append(MDLMeshBufferData(type: .vertex, data: data))
+    }
+
+    var indices: [UInt32] = []
+    var vertexBase: UInt32 = 0
+    for member in members {
+        let indexCount = member.submesh.indexCount
+        let indexBuffer = member.submesh.indexBuffer(asIndexType: .uInt32)
+        let map = indexBuffer.map()
+        let memberIndices = map.bytes.bindMemory(to: UInt32.self, capacity: indexCount)
+        for index in 0 ..< indexCount {
+            indices.append(memberIndices[index] + vertexBase)
+        }
+        vertexBase += UInt32(member.mdlMesh.vertexCount)
+    }
+
+    let submesh = MDLSubmesh(
+        name: first.submesh.name,
+        indexBuffer: MDLMeshBufferData(type: .index, data: indices.withUnsafeBytes { Data($0) }),
+        indexCount: indices.count,
+        indexType: .uInt32,
+        geometryType: .triangles,
+        material: first.submesh.material
+    )
+    let mesh = MDLMesh(
+        vertexBuffers: vertexBuffers,
+        vertexCount: Int(vertexBase),
+        descriptor: MDLVertexDescriptor(vertexDescriptor: first.mdlMesh.vertexDescriptor),
+        submeshes: [submesh]
+    )
+    mesh.name = first.mdlMesh.name
+    return mesh
+}
+
+/// Puts `object` where `placeholder` is, with its local transform.
+private func replace(_ placeholder: Object, with object: Object) {
+    object.localMatrix = placeholder.localMatrix
+    guard let parent = placeholder.parent,
+          let index = parent.children.firstIndex(where: { $0 === placeholder })
+    else { return }
+    parent.insert(object, at: index)
+    parent.remove(placeholder)
 }
 
 // MARK: - Sidedness

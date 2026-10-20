@@ -26,12 +26,20 @@ open class PosedGeometry: Geometry {
         self.source = source
         super.init(context: source.context, primitiveType: source.primitiveType, windingOrder: source.windingOrder)
         self.jointPalette = jointPalette
-        sourceSubscription = source.onUpdate.sink { [weak self] source in
-            guard let self else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        sourceSubscription = source.onUpdate.sink { [unowned self] source in
             self.windingOrder = source.windingOrder
             self.updateBounds = true
             self.onUpdate.send(self)
         }
+    }
+
+    /// Stops listening before `source` is released: stored properties go in declaration order, so
+    /// a source this view alone owns would otherwise deinitialise, and announce its removed
+    /// attributes, to a subscription still capturing this half-destroyed view.
+    deinit {
+        sourceSubscription?.cancel()
     }
 
     /// Called each frame after the source updates. Override to recompute the palette from
@@ -73,6 +81,10 @@ open class PosedGeometry: Geometry {
     /// Posed when skinned (see `Geometry.computeBounds`), otherwise the source's.
     override open func computeBounds() -> Bounds {
         isSkinned ? super.computeBounds() : source.bounds
+    }
+
+    override var boundsPaletteDependency: JointPalette? {
+        isSkinned ? jointPalette : source.boundsPaletteDependency
     }
 
     override open func intersect(ray: Ray, intersections: inout [IntersectionResult]) {

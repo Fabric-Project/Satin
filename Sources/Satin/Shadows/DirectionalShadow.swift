@@ -97,7 +97,7 @@ public final class DirectionalShadow: Shadow {
         needsUpdate = true
     }
 
-    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable], recorder: PacketRecorder) {
+    override func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) {
         guard enabled else { return }
 
         setupTexture()
@@ -120,14 +120,17 @@ public final class DirectionalShadow: Shadow {
         else { return }
 
         renderEncoder.label = label + " Shadow Encoder"
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+        renderEncoderState.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
         renderEncoderState.setPassViewport(viewport)
         let shadowViews = [RenderView(camera: camera, viewport: _viewport, frame: recorder.frame)]
+        let frustum = ViewFrustum(viewProjectionMatrix: shadowViews[0].viewProjectionMatrix)
         for renderable in renderables where renderable.castShadow {
+            guard !renderable.frustumCulled || frustum.mayContain(renderable.worldBounds) else { continue }
             let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: shadowViews)
             recorder.encode(packets, into: renderEncoderState)
         }
         renderEncoder.endEncoding()
+        renderEncoderState.end()
         needsUpdate = false
     }
 

@@ -113,6 +113,69 @@ final class RenderEncoderStateTests: XCTestCase {
 
     // MARK: - Pass State
 
+    func testTheNextPacketRestoresSingleViewAmplificationAfterACustomCommand() throws {
+        try assertSingleViewAmplificationIsRestored(beforeInternalDraw: false)
+    }
+
+    func testAnInternalDrawRestoresSingleViewAmplificationAfterACustomCommand() throws {
+        try assertSingleViewAmplificationIsRestored(beforeInternalDraw: true)
+    }
+
+    /// Counts vertex invocations separately for each amplification ID. The custom command enables
+    /// two views; the following Satin draw must execute only view zero of the original one-view pass.
+    private func assertSingleViewAmplificationIsRestored(beforeInternalDraw: Bool) throws {
+        guard device.supportsVertexAmplificationCount(2) else {
+            throw XCTSkip("The device does not support two vertex amplifications")
+        }
+        let library = try device.makeLibrary(source: """
+        #include <metal_stdlib>
+        using namespace metal;
+        vertex void countAmplifications(ushort amplificationIndex [[amplification_id]],
+                                        device atomic_uint *counts [[buffer(0)]]) {
+            atomic_fetch_add_explicit(counts + amplificationIndex, 1u, memory_order_relaxed);
+        }
+        """, options: nil)
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.vertexFunction = try XCTUnwrap(library.makeFunction(name: "countAmplifications"))
+        pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        pipelineDescriptor.isRasterizationEnabled = false
+        pipelineDescriptor.maxVertexAmplificationCount = 2
+        let pipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        let counts = try XCTUnwrap(device.makeBuffer(length: 2 * MemoryLayout<UInt32>.stride, options: .storageModeShared))
+        counts.contents().initializeMemory(as: UInt32.self, repeating: 0, count: 2)
+        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let pass = try makePass(commandBuffer)
+        let state = RenderEncoderState()
+        state.begin(renderEncoder: pass.encoder, renderPassDescriptor: pass.descriptor)
+        state.setPassViewport(MTLViewport(originX: 0, originY: 0, width: 4, height: 4, znear: 0, zfar: 1))
+
+        // The effect of a custom command, followed by the invalidation packet replay performs.
+        var mappings = [
+            MTLVertexAmplificationViewMapping(viewportArrayIndexOffset: 0, renderTargetArrayIndexOffset: 0),
+            MTLVertexAmplificationViewMapping(viewportArrayIndexOffset: 0, renderTargetArrayIndexOffset: 0),
+        ]
+        pass.encoder.setVertexAmplificationCount(2, viewMappings: &mappings)
+        state.invalidate()
+        if beforeInternalDraw {
+            state.beginInternalDraw()
+        } else {
+            state.beginPacket()
+        }
+        state.pipeline = pipeline
+        state.setVertexBuffer(counts, offset: 0, index: .Vertices)
+        pass.encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        pass.encoder.endEncoding()
+        state.end()
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        XCTAssertEqual(commandBuffer.status, .completed, "\(String(describing: commandBuffer.error))")
+        let invocations = counts.contents().bindMemory(to: UInt32.self, capacity: 2)
+        XCTAssertEqual(invocations[0], 3, "the original view executes once")
+        XCTAssertEqual(invocations[1], 0, "the custom command's extra view does not execute in the next draw")
+    }
+
     func testAPacketAfterACustomCommandOverwritingLightingIsLitAsBefore() throws {
         let context = try makeContext()
 
@@ -183,7 +246,8 @@ final class RenderEncoderStateTests: XCTestCase {
         let renderEncoder = try XCTUnwrap(commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor))
         defer { renderEncoder.endEncoding() }
 
-        let state = RenderEncoderState(renderEncoder: renderEncoder, renderTargetSize: (width: 4, height: 4))
+        let state = RenderEncoderState()
+        state.begin(renderEncoder: renderEncoder, renderTargetSize: (width: 4, height: 4))
         state.pipeline = pipeline
         state.cullMode = .back
         // Nil is sent as the default state object: setDepthStencilState(nil) crashes the AGX driver.
@@ -205,6 +269,80 @@ final class RenderEncoderStateTests: XCTestCase {
         XCTAssertTrue(state.passStateNeedsRestore)
         state.beginPacket()
         XCTAssertFalse(state.passStateNeedsRestore, "restored once, at the next packet")
+    }
+
+    // MARK: - Reuse
+
+    /// A render target and encoder for one pass: returned so the caller decides when they go.
+    private func makePass(_ commandBuffer: MTLCommandBuffer) throws -> (encoder: MTLRenderCommandEncoder, descriptor: MTLRenderPassDescriptor) {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 4, height: 4, mipmapped: false)
+        descriptor.usage = [.renderTarget]
+        descriptor.storageMode = .private
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.colorAttachments[0].texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+        return (try XCTUnwrap(commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)), renderPassDescriptor)
+    }
+
+    func testAReusedStateStartsEachPassClean() throws {
+        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let state = RenderEncoderState()
+        let texture = try makeTexture(red)
+
+        let first = try makePass(commandBuffer)
+        state.begin(renderEncoder: first.encoder, renderPassDescriptor: first.descriptor)
+        state.setFragmentTexture(texture, index: .Custom0)
+        XCTAssertTrue(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
+        first.encoder.endEncoding()
+        state.end()
+
+        let second = try makePass(commandBuffer)
+        state.begin(renderEncoder: second.encoder, renderPassDescriptor: second.descriptor)
+        XCTAssertFalse(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue),
+                       "the second pass binds its first texture even when it equals the first pass's last")
+        second.encoder.endEncoding()
+        state.end()
+    }
+
+    func testBeginningAnotherPassClearsStateEvenWithoutAnExplicitStateEnd() throws {
+        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let state = RenderEncoderState()
+        let first = try makePass(commandBuffer)
+        state.begin(renderEncoder: first.encoder, renderPassDescriptor: first.descriptor)
+        state.setFragmentTexture(try makeTexture(red), index: .Custom0)
+        first.encoder.endEncoding()
+
+        let second = try makePass(commandBuffer)
+        state.begin(renderEncoder: second.encoder, renderPassDescriptor: second.descriptor)
+
+        XCTAssertFalse(state.hasKnownFragmentTexture(at: FragmentTextureIndex.Custom0.rawValue))
+        second.encoder.endEncoding()
+        state.end()
+    }
+
+    func testEndingAPassReleasesItsReferences() throws {
+        let state = RenderEncoderState()
+        weak var releasedEncoder: MTLRenderCommandEncoder?
+        weak var releasedBuffer: MTLBuffer?
+
+        try autoreleasepool {
+            let commandQueue = try XCTUnwrap(device.makeCommandQueue())
+            let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+            let pass = try makePass(commandBuffer)
+            let buffer = try XCTUnwrap(device.makeBuffer(length: 256))
+            releasedEncoder = pass.encoder
+            releasedBuffer = buffer
+            state.begin(renderEncoder: pass.encoder, renderPassDescriptor: pass.descriptor)
+            state.setVertexBuffer(buffer, offset: 0, index: .Vertices)
+            state.setPassFragmentBuffer(buffer, offset: 0, index: .Lighting)
+            pass.encoder.endEncoding()
+            state.end()
+        }
+
+        XCTAssertFalse(state.holdsPass, "the state keeps no encoder or binding after its pass")
+        XCTAssertNil(releasedEncoder, "nothing in the state keeps the finished encoder")
+        XCTAssertNil(releasedBuffer, "or the pass's buffers")
     }
 }
 

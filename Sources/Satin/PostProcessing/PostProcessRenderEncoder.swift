@@ -60,6 +60,8 @@ open class PostProcessRenderEncoder {
     /// Per-draw storage: the mesh's vertex uniforms in the arena, its packets in leased storage.
     private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
     private let packetStoragePool = PacketStoragePool()
+    /// The state of the pass, reused by each draw.
+    private let renderEncoderState = RenderEncoderState()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
     private var colorTexture: MTLTexture?
@@ -240,7 +242,7 @@ open class PostProcessRenderEncoder {
 
         guard let renderCommandEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
         renderCommandEncoder.label = label
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderCommandEncoder, renderPassDescriptor: renderPassDescriptor)
+        renderEncoderState.begin(renderEncoder: renderCommandEncoder, renderPassDescriptor: renderPassDescriptor)
 
         if context.vertexAmplificationCount > 1 {
             var mappings = viewMappings
@@ -261,6 +263,7 @@ open class PostProcessRenderEncoder {
 
         recorder.encode(packets, into: renderEncoderState)
         renderCommandEncoder.endEncoding()
+        renderEncoderState.end()
     }
 
     private func saveState(_ renderPassDescriptor: MTLRenderPassDescriptor) -> RenderPassDescriptorState {

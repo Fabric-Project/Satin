@@ -195,11 +195,18 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 * Meshes loaded from one asset share a material when their source materials are identical, and each texture loads once per set of loading options.
 * Culling follows the asset's sidedness instead of drawing back faces everywhere; mirrored meshes keep their winding correct.
+* `mergeStaticMeshes` (off by default) joins loaded meshes that draw exactly alike (one material, cull mode, vertex layout and world transform; opaque and static) into one mesh each, copying vertices as they are: fewer draws, the same pixels.
 
 ## Transform Revisions
 
 * Transform changes no longer push through the scene graph via Combine. Objects carry revisions; world matrices, bounds, camera views and light data validate when read. Moving a parent costs nothing until something reads its descendants.
 * Removed the per-object Combine subjects that had no subscribers, and `@Published` from camera properties, which cost key-path and metadata lookups on every access.
+* Parent and container links, and the subscriptions meshes, materials, posed geometries and parameter groups hold on their sources, are checked `unowned` instead of `weak`, so the objects a frame retains most no longer take the slow, side-table retain path. A parent clears its children's links as it lets them go and as it deallocates; assigning `children` now also clears the parent of each child it removes.
+
+## Culling and Shadow Recording
+
+* Passes skip renderables whose world bounds are wholly outside their views: colour views, shadow cameras and each point-light face. `Renderable.frustumCulled` (default `true`) opts out, for shaders that draw beyond the geometry's bounds.
+* A point light records each caster once for all six faces instead of once per face, and encodes it per face as that face's view.
 
 ## Bug Fixes
 

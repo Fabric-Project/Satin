@@ -1,0 +1,190 @@
+@testable import Satin
+import Metal
+import simd
+import XCTest
+
+#if SWIFT_PACKAGE
+import SatinCore
+#endif
+
+/// Culling skips a renderable only when its world bounds are wholly outside a pass's views, and a
+/// point light's casters are recorded once for all six faces, each face encoding them as its own
+/// view. Neither may change what is drawn.
+final class CullingTests: XCTestCase {
+    private var context: Context!
+    private var commandQueue: MTLCommandQueue!
+
+    override func setUpWithError() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm, depthPixelFormat: .depth32Float)
+        commandQueue = try XCTUnwrap(device.makeCommandQueue())
+    }
+
+    // MARK: - Frustum
+
+    private func box(center: simd_float3, halfSize: Float = 0.5) -> Bounds {
+        Bounds(min: center - halfSize, max: center + halfSize)
+    }
+
+    private func frustum(of camera: Camera) -> ViewFrustum {
+        ViewFrustum(viewProjectionMatrix: camera.viewProjectionMatrix)
+    }
+
+    func testAPerspectiveViewKeepsWhatIsInFrontAndCullsWhatIsBesideOrBehind() {
+        let view = frustum(of: PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30))
+
+        XCTAssertTrue(view.mayContain(box(center: .zero)))
+        XCTAssertTrue(view.mayContain(box(center: [0, 0, -500])), "beyond the far plane is kept: near and far are never tested")
+        XCTAssertFalse(view.mayContain(box(center: [100, 0, 0])), "wholly right of the view")
+        XCTAssertFalse(view.mayContain(box(center: [0, -100, 0])), "wholly below it")
+        XCTAssertFalse(view.mayContain(box(center: [0, 0, 20])), "wholly behind the eye")
+        XCTAssertTrue(view.mayContain(box(center: [0, 0, 5], halfSize: 1)), "around the eye")
+    }
+
+    func testAnOrthographicViewCullsOnlyBesideIt() {
+        let camera = OrthographicCamera(context: context, left: -1, right: 1, bottom: -1, top: 1, near: 0.1, far: 10)
+        camera.position = [0, 0, 5]
+        let view = frustum(of: camera)
+
+        XCTAssertTrue(view.mayContain(box(center: [0.9, 0, 0], halfSize: 0.2)), "straddling the right side")
+        XCTAssertFalse(view.mayContain(box(center: [3, 0, 0], halfSize: 0.2)))
+    }
+
+    func testBoundsThatCantBeJudgedAreNeverCulled() {
+        let view = frustum(of: PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30))
+
+        XCTAssertTrue(view.mayContain(createBounds()), "empty")
+        XCTAssertTrue(view.mayContain(Bounds(min: [100, 0, 0], max: [.infinity, 1, 1])), "infinite")
+        XCTAssertTrue(view.mayContain(Bounds(min: [100, .nan, 0], max: [101, 1, 1])), "not a number")
+    }
+
+    // MARK: - Colour
+
+    private func makeMesh(at position: simd_float3) -> Mesh {
+        let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+        mesh.position = position
+        mesh.update()
+        return mesh
+    }
+
+    /// The packets `mesh` records into a submission seen from [0, 0, 5] looking down -z.
+    private func recordedPacketCount(_ mesh: Mesh) throws -> Int {
+        let encoder = RenderEncoder(context: context)
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let submission = encoder.makeSubmission(frame: .zero, commandBuffer: commandBuffer, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+        try submission.record(scene: Object(context: context, label: "Scene", [mesh]))
+        return submission.recorder.storage.runs.reduce(0) { $0 + $1.packets.count }
+    }
+
+    func testAColourPassSkipsARenderableOutsideItsViews() throws {
+        XCTAssertGreaterThan(try recordedPacketCount(makeMesh(at: .zero)), 0)
+        XCTAssertEqual(try recordedPacketCount(makeMesh(at: [100, 0, 0])), 0)
+    }
+
+    func testARenderableThatIsNotFrustumCulledIsAlwaysRecorded() throws {
+        let mesh = makeMesh(at: [100, 0, 0])
+        mesh.frustumCulled = false
+        XCTAssertGreaterThan(try recordedPacketCount(mesh), 0)
+    }
+
+    // MARK: - Point Shadows
+
+    /// Draws `scene` once, seen from [0, 0, 5].
+    private func draw(_ scene: Object) throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 16, height: 16))
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 16, height: 16, mipmapped: false)
+        descriptor.usage = [.renderTarget]
+        descriptor.storageMode = .private
+        let target = try XCTUnwrap(context.device.makeTexture(descriptor: descriptor))
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        try encoder.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, scene: scene, camera: camera, renderTarget: target)
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+    }
+
+    private func makePointLightScene(caster: Mesh) -> Object {
+        let light = PointLight(context: context, color: [1, 1, 1], intensity: 10, radius: 20)
+        light.castShadow = true
+        let floor = Mesh(context: context, label: "Floor", geometry: PlaneGeometry(context: context, size: 10, orientation: .zx), material: BasicDiffuseMaterial(context: context))
+        floor.position.y = -2
+        floor.receiveShadow = true
+        caster.castShadow = true
+        return Object(context: context, label: "Scene", [light, floor, caster])
+    }
+
+    func testAPointLightRecordsEachCasterOnceForAllItsFaces() throws {
+        let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
+        caster.position = [0, -1, 0]
+
+        try draw(makePointLightScene(caster: caster))
+
+        XCTAssertEqual(caster.shadowDraws, 1, "one recording serves every face it reaches")
+    }
+
+    func testAPointLightSkipsACasterBeyondItsReach() throws {
+        let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
+        caster.position = [0, 0, -50]
+
+        try draw(makePointLightScene(caster: caster))
+
+        XCTAssertEqual(caster.shadowDraws, 0, "outside every face's far plane")
+    }
+
+    func testACasterWithACustomCommandIsRecordedPerFace() throws {
+        let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
+        caster.addsShadowCustomCommand = true
+        caster.frustumCulled = false
+
+        try draw(makePointLightScene(caster: caster))
+
+        XCTAssertEqual(caster.shadowDraws, 1 + 6, "the shared recording, then one per face")
+    }
+
+    /// The same lit, point-shadowed scene, its caster recorded once for every face or once per
+    /// face, renders the same pixels.
+    func testRecordingOnceForEveryFaceShadowsExactlyAsRecordingPerFace() throws {
+        func render(perFace: Bool, castsShadow: Bool = true) throws -> RGBAImage {
+            try VisualTestHarness.render(size: [96, 96]) { renderer, camera in
+                let context = renderer.context
+                let light = PointLight(context: context, color: [1, 1, 1], intensity: 6, radius: 30)
+                light.position = [0.5, 2.5, 0.5]
+                light.castShadow = true
+                light.shadow.resolution = (width: 256, height: 256)
+                let floor = Mesh(context: context, label: "Floor", geometry: PlaneGeometry(context: context, size: 8, orientation: .zx), material: StandardMaterial(context: context))
+                floor.position.y = -1.0
+                floor.receiveShadow = true
+                let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: StandardMaterial(context: context))
+                caster.castShadow = castsShadow
+                caster.addsShadowCustomCommand = perFace
+                return (scene: Object(context: context, label: "Scene", [light, floor, caster]), camera: camera)
+            }
+        }
+
+        let once = try render(perFace: false)
+        let perFace = try render(perFace: true)
+        let unshadowed = try render(perFace: false, castsShadow: false)
+
+        XCTAssertNotEqual(once.pixels, unshadowed.pixels, "the caster's shadow shows")
+        XCTAssertEqual(once.pixels, perFace.pixels, "each face encodes the shared recording as its own view")
+    }
+}
+
+/// Counts its shadow-pass recordings; can add a no-op custom command to them, which makes a point
+/// light record it per face.
+private final class DrawCountingMesh: Mesh {
+    var shadowDraws = 0
+    var addsShadowCustomCommand = false
+
+    override func draw(in context: RenderableDrawContext) {
+        if context.pass == .shadow {
+            shadowDraws += 1
+            if addsShadowCustomCommand {
+                context.addCustomCommand { _ in }
+            }
+        }
+        super.draw(in: context)
+    }
+}

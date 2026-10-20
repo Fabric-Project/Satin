@@ -358,6 +358,8 @@ open class RenderEncoder {
     /// Per-draw storage: vertex uniforms in the arena, packets in storage leased for one draw.
     private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
     let packetStoragePool = PacketStoragePool()
+    /// The state of whichever of this encoder's passes is encoding: one at a time, reused.
+    private let passEncoderState = RenderEncoderState()
     /// The draw in progress: set for the length of `draw`.
     private var recorder: PacketRecorder?
     /// The renderables of a scene being recorded into a submission, reused across records.
@@ -744,18 +746,17 @@ open class RenderEncoder {
         let inTileWidth = renderPassDescriptor.tileWidth
         let inTileHeight = renderPassDescriptor.tileHeight
         let inImageblockSampleLength = renderPassDescriptor.imageblockSampleLength
-        let inAuxiliaryStates: [Int: ColorAttachmentState] = Dictionary(
-            uniqueKeysWithValues: (1...5).compactMap { index in
-                guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { return nil }
-                return (index, ColorAttachmentState(
-                    texture: attachment.texture,
-                    resolveTexture: attachment.resolveTexture,
-                    loadAction: attachment.loadAction,
-                    storeAction: attachment.storeAction,
-                    clearColor: attachment.clearColor
-                ))
-            }
-        )
+        // Auxiliary slots are fixed at 1...5; preserve a position even for an absent attachment.
+        let inAuxiliaryStates: [ColorAttachmentState?] = (1...5).map { index in
+            guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { return nil }
+            return ColorAttachmentState(
+                texture: attachment.texture,
+                resolveTexture: attachment.resolveTexture,
+                loadAction: attachment.loadAction,
+                storeAction: attachment.storeAction,
+                clearColor: attachment.clearColor
+            )
+        }
 
         defer {
             renderPassDescriptor.colorAttachments[0].storeAction = inColorStoreAction
@@ -776,8 +777,8 @@ open class RenderEncoder {
             renderPassDescriptor.tileHeight = inTileHeight
             renderPassDescriptor.imageblockSampleLength = inImageblockSampleLength
 
-            for (index, state) in inAuxiliaryStates {
-                guard let attachment = colorAttachment(renderPassDescriptor, index: index) else { continue }
+            for (offset, state) in inAuxiliaryStates.enumerated() {
+                guard let state, let attachment = colorAttachment(renderPassDescriptor, index: offset + 1) else { continue }
                 attachment.texture = state.texture
                 attachment.resolveTexture = state.resolveTexture
                 attachment.loadAction = state.loadAction
@@ -1033,15 +1034,38 @@ open class RenderEncoder {
     /// own vertex uniforms; its packets are a run for that layer and route.
     private func recordScene(recorder: PacketRecorder, views: [RenderView]) {
         let routes = recordedRoutes
+        let frusta = Self.frusta(of: views)
         for renderLayer in renderCollection.activeLayers {
             for renderable in renderCollection.renderables(renderLayer: renderLayer, sorted: sortObjects) {
-                recordColorPasses(of: renderable, renderLayer: renderLayer, routes: routes, recorder: recorder, views: views, isRecorded: false)
+                recordColorPasses(of: renderable, renderLayer: renderLayer, routes: routes, recorder: recorder, views: views, frusta: frusta, isRecorded: false)
             }
         }
     }
 
-    /// Records `renderable` once per route of `routes` it draws in, as runs of its layer.
-    private func recordColorPasses(of renderable: Renderable, renderLayer: Int, routes: [RenderRoute], recorder: PacketRecorder, views: [RenderView], isRecorded: Bool) {
+    /// The side planes of each of `views`, to cull against.
+    private static func frusta(of views: [RenderView]) -> ContiguousArray<ViewFrustum> {
+        var frusta = ContiguousArray<ViewFrustum>()
+        frusta.reserveCapacity(views.count)
+        for view in views {
+            frusta.append(ViewFrustum(viewProjectionMatrix: view.viewProjectionMatrix))
+        }
+        return frusta
+    }
+
+    /// Whether `renderable` may be seen in any of `frusta`: always, when it isn't frustum culled.
+    private static func mayBeSeen(_ renderable: Renderable, in frusta: ContiguousArray<ViewFrustum>) -> Bool {
+        guard renderable.frustumCulled, !frusta.isEmpty else { return true }
+        let bounds = renderable.worldBounds
+        for frustum in frusta where frustum.mayContain(bounds) {
+            return true
+        }
+        return false
+    }
+
+    /// Records `renderable` once per route of `routes` it draws in, as runs of its layer, unless it
+    /// is outside every view.
+    private func recordColorPasses(of renderable: Renderable, renderLayer: Int, routes: [RenderRoute], recorder: PacketRecorder, views: [RenderView], frusta: ContiguousArray<ViewFrustum>, isRecorded: Bool) {
+        guard Self.mayBeSeen(renderable, in: frusta) else { return }
         let membership = routeMembership(of: renderable)
         for route in routes where membership & (1 << route.rawValue) != 0 {
             let phase = Self.phase(for: route)
@@ -1071,15 +1095,14 @@ open class RenderEncoder {
         collectRecordedRenderables(scene: scene, renderables: &recordedRenderables)
         if sortObjects {
             // Stable: equal render orders keep the scene's order.
-            recordedRenderables = recordedRenderables.enumerated()
-                .sorted { $0.element.renderOrder != $1.element.renderOrder ? $0.element.renderOrder < $1.element.renderOrder : $0.offset < $1.offset }
-                .map(\.element)
+            recordedRenderables.sort { $0.renderOrder < $1.renderOrder }
         }
 
         let routes = recordedRoutes
+        let frusta = Self.frusta(of: submission.views)
         for renderable in recordedRenderables {
             renderable.beginOccurrence(frame: recorder.frame)
-            recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, isRecorded: true)
+            recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)
         }
         recordedRenderables.removeAll(keepingCapacity: true)
     }
@@ -1116,7 +1139,7 @@ open class RenderEncoder {
         }
     }
 
-    private func appendRunToBucket(_ run: PacketStorage.PacketRun) {
+    private func appendRunToBucket(_ run: PacketTables.PacketRun) {
         guard let pass = passLayers.firstIndex(of: run.renderLayer) else { return }
         packetBuckets[run.routeIndex][pass].append(contentsOf: run.packets)
     }
@@ -1371,7 +1394,7 @@ open class RenderEncoder {
 #if DEBUG
         renderEncoder.pushDebugGroup("Deferred Lighting Resolve")
 #endif
-        let passState = makePassState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
+        let passState = beginPass(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
 
         // The lighting quad isn't in the scene: it is its own occurrence, recorded for this encoder.
         var lightingPackets: Range<Int>?
@@ -1415,7 +1438,7 @@ open class RenderEncoder {
 #if DEBUG
         renderEncoder.popDebugGroup()
 #endif
-        renderEncoder.endEncoding()
+        endPass(renderEncoder)
 
         // Encode any additional unlit render passes (multiple render layers, uncommon case).
         for (i, entry) in unlitEntries.dropFirst().enumerated() {
@@ -1432,7 +1455,7 @@ open class RenderEncoder {
 #if DEBUG
             enc.pushDebugGroup("Unlit Forward Pass \(entry.pass)")
 #endif
-            let passState = makePassState(renderEncoder: enc, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
+            let passState = beginPass(renderEncoder: enc, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
             encode(
                 state: passState,
                 pass: entry.pass,
@@ -1442,7 +1465,7 @@ open class RenderEncoder {
 #if DEBUG
             enc.popDebugGroup()
 #endif
-            enc.endEncoding()
+            endPass(enc)
         }
 
         return true
@@ -1506,7 +1529,7 @@ open class RenderEncoder {
         if let recorder {
             for entry in routeEntries {
                 if let packetIndex = entry.packets.first {
-                    return recorder.storage.pipeline(of: recorder.storage.packets[packetIndex]).imageblockSampleLength
+                    return recorder.storage.pipeline(ofPacketAt: packetIndex).imageblockSampleLength
                 }
             }
         }
@@ -1557,7 +1580,7 @@ open class RenderEncoder {
 #if DEBUG
             renderEncoder.pushDebugGroup("Alpha OIT Pass")
 #endif
-            let passState = makePassState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
+            let passState = beginPass(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
 
             encodeAlphaOitTileClear(state: passState, resources: resources)
 
@@ -1569,7 +1592,7 @@ open class RenderEncoder {
                     encodeAlphaOitTileClear(state: passState, resources: resources)
                 }
 #if DEBUG
-                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(group.pass) Render Order \(group.packets.first.map { recorder?.storage.packets[$0].renderOrder ?? 0 } ?? 0)")
+                renderEncoder.pushDebugGroup("Alpha OIT Geometry Pass \(group.pass) Render Order \(group.packets.first.map { recorder?.storage.renderOrder(ofPacketAt: $0) ?? 0 } ?? 0)")
 #endif
                 encode(
                     state: passState,
@@ -1586,7 +1609,7 @@ open class RenderEncoder {
 #if DEBUG
             renderEncoder.popDebugGroup()
 #endif
-            renderEncoder.endEncoding()
+            endPass(renderEncoder)
 
             return true
         } catch {
@@ -1608,8 +1631,8 @@ open class RenderEncoder {
         for entry in routeEntries {
             var groupStart = entry.packets.startIndex
             for packetPosition in entry.packets.indices where packetPosition > groupStart {
-                let renderOrder = recorder.storage.packets[entry.packets[packetPosition]].renderOrder
-                let previousRenderOrder = recorder.storage.packets[entry.packets[packetPosition - 1]].renderOrder
+                let renderOrder = recorder.storage.renderOrder(ofPacketAt: entry.packets[packetPosition])
+                let previousRenderOrder = recorder.storage.renderOrder(ofPacketAt: entry.packets[packetPosition - 1])
                 if sortObjects, renderOrder != previousRenderOrder {
                     groups.append(RenderRouteEntry(pass: entry.pass, packets: entry.packets[groupStart ..< packetPosition]))
                     groupStart = packetPosition
@@ -1697,7 +1720,7 @@ open class RenderEncoder {
 
             guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
             renderEncoder.label = "\(self.label) \(label) Pass \(entry.pass)"
-            let passState = makePassState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
+            let passState = beginPass(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
 
             encode(
                 state: passState,
@@ -1705,7 +1728,7 @@ open class RenderEncoder {
                 packets: entry.packets,
                 phase: phase
             )
-            renderEncoder.endEncoding()
+            endPass(renderEncoder)
         }
 
         return true
@@ -1769,7 +1792,7 @@ open class RenderEncoder {
 #if DEBUG
             renderEncoder.pushDebugGroup("\(label) Pass \(entry.pass)")
 #endif
-            let passState = makePassState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
+            let passState = beginPass(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor, viewports: viewports, viewMappings: viewMappings)
 
             encode(
                 state: passState,
@@ -1781,7 +1804,7 @@ open class RenderEncoder {
 #if DEBUG
             renderEncoder.popDebugGroup()
 #endif
-            renderEncoder.endEncoding()
+            endPass(renderEncoder)
         }
 
         return true
@@ -2296,15 +2319,16 @@ open class RenderEncoder {
 
     // MARK: - Internal Encoding
 
-    /// The state for a pass on `renderEncoder`, with its viewports and vertex amplification set
-    /// through it, so they are put back after a custom command changes them.
-    private func makePassState(
+    /// Starts a pass on `renderEncoder` with the encoder's one reused state, its viewports and
+    /// vertex amplification set through it, so they are put back after a custom command changes them.
+    private func beginPass(
         renderEncoder: MTLRenderCommandEncoder,
         renderPassDescriptor: MTLRenderPassDescriptor,
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping]
     ) -> RenderEncoderState {
-        let state = RenderEncoderState(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
+        let state = passEncoderState
+        state.begin(renderEncoder: renderEncoder, renderPassDescriptor: renderPassDescriptor)
         state.setPassViewports(viewports)
         if context.vertexAmplificationCount > 1 {
             var mappings = viewMappings
@@ -2316,6 +2340,12 @@ open class RenderEncoder {
             state.setPassVertexAmplification(count: context.vertexAmplificationCount, viewMappings: mappings)
         }
         return state
+    }
+
+    /// Ends the pass `beginPass` started: the reused state lets go of the encoder and its bindings.
+    private func endPass(_ renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.endEncoding()
+        passEncoderState.end()
     }
 
     /// Encodes `packets` into one pass, after the fragment state every pass shares: lights,

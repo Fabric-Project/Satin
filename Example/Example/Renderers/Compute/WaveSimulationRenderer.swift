@@ -25,7 +25,12 @@ final class WaveSimulationRenderer: BaseRenderer {
     )
 
     lazy var material = DisplacementMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
-    lazy var mesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 2.0, resolution: 512, orientation: .xy), material: material)
+    lazy var mesh: Mesh = {
+        let mesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 2.0, resolution: 512, orientation: .xy), material: material)
+        // Its shader displaces the plane beyond the geometry's bounds.
+        mesh.frustumCulled = false
+        return mesh
+    }()
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
 

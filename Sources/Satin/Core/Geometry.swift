@@ -156,7 +156,7 @@ open class Geometry {
 
     /// `vertexBuffers` with their offsets, flattened in slot order when either changes, so each
     /// draw walks an array instead of iterating a dictionary and looking up every offset.
-    private var vertexBufferBindings: [(index: VertexBufferIndex, buffer: MTLBuffer, offset: Int)] = []
+    private var vertexBufferBindings = ContiguousArray<(index: VertexBufferIndex, buffer: MTLBuffer, offset: Int)>()
     private var vertexBufferBindingsAreCurrent = false
     private var indexBufferOffset = 0
 
@@ -210,8 +210,10 @@ open class Geometry {
     /// material, moves its vertices by the palette on the GPU.
     public var jointPalette: JointPalette? {
         didSet {
-            // Gaining or losing a palette changes how the geometry draws and its bounds.
-            if (jointPalette == nil) != (oldValue == nil) { onUpdate.send(self) }
+            guard jointPalette !== oldValue else { return }
+            // Replacing a palette changes the pose dependency even when both palettes exist.
+            updateBounds = true
+            onUpdate.send(self)
         }
     }
 
@@ -317,14 +319,20 @@ open class Geometry {
 
     public var updateBounds = true
 
+    /// The pose used by `computeBounds`; a view may instead use its source's pose.
+    var boundsPaletteDependency: JointPalette? { jointPalette }
+
     private var _bounds: Bounds = createBounds()
     public var bounds: Bounds {
-        // A skinned geometry's bounds follow its pose.
-        if isSkinned, let jointPalette, jointPalette !== boundsPalette || jointPalette.poseVersion != boundsPoseVersion {
+        let palette = boundsPaletteDependency
+        let poseVersion = palette?.poseVersion ?? -1
+        if palette !== boundsPalette || poseVersion != boundsPoseVersion {
             updateBounds = true
         }
         if updateBounds {
             _bounds = computeBounds()
+            boundsPalette = palette
+            boundsPoseVersion = poseVersion
             updateBounds = false
         }
         return _bounds
@@ -355,9 +363,9 @@ open class Geometry {
     /// gives one, otherwise its own when skinned.
     final func recordBindings(in context: GeometryDrawContext) {
         if !vertexBufferBindingsAreCurrent {
-            vertexBufferBindings = vertexBuffers
+            vertexBufferBindings = ContiguousArray(vertexBuffers
                 .map { (index: $0.key, buffer: $0.value, offset: vertexBufferOffsets[$0.key, default: 0]) }
-                .sorted { $0.index.rawValue < $1.index.rawValue }
+                .sorted { $0.index.rawValue < $1.index.rawValue })
             vertexBufferBindingsAreCurrent = true
         }
         for binding in vertexBufferBindings {
@@ -662,9 +670,6 @@ open class Geometry {
 
     open func computeBounds() -> Bounds {
         if isSkinned, let jointPalette {
-            // Recorded even when the pose cannot be bounded, so `bounds` does not recompute on every read.
-            boundsPalette = jointPalette
-            boundsPoseVersion = jointPalette.poseVersion
             if let jointRestBounds = skinningSource.jointRestBounds() {
                 return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)
             }

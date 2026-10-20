@@ -47,6 +47,7 @@ final class SubmissionRecordTests: XCTestCase {
     private func binding(of packet: DrawPacket, in storage: PacketStorage, vertexSlot: VertexBufferIndex? = nil, fragmentSlot: FragmentBufferIndex? = nil) -> (buffer: MTLBuffer, offset: Int)? {
         for command in storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)] {
             if case let .vertexBuffer(bufferIndex, offset, slot) = command, slot == vertexSlot { return (storage.buffers[Int(bufferIndex)], offset) }
+            if case let .perViewVertexBuffer(bufferIndex, offset, slot) = command, slot == vertexSlot { return (storage.buffers[Int(bufferIndex)], offset) }
             if case let .fragmentBuffer(bufferIndex, offset, slot) = command, slot == fragmentSlot { return (storage.buffers[Int(bufferIndex)], offset) }
         }
         return nil
@@ -74,6 +75,69 @@ final class SubmissionRecordTests: XCTestCase {
     }
 
     // MARK: - Records Snapshot
+
+    func testDrawingRestoresEveryAuxiliaryAttachment() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 64, height: 64))
+        let descriptor = try makeRenderPassDescriptor()
+        var textures: [MTLTexture?] = []
+        var resolveTextures: [MTLTexture?] = []
+        for index in 1 ... 5 {
+            let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 64, height: 64, mipmapped: false)
+            textureDescriptor.usage = [.renderTarget]
+            let texture = index.isMultiple(of: 2) ? nil : try XCTUnwrap(device.makeTexture(descriptor: textureDescriptor))
+            let resolveTexture = index.isMultiple(of: 2) ? try XCTUnwrap(device.makeTexture(descriptor: textureDescriptor)) : nil
+            textures.append(texture)
+            resolveTextures.append(resolveTexture)
+            let attachment = try XCTUnwrap(descriptor.colorAttachments[index])
+            attachment.texture = texture
+            attachment.resolveTexture = resolveTexture
+            attachment.loadAction = .load
+            attachment.storeAction = .store
+            attachment.clearColor = MTLClearColorMake(Double(index) / 10, 0.2, 0.3, 0.4)
+        }
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+
+        try encoder.draw(frame: .zero, renderPassDescriptor: descriptor, commandBuffer: commandBuffer, scene: Object(context: context), camera: makeCamera())
+
+        for index in 1 ... 5 {
+            let attachment = try XCTUnwrap(descriptor.colorAttachments[index])
+            XCTAssertTrue(attachment.texture === textures[index - 1])
+            XCTAssertTrue(attachment.resolveTexture === resolveTextures[index - 1])
+            XCTAssertEqual(attachment.loadAction, .load)
+            XCTAssertEqual(attachment.storeAction, .store)
+            XCTAssertEqual(attachment.clearColor.red, Double(index) / 10)
+            XCTAssertEqual(attachment.clearColor.green, 0.2)
+            XCTAssertEqual(attachment.clearColor.blue, 0.3)
+            XCTAssertEqual(attachment.clearColor.alpha, 0.4)
+        }
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed)
+    }
+
+    func testSortingRepeatedRecordsPreservesSceneOrderForEqualRenderOrders() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.sortObjects = true
+        let scenes = (0 ..< 4).map { _ in makeScene() }
+        let orders = [2, 1, 1, 0]
+        for (index, scene) in scenes.enumerated() {
+            scene.mesh.renderOrder = orders[index]
+            scene.mesh.position.x = Float(index) * 0.1
+        }
+        let root = Object(context: context, label: "Sorted", scenes.map(\.mesh))
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        for _ in 0 ..< 2 { try submission.record(scene: root) }
+
+        let positions = try recordedPackets(submission).map {
+            try modelMatrix(of: $0, in: submission.recorder.storage).columns.3.x
+        }
+        let expected: [Float] = [0.3, 0.1, 0.2, 0, 0.3, 0.1, 0.2, 0]
+        XCTAssertEqual(positions.count, expected.count)
+        for (actual, expected) in zip(positions, expected) {
+            XCTAssertEqual(actual, expected, accuracy: 0.0001)
+        }
+    }
 
     func testEachRecordKeepsTheValuesItWasRecordedWith() throws {
         let encoder = RenderEncoder(context: context)

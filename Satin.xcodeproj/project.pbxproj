@@ -111,6 +111,7 @@
 		7F1A00000000000000000010 /* DrawRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000F /* DrawRecording.swift */; };
 		7F1A00000000000000000016 /* DrawPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000015 /* DrawPacket.swift */; };
 		7F1A00000000000000000018 /* PacketRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000017 /* PacketRecorder.swift */; };
+		7F1A00000000000000000051 /* ViewFrustum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000050 /* ViewFrustum.swift */; };
 		7F1A0000000000000000001A /* RenderSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000019 /* RenderSubmission.swift */; };
 		7F1A0000000000000000001C /* EncodingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000001B /* EncodingContext.swift */; };
 		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
@@ -388,6 +389,7 @@
 		7F1A0000000000000000000F /* DrawRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawRecording.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000015 /* DrawPacket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawPacket.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000017 /* PacketRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PacketRecorder.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000050 /* ViewFrustum.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewFrustum.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000019 /* RenderSubmission.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderSubmission.swift; sourceTree = "<group>"; };
 		7F1A0000000000000000001B /* EncodingContext.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EncodingContext.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
@@ -994,6 +996,7 @@
 				7F1A0000000000000000000F /* DrawRecording.swift */,
 				7F1A00000000000000000015 /* DrawPacket.swift */,
 				7F1A00000000000000000017 /* PacketRecorder.swift */,
+				7F1A00000000000000000050 /* ViewFrustum.swift */,
 				7F1A00000000000000000019 /* RenderSubmission.swift */,
 				7F1A0000000000000000001B /* EncodingContext.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
@@ -1501,6 +1504,7 @@
 				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
 				7F1A00000000000000000016 /* DrawPacket.swift in Sources */,
 				7F1A00000000000000000018 /* PacketRecorder.swift in Sources */,
+				7F1A00000000000000000051 /* ViewFrustum.swift in Sources */,
 				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
 				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,

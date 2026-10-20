@@ -149,6 +149,83 @@ final class PacketEncodingTests: XCTestCase {
         XCTAssertEqual(customCommands, 2, "the material's custom command is recorded once per culled draw")
     }
 
+    // MARK: - Buffer Entries
+
+    /// The buffer and offset each `vertexBuffer` command of `storage` binds, in order.
+    private func vertexBufferBindings(in storage: PacketStorage) -> [(index: Int32, offset: Int)] {
+        storage.commands.compactMap { command in
+            if case let .vertexBuffer(bufferIndex, offset, _) = command { return (bufferIndex, offset) }
+            return nil
+        }
+    }
+
+    func testTheSameBufferInOneRecordingIsOneEntryWithEachCommandsOffset() throws {
+        let storage = PacketStorage()
+        let shared = try buffer()
+        beginRecording(storage)
+        storage.beginMaterial()
+        storage.setPipeline(try pipeline())
+        storage.appendVertexBuffer(shared, offset: 0, slot: .Vertices)
+        storage.appendVertexBuffer(shared, offset: 64, slot: .VertexUniforms)
+        storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+        storage.endRecording()
+
+        XCTAssertEqual(storage.buffers.count, 1, "one entry, one retain")
+        let bindings = vertexBufferBindings(in: storage)
+        XCTAssertEqual(bindings.map { $0.index }, [0, 0])
+        XCTAssertEqual(bindings.map { $0.offset }, [0, 64], "each command keeps its own offset")
+    }
+
+    func testADifferentBufferGetsItsOwnEntry() throws {
+        let storage = PacketStorage()
+        beginRecording(storage)
+        storage.beginMaterial()
+        storage.setPipeline(try pipeline())
+        storage.appendVertexBuffer(try buffer(), offset: 0, slot: .Vertices)
+        storage.appendVertexBuffer(try buffer(), offset: 0, slot: .VertexUniforms)
+        storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+        storage.endRecording()
+
+        XCTAssertEqual(storage.buffers.count, 2)
+    }
+
+    func testARolledBackBufferIsNotReusedByTheNextLookup() throws {
+        let storage = PacketStorage()
+        let rolledBack = try buffer()
+        beginRecording(storage)
+        storage.beginMaterial()
+        storage.appendVertexBuffer(rolledBack, offset: 0, slot: .Vertices)
+        // No pipeline: the packet is abandoned, and its buffer entry removed.
+        storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+        storage.beginMaterial()
+        storage.setPipeline(try pipeline())
+        storage.appendVertexBuffer(rolledBack, offset: 0, slot: .Vertices)
+        storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+        storage.endRecording()
+
+        let bindings = vertexBufferBindings(in: storage)
+        XCTAssertEqual(bindings.count, 1)
+        let index = Int(try XCTUnwrap(bindings.first).index)
+        XCTAssertLessThan(index, storage.buffers.count, "no command references a removed entry")
+        XCTAssertTrue(storage.buffers[index] === rolledBack)
+    }
+
+    func testReuseStaysWithinOneRecording() throws {
+        let storage = PacketStorage()
+        let shared = try buffer()
+        let pipeline = try pipeline()
+        for _ in 0 ..< 2 {
+            beginRecording(storage)
+            storage.beginMaterial()
+            storage.setPipeline(pipeline)
+            storage.appendVertexBuffer(shared, offset: 0, slot: .Vertices)
+            storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
+            storage.endRecording()
+        }
+
+        XCTAssertEqual(storage.buffers.count, 2, "each recording's packets own their entries")
+    }
+
     // MARK: - Pool
 
     func testStorageIsLeasedPerDrawAndReturnedCleared() throws {

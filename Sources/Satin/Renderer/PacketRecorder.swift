@@ -75,12 +75,14 @@ final class PacketRecorder {
         materialPass: Renderable.MaterialPass,
         views: [RenderView]
     ) -> Range<Int> {
-        let firstPacket = storage.packets.count
+        let firstPacket = storage.packetCount
         guard !views.isEmpty else { return firstPacket ..< firstPacket }
 
+        // Every view gets its uniforms: the amplified views of one pass, or the views of a
+        // multi-view shadow, each encoded in its own pass from this one recording.
         let vertexUniforms = writeVertexUniforms(
             occurrence: renderable.occurrence,
-            viewCount: max(renderContext.vertexAmplificationCount, 1),
+            viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
             views: views
         )
 
@@ -93,7 +95,7 @@ final class PacketRecorder {
             recordOnce(renderable, cullMode: renderable.cullMode, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
         }
 
-        return firstPacket ..< storage.packets.count
+        return firstPacket ..< storage.packetCount
     }
 
     private func recordOnce(
@@ -109,6 +111,7 @@ final class PacketRecorder {
             windingOrder: renderable.windingOrder,
             triangleFillMode: renderable.triangleFillMode,
             renderOrder: renderable.renderOrder,
+            vertexUniforms: vertexUniforms,
             debugLabel: renderable.label
         )
         renderable.draw(in: RenderableDrawContext(
@@ -121,16 +124,10 @@ final class PacketRecorder {
         storage.endRecording()
     }
 
-    func encode(_ packets: Range<Int>, into state: RenderEncoderState) {
-        for packetIndex in packets {
-            storage.encode(storage.packets[packetIndex], into: state)
-        }
-    }
-
-    func encode(_ packetIndices: ArraySlice<Int>, into state: RenderEncoderState) {
-        for packetIndex in packetIndices {
-            storage.encode(storage.packets[packetIndex], into: state)
-        }
+    /// Encodes the packets at `packetIndices` into `state`, as their render event's view
+    /// `viewIndex`: the first, unless the event was recorded for several views.
+    func encode<PacketIndices: Sequence>(_ packetIndices: PacketIndices, into state: RenderEncoderState, viewIndex: Int = 0) where PacketIndices.Element == Int {
+        storage.encode(packetIndices, into: state, viewIndex: viewIndex)
     }
 
     /// One `VertexUniforms` per view, contiguous, in an arena slice valid until the command buffer
