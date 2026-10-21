@@ -180,7 +180,14 @@ public final class RecordedGPUCommands {
             self.commands = nil
             return commands
         }
-        commandBuffer.addCompletedHandler { [commands] _ in withExtendedLifetime(commands) {} }
+        let lock = lock
+        // Released on Metal's completion thread after the GPU finishes; the lock orders that after
+        // this encode, which commit (and so completion) follows.
+        commandBuffer.addCompletedHandler { [commands] _ in
+            lock.sync {}
+            withExtendedLifetime(commands) {}
+        }
+        defer { lock.sync {} }
         for command in commands { try command.encode(into: commandBuffer) }
     }
 }

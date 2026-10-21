@@ -57,6 +57,9 @@ final class FrameArena {
             }
         }
 
+        /// Orders this thread's earlier writes to chunks before anything that synchronizes after it.
+        func synchronize() { lock.sync {} }
+
         func recycle(_ chunks: [Chunk]) {
             lock.sync {
                 for chunk in chunks {
@@ -86,7 +89,14 @@ final class FrameArena {
         func retain(untilCompleted commandBuffer: MTLCommandBuffer) {
             guard let contents else { preconditionFailure("Recording has finished") }
             let hold = CompletionHold(contents)
-            commandBuffer.addCompletedHandler { _ in hold.contents = nil }
+            let pool = contents.pool
+            // The slices were written before this; completion follows commit through the GPU. The
+            // pool's lock makes that order explicit before the chunks are recycled.
+            pool.synchronize()
+            commandBuffer.addCompletedHandler { _ in
+                pool.synchronize()
+                hold.contents = nil
+            }
         }
 
         /// Transfers the producer's hold to the submitted segments. Retaining a consumed builder

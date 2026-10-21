@@ -120,7 +120,9 @@ public final class SealedSubmission {
     }
 
     deinit {
-        if !encoded {
+        // A submission released from a completion handler is released on Metal's thread.
+        let isPending = lock.sync { !encoded }
+        if isPending {
             lease.finishRecording()
             pool.returnStorage(recorder.storage)
         }
@@ -150,8 +152,15 @@ public final class SealedSubmission {
         lease.finishRecording()
         let storage = recorder.storage
         let pool = pool
-        commandBuffer.addCompletedHandler { _ in pool.returnStorage(storage) }
+        let lock = lock
+        // Completion follows commit, which follows this encode, but through the GPU: the lock makes
+        // that order explicit, so returning the storage is ordered after encoding read it.
+        commandBuffer.addCompletedHandler { _ in
+            lock.sync {}
+            pool.returnStorage(storage)
+        }
         for pass in passes { pass.encode(into: commandBuffer, recorder: recorder, state: storage.encoderState) }
+        lock.sync {}
     }
 }
 
