@@ -76,14 +76,8 @@ public final class PacketRecorder {
     /// event's uniforms do. Amplified views stay contiguous, as the shaders index them by view.
     static let viewSlotStride = (vertexUniformsStride + 255) / 256 * 256
 
-    // TEMPORARY A/B (remove after measuring): false packs separately encoded views contiguously.
-    public nonisolated(unsafe) static var alignsViewSlots = true
-
-    /// The view spacing in use for separately encoded views.
-    static var separateViewStride: Int { alignsViewSlots ? viewSlotStride : vertexUniformsStride }
-
-    /// Snapshot the A/B layout setting with the bytes it describes.
-    let recordedViewStride = PacketRecorder.separateViewStride
+    /// The view spacing for separately encoded views.
+    let recordedViewStride = PacketRecorder.viewSlotStride
 
     var passBindings = RenderPassBindings()
     let storage: PacketStorage

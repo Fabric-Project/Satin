@@ -11,10 +11,6 @@ import Metal
 import simd
 
 public final class PointShadow: Shadow {
-    // TEMPORARY A/B (remove after measuring): false records every caster once per pass of every
-    // shadow, as before, instead of once for all of them (see `ShadowCasterRecording`).
-    public nonisolated(unsafe) static var recordsCastersOnceForAllFaces = true
-
     var device: MTLDevice? {
         didSet {
             if device != nil {

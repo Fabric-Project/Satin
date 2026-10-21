@@ -220,9 +220,6 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override func setup() throws {
-        
-        PointShadow.recordsCastersOnceForAllFaces = true
-        PacketRecorder.alignsViewSlots = true
 
         loadHdri()
         setupSponzaScene()

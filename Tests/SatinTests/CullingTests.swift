@@ -142,7 +142,7 @@ final class CullingTests: XCTestCase {
         let contents = storage.buffers[Int(vertexUniforms.bufferIndex)].contents() + vertexUniforms.offset
         // viewMatrix follows modelMatrix in each view's VertexUniforms.
         for (view, camera) in cameras.enumerated() {
-            let viewMatrix = (contents + view * PacketRecorder.separateViewStride + MemoryLayout<simd_float4x4>.stride).load(as: simd_float4x4.self)
+            let viewMatrix = (contents + view * PacketRecorder.viewSlotStride + MemoryLayout<simd_float4x4>.stride).load(as: simd_float4x4.self)
             XCTAssertEqual(viewMatrix, camera.viewMatrix, "view \(view) sits at its own aligned slot")
         }
     }
@@ -183,24 +183,10 @@ final class CullingTests: XCTestCase {
         XCTAssertEqual(caster.shadowDraws, 0, "outside every face's far plane")
     }
 
-    func testRecordingPerFaceRecordsACasterOnceForEachFace() throws {
-        PointShadow.recordsCastersOnceForAllFaces = false
-        defer { PointShadow.recordsCastersOnceForAllFaces = true }
-        let caster = DrawCountingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicDiffuseMaterial(context: context))
-        caster.frustumCulled = false
-
-        try draw(makePointLightScene(caster: caster))
-
-        XCTAssertEqual(caster.shadowDraws, 6)
-    }
-
-    /// The same lit, point-shadowed scene, its caster recorded once for every face or once per
-    /// face, renders the same pixels.
-    func testRecordingOnceForEveryFaceShadowsExactlyAsRecordingPerFace() throws {
-        func render(perFace: Bool, castsShadow: Bool = true) throws -> RGBAImage {
-            PointShadow.recordsCastersOnceForAllFaces = !perFace
-            defer { PointShadow.recordsCastersOnceForAllFaces = true }
-            return try VisualTestHarness.render(size: [96, 96]) { renderer, camera in
+    /// A point-shadowed scene whose caster is recorded once for every face casts its shadow.
+    func testACasterRecordedOnceForEveryFaceCastsItsShadow() throws {
+        func render(castsShadow: Bool) throws -> RGBAImage {
+            try VisualTestHarness.render(size: [96, 96]) { renderer, camera in
                 let context = renderer.context
                 let light = PointLight(context: context, color: [1, 1, 1], intensity: 6, radius: 30)
                 light.position = [0.5, 2.5, 0.5]
@@ -215,12 +201,10 @@ final class CullingTests: XCTestCase {
             }
         }
 
-        let once = try render(perFace: false)
-        let perFace = try render(perFace: true)
-        let unshadowed = try render(perFace: false, castsShadow: false)
+        let shadowed = try render(castsShadow: true)
+        let unshadowed = try render(castsShadow: false)
 
-        XCTAssertNotEqual(once.pixels, unshadowed.pixels, "the caster's shadow shows")
-        XCTAssertEqual(once.pixels, perFace.pixels, "each face encodes the shared recording as its own view")
+        XCTAssertNotEqual(shadowed.pixels, unshadowed.pixels, "each face encodes the shared recording as its own view")
     }
 }
 

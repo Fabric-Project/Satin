@@ -74,7 +74,6 @@ final class ShadowCasterRecording {
             }
         }
 
-        let recordsOnce = PointShadow.recordsCastersOnceForAllFaces
         let allPasses: UInt64 = passes.count >= 64 ? .max : (UInt64(1) << UInt64(passes.count)) - 1
 
         casters.removeAll(keepingCapacity: true)
@@ -95,18 +94,13 @@ final class ShadowCasterRecording {
             }
             guard reached != 0 else { continue }
 
-            if recordsOnce {
-                let packets = recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: views)
-                casters.append(Caster(
-                    renderable: renderable,
-                    packets: packets,
-                    passes: reached,
-                    // Amplified uniforms are contiguous for the shaders, not laid out per pass.
-                    servesEveryView: context.vertexAmplificationCount <= 1
-                ))
-            } else {
-                casters.append(Caster(renderable: renderable, packets: 0 ..< 0, passes: reached, servesEveryView: false))
-            }
+            // Amplified uniforms are contiguous for the shaders, not laid out per pass: those are
+            // recorded again for each pass they reach.
+            let servesEveryView = context.vertexAmplificationCount <= 1
+            let packets = servesEveryView
+                ? recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: views)
+                : 0 ..< 0
+            casters.append(Caster(renderable: renderable, packets: packets, passes: reached, servesEveryView: servesEveryView))
         }
 
         for (index, pass) in passes.enumerated() {
