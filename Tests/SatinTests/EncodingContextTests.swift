@@ -33,6 +33,7 @@ final class EncodingContextTests: XCTestCase {
     }
 
     private func viewMatrix(of packet: DrawPacket, in storage: PacketStorage) -> simd_float4x4? {
+        storage.writeVertexUniforms()
         for command in storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)] {
             if case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command {
                 // viewMatrix follows modelMatrix in VertexUniforms.

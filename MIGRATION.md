@@ -157,6 +157,13 @@ buffers and sizes are resolved before returning from recording. Large copies kee
 until replay transfers them to GPU completion. The convenience draw seals and schedules as one
 operation. A caller using `GPUCommandRecording` directly must encode a sealed recording once.
 
+**Vertex uniforms are written when the submission encodes.** Recording reserves each render event's
+`VertexUniforms` slot and records the occurrence's transforms and the views as values. The per-view
+matrices are computed and written just before replay, on the encode queue with a `renderQueue`, on the
+producer without one. Hooks keep binding `context.vertexUniforms` exactly as before. Its bytes aren't
+written yet while recording, though: don't read them, and don't copy them with `copyOnRecordLength`
+(that's a precondition failure).
+
 **A throw fails the frame.**
 - Satin's own errors are thrown before anything changes: a mismatched descriptor, an
   already-enqueued or unavailable command buffer.

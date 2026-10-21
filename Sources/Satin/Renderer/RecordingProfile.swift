@@ -26,7 +26,8 @@ enum RecordingProfile {
         case shadowCulling
         /// Renderable, material and geometry `draw(in:)` bodies, including their packet appends.
         case hooks
-        /// Writing per-view vertex uniforms.
+        /// Reserving per-view vertex uniforms; they're written when the submission encodes, inside
+        /// replay.
         case vertexUniforms
         /// Runs, route entries and render-order sorting.
         case bookkeeping
@@ -45,7 +46,7 @@ enum RecordingProfile {
                 case .colourCulling: "colour culling"
                 case .shadowCulling: "shadow culling"
                 case .hooks: "draw(in:) hooks"
-                case .vertexUniforms: "vertex uniforms"
+                case .vertexUniforms: "vertex uniforms (reserve)"
                 case .bookkeeping: "bookkeeping"
                 case .scenePlanning: "scene planning (rest)"
                 case .effects: "effects (rest)"

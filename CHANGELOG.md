@@ -2,6 +2,12 @@
 
 ## Stage 4: complete GPU command recording
 
+- Per-view vertex uniforms are reserved while recording and written when the submission encodes, from
+  recorded transforms and views as values: with a `renderQueue`, that maths leaves the producer.
+  Hooks bind `vertexUniforms` as before; reading or copying its bytes while recording isn't supported.
+- `PointShadow.recordsCastersOnceForAllFaces` and `PacketRecorder.alignsViewSlots` are gone. Casters
+  are recorded once for every point-light face, and separately encoded views use 256-byte-aligned slots.
+
 - Development profiling: launch with `SATIN_RECORDING_PROFILE=1` to print, every 120 frames, exclusive
   ms and calls per frame for each producer recording category (update, culling, hooks, uniforms,
   bookkeeping, planning, effects, replay, admission wait) and for encode-queue replay. Off by default

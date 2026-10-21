@@ -32,6 +32,7 @@ final class MultiviewUniformsTests: XCTestCase {
             return nil
         }.first
         let vertexUniforms = try XCTUnwrap(binding, "the mesh binds its event's vertex uniforms")
+        storage.writeVertexUniforms()
         let contents = storage.buffers[Int(vertexUniforms.bufferIndex)].contents() + vertexUniforms.offset
 
         // viewMatrix follows modelMatrix in each view's VertexUniforms.

@@ -11,7 +11,8 @@ import SatinCore
 #endif
 
 /// Where a render event's vertex uniforms live: one `VertexUniforms` per view, contiguous, as the
-/// shaders index them by view.
+/// shaders index them by view. Reserved while recording and written when the submission encodes,
+/// so a binding is for binding: its bytes aren't there yet while recording.
 public struct VertexUniformsBinding {
     public let buffer: MTLBuffer
     public let offset: Int
@@ -78,6 +79,8 @@ public final class PacketRecorder {
 
     /// The view spacing for separately encoded views.
     let recordedViewStride = PacketRecorder.viewSlotStride
+    /// The views the last reservation used, in the storage's view table.
+    private var lastViewRange: Range<Int>?
 
     var passBindings = RenderPassBindings()
     let storage: PacketStorage
@@ -124,6 +127,8 @@ public final class PacketRecorder {
         guard let length = copyOnRecordLength else { return (buffer, offset) }
         precondition(buffer.storageMode != .private && buffer.storageMode != .memoryless, "copyOnRecord requires CPU-readable storage")
         precondition(offset >= 0 && length > 0 && offset + length <= buffer.length, "The copied range must be inside the buffer")
+        precondition(!storage.reservesVertexUniforms(in: buffer, range: offset ..< offset + length),
+                     "A render event's vertex uniforms are written when the submission encodes: bind them, don't copy them")
         let slice = allocate(length: length)
         slice.contents.copyMemory(from: buffer.contents() + offset, byteCount: length)
         return (slice.buffer, slice.offset)
@@ -146,7 +151,7 @@ public final class PacketRecorder {
         // multi-view shadow, each encoded in its own pass from this one recording.
         let isAmplified = renderContext.vertexAmplificationCount > 1
         RecordingProfile.begin(.vertexUniforms)
-        let vertexUniforms = writeVertexUniforms(
+        let vertexUniforms = reserveVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
             viewStride: isAmplified ? Self.vertexUniformsStride : recordedViewStride,
@@ -200,15 +205,68 @@ public final class PacketRecorder {
         storage.encode(packetIndices, into: state, viewOffset: viewIndex * recordedViewStride)
     }
 
-    /// One `VertexUniforms` per view, `viewStride` apart, in an arena slice valid until the command
-    /// buffer completes. A pass with fewer views than the context's repeats its last view.
-    private func writeVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
+    /// Reserves one `VertexUniforms` per view, `viewStride` apart, in an arena slice valid until the
+    /// command buffer completes, and queues their write from the occurrence and the views as values.
+    /// The slot is bound by hooks now and filled when the submission encodes. A pass with fewer views
+    /// than the context's repeats its last view.
+    private func reserveVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
         let slice = allocate(length: viewStride * (viewCount - 1) + Self.vertexUniformsStride)
-        let modelMatrix = occurrence.modelMatrix
-        let previousModelMatrix = occurrence.previousModelMatrix
+        storage.appendVertexUniformsJob(VertexUniformsJob(
+            slice: slice,
+            modelMatrix: occurrence.modelMatrix,
+            previousModelMatrix: occurrence.previousModelMatrix,
+            normalMatrix: occurrence.normalMatrix,
+            views: viewRange(for: views),
+            viewCount: viewCount,
+            viewStride: viewStride
+        ))
+        return VertexUniformsBinding(buffer: slice.buffer, offset: slice.offset)
+    }
+
+    /// Where `views` sit in the storage's view table. Records usually share their views (every
+    /// renderable of a colour pass, every caster of a shadow batch), so the last set is reused when
+    /// it matches and appended only when it doesn't.
+    private func viewRange(for views: [RenderView]) -> Range<Int> {
+        if let lastViewRange, lastViewRange.count == views.count {
+            var matches = true
+            for index in views.indices where !Self.isSameView(storage.viewTable[lastViewRange.lowerBound + index], views[index]) {
+                matches = false
+                break
+            }
+            if matches { return lastViewRange }
+        }
+        let range = storage.appendViews(views)
+        lastViewRange = range
+        return range
+    }
+
+    private static func isSameView(_ first: RenderView, _ second: RenderView) -> Bool {
+        first.viewMatrix == second.viewMatrix
+            && first.projectionMatrix == second.projectionMatrix
+            && first.viewProjectionMatrix == second.viewProjectionMatrix
+            && first.inverseViewMatrix == second.inverseViewMatrix
+            && first.previousViewProjectionMatrix == second.previousViewProjectionMatrix
+            && first.viewport == second.viewport
+            && first.worldPosition == second.worldPosition
+            && first.viewDirection == second.viewDirection
+    }
+}
+
+/// One render event's vertex uniforms, as values: where they go, the occurrence's transforms and
+/// which views of the storage's view table. Written off the producer, reading no live object.
+struct VertexUniformsJob {
+    let slice: FrameArena.Slice
+    let modelMatrix: simd_float4x4
+    let previousModelMatrix: simd_float4x4
+    let normalMatrix: simd_float3x3
+    let views: Range<Int>
+    let viewCount: Int
+    let viewStride: Int
+
+    func write(from viewTable: ContiguousArray<RenderView>) {
         for viewIndex in 0 ..< viewCount {
             let uniforms = (slice.contents + viewIndex * viewStride).bindMemory(to: VertexUniforms.self, capacity: 1)
-            let view = views[min(viewIndex, views.count - 1)]
+            let view = viewTable[views.lowerBound + min(viewIndex, views.count - 1)]
             let viewProjectionMatrix = view.viewProjectionMatrix
             let previousViewProjectionMatrix = view.previousViewProjectionMatrix
             let modelViewProjectionMatrix = viewProjectionMatrix * modelMatrix
@@ -221,7 +279,7 @@ public final class PacketRecorder {
             uniforms.pointee.modelViewProjectionMatrix = modelViewProjectionMatrix
             uniforms.pointee.inverseModelViewProjectionMatrix = modelViewProjectionMatrix.inverse
             uniforms.pointee.inverseViewMatrix = view.inverseViewMatrix
-            uniforms.pointee.normalMatrix = occurrence.normalMatrix
+            uniforms.pointee.normalMatrix = normalMatrix
             uniforms.pointee.viewport = view.viewport
             uniforms.pointee.worldCameraPosition = view.worldPosition
             uniforms.pointee.worldCameraViewDirection = view.viewDirection
@@ -229,6 +287,5 @@ public final class PacketRecorder {
             uniforms.pointee.previousViewProjectionMatrix = previousViewProjectionMatrix
             uniforms.pointee.previousModelViewProjectionMatrix = previousViewProjectionMatrix * previousModelMatrix
         }
-        return VertexUniformsBinding(buffer: slice.buffer, offset: slice.offset)
     }
 }

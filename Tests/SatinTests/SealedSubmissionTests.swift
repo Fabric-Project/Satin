@@ -126,6 +126,46 @@ final class SealedSubmissionTests: XCTestCase {
         XCTAssertEqual(commandBuffer.status, .completed)
     }
 
+    func testUniformsWrittenAtEncodeUseTheTransformsRecordedAtSeal() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((32, 32))
+        let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+        let scene = Object(context: context, label: "Scene", [mesh])
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let viewport = MTLViewport(originX: 0, originY: 0, width: 32, height: 32, znear: 0, zfar: 1)
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = try target()
+        let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [viewport])
+        let sealed = try seal(builder, descriptor: descriptor, scene: scene)
+        let recordedModel = mesh.worldMatrix
+        let recordedView = camera.viewMatrix
+        let storage = builder.recorder.storage
+        XCTAssertFalse(storage.vertexUniformsJobs.isEmpty, "the write waits for encoding")
+
+        mesh.position = [3, 0, 0]
+        mesh.update()
+        camera.position = [0, 4, 5]
+        camera.update()
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        try sealed.encode(into: commandBuffer)
+
+        XCTAssertTrue(storage.vertexUniformsJobs.isEmpty, "encoding wrote them")
+        var found = false
+        for packet in storage.packets {
+            for command in storage.commands[Int(packet.commandStart) ..< Int(packet.commandStart + packet.commandCount)] {
+                guard case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command else { continue }
+                let uniforms = (storage.buffers[Int(bufferIndex)].contents() + offset).load(as: VertexUniforms.self)
+                if uniforms.modelMatrix == recordedModel {
+                    XCTAssertEqual(uniforms.viewMatrix, recordedView, "the view as sealed, not as moved")
+                    found = true
+                }
+            }
+        }
+        XCTAssertTrue(found, "the mesh's uniforms hold its transform as sealed, not as moved")
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+    }
+
     func testObjectsRemovedAndReleasedAfterSealingStillDrawInWhatWasSealed() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((32, 32))

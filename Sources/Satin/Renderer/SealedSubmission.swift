@@ -159,6 +159,8 @@ public final class SealedSubmission {
             lock.sync {}
             pool.returnStorage(storage)
         }
+        // Per-view matrices are computed here, on the encoding thread, from the values recorded.
+        storage.writeVertexUniforms()
         for pass in passes { pass.encode(into: commandBuffer, recorder: recorder, state: storage.encoderState) }
         lock.sync {}
     }

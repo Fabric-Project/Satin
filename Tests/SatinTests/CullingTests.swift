@@ -139,6 +139,7 @@ final class CullingTests: XCTestCase {
         }.first
         let vertexUniforms = try XCTUnwrap(binding)
         XCTAssertEqual(vertexUniforms.offset % 256, 0)
+        storage.writeVertexUniforms()
         let contents = storage.buffers[Int(vertexUniforms.bufferIndex)].contents() + vertexUniforms.offset
         // viewMatrix follows modelMatrix in each view's VertexUniforms.
         for (view, camera) in cameras.enumerated() {

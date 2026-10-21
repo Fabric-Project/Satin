@@ -181,7 +181,9 @@ public struct RenderableDrawContext {
     public let pass: RenderPass
     /// Which of the renderable's materials draw in this pass.
     let materialPass: Renderable.MaterialPass
-    /// This render event's vertex uniforms: one per view.
+    /// This render event's vertex uniforms: one per view. Bind them (vertex, fragment, object or
+    /// mesh stage); their bytes are written when the submission encodes, so don't read or copy them
+    /// while recording.
     public let vertexUniforms: VertexUniformsBinding
     let recorder: PacketRecorder
     var storage: PacketStorage { recorder.storage }

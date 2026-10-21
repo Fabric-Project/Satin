@@ -93,7 +93,43 @@ final class PacketStorage {
     var commands: ContiguousArray<PacketCommand> { tables.commands }
     var buffers: ContiguousArray<MTLBuffer> { tables.buffers }
 
-    func reset() { tables.reset() }
+    /// The views this storage's vertex uniforms are written from, as values: each distinct set of
+    /// views is appended once and shared by every record of it.
+    private(set) var viewTable = ContiguousArray<RenderView>()
+    /// Vertex uniforms reserved while recording and written when this storage's submission encodes,
+    /// on whichever thread encodes it, so recording on the producer computes no per-view matrices.
+    private(set) var vertexUniformsJobs = ContiguousArray<VertexUniformsJob>()
+
+    func reset() {
+        tables.reset()
+        viewTable.removeAll(keepingCapacity: true)
+        vertexUniformsJobs.removeAll(keepingCapacity: true)
+    }
+
+    func appendViews(_ views: [RenderView]) -> Range<Int> {
+        let start = viewTable.count
+        viewTable.append(contentsOf: views)
+        return start ..< viewTable.count
+    }
+
+    func appendVertexUniformsJob(_ job: VertexUniformsJob) {
+        vertexUniformsJobs.append(job)
+    }
+
+    /// Whether `range` of `buffer` overlaps a vertex-uniforms slot still waiting to be written.
+    func reservesVertexUniforms(in buffer: MTLBuffer, range: Range<Int>) -> Bool {
+        for job in vertexUniformsJobs where job.slice.buffer === buffer {
+            if job.slice.offset < range.upperBound, range.lowerBound < job.slice.offset + job.slice.length { return true }
+        }
+        return false
+    }
+
+    /// Writes every reserved vertex-uniforms slot, then forgets the jobs: the encode that follows
+    /// binds them, and a second fill finds nothing to do.
+    func writeVertexUniforms() {
+        for job in vertexUniformsJobs { job.write(from: viewTable) }
+        vertexUniformsJobs.removeAll(keepingCapacity: true)
+    }
 
     func appendRun(renderLayer: Int, routeIndex: Int, packets: Range<Int>, isRecorded: Bool) {
         tables.appendRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded)

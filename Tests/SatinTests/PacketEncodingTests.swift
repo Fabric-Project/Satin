@@ -34,6 +34,53 @@ final class PacketEncodingTests: XCTestCase {
         XCTAssertEqual(bindings[1].offset, 256)
     }
 
+    /// The event's vertex-uniforms binding, read from the packet's commands.
+    private func vertexUniformsBinding(of packets: Range<Int>, in storage: PacketStorage) -> (buffer: MTLBuffer, offset: Int)? {
+        let packet = storage.packets[packets.lowerBound]
+        for command in commands(of: packet, in: storage) {
+            if case let .perViewVertexBuffer(bufferIndex, offset, .VertexUniforms) = command { return (storage.buffers[Int(bufferIndex)], offset) }
+        }
+        return nil
+    }
+
+    func testRecordingReservesVertexUniformsAndFillingWritesThem() throws {
+        let storage = PacketStoragePool().lease()
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
+        let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+        mesh.position = [1, 2, 3]
+        mesh.update()
+        mesh.beginOccurrence(frame: .zero)
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+
+        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all,
+                                      views: [RenderView(camera: camera, viewport: [0, 0, 64, 64])])
+
+        XCTAssertEqual(storage.vertexUniformsJobs.count, 1, "recording reserves the uniforms and queues their write")
+        let binding = try XCTUnwrap(vertexUniformsBinding(of: packets, in: storage), "hooks still bind a real slot")
+        storage.writeVertexUniforms()
+        XCTAssertTrue(storage.vertexUniformsJobs.isEmpty, "a fill consumes its jobs")
+        let uniforms = (binding.buffer.contents() + binding.offset).load(as: VertexUniforms.self)
+        XCTAssertEqual(uniforms.modelMatrix, mesh.worldMatrix)
+        XCTAssertEqual(uniforms.viewMatrix, camera.viewMatrix)
+        XCTAssertEqual(uniforms.modelViewProjectionMatrix, camera.viewProjectionMatrix * mesh.worldMatrix)
+    }
+
+    func testViewsSharedByManyRecordsAreStoredOnce() throws {
+        let storage = PacketStoragePool().lease()
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let views = [RenderView(camera: camera, viewport: [0, 0, 64, 64])]
+        for x in 0 ..< 3 {
+            let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+            mesh.position = [Float(x), 0, 0]
+            mesh.update()
+            mesh.beginOccurrence(frame: .zero)
+            recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: views)
+        }
+        XCTAssertEqual(storage.vertexUniformsJobs.count, 3)
+        XCTAssertEqual(storage.viewTable.count, 1, "three records of the same views share one table entry")
+    }
+
     func testCopyOnRecordCopiesOnlyTheLengthAskedFor() throws {
         let lease = FrameArena(device: device).lease(frame: .zero)
         let recorder = PacketRecorder(storage: PacketStoragePool().lease(), lease: lease)

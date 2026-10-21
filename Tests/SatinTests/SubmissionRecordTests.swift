@@ -136,11 +136,13 @@ final class SubmissionRecordTests: XCTestCase {
     }
 
     private func modelMatrix(of packet: DrawPacket, in storage: PacketStorage) throws -> simd_float4x4 {
+        storage.writeVertexUniforms()
         let uniforms = try XCTUnwrap(binding(of: packet, in: storage, vertexSlot: .VertexUniforms))
         return (uniforms.buffer.contents() + uniforms.offset).load(as: simd_float4x4.self)
     }
 
     private func viewMatrix(of packet: DrawPacket, in storage: PacketStorage) throws -> simd_float4x4 {
+        storage.writeVertexUniforms()
         let uniforms = try XCTUnwrap(binding(of: packet, in: storage, vertexSlot: .VertexUniforms))
         // viewMatrix follows modelMatrix in VertexUniforms.
         return (uniforms.buffer.contents() + uniforms.offset + MemoryLayout<simd_float4x4>.stride).load(as: simd_float4x4.self)
