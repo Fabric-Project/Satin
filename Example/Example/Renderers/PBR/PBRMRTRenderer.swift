@@ -244,7 +244,7 @@ final class PBRMRTRenderer: BaseRenderer {
             camera: camera
         )
 
-        let beautyTexture = postProcessedBeautyTexture(commandBuffer: commandBuffer)
+        let beautyTexture = try postProcessedBeautyTexture(commandBuffer: commandBuffer)
         updatePreviewTextures(beautyTexture: beautyTexture)
 
         try overlayRenderer.draw(
@@ -448,7 +448,7 @@ final class PBRMRTRenderer: BaseRenderer {
         )
     }
 
-    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         // Temporarily bypass SSAO to isolate the DOF path during debugging.
         let compositeTexture = sceneRenderer.colorTexture
 
@@ -456,7 +456,7 @@ final class PBRMRTRenderer: BaseRenderer {
         bokehDepthOfFieldPostProcessEncoder.colorTexture = compositeTexture
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
-        bokehDepthOfFieldPostProcessEncoder.draw(
+        try bokehDepthOfFieldPostProcessEncoder.draw(
             frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer

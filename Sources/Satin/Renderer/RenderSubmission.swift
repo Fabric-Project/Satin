@@ -25,6 +25,10 @@ struct SubmissionConfiguration {
 
 /// Why recording, sealing or encoding a submission failed.
 public enum SubmissionError: Swift.Error, Equatable {
+    /// Queued drawing requires a caller buffer that has not reserved its GPU queue position yet.
+    case commandBufferAlreadyEnqueued
+    /// Metal could not create the private command buffer for a queued submission.
+    case commandBufferUnavailable
     /// The builder was already sealed, or the sealed submission already encoded or abandoned.
     case alreadyDrawn
     /// The builder has not recorded its render operation.

@@ -95,7 +95,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         try matteRenderer.encode(frame: frameTime, commandBuffer: commandBuffer)
 
         if let backgroundTexture = backgroundTexture {
-            backgroundRenderer.draw(
+            try backgroundRenderer.draw(
                 frame: frameTime,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
@@ -117,7 +117,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         compositor.alphaTexture = matteRenderer.alphaTexture
         compositor.dilatedDepthTexture = matteRenderer.dilatedDepthTexture
 
-        compositor.draw(
+        try compositor.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

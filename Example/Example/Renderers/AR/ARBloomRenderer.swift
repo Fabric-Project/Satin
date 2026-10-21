@@ -139,7 +139,7 @@ final class ARBloomRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        backgroundRenderer.draw(
+        try backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
@@ -172,7 +172,7 @@ final class ARBloomRenderer: BaseRenderer {
 
         postProcessor.postProcessRenderer.colorLoadAction = .load
 
-        postProcessor.draw(
+        try postProcessor.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

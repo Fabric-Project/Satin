@@ -190,7 +190,7 @@ final class ARContactShadowRenderer: BaseRenderer {
             try shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
         }
 
-        backgroundRenderer.draw(
+        try backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

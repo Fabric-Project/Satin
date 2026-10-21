@@ -107,10 +107,14 @@ open class PostProcessRenderEncoder {
         mesh: Mesh,
         camera: Camera,
         renderTarget: MTLTexture
-    ) {
+    ) throws {
         let colorAttachment = colorAttachment(renderPassDescriptor)
         let originalTexture = colorAttachment.texture
         let originalResolveTexture = colorAttachment.resolveTexture
+        defer {
+            colorAttachment.texture = originalTexture
+            colorAttachment.resolveTexture = originalResolveTexture
+        }
 
         if context.sampleCount > 1 {
             colorAttachment.resolveTexture = renderTarget
@@ -119,16 +123,13 @@ open class PostProcessRenderEncoder {
             colorAttachment.texture = renderTarget
         }
 
-        draw(
+        try draw(
             frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             mesh: mesh,
             camera: camera
         )
-
-        colorAttachment.texture = originalTexture
-        colorAttachment.resolveTexture = originalResolveTexture
     }
 
     open func draw(
@@ -137,8 +138,8 @@ open class PostProcessRenderEncoder {
         commandBuffer: MTLCommandBuffer,
         mesh: Mesh,
         camera: Camera
-    ) {
-        draw(
+    ) throws {
+        try draw(
             frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
@@ -157,10 +158,14 @@ open class PostProcessRenderEncoder {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping] = [],
         renderTarget: MTLTexture
-    ) {
+    ) throws {
         let colorAttachment = colorAttachment(renderPassDescriptor)
         let originalTexture = colorAttachment.texture
         let originalResolveTexture = colorAttachment.resolveTexture
+        defer {
+            colorAttachment.texture = originalTexture
+            colorAttachment.resolveTexture = originalResolveTexture
+        }
 
         if context.sampleCount > 1 {
             colorAttachment.resolveTexture = renderTarget
@@ -169,7 +174,7 @@ open class PostProcessRenderEncoder {
             colorAttachment.texture = renderTarget
         }
 
-        draw(
+        try draw(
             frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
@@ -178,9 +183,6 @@ open class PostProcessRenderEncoder {
             viewports: viewports,
             viewMappings: viewMappings
         )
-
-        colorAttachment.texture = originalTexture
-        colorAttachment.resolveTexture = originalResolveTexture
     }
 
     open func draw(
@@ -191,11 +193,17 @@ open class PostProcessRenderEncoder {
         cameras: [Camera],
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping] = []
-    ) {
+    ) throws {
         let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
                                        viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
-        do { try sealed.encode(into: commandBuffer) }
-        catch { assertionFailure("A newly prepared postprocess submission was already encoded: \(error)") }
+        try sealed.encode(into: commandBuffer)
+    }
+
+    func record(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, mesh: Mesh,
+                cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
+        let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
+                                       viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: nil, preparationCommands: commands)
+        try commands.append(sealed)
     }
 
     /// Captures a postprocess pass without a command buffer. Custom GPU preparation must be
@@ -208,7 +216,7 @@ open class PostProcessRenderEncoder {
 
     private func prepareSubmission(frame: FrameTime, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
                                    cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping],
-                                   preparationCommandBuffer: MTLCommandBuffer?) -> SealedSubmission {
+                                   preparationCommandBuffer: MTLCommandBuffer?, preparationCommands: GPUCommandRecording? = nil) -> SealedSubmission {
         let renderContext = fastRenderContext()
         let lease = frameArena.lease(frame: frame)
         let recorder = PacketRecorder(storage: packetStoragePool.lease(), lease: lease)
@@ -217,8 +225,8 @@ open class PostProcessRenderEncoder {
             RenderView(camera: camera, viewport: viewports.isEmpty ? .zero : viewports[min(index, viewports.count - 1)].float4, frame: frame)
         }
         mesh.update()
-        if let commandBuffer = preparationCommandBuffer {
-            mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
+        if let commands = preparationCommands ?? preparationCommandBuffer.map({ GPUCommandRecording(commandBuffer: $0) }) {
+            mesh.encode(in: EncodingContext(commands: commands, frame: frame, views: views, recorder: recorder))
         }
         mesh.beginOccurrence(frame: frame)
         let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)

@@ -1,3 +1,4 @@
+import Dispatch
 import Metal
 @testable import Satin
 import XCTest
@@ -81,7 +82,7 @@ final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
         processor.resize(size: (4, 4), scaleFactor: 1.0)
 
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         XCTAssertNil(commandBuffer.error)
@@ -111,7 +112,7 @@ final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
         processor.resize(size: (4, 4), scaleFactor: 1.0)
 
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         XCTAssertNil(commandBuffer.error)
@@ -119,6 +120,51 @@ final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
         let outputTexture = try XCTUnwrap(processor.outputTexture)
         let alpha = try readFirstPixelAlpha(texture: outputTexture, device: device, commandQueue: commandQueue)
         XCTAssertGreaterThan(alpha, 0.1)
+    }
+
+    func testQueuedBokehMatchesImmediateAcrossRingWraps() throws {
+        let device = try XCTUnwrap(makeDevice())
+        let commandQueue = try XCTUnwrap(device.makeCommandQueue())
+        var results: [[Float]] = []
+        for queued in [false, true] {
+            let context = makeContext(device: device)
+            let processor = BokehDepthOfFieldPostProcessEncoder(context: context)
+            processor.sceneCamera = PerspectiveCamera(context: context, position: [0, 0, 2], near: 0.1, far: 100, fov: 45)
+            processor.resize(size: (4, 4), scaleFactor: 1)
+            if queued { processor.renderQueue = DispatchQueue(label: "Bokeh ring pressure") }
+            var outputs: [MTLTexture] = []
+            for index in 0 ..< 9 {
+                processor.colorTexture = try makeColorTexture(device: device, width: 4, height: 4,
+                    rgba: [Float(index + 1) / 10, 0.4, 0.2, 0.25])
+                processor.depthTexture = try makeDepthTexture(device: device, width: 4, height: 4, depth: index.isMultiple(of: 2) ? 1 : 0)
+                processor.explicitCoCBands = .init(nearBegin: 0.01, nearEnd: 0.05, farBegin: 10, farEnd: 20)
+                processor.maxBlurRadius = Float(index + 1)
+                let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Float, width: 4, height: 4, mipmapped: false)
+                descriptor.storageMode = .shared
+                descriptor.usage = [.renderTarget, .shaderRead]
+                let output = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+                outputs.append(output)
+                let caller = try XCTUnwrap(commandQueue.makeCommandBuffer())
+                try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: caller, renderTarget: output)
+                caller.commit()
+            }
+            let finished = try XCTUnwrap(commandQueue.makeCommandBuffer())
+            finished.commit()
+            finished.waitUntilCompleted()
+            XCTAssertNil(finished.error)
+            var pixels: [Float] = []
+            for output in outputs {
+                var image = [Float](repeating: 0, count: 4 * 4 * 4)
+                output.getBytes(&image, bytesPerRow: 4 * 4 * MemoryLayout<Float>.size,
+                                from: MTLRegionMake2D(0, 0, 4, 4), mipmapLevel: 0)
+                pixels.append(contentsOf: image)
+            }
+            results.append(pixels)
+        }
+        XCTAssertEqual(results[0].count, results[1].count)
+        for (immediate, queued) in zip(results[0], results[1]) {
+            XCTAssertEqual(immediate, queued, accuracy: 0.001)
+        }
     }
 
     private func makeColorTexture(

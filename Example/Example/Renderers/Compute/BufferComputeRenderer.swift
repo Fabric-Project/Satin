@@ -98,7 +98,7 @@ final class BufferComputeRenderer: BaseRenderer {
 
         chromaMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
 
-        chromaticProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try chromaticProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

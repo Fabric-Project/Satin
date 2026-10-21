@@ -1,5 +1,66 @@
 # Satin 2.0 Changelog
 
+## Stage 4: complete GPU command recording
+
+- Development profiling: launch with `SATIN_RECORDING_PROFILE=1` to print, every 120 frames, exclusive
+  ms and calls per frame for each producer recording category (update, culling, hooks, uniforms,
+  bookkeeping, planning, effects, replay, admission wait) and for encode-queue replay. Off by default
+  (one branch per marker).
+
+- Custom GPU work is an open protocol, `RecordedGPUWork` (and `RecordedComputeWork` inside a compute
+  pass): values and Metal resources only, encoded once in order, released after completion. It
+  replaces the `addCommands` closures on `GPUCommandRecording` and `ComputeCommandEncoder`.
+  `ARDepthUpscaler`'s MPS work is the in-tree example.
+- A throw fails the frame. Abandoned preparation no longer rolls back one-time producer state
+  (feedback reset/index, frozen tessellation factors, fallback-depth clear, cleaned shadows), and the
+  closure-based `onAbandon` is gone. Recover with `reset()` / `needsUpdate`.
+- `holdUntilCompleted(_:)` replaces `retainUntilCompleted(_:)` for external resource owners
+  (`CVMetalTexture`, pooled `CVPixelBuffer` / `IOSurface`), covering both object and content lifetime.
+
+- Queued scenes/effects now replay GPU preparation, render passes, compute dispatches, clears,
+  blits and captured MPS work on the supplied queue. Effect queues no longer mean commit-only.
+- Added one shared GPUCommandRecording boundary and a compute command facade. Pipelines,
+  resource bindings, uploaded CPU bytes and dispatch dimensions are captured on the producer.
+- Migrated effect/preparation hooks to recorded commands, including Bokeh, tessellation and AR
+  depth upscaling; private children compose inside one outer submission. Compute's final raw-buffer
+  entry routes through shared hooks, so old overrides fail compilation rather than being skipped.
+- External resource owners and input snapshots survive through GPU completion.
+- Added suspended-worker affinity/isolation, deferred compute input, abandonment and retained-owner
+  regression coverage. No builds, tests or performance measurements run for this increment.
+
+## Stage 4: compound effects and Sponza queue comparison
+
+- Added opt-in `PostProcessEncoder.renderQueue`: one private command buffer and permit per
+  complete effect invocation, preserving child-pass, compute and raw-clear order.
+- Final throwing `draw` overloads route through overridable `encodeEffect`. Migrated built-in
+  effects, AR effect overrides and Example callers; postprocess errors now propagate.
+- Compound effects preserve configured admission limits and final destination view mappings.
+- Sponza has a default-off Dedicated Render Queue inspector control for its complete chain.
+- Added scene/effect/overlay equivalence, compound failure/admission, queue-transition,
+  motion-blur fallback-clear and Bokeh ring-wrap tests. These additions have not been run.
+
+## Stage 4: queued scene admission and scheduling
+
+- Opt-in `RenderEncoder.renderQueue` records on the producer and encodes sealed scene packets
+  on a caller-supplied serial queue. Nil preserves immediate encoding.
+- A shared scheduler owns private command buffers, enqueue order, GPU-completion admission and
+  failure cleanup. Preparatory GPU work uses the same private buffer as its scene.
+- Added Release caller-buffer validation and submission errors; `Context` validates counts in
+  `1...3`. Documented ordering, resource lifetime and per-encoder admission boundaries.
+- Added scene queue regression tests and concurrent recording stress coverage. Standalone AR
+  matte queuing and device-specific validation remain separate follow-up work.
+
+## Stage 4: compute snapshot prerequisite
+
+- Compute uniforms and registered uniform/struct inputs are copied at binding time, preserving
+  the last uploaded slot at all sizes. Small copies use `setBytes`; larger copies use
+  completion-held arena storage. Raw buffers and textures retain their existing contract.
+- Encoder-taking compute updates and custom uniform-binding hooks use `ComputeEncodingContext`
+  to identify the owning command buffer. Command-buffer-taking updates are unchanged.
+- Updated generator overloads, the Jump Flood Example and Fabric's compute callers. Added GPU
+  regression coverage for ring reuse, upload semantics, large-copy lifetime and abandonment.
+- This prerequisite adds no background encoding or render-queue opt-in yet.
+
 ## Context Init
 
 In Satin 1.0, an object’s `Context` could change out from under it (was a var) causing some subtle issues, and `Context` was assigned lazily. In Satin 2.0, all objects have a let `Context`, thus requiring new initializers. This change fixes a class of bugs, and for most use cases, a Satin `Context` does not change, so we decided this would be an acceptable change. 

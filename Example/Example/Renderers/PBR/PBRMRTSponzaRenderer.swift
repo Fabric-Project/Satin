@@ -5,6 +5,7 @@
 //  Created by OpenAI Codex on 4/30/26.
 //
 
+import Dispatch
 import Metal
 import MetalKit
 import Satin
@@ -54,15 +55,35 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["SSAO", "Motion Blur", "DOF"]
+        ["Rendering", "SSAO", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
         [
+            "Rendering": renderingParameters,
             "SSAO": ssaoPostProcessEncoder.parameters,
             "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters,
             "DOF": bokehDepthOfFieldPostProcessEncoder.parameters
         ]
+    }
+
+    private let dedicatedRenderQueue = DispatchQueue(label: "Sponza Render Encoding", qos: .userInteractive)
+    private let dedicatedRenderQueueParameter = BoolParameter("Dedicated Render Queue", false, .toggle)
+    private lazy var renderingParameters = ParameterGroup("Rendering", [dedicatedRenderQueueParameter])
+    private var usesDedicatedRenderQueue = false
+
+    /// Switch the complete dependency chain between frames. The host committed the previous
+    /// caller buffer before this update; no GPU wait or change to the rendering workload is needed.
+    private func updateRenderQueue() {
+        let enabled = dedicatedRenderQueueParameter.value
+        guard enabled != usesDedicatedRenderQueue else { return }
+        usesDedicatedRenderQueue = enabled
+        let queue = enabled ? dedicatedRenderQueue : nil
+        sceneRenderer.renderQueue = queue
+        ssaoPostProcessEncoder.renderQueue = queue
+        motionBlurPostProcessEncoder.renderQueue = queue
+        bokehDepthOfFieldPostProcessEncoder.renderQueue = queue
+        overlayRenderer.renderQueue = queue
     }
 
     private let allOutputs: RendererOutputs = [.color, .albedo, .normals, .pbr, .velocity, .emissive]
@@ -220,6 +241,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
 
     override func update(frame: FrameTime) throws {
         try super.update(frame: frame)
+        updateRenderQueue()
 
         
         let time = Float(frame.time)
@@ -245,7 +267,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
             camera: camera
         )
 
-        let beautyTexture = postProcessedBeautyTexture(commandBuffer: commandBuffer)
+        let beautyTexture = try postProcessedBeautyTexture(commandBuffer: commandBuffer)
         updatePreviewTextures(beautyTexture: beautyTexture)
 
         try overlayRenderer.draw(
@@ -491,26 +513,26 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         )
     }
 
-    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         ssaoPostProcessEncoder.colorTexture = sceneRenderer.colorTexture
         ssaoPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         ssaoPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
         ssaoPostProcessEncoder.sceneCamera = camera
-        ssaoPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try ssaoPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let compositeTexture = ssaoPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
 
         motionBlurPostProcessEncoder.colorTexture = compositeTexture
         motionBlurPostProcessEncoder.velocityTexture = sceneRenderer.velocityTexture
         motionBlurPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
-        motionBlurPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try motionBlurPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let motionBlurTexture = motionBlurPostProcessEncoder.outputTexture ?? compositeTexture
 
         bokehDepthOfFieldPostProcessEncoder.colorTexture = motionBlurTexture
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
-        bokehDepthOfFieldPostProcessEncoder.draw(
+        try bokehDepthOfFieldPostProcessEncoder.draw(
             frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer

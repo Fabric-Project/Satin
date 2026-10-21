@@ -398,7 +398,7 @@ final class ARPBRRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        backgroundRenderer.draw(
+        try backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
@@ -436,7 +436,7 @@ final class ARPBRRenderer: BaseRenderer {
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
 
-        postProcessor.draw(
+        try postProcessor.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

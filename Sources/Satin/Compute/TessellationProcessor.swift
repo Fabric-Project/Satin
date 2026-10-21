@@ -16,7 +16,8 @@ public protocol Tessellator: ComputeProcessor {
     /// dispatched without one: the tessellator owns no factors storage.
     var factorsDestination: (buffer: MTLBuffer, offset: Int)? { get set }
     func update(_ commandBuffer: MTLCommandBuffer, iterations: Int)
-    func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int)
+    func update(_ context: ComputeEncodingContext, iterations: Int)
+    func update(_ commands: GPUCommandRecording, iterations: Int)
 }
 
 open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
@@ -57,29 +58,18 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
 
     // MARK: - Reset
 
-    override public func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        super.update(commandBuffer)
-
-        guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
-
-        if factorsDestination != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
-            computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
-            computeEncoder.endEncoding()
-        }
-    }
-
-    override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        super.update(computeEncoder)
+    override public func update(_ context: ComputeEncodingContext, iterations: Int = 1) {
+        super.update(context)
 
         if factorsDestination != nil {
-            encode(computeEncoder, iterations: iterations)
+            encode(context, iterations: iterations)
         }
     }
 
-    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        bindUniforms(computeEncoder)
-        bindBuffers(computeEncoder)
+    private func encode(_ context: ComputeEncodingContext, iterations: Int = 1) {
+        let computeEncoder = context.computeEncoder
+        bindUniforms(context)
+        bindBuffers(context)
         bindTextures(computeEncoder)
         if let factorsDestination {
             computeEncoder.setBuffer(factorsDestination.buffer, offset: factorsDestination.offset, index: ComputeBufferIndex.TessellationFactors.rawValue)
@@ -112,7 +102,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
     // MARK: - Dispatching
 
     #if os(macOS) || os(iOS) || os(visionOS)
-        override open func dispatchThreads(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
+        override open func dispatchThreads(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
             let patchCount = geometry.patchCount
             let threadsPerGrid = MTLSizeMake(patchCount, 1, 1)
 
@@ -124,7 +114,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         }
     #endif
 
-    override open func dispatchThreadgroups(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
+    override open func dispatchThreadgroups(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
         let maxTotalThreadsPerThreadgroup = pipeline.maxTotalThreadsPerThreadgroup
         let patchCount = geometry.patchCount
         let threadsPerThreadgroup = MTLSizeMake(maxTotalThreadsPerThreadgroup, 1, 1)

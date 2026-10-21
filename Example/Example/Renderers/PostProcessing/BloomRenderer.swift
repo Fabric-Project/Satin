@@ -136,7 +136,7 @@ final class BloomRenderer: BaseRenderer {
         postProcessor.mesh.material?.set(renderTexture, index: FragmentTextureIndex.Custom0)
         postProcessor.mesh.material?.set(bloomTexture, index: FragmentTextureIndex.Custom1)
 
-        postProcessor.draw(
+        try postProcessor.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

@@ -55,6 +55,7 @@ public struct Context {
         velocityPixelFormat: MTLPixelFormat = .rg16Float,
         emissivePixelFormat: MTLPixelFormat = .rgba16Float
     ) {
+        precondition((1 ... 3).contains(maxBuffersInFlight), "maxBuffersInFlight must be between 1 and 3")
         self.id = id
         self.device = device
         self.commandQueue = device.makeCommandQueue()!

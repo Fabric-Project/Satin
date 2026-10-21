@@ -42,7 +42,7 @@ final class PostProcessEncoderTests: XCTestCase {
         let target = try makeRedTarget()
         processor.resize(size: (width: Float(size), height: Float(size)), scaleFactor: 1)
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, renderTarget: target)
+        try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, renderTarget: target)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
 

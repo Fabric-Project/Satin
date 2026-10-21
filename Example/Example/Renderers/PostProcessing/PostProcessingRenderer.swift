@@ -75,7 +75,7 @@ final class PostProcessingRenderer: BaseRenderer {
             renderTarget: renderTexture
         )
         postMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
-        postProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try postProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

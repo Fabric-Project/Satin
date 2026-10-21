@@ -196,10 +196,10 @@ final class SSGIProjectorRenderer: BaseRenderer {
         ssgiPostProcessEncoder.albedoTexture = sceneRenderer.albedoTexture
         ssgiPostProcessEncoder.pbrTexture = sceneRenderer.pbrTexture
         ssgiPostProcessEncoder.sceneCamera = camera
-        ssgiPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try ssgiPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         compositorMaterial.texture = ssgiPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
-        compositor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try compositor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

@@ -161,7 +161,7 @@ final class ARPlanesRenderer: BaseRenderer {
     // MARK: - Draw
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        backgroundRenderer.draw(
+        try backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

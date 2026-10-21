@@ -304,6 +304,14 @@
 		F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B100012E06000200AAA005 /* SlugTextTests.swift */; };
 		F1A000012F00000100AAA001 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000022F00000100AAA001 /* Renderer.swift */; };
 		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
+		7F1A00000000000000000061 /* ComputeEncodingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000060 /* ComputeEncodingContext.swift */; };
+		7F1A00000000000000000063 /* ComputeInputSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000062 /* ComputeInputSnapshots.swift */; };
+		7F1A00000000000000000065 /* ComputeInputSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */; };
+		7F1A00000000000000000067 /* QueuedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000066 /* QueuedSubmission.swift */; };
+		7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000A000 /* RecordingProfile.swift */; };
+		7F1A00000000000000000069 /* RenderQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000068 /* RenderQueueTests.swift */; };
+		7F1A00000000000000000071 /* ComputeCommandEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000070 /* ComputeCommandEncoder.swift */; };
+		7F1A00000000000000000073 /* GPUCommandRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000072 /* GPUCommandRecording.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -616,6 +624,14 @@
 		F0B100012E06000200AAA005 /* SlugTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextTests.swift; sourceTree = "<group>"; };
 		F1A000022F00000100AAA001 /* Renderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
 		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000060 /* ComputeEncodingContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeEncodingContext.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000062 /* ComputeInputSnapshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeInputSnapshots.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeInputSnapshotTests.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000066 /* QueuedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedSubmission.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000A000 /* RecordingProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingProfile.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000068 /* RenderQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderQueueTests.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000070 /* ComputeCommandEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCommandEncoder.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000072 /* GPUCommandRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUCommandRecording.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -735,6 +751,7 @@
 			isa = PBXGroup;
 			children = (
 				66D7DD5D2C06A24B00B5A6C8 /* ComputeConfiguration.swift */,
+				7F1A00000000000000000062 /* ComputeInputSnapshots.swift */,
 				66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */,
 				66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */,
 				66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */,
@@ -755,6 +772,8 @@
 				66D7DD672C06A24B00B5A6C8 /* TextureComputeSystem.swift */,
 				E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */,
 				E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */,
+				7F1A00000000000000000060 /* ComputeEncodingContext.swift */,
+				7F1A00000000000000000070 /* ComputeCommandEncoder.swift */,
 			);
 			path = Compute;
 			sourceTree = "<group>";
@@ -1010,6 +1029,9 @@
 				7F1A00000000000000000050 /* ViewFrustum.swift */,
 				7F1A00000000000000000052 /* ShadowCasterRecording.swift */,
 				7F1A00000000000000000019 /* RenderSubmission.swift */,
+				7F1A00000000000000000066 /* QueuedSubmission.swift */,
+				7F1A0000000000000000A000 /* RecordingProfile.swift */,
+				7F1A00000000000000000072 /* GPUCommandRecording.swift */,
 				7F1A0000000000000000001B /* EncodingContext.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
@@ -1219,6 +1241,8 @@
 				E18ABF832CBCDC9000F54A6D /* MutexTests.swift */,
 				E125E6942CA9EABF005D3A0E /* ObjectTests.swift */,
 				E125E6952CA9EABF005D3A0E /* RenderableTests.swift */,
+				7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */,
+				7F1A00000000000000000068 /* RenderQueueTests.swift */,
 				F0B100012E06000200AAA005 /* SlugTextTests.swift */,
 			);
 			path = SatinTests;
@@ -1379,6 +1403,9 @@
 				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
 				7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
+				7F1A00000000000000000063 /* ComputeInputSnapshots.swift in Sources */,
+				7F1A00000000000000000061 /* ComputeEncodingContext.swift in Sources */,
+				7F1A00000000000000000071 /* ComputeCommandEncoder.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
 				E101A8572C07061D0055FABA /* Conversions.mm in Sources */,
@@ -1522,6 +1549,9 @@
 				7F1A00000000000000000051 /* ViewFrustum.swift in Sources */,
 				7F1A00000000000000000053 /* ShadowCasterRecording.swift in Sources */,
 				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
+				7F1A00000000000000000067 /* QueuedSubmission.swift in Sources */,
+				7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */,
+				7F1A00000000000000000073 /* GPUCommandRecording.swift in Sources */,
 				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
@@ -1656,6 +1686,8 @@
 				E125E69A2CA9EABF005D3A0E /* BoundsTests.swift in Sources */,
 				E125E69B2CA9EABF005D3A0E /* TriangulatorTests.swift in Sources */,
 				E125E69C2CA9EABF005D3A0E /* RenderableTests.swift in Sources */,
+				7F1A00000000000000000065 /* ComputeInputSnapshotTests.swift in Sources */,
+				7F1A00000000000000000069 /* RenderQueueTests.swift in Sources */,
 				E18ABF842CBCDC9600F54A6D /* MutexTests.swift in Sources */,
 				E125E69D2CA9EABF005D3A0E /* ObjectTests.swift in Sources */,
 				F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */,

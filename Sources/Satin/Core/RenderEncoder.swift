@@ -6,6 +6,7 @@
 //  Copyright © 2019 Reza Ali. All rights reserved.
 //
 
+import Dispatch
 import Metal
 import simd
 
@@ -13,6 +14,17 @@ open class RenderEncoder {
     public var label = "Satin RenderEncoder"
 
     public var onUpdate: (() -> Void)?
+
+    /// Opt-in CPU queue for encoding sealed scenes. Nil encodes into the caller's command buffer.
+    /// Set this on the serial producer that owns scene/configuration changes. The supplied queue
+    /// must be serial and independently runnable: it cannot be, or target, the producer queue.
+    ///
+    /// Queued work uses a private command buffer from the caller's Metal command queue. All work
+    /// left in the caller's buffer runs after these submissions, even when encoded before draw.
+    /// Commit earlier immediate work before issuing queued work that depends on it. Raw resource
+    /// contents must stay valid through every GPU reader; retaining them does not freeze bytes.
+    public var renderQueue: DispatchQueue?
+    private let submissionAdmission: QueuedSubmission.Admission
 
     // MARK: - Configuration
 
@@ -455,6 +467,7 @@ open class RenderEncoder {
     ) {
         self.label = label
         self.context = context
+        submissionAdmission = QueuedSubmission.Admission(limit: context.maxBuffersInFlight)
         self.colorPixelFormat = colorPixelFormat
         self.depthPixelFormat = depthPixelFormat
         self.stencilPixelFormat = stencilPixelFormat
@@ -609,9 +622,28 @@ open class RenderEncoder {
     /// Shadow passes run before the main scene pass. Surface materials render first according to
     /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
     public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) throws {
-        let builder = makeSubmissionBuilder(frame: frame, cameras: cameras, viewports: viewports)
-        try builder.record(scene: scene, renderPassDescriptor: renderPassDescriptor, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
-        try builder.seal().encode(into: commandBuffer)
+        RecordingProfile.noteFrame(frame.frameNumber)
+        RecordingProfile.begin(.scenePlanning)
+        defer { RecordingProfile.end() }
+        let encodeQueue = renderQueue
+        let encodingBuffer: MTLCommandBuffer
+        if let encodeQueue {
+            encodingBuffer = try QueuedSubmission.begin(commandBuffer: commandBuffer, renderQueue: encodeQueue, admission: submissionAdmission)
+            encodingBuffer.label = "\(label) Submission"
+        } else {
+            encodingBuffer = commandBuffer
+        }
+        do {
+            let commands = encodeQueue == nil ? GPUCommandRecording(commandBuffer: encodingBuffer) : GPUCommandRecording(device: context.device)
+            try commands.draw(self, frame: frame, renderPassDescriptor: renderPassDescriptor, scene: scene,
+                              cameras: cameras, viewports: viewports, viewMappings: viewMappings)
+            if let encodeQueue {
+                QueuedSubmission.schedule(commands.seal(), satinBuffer: encodingBuffer, renderQueue: encodeQueue, admission: submissionAdmission)
+            }
+        } catch {
+            if encodeQueue != nil { QueuedSubmission.cancel(satinBuffer: encodingBuffer, admission: submissionAdmission) }
+            throw error
+        }
     }
 
     /// Creates a producer-only operation with frozen views and renderer settings. Record its scene
@@ -669,7 +701,8 @@ open class RenderEncoder {
     }
 
     func prepare(builder submission: SubmissionBuilder, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor,
-              scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil) throws -> [RecordedRenderPass] {
+              scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil,
+              preparationCommands: GPUCommandRecording? = nil) throws -> [RecordedRenderPass] {
         guard !submission.isConsumed else { throw SubmissionError.alreadyDrawn }
         try validate(inputDescriptor, against: submission.destination)
         let renderPassDescriptor = inputDescriptor.privateCopy()
@@ -682,7 +715,7 @@ open class RenderEncoder {
 
         let recorder = submission.recorder
         let frame = submission.frame
-        let commandBuffer = preparationCommandBuffer
+        let commands = preparationCommands ?? preparationCommandBuffer.map { GPUCommandRecording(commandBuffer: $0) }
         let cameras = submission.cameras
         let viewports = submission.viewports
         self.recorder = recorder
@@ -694,12 +727,13 @@ open class RenderEncoder {
         }
 
         let simd_viewports = submission.simdViewports
+        RecordingProfile.begin(.updateAndTraversal)
         update(
             scene: scene,
             cameras: cameras,
             viewports: simd_viewports,
             recorder: recorder,
-            encodingContext: commandBuffer.map { EncodingContext(commandBuffer: $0, frame: frame, views: submission.views, recorder: recorder) }
+            encodingContext: commands.map { EncodingContext(commands: $0, frame: frame, views: submission.views, recorder: recorder) }
         )
 
         // The scene is one record: its shadows and colour passes share palette snapshots.
@@ -708,6 +742,7 @@ open class RenderEncoder {
         for collectedObject in renderCollection.objects {
             collectedObject.renderable?.beginOccurrence(frame: frame)
         }
+        RecordingProfile.end()
 
         var arrayLength = 1
         for viewMapping in viewMappings {
@@ -734,7 +769,9 @@ open class RenderEncoder {
         recorder.passBindings.projectorTextures = projectorTextures
 
         recordScene(recorder: recorder, views: submission.views)
+        RecordingProfile.begin(.bookkeeping)
         buildRouteEntries(storage: recorder.storage)
+        RecordingProfile.end()
 
         let inColorTexture = renderPassDescriptor.colorAttachments[0].texture
         let inColorResolveTexture = renderPassDescriptor.colorAttachments[0].resolveTexture
@@ -1020,7 +1057,10 @@ open class RenderEncoder {
     /// Records `renderable` once per route of `routes` it draws in, as runs of its layer, unless it
     /// is outside every view.
     private func recordColorPasses(of renderable: Renderable, renderLayer: Int, routes: [RenderRoute], recorder: PacketRecorder, views: [RenderView], frusta: ContiguousArray<ViewFrustum>, isRecorded: Bool) {
-        guard Self.mayBeSeen(renderable, in: frusta) else { return }
+        RecordingProfile.begin(.colourCulling)
+        let mayBeSeen = Self.mayBeSeen(renderable, in: frusta)
+        RecordingProfile.end()
+        guard mayBeSeen else { return }
         let membership = routeMembership(of: renderable)
         for route in routes where membership & (1 << route.rawValue) != 0 {
             let phase = Self.phase(for: route)
@@ -1031,7 +1071,9 @@ open class RenderEncoder {
                 materialPass: materialPass(for: phase),
                 views: views
             )
+            RecordingProfile.begin(.bookkeeping)
             recorder.storage.appendRun(renderLayer: renderLayer, routeIndex: route.rawValue, packets: packets, isRecorded: isRecorded)
+            RecordingProfile.end()
         }
     }
 
@@ -1050,7 +1092,9 @@ open class RenderEncoder {
         collectRecordedRenderables(scene: scene, renderables: &recordedRenderables)
         if sortObjects {
             // Stable: equal render orders keep the scene's order.
+            RecordingProfile.begin(.bookkeeping)
             recordedRenderables.sort { $0.renderOrder < $1.renderOrder }
+            RecordingProfile.end()
         }
 
         let routes = recordedRoutes

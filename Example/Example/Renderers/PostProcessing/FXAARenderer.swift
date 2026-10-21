@@ -71,7 +71,7 @@ final class FXAARenderer: BaseRenderer {
 
         fxaaMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
 
-        fxaaProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try fxaaProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

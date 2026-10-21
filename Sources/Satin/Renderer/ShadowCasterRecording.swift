@@ -81,6 +81,7 @@ final class ShadowCasterRecording {
         for renderable in renderables where renderable.castShadow {
             var reached = allPasses
             if renderable.frustumCulled {
+                RecordingProfile.begin(.shadowCulling)
                 let bounds = renderable.worldBounds
                 reached = 0
                 var shadowReaches = false
@@ -90,6 +91,7 @@ final class ShadowCasterRecording {
                         reached |= UInt64(1) << UInt64(index)
                     }
                 }
+                RecordingProfile.end()
             }
             guard reached != 0 else { continue }
 

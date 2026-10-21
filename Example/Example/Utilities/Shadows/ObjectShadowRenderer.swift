@@ -176,7 +176,7 @@ final class ObjectShadowRenderer {
             processor.depthTexture = renderer.depthTexture
             processor.mesh.material?.set("Near Far", [camera.near, camera.far])
             processor.mesh.material?.set("Color", color)
-            processor.draw(frame: frame, renderPassDescriptor: srpd, commandBuffer: commandBuffer)
+            try processor.draw(frame: frame, renderPassDescriptor: srpd, commandBuffer: commandBuffer)
 
             if let blurFilter = blurFilter {
                 blurFilter.encode(

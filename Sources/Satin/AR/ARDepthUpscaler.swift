@@ -79,56 +79,57 @@ class ARDepthUpscaler {
     }
 
     func update(
-        commandBuffer: MTLCommandBuffer,
+        commands: GPUCommandRecording,
         yTexture: MTLTexture,
         cbcrTexture: MTLTexture,
         depthTexture: MTLTexture
     ) -> MTLTexture? {
-        commandBuffer.pushDebugGroup("Depth Upscaler")
-        defer { commandBuffer.popDebugGroup() }
-
         guard
-            let rgbColorTexture = colorConverter.encode(
-                commandBuffer: commandBuffer,
-                yTexture: yTexture,
-                cbcrTexture: cbcrTexture
-            ),
-            let rgbColorDownscaledTexture = rgbColorDownscaledTexture,
-            let rgbColorDownscaledLowResTexture = rgbColorDownscaledLowResTexture,
-            let coefficientsTexture = coefficientsTexture,
-            let upscaledDepthTexture = upscaledDepthTexture
+            let rgbColorTexture = colorConverter.encode(commands: commands, yTexture: yTexture, cbcrTexture: cbcrTexture),
+            let rgbColorDownscaledTexture, let rgbColorDownscaledLowResTexture,
+            let coefficientsTexture, let upscaledDepthTexture,
+            let scaleFilter = scaleFilter.copy() as? MPSImageBilinearScale,
+            let guidedFilter = guidedFilter.copy() as? MPSImageGuidedFilter
         else { return nil }
 
-        // Downscale the RGB data. Pass in the target resoultion.
-        scaleFilter.encode(
-            commandBuffer: commandBuffer,
-            sourceTexture: rgbColorTexture,
-            destinationTexture: rgbColorDownscaledTexture
-        )
-
-        // Match the input depth resolution.
-        scaleFilter.encode(
-            commandBuffer: commandBuffer,
-            sourceTexture: rgbColorTexture,
-            destinationTexture: rgbColorDownscaledLowResTexture
-        )
-
-        guidedFilter.encodeRegression(
-            to: commandBuffer,
-            sourceTexture: depthTexture,
-            guidanceTexture: rgbColorDownscaledLowResTexture,
-            weightsTexture: nil,
-            destinationCoefficientsTexture: coefficientsTexture
-        )
-
-        guidedFilter.encodeReconstruction(
-            to: commandBuffer,
-            guidanceTexture: rgbColorDownscaledTexture,
+        // Each invocation owns copies of its kernels. No mutable upscaler is consulted later.
+        commands.append(DepthUpscaleWork(
+            scaleFilter: scaleFilter,
+            guidedFilter: guidedFilter,
+            colorTexture: rgbColorTexture,
+            downscaledColorTexture: rgbColorDownscaledTexture,
+            lowResolutionColorTexture: rgbColorDownscaledLowResTexture,
+            depthTexture: depthTexture,
             coefficientsTexture: coefficientsTexture,
-            destinationTexture: upscaledDepthTexture
-        )
-
+            upscaledDepthTexture: upscaledDepthTexture
+        ))
         return upscaledDepthTexture
+    }
+
+    /// The upscale's MPS work: downscale the colour twice, then guided-filter the depth against it.
+    private struct DepthUpscaleWork: RecordedGPUWork {
+        let scaleFilter: MPSImageBilinearScale
+        let guidedFilter: MPSImageGuidedFilter
+        let colorTexture: MTLTexture
+        let downscaledColorTexture: MTLTexture
+        let lowResolutionColorTexture: MTLTexture
+        let depthTexture: MTLTexture
+        let coefficientsTexture: MTLTexture
+        let upscaledDepthTexture: MTLTexture
+
+        func encode(into commandBuffer: MTLCommandBuffer) {
+            commandBuffer.pushDebugGroup("Depth Upscaler")
+            defer { commandBuffer.popDebugGroup() }
+            scaleFilter.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture,
+                               destinationTexture: downscaledColorTexture)
+            scaleFilter.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture,
+                               destinationTexture: lowResolutionColorTexture)
+            guidedFilter.encodeRegression(to: commandBuffer, sourceTexture: depthTexture,
+                guidanceTexture: lowResolutionColorTexture, weightsTexture: nil,
+                destinationCoefficientsTexture: coefficientsTexture)
+            guidedFilter.encodeReconstruction(to: commandBuffer, guidanceTexture: downscaledColorTexture,
+                coefficientsTexture: coefficientsTexture, destinationTexture: upscaledDepthTexture)
+        }
     }
 
     func createTexture(

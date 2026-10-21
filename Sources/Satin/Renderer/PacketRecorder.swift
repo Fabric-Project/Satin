@@ -151,12 +151,14 @@ public final class PacketRecorder {
         // Every view gets its uniforms: the amplified views of one pass, or the views of a
         // multi-view shadow, each encoded in its own pass from this one recording.
         let isAmplified = renderContext.vertexAmplificationCount > 1
+        RecordingProfile.begin(.vertexUniforms)
         let vertexUniforms = writeVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
             viewStride: isAmplified ? Self.vertexUniformsStride : recordedViewStride,
             views: views
         )
+        RecordingProfile.end()
 
         // A double-sided transparent renderable is recorded twice, culling front faces and then back
         // faces, so all its back faces draw before its front faces, every submesh in each.
@@ -178,6 +180,8 @@ public final class PacketRecorder {
         materialPass: Renderable.MaterialPass,
         vertexUniforms: VertexUniformsBinding
     ) {
+        RecordingProfile.begin(.hooks)
+        defer { RecordingProfile.end() }
         storage.beginRecording(
             cullMode: cullMode,
             windingOrder: renderable.windingOrder,
