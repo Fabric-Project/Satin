@@ -1,5 +1,16 @@
 # Satin 2.0 Changelog
 
+## Frame contract: target-wide scene occurrences
+
+- Recorded scenes contribute lights and shadow casters alongside colour draws. All occurrences in
+  one target share lighting and shadows, while each keeps its transforms, material inputs and pose.
+- Shadow passes replay captured commands with each light's views instead of revisiting live objects.
+  Custom shadow pipelines and bindings remain intact. Colour pipelines resolve complete lighting
+  counts after collection; renderOrder sorting includes both root and recorded draws.
+- Captured shadow maps are versioned. Pending unencoded maps cannot become another submission's
+  cache dependency, and abandoning a recording invalidates its own pending versions. Static maps
+  remain reusable after encoding. Failure to create a render encoder now throws a SubmissionError.
+
 ## Stage 4: one drawing thread, plain command buffers
 
 - Queued encoding is gone: `RenderEncoder.renderQueue`, `PostProcessEncoder.renderQueue`, submission

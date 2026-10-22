@@ -55,6 +55,10 @@ final class RenderCollection {
         }
     }
 
+    func includeLights(_ occurrences: [RecordedLightOccurrence]) {
+        for occurrence in occurrences { lights.append(occurrence) }
+    }
+
     /// Collects one visible object. Its render layer and lighting and shadow flags are read now.
     func collect(object: Object, renderable: Renderable?, light: Light?, environment: IBLEnvironment?) {
         objects.append(CollectedObject(object: object, renderable: renderable, environment: environment))

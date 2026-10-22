@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4113CF3BF9DA4D7F8ACD4DC1 /* RecordedLightingPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */; };
+		49637A7F7C9B42BB973E21F1 /* RecordedSceneOccurrences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */; };
 		CF4500000000000000000003 /* SealedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000004 /* SealedSubmission.swift */; };
 		CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000006 /* PipelineResourceUsage.swift */; };
 		CF4500000000000000000001 /* MotionHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000002 /* MotionHistory.swift */; };
@@ -321,6 +323,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedLightingPipeline.swift; sourceTree = "<group>"; };
+		2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedSceneOccurrences.swift; sourceTree = "<group>"; };
 		CF4500000000000000000004 /* SealedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SealedSubmission.swift; sourceTree = "<group>"; };
 		CF4500000000000000000006 /* PipelineResourceUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineResourceUsage.swift; sourceTree = "<group>"; };
 		CF4500000000000000000002 /* MotionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionHistory.swift; sourceTree = "<group>"; };
@@ -1012,6 +1016,8 @@
 				7F1A0000000000000000000B /* FrameArena.swift */,
 				CF4500000000000000000002 /* MotionHistory.swift */,
 				CF4500000000000000000004 /* SealedSubmission.swift */,
+				B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */,
+				2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */,
 				CF4500000000000000000006 /* PipelineResourceUsage.swift */,
 				7F1A0000000000000000000D /* RenderDestination.swift */,
 				7F1A0000000000000000000F /* DrawRecording.swift */,
@@ -1528,6 +1534,8 @@
 				7F1A0000000000000000000C /* FrameArena.swift in Sources */,
 				CF4500000000000000000001 /* MotionHistory.swift in Sources */,
 				CF4500000000000000000003 /* SealedSubmission.swift in Sources */,
+				4113CF3BF9DA4D7F8ACD4DC1 /* RecordedLightingPipeline.swift in Sources */,
+				49637A7F7C9B42BB973E21F1 /* RecordedSceneOccurrences.swift in Sources */,
 				CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */,
 				7F1A0000000000000000000E /* RenderDestination.swift in Sources */,
 				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,

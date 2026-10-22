@@ -39,13 +39,14 @@ final class ShadowCasterRecording {
     private var frusta = ContiguousArray<ViewFrustum>()
     private var casters = ContiguousArray<Caster>()
 
-    func prepare(_ shadows: ContiguousArray<Shadow>, context: Context, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder) -> [RecordedRenderPass] {
+    func prepare(_ shadows: ContiguousArray<Shadow>, context: Context, renderables: ContiguousArray<Renderable>,
+                 occurrences: [RecordedShadowOccurrence] = [], recorder: PacketRecorder) throws -> [RecordedRenderPass] {
         var result: [RecordedRenderPass] = []
         batch.removeAll(keepingCapacity: true)
         var batchViewCount = 0
         for shadow in shadows {
             if !batch.isEmpty, batchViewCount + shadow.passCount > Self.maximumViewsPerRecording {
-                prepareBatch(context: context, renderables: renderables, recorder: recorder, result: &result)
+                try prepareBatch(context: context, renderables: renderables, occurrences: occurrences, recorder: recorder, result: &result)
                 batch.removeAll(keepingCapacity: true)
                 batchViewCount = 0
             }
@@ -53,18 +54,20 @@ final class ShadowCasterRecording {
             batchViewCount += shadow.passCount
         }
         if !batch.isEmpty {
-            prepareBatch(context: context, renderables: renderables, recorder: recorder, result: &result)
+            try prepareBatch(context: context, renderables: renderables, occurrences: occurrences, recorder: recorder, result: &result)
         }
         batch.removeAll(keepingCapacity: true)
         return result
     }
 
-    private func prepareBatch(context: Context, renderables: ContiguousArray<Renderable>, recorder: PacketRecorder, result: inout [RecordedRenderPass]) {
+    private func prepareBatch(context: Context, renderables: ContiguousArray<Renderable>, occurrences: [RecordedShadowOccurrence],
+                              recorder: PacketRecorder, result: inout [RecordedRenderPass]) throws {
         passes.removeAll(keepingCapacity: true)
         views.removeAll(keepingCapacity: true)
         frusta.removeAll(keepingCapacity: true)
         for shadow in batch {
-            shadow.prepareForDrawing(context: context)
+            try shadow.beginRecording(context: context)
+            recorder.shadowInvalidations.append(shadow.recordingInvalidation)
             let viewport = shadow.passViewport
             for passIndex in 0 ..< shadow.passCount {
                 let view = RenderView(camera: shadow.passCamera(passIndex), viewport: viewport, frame: recorder.frame)
@@ -123,6 +126,15 @@ final class ShadowCasterRecording {
                     let packets = recorder.record(caster.renderable, renderContext: context, pass: .shadow, materialPass: .all, views: [views[index]])
                     planned.commands.append(.range(packets, viewIndex: 0))
                 }
+            }
+            for occurrence in occurrences {
+                if occurrence.frustumCulled, !frusta[index].mayContain(occurrence.bounds) { continue }
+                let uniforms = recorder.reserveVertexUniforms(occurrence: occurrence.occurrence,
+                                                               viewCount: max(1, context.vertexAmplificationCount),
+                                                               viewStride: PacketRecorder.vertexUniformsStride,
+                                                               views: [views[index]])
+                let packets = recorder.storage.copyPackets(occurrence.packets, vertexUniforms: uniforms)
+                planned.commands.append(.range(packets, viewIndex: 0))
             }
             result.append(planned)
         }

@@ -465,13 +465,20 @@ open class Material: Codable {
         // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
         // a layout variant's included, and the bindings below are made from that.
         let pipeline = shader.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
-        let usage = pipeline.flatMap { shader.resourceUsage(for: $0) }
+        let defersLighting = context.recorder.defersLightingPipelines && !shadow && lighting
+            && !(context.renderContext.renderingMode == .deferredGeometry && lightingModel == .surface && blending == .disabled)
+        let usage = defersLighting ? nil : pipeline.flatMap { shader.resourceUsage(for: $0) }
         recordUniforms(in: context, shader: shader, shadow: shadow, usage: usage)
         recordDepthState(in: context, shadow: shadow)
         recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
         recordTextures(in: context, shader: shader, conservative: shadow || usage == nil)
         if let pipeline {
             context.setPipeline(pipeline, usage: usage)
+            if defersLighting {
+                context.storage.captureLightingPipeline(RecordedLightingPipeline(shader: shader,
+                                                                                 renderContext: context.renderContext,
+                                                                                 layout: context.layout))
+            }
         }
     }
 

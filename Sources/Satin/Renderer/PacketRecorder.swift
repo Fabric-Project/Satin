@@ -83,6 +83,8 @@ public final class PacketRecorder {
     private var lastViewRange: Range<Int>?
 
     var passBindings = RenderPassBindings()
+    var defersLightingPipelines = false
+    var shadowInvalidations: [ShadowRecordingInvalidation] = []
     let storage: PacketStorage
     let frame: FrameTime
     private let lease: FrameArena.Lease
@@ -209,7 +211,7 @@ public final class PacketRecorder {
     /// command buffer completes, and queues their write from the occurrence and the views as values.
     /// The slot is bound by hooks now and filled when the submission encodes. A pass with fewer views
     /// than the context's repeats its last view.
-    private func reserveVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
+    func reserveVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
         let slice = allocate(length: viewStride * (viewCount - 1) + Self.vertexUniformsStride)
         storage.appendVertexUniformsJob(VertexUniformsJob(
             slice: slice,

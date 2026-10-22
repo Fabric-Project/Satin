@@ -72,7 +72,7 @@ try builder.record(scene: mainScene, renderPassDescriptor: renderPassDescriptor,
 try builder.seal().encode(into: commandBuffer)
 ```
 
-`RenderSubmission`, `makeSubmission(frame:commandBuffer:cameras:viewports:)` and `draw(submission:…)` are gone; the builder above replaces them. `record(scene:)` neither updates nor encodes: do both first, as above. `record(scene:renderPassDescriptor:)` updates, encodes (into `preparationCommandBuffer`, when given) and records its own scene first, then the earlier records in order, per render layer. Records draw in the colour passes only. A recorded draw holds the Metal resources it binds and nothing else, so no scene object needs to outlive it: `retainUntilCompleted(_:)` is gone.
+`RenderSubmission`, `makeSubmission(frame:commandBuffer:cameras:viewports:)` and `draw(submission:…)` are gone; the builder above replaces them. `record(scene:)` neither updates nor encodes: do both first, as above. `record(scene:renderPassDescriptor:)` updates, encodes (into `preparationCommandBuffer`, when given) and records its own scene first, then the earlier records in order, per render layer. Records contribute colour draws, lights and shadow casters to this target. Each occurrence keeps its captured state, and all target lights illuminate the combined root and recorded scene. With sorting enabled, renderOrder applies across both root and recorded objects within each layer and route; equal orders retain root-first, then recording order. A recorded draw holds the Metal resources it binds and nothing else, so no scene object needs to outlive it: `retainUntilCompleted(_:)` is gone.
 
 `UniformBuffer(device:parameters:options:maxBuffersInFlight:encodesPerFrame:)` loses `encodesPerFrame`, and `encodesPerFrame` / `totalSlotCount` are gone: a uniform buffer has one slot per frame in flight.
 
@@ -165,7 +165,7 @@ Binding the render event's `vertexUniforms` to any stage follows the view being 
 
 `Shadow.draw(context:commandBuffer:renderables:)` is no longer public: shadows render inside `RenderEncoder`'s draw.
 
-`needsUpdate` is cleared when a shadow's passes are recorded, not when they finish on the GPU. A producer that records a sealed submission and then drops it unencoded calls `renderEncoder.abandon(sealed)`: that releases the submission and marks the shadows it drew dirty again, so the next recording draws them. A submitted command buffer that fails is a device error, not something shadows recover from. `abandon` reaches back only through the last eight recordings.
+`needsUpdate` is cleared when a shadow's passes are recorded, not when they finish on the GPU. Use `renderEncoder.abandon(sealed)` to release an unencoded submission explicitly; dropping an unencoded builder or sealed submission also invalidates its pending shadow versions. Invalidation is carried by the recording itself, without a bounded history. A map prepared but not yet encoded is not reused as a clean cache by another recording. An encoded producer must be submitted before work that samples its cached map, on the same ordered command queue. A submitted command buffer that fails is a device error, not something shadows recover from.
 
 ## Culling
 
@@ -216,3 +216,9 @@ Explicit draw-context bindings are preserved without packet filtering. Light/sha
 `Renderer` now returns its in-flight permit from the command buffer committed by `postDraw`, rather than the buffer created by `preDraw`. This keeps a logical frame admitted while an MPS wrapper commits intermediate segments. Hosts that override final submission must call `super.postDraw(commandBuffer:)`, as the standard display host does. The visionOS host registers its permit at its final submission too.
 
 Compute inputs over 4 KB bound through an encoder-only update now get dedicated immutable buffer copies instead of retaining live ring bytes. With an unretained Metal command buffer, use the command-buffer update overload so Satin can supply explicit completion-owned storage.
+
+## Target-wide recorded lighting and shadows
+
+`record(scene:)` captures shadow draw commands through the same `draw(in:)` hooks as colour draws. Finalization replays those commands for the target's shadow views using the captured transforms, poses, geometry and custom bindings, without rerunning hooks against the last iteration's objects. CPU buffers that callers mutate still require `copyOnRecordLength` or independently versioned contents. Custom shadow shader pipelines and their texture bindings are preserved.
+
+Lit colour pipelines are finalized using the complete target's light, shadow and projector counts. Source shader configuration and vertex descriptors are captured with each occurrence; no live material is consulted at finalization. Captured light occurrences keep independent shadow destinations when they need rendering. Unchanged, already-encoded maps with `autoUpdate == false` retain their cache behavior. A later native redraw detaches a destination still owned by a captured occurrence.

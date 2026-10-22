@@ -287,7 +287,7 @@ final class SealedSubmissionTests: XCTestCase {
         XCTAssertEqual(encoder.packetStoragePool.availableCount, before + 1)
     }
 
-    // MARK: - Static shadows: clean when recorded, dirty again only if the producer abandons
+    // MARK: - Static shadows: recorded state is reusable only after successful encoding
 
     private func staticShadowScene() -> (scene: Object, light: SpotLight) {
         let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: PhysicalMaterial(context: context))
@@ -300,7 +300,7 @@ final class SealedSubmissionTests: XCTestCase {
         return (Object(context: context, label: "Static shadow", [mesh, light]), light)
     }
 
-    func testAStaticShadowIsCleanOnceItsPassesAreRecorded() throws {
+    func testAStaticShadowIsReusableOnlyOnceItsPassesAreEncoded() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((32, 32))
         let (scene, light) = staticShadowScene()
@@ -309,8 +309,15 @@ final class SealedSubmissionTests: XCTestCase {
         let builder = encoder.makeSubmissionBuilder(frame: .zero, cameras: [PerspectiveCamera(context: context)], viewports: [])
         let sealed = try seal(builder, descriptor: MTLRenderPassDescriptor(), scene: scene)
 
-        XCTAssertFalse(light.shadow.shouldRender, "the producer recorded its passes: nothing is left to render")
-        withExtendedLifetime(sealed) {}
+        XCTAssertFalse(light.shadow.needsUpdate, "the producer captured the current light revision")
+        XCTAssertTrue(light.shadow.shouldRender, "another submission must not reuse a map whose producer has not encoded")
+
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        try sealed.encode(into: commandBuffer)
+        XCTAssertFalse(light.shadow.shouldRender, "the map's producer is encoded and can precede its readers on the same queue")
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed, String(describing: commandBuffer.error))
     }
 
     func testAbandoningASealedSubmissionMarksItsShadowsDirtyAgain() throws {

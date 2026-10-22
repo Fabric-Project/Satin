@@ -2,11 +2,241 @@
 import Metal
 import simd
 import XCTest
+#if SWIFT_PACKAGE
+import SatinCore
+#endif
 
 /// Submissions and records: each `record(scene:)` snapshots the scene as it is at that moment, so
 /// changing it between records (as an Iterator does) gives each record its own values and motion;
 /// snapshots never cross leases, submissions or command buffers; a submission draws once.
 final class SubmissionRecordTests: XCTestCase {
+    private final class ShadowHookMesh: Mesh {
+        var shadowDrawCount = 0
+        var shadowInput: MTLBuffer?
+        override func draw(in context: RenderableDrawContext) {
+            if context.isShadowPass {
+                shadowDrawCount += 1
+                if let shadowInput {
+                    context.setVertexBuffer(shadowInput, index: .Custom0, copyOnRecordLength: MemoryLayout<UInt32>.stride)
+                }
+            }
+            super.draw(in: context)
+        }
+    }
+
+    func testLightingRecipeCopiesTheShadersVertexDescriptor() throws {
+        var configuration = ShaderConfiguration()
+        configuration.context = context
+        let shader = Shader(configuration: configuration)
+        let descriptor = shader.configuration.rendering.vertexDescriptor
+        descriptor.layouts[0].stride = 32
+        let recipe = RecordedLightingPipeline(shader: shader, renderContext: context, layout: nil)
+        descriptor.layouts[0].stride = 64
+        XCTAssertEqual(recipe.configuration.rendering.vertexDescriptor.layouts[0].stride, 32)
+        XCTAssertFalse(recipe.configuration.rendering.vertexDescriptor === descriptor)
+    }
+
+    func testRecordingDoesNotRepeatMaterialUpdateCallbacks() throws {
+        let scene = makeScene()
+        var updates = 0
+        scene.material.onUpdate = { updates += 1 }
+        scene.mesh.update()
+        let expected = updates
+        let submission = try makeSubmission(RenderEncoder(context: context), camera: makeCamera())
+        try submission.record(scene: scene.root)
+        XCTAssertEqual(updates, expected)
+    }
+
+    func testStaticRecordedShadowBecomesTheSourcesCachedVersion() throws {
+        let encoder = RenderEncoder(context: context)
+        let scene = makeScene()
+        scene.mesh.castShadow = true
+        scene.mesh.receiveShadow = true
+        let light = DirectionalLight(context: context, color: .one)
+        light.position = [0, 0, 5]
+        light.lookAt(target: .zero)
+        light.castShadow = true
+        light.shadow.autoUpdate = false
+        light.shadow.resolution = (16, 16)
+        scene.root.add(light)
+        let first = try makeSubmission(encoder, camera: makeCamera())
+        try first.record(scene: scene.root)
+        let map = try XCTUnwrap(first.lightOccurrences.first?.shadow.passTexture(0))
+        try first.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor())
+        XCTAssertFalse(light.shadow.needsUpdate)
+        XCTAssertTrue(light.shadow.textures.first === map)
+
+        let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        try first.seal().encode(into: commandBuffer)
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        let nextFrame = FrameTime.zero.next(time: 1, displayTime: 1)
+        let second = try makeSubmission(encoder, frame: nextFrame, camera: makeCamera())
+        try second.record(scene: scene.root)
+        XCTAssertTrue(second.lightOccurrences.first?.shadow.passTexture(0) === map)
+        XCTAssertFalse(second.lightOccurrences[0].shadow.shouldRender)
+
+        // A later native/root draw must allocate another map, not overwrite the earlier version.
+        light.position.x = 1
+        light.updateViewIfNeeded()
+        let native = try makeSubmission(encoder, frame: nextFrame, camera: makeCamera())
+        try native.record(scene: scene.root, renderPassDescriptor: makeRenderPassDescriptor())
+        XCTAssertFalse(light.shadow.textures.first === map)
+        XCTAssertTrue(first.lightOccurrences[0].shadow.passTexture(0) === map)
+    }
+
+    func testPendingShadowIsNotReusedByAnotherSubmission() throws {
+        let encoder = RenderEncoder(context: context)
+        let scene = makeScene()
+        scene.mesh.castShadow = true
+        scene.mesh.receiveShadow = true
+        let light = DirectionalLight(context: context, color: .one)
+        light.castShadow = true
+        light.shadow.autoUpdate = false
+        light.shadow.resolution = (16, 16)
+        scene.root.add(light)
+        var first: SubmissionBuilder? = try makeSubmission(encoder, camera: makeCamera())
+        try first?.record(scene: scene.root)
+        try first?.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor())
+        let firstMap = try XCTUnwrap(first?.lightOccurrences.first?.shadow.passTexture(0))
+        let second = try makeSubmission(encoder, camera: makeCamera())
+        try second.record(scene: scene.root)
+        let secondShadow = try XCTUnwrap(second.lightOccurrences.first?.shadow)
+        XCTAssertFalse(secondShadow.passTexture(0) === firstMap)
+        XCTAssertTrue(secondShadow.shouldRender)
+        first = nil
+        XCTAssertTrue(secondShadow.shouldRender, "Discarding A must not leave B dependent on A's unencoded map")
+    }
+
+    func testDroppingAnUnencodedRecordedShadowMakesItsSourceDirty() throws {
+        let encoder = RenderEncoder(context: context)
+        let scene = makeScene()
+        scene.mesh.castShadow = true
+        scene.mesh.receiveShadow = true
+        let light = DirectionalLight(context: context, color: .one)
+        light.castShadow = true
+        light.shadow.autoUpdate = false
+        light.shadow.resolution = (16, 16)
+        scene.root.add(light)
+        var submission: SubmissionBuilder? = try makeSubmission(encoder, camera: makeCamera())
+        try submission?.record(scene: scene.root)
+        try submission?.record(scene: Object(context: context), renderPassDescriptor: makeRenderPassDescriptor())
+        XCTAssertFalse(light.shadow.needsUpdate)
+        submission = nil
+        XCTAssertTrue(light.shadow.needsUpdate)
+    }
+
+    func testSharedShadowsReplayCapturedCommandsWithoutCallingOldHooks() throws {
+        let encoder = RenderEncoder(context: context)
+        encoder.resize((width: 64, height: 64))
+        let mesh = ShadowHookMesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        let iterated = Object(context: context, label: "Occurrences", [mesh])
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        for position in [Float(-1), 1] {
+            mesh.position.x = position
+            mesh.update()
+            try submission.record(scene: iterated)
+        }
+        XCTAssertEqual(mesh.shadowDrawCount, 2)
+        let packetCount = submission.recorder.storage.packetCount
+        let light = DirectionalLight(context: context, color: .one)
+        light.position = [0, 0, 5]
+        light.lookAt(target: .zero)
+        light.castShadow = true
+        light.shadow.resolution = (16, 16)
+        let root = Object(context: context, label: "Root light", [light])
+        try submission.record(scene: root, renderPassDescriptor: makeRenderPassDescriptor())
+        XCTAssertEqual(mesh.shadowDrawCount, 2, "Finalization must not revisit a mesh now representing a later iteration")
+        XCTAssertGreaterThan(submission.recorder.storage.packetCount, packetCount,
+                             "The root light must receive the captured shadow draw commands")
+    }
+
+    func testSharedShadowReplayPreservesCustomBindingsPerOccurrence() throws {
+        let encoder = RenderEncoder(context: context)
+        let input = try XCTUnwrap(device.makeBuffer(length: MemoryLayout<UInt32>.stride, options: .storageModeShared))
+        let mesh = ShadowHookMesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
+        mesh.shadowInput = input
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        mesh.frustumCulled = false
+        let scene = Object(context: context, label: "Custom shadow occurrences", [mesh])
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        for value in [UInt32(7), 11] {
+            input.contents().storeBytes(of: value, as: UInt32.self)
+            mesh.update()
+            try submission.record(scene: scene)
+        }
+        input.contents().storeBytes(of: UInt32(99), as: UInt32.self)
+        let firstReplayPacket = submission.recorder.storage.packetCount
+        let light = PointLight(context: context, color: .one, radius: 10)
+        light.castShadow = true
+        light.shadow.resolution = (16, 16)
+        try submission.record(scene: Object(context: context, label: "Root light", [light]),
+                              renderPassDescriptor: makeRenderPassDescriptor())
+        let storage = submission.recorder.storage
+        var values: [UInt32] = []
+        for packet in storage.packets.dropFirst(firstReplayPacket) {
+            let start = Int(packet.commandStart)
+            for command in storage.commands[start ..< start + Int(packet.commandCount)] {
+                if case let .vertexBuffer(index, offset, .Custom0) = command {
+                    values.append(storage.buffers[Int(index)].contents().advanced(by: offset).load(as: UInt32.self))
+                }
+            }
+        }
+        XCTAssertEqual(values, Array(repeating: [UInt32(7), 11], count: 6).flatMap { $0 })
+        XCTAssertEqual(mesh.shadowDrawCount, 2, "Each hook runs at capture, never once again per shadow face")
+    }
+
+    func testRecordedCastersKeepEveryOccurrenceForSharedShadows() throws {
+        let encoder = RenderEncoder(context: context)
+        let scene = makeScene()
+        scene.mesh.castShadow = true
+        scene.mesh.receiveShadow = true
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        for position in [Float(-1), 1] {
+            scene.mesh.position.x = position
+            scene.mesh.update()
+            try submission.record(scene: scene.root)
+        }
+        scene.mesh.position.x = 99
+        XCTAssertEqual(submission.shadowOccurrences.count, 2)
+        XCTAssertEqual(submission.shadowOccurrences.map { $0.occurrence.modelMatrix.columns.3.x }, [-1, 1])
+        XCTAssertTrue(submission.hasRecordedShadowReceivers)
+    }
+
+    func testIteratedLightsAreIndependentAndJoinTheRootLightSet() throws {
+        let encoder = RenderEncoder(context: context)
+        let light = PointLight(context: context, color: [1, 0, 0])
+        light.castShadow = true
+        light.shadow.resolution = (16, 16)
+        let recorded = Object(context: context, label: "Iterated lights", [light])
+        let submission = try makeSubmission(encoder, camera: makeCamera())
+        try submission.record(scene: recorded)
+        light.position = [2, 0, 0]
+        light.color = [0, 0, 1]
+        try submission.record(scene: recorded)
+        light.color = [0, 1, 0]
+
+        XCTAssertEqual(submission.lightOccurrences.count, 2)
+        XCTAssertEqual(submission.lightOccurrences[0].data.color.x, 1)
+        XCTAssertEqual(submission.lightOccurrences[1].data.color.z, 1)
+        XCTAssertEqual(submission.lightOccurrences[0].data.position.x, 0)
+        XCTAssertEqual(submission.lightOccurrences[1].data.position.x, 2)
+        let first = try XCTUnwrap(submission.lightOccurrences[0].shadow.passTexture(0))
+        let second = try XCTUnwrap(submission.lightOccurrences[1].shadow.passTexture(0))
+        XCTAssertFalse(first === second)
+        XCTAssertFalse(first === light.shadow.passTexture(0))
+
+        let scene = makeScene()
+        scene.root.add(DirectionalLight(context: context, color: .one))
+        try submission.record(scene: scene.root, renderPassDescriptor: MTLRenderPassDescriptor())
+        let lights = try XCTUnwrap(submission.recorder.passBindings.lights)
+        XCTAssertEqual(lights.length / MemoryLayout<LightData>.stride, 3)
+    }
+
     func testPacketRecordingDoesNotRequireACommandBuffer() throws {
         let arena = FrameArena(device: device)
         let lease = arena.lease(frame: .zero)
@@ -121,7 +351,12 @@ final class SubmissionRecordTests: XCTestCase {
     }
 
     private func makeSubmission(_ encoder: RenderEncoder, frame: FrameTime = .zero, camera: Camera) throws -> SubmissionBuilder {
-        encoder.makeSubmissionBuilder(frame: frame, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
+        // Preparation may allocate missing colour/depth attachments. Match the fixture's target
+        // before the builder freezes its destination, preserving sizes explicitly set by a test.
+        if encoder.size.width == 0 && encoder.size.height == 0 {
+            encoder.resize((width: 64, height: 64))
+        }
+        return encoder.makeSubmissionBuilder(frame: frame, cameras: [camera], viewports: [MTLViewport(originX: 0, originY: 0, width: 64, height: 64, znear: 0, zfar: 1)])
     }
 
     /// The buffer and offset a packet binds at `slot` in the vertex stage (vertex uniforms) or

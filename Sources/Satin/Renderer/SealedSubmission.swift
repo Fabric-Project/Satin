@@ -7,7 +7,7 @@ import simd
 /// `record(scene:)` captures a scene as it is at that moment (its objects' transforms, materials'
 /// uniforms, instances and poses, snapshotted into the frame arena), so changing the scene afterwards,
 /// as an Iterator does between iterations, doesn't alter what was recorded. Those records draw in
-/// the colour passes only, as they never cast shadows. `record(scene:renderPassDescriptor:)` then
+/// the colour and shadow passes. `record(scene:renderPassDescriptor:)` then
 /// updates and records the operation's own scene and plans every pass: per render layer, its own
 /// draws, then each record in call order. `seal()` hands that work over without sampling the scene
 /// again.
@@ -30,6 +30,10 @@ public final class SubmissionBuilder {
     let pool: PacketStoragePool
     private(set) var isConsumed = false
     private var recordedPasses: [RecordedRenderPass]?
+    var shadowOccurrences: [RecordedShadowOccurrence] = []
+    var lightOccurrences: [RecordedLightOccurrence] = []
+    var hasRecordedShadowReceivers = false
+    var hasRecordedLightReceivers = false
 
     init(encoder: RenderEncoder, recorder: PacketRecorder, lease: FrameArena.Lease, frame: FrameTime,
          destination: RenderDestination, configuration: SubmissionConfiguration, cameras: [Camera],
@@ -50,14 +54,18 @@ public final class SubmissionBuilder {
     }
 
     deinit {
-        if !isConsumed { pool.returnStorage(recorder.storage) }
+        if !isConsumed {
+            for invalidation in recorder.shadowInvalidations { invalidation.invalidate() }
+            lease.finishRecording()
+            pool.returnStorage(recorder.storage)
+        }
     }
 
     /// Records `scene` as it is now, drawn in this operation's colour passes after its own scene.
     /// Neither updates nor encodes it: do both first. Call before `record(scene:renderPassDescriptor:)`.
     public func record(scene: Object) throws {
         guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
-        encoder.record(scene: scene, into: self)
+        try encoder.record(scene: scene, into: self)
     }
 
     /// Updates and records the operation's own scene and its complete pass plan now. With a
@@ -116,6 +124,7 @@ public final class SealedSubmission {
         // A submission released from a completion handler is released on Metal's thread.
         let isPending = lock.sync { !encoded }
         if isPending {
+            for invalidation in recorder.shadowInvalidations { invalidation.invalidate() }
             lease.finishRecording()
             pool.returnStorage(recorder.storage)
         }
@@ -131,6 +140,7 @@ public final class SealedSubmission {
             return true
         }
         guard wasPending else { return false }
+        for invalidation in recorder.shadowInvalidations { invalidation.invalidate() }
         lease.finishRecording()
         pool.returnStorage(recorder.storage)
         return true
@@ -154,7 +164,13 @@ public final class SealedSubmission {
         }
         // Per-view matrices are computed here, on the encoding thread, from the values recorded.
         storage.writeVertexUniforms()
-        for pass in passes { pass.encode(into: commandBuffer, recorder: recorder, state: storage.encoderState) }
+        do {
+            for pass in passes { try pass.encode(into: commandBuffer, recorder: recorder, state: storage.encoderState) }
+            for invalidation in recorder.shadowInvalidations { invalidation.markEncoded() }
+        } catch {
+            for invalidation in recorder.shadowInvalidations { invalidation.invalidate() }
+            throw error
+        }
         lock.sync {}
     }
 }
@@ -188,8 +204,10 @@ struct RecordedRenderPass {
         self.bindings = bindings
     }
 
-    func encode(into commandBuffer: MTLCommandBuffer, recorder: PacketRecorder, state: RenderEncoderState) {
-        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else { return }
+    func encode(into commandBuffer: MTLCommandBuffer, recorder: PacketRecorder, state: RenderEncoderState) throws {
+        guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
+            throw SubmissionError.renderCommandEncoderCreationFailed
+        }
         encoder.label = label
         state.begin(renderEncoder: encoder)
         if !viewports.isEmpty { state.setPassViewports(viewports) }

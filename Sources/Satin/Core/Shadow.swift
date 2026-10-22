@@ -29,7 +29,15 @@ public class Shadow {
     public var autoUpdate = true
     /// Whether the map must be drawn again. Cleared when its passes are recorded; a producer that
     /// abandons that recording (`RenderEncoder.abandon(_:)`) sets it again.
-    public var needsUpdate = true
+    let recordingState = ShadowRecordingState()
+    var recordedVersion: RecordedShadow?
+    public var needsUpdate: Bool {
+        get { recordingState.needsUpdate }
+        set {
+            if newValue { recordingState.requestUpdate() }
+            else { recordingState.markRecorded(revision: recordingState.revision) }
+        }
+    }
 
     public var strength: Float = 1.0
     public var bias: Float = 0.00001
@@ -64,7 +72,7 @@ public class Shadow {
     }
 
     public var shouldRender: Bool {
-        enabled && (autoUpdate || needsUpdate)
+        enabled && (autoUpdate || needsUpdate || recordingState.hasUnencodedVersion)
     }
     
     // MARK: - Passes
@@ -85,6 +93,26 @@ public class Shadow {
     /// Makes what the passes draw into, before any pass begins.
     func prepareForDrawing(context: Context) {}
 
+    /// A captured occurrence keeps its map immutable. Detach that destination before a later
+    /// native pass redraws it; ordinary ordered passes without captured maps keep their reuse path.
+    func beginRecording(context: Context) throws {
+        prepareForDrawing(context: context)
+        if recordedVersion != nil, let texture {
+            self.texture = try makeShadowTextureVersion(of: texture, device: context.device)
+        }
+        recordedVersion = nil
+        recordingState.captureVersion()
+    }
+
+    var recordingInvalidation: ShadowRecordingInvalidation {
+        ShadowRecordingInvalidation(state: recordingState, generation: recordingState.generation)
+    }
+
+    func adoptRecordedVersion(_ version: RecordedShadow) {
+        recordedVersion = version
+        texture = version.textures.first
+    }
+
     /// Whether a caster within `bounds` may reach any of this shadow's passes, beyond what each
     /// pass's frustum says: a point light's far planes. True when it can't tell.
     func mayReach(_ bounds: Bounds) -> Bool { true }
@@ -94,5 +122,37 @@ public class Shadow {
         simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
     }
 
+}
+
+/// Shared without retaining the source Shadow: a captured map can mark its exact source revision
+/// clean, while a light moved by a later iteration remains dirty. This creates no ownership cycle.
+final class ShadowRecordingState {
+    private(set) var revision: UInt64 = 0
+    private(set) var generation: UInt64 = 0
+    private var recordedRevision: UInt64?
+    private var encodedGeneration: UInt64?
+    var hasUnencodedVersion: Bool { generation != 0 && encodedGeneration != generation }
+    var needsUpdate: Bool { recordedRevision != revision }
+    func requestUpdate() { revision &+= 1 }
+    @discardableResult
+    func captureVersion() -> UInt64 { generation &+= 1; return generation }
+    func markRecorded(revision: UInt64, generation: UInt64? = nil) {
+        if revision == self.revision && (generation == nil || generation == self.generation) {
+            recordedRevision = revision
+        }
+    }
+    func markEncoded(generation: UInt64) {
+        if generation == self.generation { encodedGeneration = generation }
+    }
+    func invalidate(generation: UInt64) {
+        if generation == self.generation { requestUpdate() }
+    }
+}
+
+struct ShadowRecordingInvalidation {
+    let state: ShadowRecordingState
+    let generation: UInt64
+    func invalidate() { state.invalidate(generation: generation) }
+    func markEncoded() { state.markEncoded(generation: generation) }
 }
 

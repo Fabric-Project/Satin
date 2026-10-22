@@ -365,10 +365,6 @@ open class RenderEncoder {
     /// Records each frame's shadow casters once for every shadow pass.
     private let shadowCasterRecording = ShadowCasterRecording()
     private var shadowsToDraw = ContiguousArray<Shadow>()
-    /// The shadows the latest recordings cleaned, by record token, so abandoning one marks them
-    /// dirty again. Producer-only, and only the last few: an abandon comes soon after its seal.
-    private var cleanedShadows = ContiguousArray<(recordToken: UInt64, shadows: ContiguousArray<Shadow>)>()
-    private static let abandonableRecordingCount = 8
     /// The draw in progress: set for the length of `draw`.
     private var recorder: PacketRecorder?
     /// The renderables of a scene being recorded into a submission, reused across records.
@@ -399,7 +395,7 @@ open class RenderEncoder {
     private var directShadowLights = [Light]()
     private var directShadowTextures = [MTLTexture?]()
 
-    private var projectorLights = [SpotLight]()
+    private var projectorLights = [Light]()
     private var projectorTextures = [MTLTexture?]()
 
     private var activeEnvironmentIntensity: Float = 1.0
@@ -636,16 +632,9 @@ open class RenderEncoder {
 
     /// Gives up `sealed` without encoding it: what it holds is released, and the shadows its
     /// recording cleaned are marked to draw again, since their passes will never run. Call it on the
-    /// producer, for a submission sealed within its last few recordings, instead of dropping it.
+    /// producer. Dropping an unencoded builder or submission also invalidates its pending shadows.
     public func abandon(_ sealed: SealedSubmission) {
-        guard sealed.discard() else { return }
-        for index in cleanedShadows.indices where cleanedShadows[index].recordToken == sealed.recordToken {
-            for shadow in cleanedShadows[index].shadows {
-                shadow.needsUpdate = true
-            }
-            cleanedShadows.remove(at: index)
-            return
-        }
+        sealed.discard()
     }
 
     /// Throws when an attachment `renderPassDescriptor` supplies doesn't have the destination's pixel
@@ -707,8 +696,10 @@ open class RenderEncoder {
             cameras: cameras,
             viewports: simd_viewports,
             recorder: recorder,
-            encodingContext: commandBuffer.map { EncodingContext(commandBuffer: $0, frame: frame, views: submission.views, recorder: recorder) }
+            encodingContext: commandBuffer.map { EncodingContext(commandBuffer: $0, frame: frame, views: submission.views, recorder: recorder) },
+            lightOccurrences: submission.lightOccurrences
         )
+        recorder.passBindings.bindsLights = !renderCollection.lightReceivers.isEmpty || submission.hasRecordedLightReceivers
 
         // The scene is one record: its shadows and colour passes share palette snapshots.
         recorder.beginRecord()
@@ -724,16 +715,15 @@ open class RenderEncoder {
         }
 
         // Every shadow drawn this frame records each caster once, for all their passes.
-        if !renderCollection.shadowCasters.isEmpty, !renderCollection.shadowReceivers.isEmpty {
+        if (!renderCollection.shadowCasters.isEmpty || !submission.shadowOccurrences.isEmpty),
+           (!renderCollection.shadowReceivers.isEmpty || submission.hasRecordedShadowReceivers) {
             shadowsToDraw.removeAll(keepingCapacity: true)
             for light in renderCollection.lights where light.castShadow && light.shadow.shouldRender {
                 shadowsToDraw.append(light.shadow)
             }
-            preparedPasses.append(contentsOf: shadowCasterRecording.prepare(shadowsToDraw, context: context, renderables: renderCollection.shadowCasters, recorder: recorder))
-            if !shadowsToDraw.isEmpty {
-                if cleanedShadows.count == Self.abandonableRecordingCount { cleanedShadows.removeFirst() }
-                cleanedShadows.append((recordToken: recorder.storage.leaseToken, shadows: shadowsToDraw))
-            }
+            preparedPasses.append(contentsOf: try shadowCasterRecording.prepare(shadowsToDraw, context: context,
+                                                                           renderables: renderCollection.shadowCasters,
+                                                                           occurrences: submission.shadowOccurrences, recorder: recorder))
             shadowsToDraw.removeAll(keepingCapacity: true)
         }
 
@@ -888,30 +878,11 @@ open class RenderEncoder {
             finalDepthStoreAction: finalDepthStoreAction,
             finalStencilStoreAction: finalStencilStoreAction
         )
+        try recorder.storage.resolveLightingPipelines(lightCount: renderCollection.lights.count,
+                                                       shadowCount: directShadowLights.count,
+                                                       shadowTextureCount: directShadowTextures.count,
+                                                       projectorCount: projectorLights.count)
         return preparedPasses
-    }
-
-    /// The visible renderables of `scene`, the root included, skipping everything below a hidden object.
-    private func collectRecordedRenderables(scene: Object, renderables: inout [Renderable]) {
-        guard scene.visible else { return }
-
-        if let renderable = scene as? Renderable {
-            renderables.append(renderable)
-        }
-
-        let entries = scene.sceneIndex.entries
-        var entryIndex = 0
-        while entryIndex < entries.count {
-            let entry = entries[entryIndex]
-            if entry.object.visible {
-                if let renderable = entry.renderable {
-                    renderables.append(renderable)
-                }
-                entryIndex += 1
-            } else {
-                entryIndex = entry.subtreeEnd
-            }
-        }
     }
 
     private func normalizedOutputs(_ outputs: RendererOutputs) -> RendererOutputs {
@@ -1054,16 +1025,28 @@ open class RenderEncoder {
     /// Records `scene` as it is now into `submission`: each visible renderable is an occurrence of
     /// its own, recorded in the colour routes from the submission's views, in render order within
     /// each layer when sorting.
-    func record(scene: Object, into submission: SubmissionBuilder) {
+    func record(scene: Object, into submission: SubmissionBuilder) throws {
         let previousConfiguration = activeConfiguration
         activeConfiguration = submission.configuration
         defer { activeConfiguration = previousConfiguration }
 
         let recorder = submission.recorder
+        recorder.defersLightingPipelines = true
         recorder.beginRecord()
 
+        renderCollection.reset()
+        sceneTraversal.collect(scene: scene, into: renderCollection)
+        updateScene(cameras: submission.cameras, viewports: submission.simdViewports,
+                    recorder: recorder, encodingContext: nil, runsMaterialUpdates: false)
+        for light in renderCollection.lights {
+            submission.lightOccurrences.append(try RecordedLightOccurrence(light))
+        }
+        submission.hasRecordedShadowReceivers = submission.hasRecordedShadowReceivers || !renderCollection.shadowReceivers.isEmpty
+        submission.hasRecordedLightReceivers = submission.hasRecordedLightReceivers || !renderCollection.lightReceivers.isEmpty
         recordedRenderables.removeAll(keepingCapacity: true)
-        collectRecordedRenderables(scene: scene, renderables: &recordedRenderables)
+        for object in renderCollection.objects {
+            if let renderable = object.renderable { recordedRenderables.append(renderable) }
+        }
         if sortObjects {
             // Stable: equal render orders keep the scene's order.
             RecordingProfile.begin(.bookkeeping)
@@ -1075,6 +1058,16 @@ open class RenderEncoder {
         let frusta = Self.frusta(of: submission.views)
         for renderable in recordedRenderables {
             renderable.beginOccurrence(frame: recorder.frame)
+            if renderable.castShadow {
+                let packets = recorder.record(renderable, renderContext: context, pass: .shadow,
+                                               materialPass: .all, views: submission.views)
+                if !packets.isEmpty {
+                    submission.shadowOccurrences.append(RecordedShadowOccurrence(packets: packets,
+                                                                                  occurrence: renderable.occurrence,
+                                                                                  bounds: renderable.worldBounds,
+                                                                                  frustumCulled: renderable.frustumCulled))
+                }
+            }
             recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)
         }
         recordedRenderables.removeAll(keepingCapacity: true)
@@ -1105,8 +1098,14 @@ open class RenderEncoder {
             appendRunToBucket(run)
         }
 
+        let ordersRecordedScenes = sortObjects && storage.runs.contains(where: \.isRecorded)
         for routeIndex in routeEntries.indices {
             for pass in passLayers.indices where !packetBuckets[routeIndex][pass].isEmpty {
+                if ordersRecordedScenes {
+                    packetBuckets[routeIndex][pass].sort {
+                        storage.renderOrder(ofPacketAt: $0) < storage.renderOrder(ofPacketAt: $1)
+                    }
+                }
                 routeEntries[routeIndex].append(RenderRouteEntry(pass: pass, packets: packetBuckets[routeIndex][pass][...]))
             }
         }
@@ -1957,7 +1956,8 @@ open class RenderEncoder {
 
     // MARK: - Internal Update
 
-    private func update(scene: Object, cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?) {
+    private func update(scene: Object, cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?,
+                         lightOccurrences: [RecordedLightOccurrence] = []) {
         for camera in cameras {
             camera.update()
         }
@@ -1966,6 +1966,7 @@ open class RenderEncoder {
 
         renderCollection.reset()
         sceneTraversal.updateAndCollect(scene: scene, into: renderCollection)
+        renderCollection.includeLights(lightOccurrences)
 
         updateScene(
             cameras: cameras,
@@ -1978,7 +1979,8 @@ open class RenderEncoder {
         recorder.passBindings.bindsLights = !renderCollection.lightReceivers.isEmpty
     }
 
-    private func updateScene(cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?) {
+    private func updateScene(cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?,
+                             runsMaterialUpdates: Bool = true) {
         updateDirectLightingState(recorder: recorder)
 
         let lightCount = renderCollection.lights.count
@@ -2055,7 +2057,14 @@ open class RenderEncoder {
                         skyboxMaterial.environmentIntensity = activeEnvironmentIntensity
                     }
 
-                    material.update()
+                    if runsMaterialUpdates {
+                        material.update()
+                    } else {
+                        // Recording captures the state the caller updated. Refresh bindings and
+                        // pipelines for scene settings without running procedural update hooks again.
+                        material.updateDepth()
+                        material.updateShader()
+                    }
                 }
             }
 
@@ -2345,7 +2354,16 @@ open class RenderEncoder {
             light.shadowIndex = -1
             light.projectorIndex = -1
 
-            if let spotLight = light as? SpotLight,
+            if let captured = light as? RecordedLightOccurrence,
+               let texture = captured.projectorTexture, let matrix = captured.projectorMatrix,
+               let transform = captured.projectorTransform, projectorIndex < maxProjectors {
+                light.projectorIndex = projectorIndex
+                projectorLights.append(light)
+                projectorTextures.append(texture)
+                projectorMatrices.append(matrix)
+                projectorTransforms.append(transform)
+                projectorIndex += 1
+            } else if let spotLight = light as? SpotLight,
                let projectionTexture = spotLight.projectionTexture,
                projectorIndex < maxProjectors
             {
@@ -2407,7 +2425,10 @@ open class RenderEncoder {
     }
 
     private func updateProjectorTextures() {
-        projectorTextures = projectorLights.map(\.projectionTexture)
+        projectorTextures = projectorLights.map { light in
+            if let captured = light as? RecordedLightOccurrence { return captured.projectorTexture }
+            return (light as? SpotLight)?.projectionTexture
+        }
     }
 
     // MARK: - Output Textures

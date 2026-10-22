@@ -17,6 +17,21 @@ import Foundation
 /// the walk carries on from that point as the recursive traversal itself, resumed with the same
 /// state that traversal would have, so every change during the pass is handled as it always was.
 final class SceneTraversal {
+    /// Collect an already-updated scene without running its hooks a second time.
+    func collect(scene: Object, into collection: RenderCollection) {
+        guard scene.visible else { return }
+        collection.collect(object: scene, renderable: scene as? Renderable,
+                           light: scene as? Light, environment: scene as? IBLEnvironment)
+        let entries = scene.sceneIndex.entries
+        var index = 0
+        while index < entries.count {
+            let entry = entries[index]
+            guard entry.object.visible else { index = entry.subtreeEnd; continue }
+            collection.collect(object: entry.object, renderable: entry.renderable,
+                               light: entry.light, environment: entry.environment)
+            index += 1
+        }
+    }
     /// The visibility each index entry was reached with, by entry. Reused across passes.
     private var entryCallVisible: [Bool] = []
 

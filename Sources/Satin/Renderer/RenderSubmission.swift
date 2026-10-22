@@ -29,6 +29,9 @@ public enum SubmissionError: Swift.Error, Equatable {
     case alreadyDrawn
     /// The builder has not recorded its render operation.
     case notRecorded
+    case renderCommandEncoderCreationFailed
+    case shadowAllocationFailed
+    case pipelineCompilationFailed
     /// An attachment the descriptor supplies doesn't have the destination's pixel format.
     case destinationMismatch(attachment: String, expected: MTLPixelFormat, found: MTLPixelFormat)
 }

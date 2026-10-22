@@ -254,7 +254,7 @@ final class PipelineBindingUsageTests: XCTestCase {
             var pass = RecordedRenderPass(descriptor: descriptor, label: "Cutout test", viewports: [MTLViewport(originX: 0, originY: 0, width: 32, height: 32, znear: 0, zfar: 1)])
             pass.commands = [.range(packets, viewIndex: 0)]
             let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
-            pass.encode(into: commandBuffer, recorder: recorder, state: RenderEncoderState())
+            try pass.encode(into: commandBuffer, recorder: recorder, state: RenderEncoderState())
             let readback = try XCTUnwrap(device.makeBuffer(length: 32 * 256, options: .storageModeShared))
             let blit = try XCTUnwrap(commandBuffer.makeBlitCommandEncoder())
             blit.copy(from: target, sourceSlice: 0, sourceLevel: 0, sourceOrigin: MTLOrigin(x: 0,y: 0,z: 0), sourceSize: MTLSize(width: 32,height: 32,depth: 1), to: readback, destinationOffset: 0, destinationBytesPerRow: 256, destinationBytesPerImage: 32 * 256)

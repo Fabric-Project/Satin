@@ -135,6 +135,17 @@ final class PacketStorage {
         tables.appendRun(renderLayer: renderLayer, routeIndex: routeIndex, packets: packets, isRecorded: isRecorded)
     }
 
+    func copyPackets(_ packets: Range<Int>, vertexUniforms: VertexUniformsBinding) -> Range<Int> {
+        tables.copyPackets(packets, vertexUniforms: vertexUniforms)
+    }
+
+    func captureLightingPipeline(_ recipe: RecordedLightingPipeline) { tables.captureLightingPipeline(recipe) }
+
+    func resolveLightingPipelines(lightCount: Int, shadowCount: Int, shadowTextureCount: Int, projectorCount: Int) throws {
+        try tables.resolveLightingPipelines(lightCount: lightCount, shadowCount: shadowCount,
+                                           shadowTextureCount: shadowTextureCount, projectorCount: projectorCount)
+    }
+
     // MARK: Recording
 
     /// `vertexUniforms` is the render event's own: a binding of exactly it records as per-view.
@@ -258,6 +269,8 @@ struct PacketTables {
     private var recordingBufferStart = 0
     private(set) var pendingPipelineUsage: PipelineResourceUsage?
     private var pendingPipelineIndex: Int32 = -1
+    private var pendingLightingPipeline: RecordedLightingPipeline?
+    private var lightingPipelines: [(index: Int, recipe: RecordedLightingPipeline)] = []
     private var pendingDepthStencilStateIndex: Int32 = -1
     private var pendingSetsDepthState = false
     private var pendingDepthBias: DepthBias?
@@ -283,6 +296,8 @@ struct PacketTables {
         textures.removeAll(keepingCapacity: true)
         samplers.removeAll(keepingCapacity: true)
         pipelines.removeAll(keepingCapacity: true)
+        lightingPipelines.removeAll(keepingCapacity: true)
+        pendingLightingPipeline = nil
         depthStencilStates.removeAll(keepingCapacity: true)
 #if DEBUG
         debugLabels.removeAll(keepingCapacity: true)
@@ -344,6 +359,7 @@ struct PacketTables {
             depthStencilStates: depthStencilStates.count
         )
         pendingPipelineIndex = -1
+        pendingLightingPipeline = nil
         pendingPipelineUsage = nil
         pendingDepthStencilStateIndex = -1
         pendingSetsDepthState = false
@@ -363,9 +379,56 @@ struct PacketTables {
     }
 
     mutating func setPipeline(_ pipeline: MTLRenderPipelineState, usage: PipelineResourceUsage?) {
+        pendingLightingPipeline = nil
         pendingPipelineUsage = usage
         pipelines.append(pipeline)
         pendingPipelineIndex = Int32(pipelines.count - 1)
+    }
+
+    mutating func captureLightingPipeline(_ recipe: RecordedLightingPipeline) {
+        pendingLightingPipeline = recipe
+    }
+
+    mutating func resolveLightingPipelines(lightCount: Int, shadowCount: Int, shadowTextureCount: Int, projectorCount: Int) throws {
+        for entry in lightingPipelines {
+            guard let pipeline = entry.recipe.resolve(lightCount: lightCount, shadowCount: shadowCount,
+                                                       shadowTextureCount: shadowTextureCount, projectorCount: projectorCount) else {
+                throw SubmissionError.pipelineCompilationFailed
+            }
+            pipelines[entry.index] = pipeline
+        }
+        lightingPipelines.removeAll(keepingCapacity: true)
+    }
+
+    /// Replay the captured shadow commands with this light's uniforms, without revisiting the
+    /// live renderable/material/geometry. All other bindings, including custom fragments, stay intact.
+    mutating func copyPackets(_ source: Range<Int>, vertexUniforms: VertexUniformsBinding) -> Range<Int> {
+        let first = packets.count
+        let uniformBufferIndex = appendBuffer(vertexUniforms.buffer)
+        for index in source {
+            var packet = packets[index]
+            let commandStart = commands.count
+            let start = Int(packet.commandStart)
+            let end = start + Int(packet.commandCount)
+            for commandIndex in start..<end {
+                let command: PacketCommand
+                switch commands[commandIndex] {
+                case let .perViewVertexBuffer(_, _, slot):
+                    command = .perViewVertexBuffer(bufferIndex: uniformBufferIndex, offset: vertexUniforms.offset, slot: slot)
+                case let .perViewFragmentBuffer(_, _, slot):
+                    command = .perViewFragmentBuffer(bufferIndex: uniformBufferIndex, offset: vertexUniforms.offset, slot: slot)
+                case let .perViewObjectBuffer(_, _, slot):
+                    command = .perViewObjectBuffer(bufferIndex: uniformBufferIndex, offset: vertexUniforms.offset, slot: slot)
+                case let .perViewMeshBuffer(_, _, slot):
+                    command = .perViewMeshBuffer(bufferIndex: uniformBufferIndex, offset: vertexUniforms.offset, slot: slot)
+                default: command = commands[commandIndex]
+                }
+                commands.append(command)
+            }
+            packet.commandStart = Int32(commandStart)
+            packets.append(packet)
+        }
+        return first..<packets.count
     }
 
     mutating func setDepthStencilState(_ depthStencilState: MTLDepthStencilState?, bias: DepthBias?, clipMode: MTLDepthClipMode?) {
@@ -484,6 +547,9 @@ struct PacketTables {
             drawCall: drawCall,
             debugLabelIndex: recordingDebugLabelIndex
         ))
+        if let recipe = pendingLightingPipeline {
+            lightingPipelines.append((index: Int(pendingPipelineIndex), recipe: recipe))
+        }
 
         let finishedStart = packetCommandStart
         packetCommandStart = commands.count

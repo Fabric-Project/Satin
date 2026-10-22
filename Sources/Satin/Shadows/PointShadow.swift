@@ -23,6 +23,25 @@ public final class PointShadow: Shadow {
     private var depthTextures: [MTLTexture?] = Array(repeating: nil, count: 6)
     private var updateTextures = true
 
+    override func beginRecording(context: Context) throws {
+        prepareForDrawing(context: context)
+        if recordedVersion != nil {
+            var versions: [MTLTexture?] = []
+            for texture in depthTextures {
+                guard let texture else { throw SubmissionError.shadowAllocationFailed }
+                versions.append(try makeShadowTextureVersion(of: texture, device: context.device))
+            }
+            depthTextures = versions
+            recordedVersion = nil
+        }
+        recordingState.captureVersion()
+    }
+
+    override func adoptRecordedVersion(_ version: RecordedShadow) {
+        super.adoptRecordedVersion(version)
+        depthTextures = version.textures.map(Optional.some)
+    }
+
     private let faceDirections: [(direction: simd_float3, up: simd_float3)] = [
         (Satin.worldRightDirection, Satin.worldUpDirection),
         (-Satin.worldRightDirection, Satin.worldUpDirection),
