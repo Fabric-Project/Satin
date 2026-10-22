@@ -33,67 +33,67 @@ final class SliderViewController: InputViewController, NSTextFieldDelegate {
             var maxValue = 1.0
             var stringValue = ""
             if let param = parameter as? FloatParameter {
-                value = Double(param.value)
-                minValue = Double(param.min)
-                maxValue = Double(param.max)
+                value = Double(param.mainValue)
+                minValue = Double(param.mainMin)
+                maxValue = Double(param.mainMax)
                 stringValue = String(format: "%.3f", value)
 
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+                param.mainValuePublisher.sink { [weak self] newValue in
                     guard let self = self, let slider = self.slider, let inputField = self.inputField else { return }
                     inputField.stringValue = String(format: "%.3f", newValue)
                     slider.doubleValue = Double(newValue)
                 }.store(in: &subscriptions)
 
-                param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+                param.mainMinValuePublisher.sink { [weak self] newMinValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.minValue = Double(newMinValue)
                 }.store(in: &subscriptions)
 
-                param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+                param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.maxValue = Double(newMaxValue)
                 }.store(in: &subscriptions)
             }
             else if let param = parameter as? IntParameter {
-                value = Double(param.value)
-                minValue = Double(param.min)
-                maxValue = Double(param.max)
+                value = Double(param.mainValue)
+                minValue = Double(param.mainMin)
+                maxValue = Double(param.mainMax)
                 stringValue = "\(Int(value))"
 
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+                param.mainValuePublisher.sink { [weak self] newValue in
                     guard let self = self, let slider = self.slider, let inputField = self.inputField else { return }
                     inputField.stringValue = "\(newValue)"
                     slider.doubleValue = Double(newValue)
                 }.store(in: &subscriptions)
 
-                param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+                param.mainMinValuePublisher.sink { [weak self] newMinValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.minValue = Double(newMinValue)
                 }.store(in: &subscriptions)
 
-                param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+                param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.maxValue = Double(newMaxValue)
                 }.store(in: &subscriptions)
             }
             else if let param = parameter as? DoubleParameter {
-                value = param.value
-                minValue = param.min
-                maxValue = param.max
+                value = param.mainValue
+                minValue = param.mainMin
+                maxValue = param.mainMax
                 stringValue = String(format: "%.3f", value)
 
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+                param.mainValuePublisher.sink { [weak self] newValue in
                     guard let self = self, let slider = self.slider, let inputField = self.inputField else { return }
                     inputField.stringValue = String(format: "%.3f", newValue)
                     slider.doubleValue = Double(newValue)
                 }.store(in: &subscriptions)
 
-                param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+                param.mainMinValuePublisher.sink { [weak self] newMinValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.minValue = newMinValue
                 }.store(in: &subscriptions)
 
-                param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+                param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                     guard let self = self, let slider = self.slider else { return }
                     slider.maxValue = newMaxValue
                 }.store(in: &subscriptions)
@@ -167,13 +167,13 @@ final class SliderViewController: InputViewController, NSTextFieldDelegate {
     func setValue(_ value: Double) {
         guard let parameter = parameter else { return }
         if let floatParam = parameter as? FloatParameter {
-            floatParam.value = Float(value)
+            floatParam.submit(Float(value))
         }
         else if let doubleParam = parameter as? DoubleParameter {
-            doubleParam.value = value
+            doubleParam.submit(value)
         }
         else if let intParam = parameter as? IntParameter {
-            intParam.value = Int(value)
+            intParam.submit(Int(value))
         }
     }
 
@@ -324,67 +324,67 @@ final class SliderViewController: WidgetViewController, UITextFieldDelegate {
         var stringValue = ""
 
         if let param = parameter as? FloatParameter {
-            value = param.value
-            minValue = param.min
-            maxValue = param.max
+            value = param.mainValue
+            minValue = param.mainMin
+            maxValue = param.mainMax
             stringValue = String(format: "%.3f", value)
 
-            param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+            param.mainValuePublisher.sink { [weak self] newValue in
                 guard let self = self, let slider = self.slider, let inputField = self.input else { return }
                 inputField.text = String(format: "%.3f", newValue)
                 slider.value = newValue
             }.store(in: &subscriptions)
 
-            param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+            param.mainMinValuePublisher.sink { [weak self] newMinValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.minimumValue = newMinValue
             }.store(in: &subscriptions)
 
-            param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+            param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.maximumValue = newMaxValue
             }.store(in: &subscriptions)
         }
         else if let param = parameter as? IntParameter {
-            value = Float(param.value)
-            minValue = Float(param.min)
-            maxValue = Float(param.max)
+            value = Float(param.mainValue)
+            minValue = Float(param.mainMin)
+            maxValue = Float(param.mainMax)
             stringValue = "\(Int(value))"
 
-            param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+            param.mainValuePublisher.sink { [weak self] newValue in
                 guard let self = self, let slider = self.slider, let inputField = self.input else { return }
                 inputField.text = "\(newValue)"
                 slider.value = Float(newValue)
             }.store(in: &subscriptions)
 
-            param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+            param.mainMinValuePublisher.sink { [weak self] newMinValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.minimumValue = Float(newMinValue)
             }.store(in: &subscriptions)
 
-            param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+            param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.maximumValue = Float(newMaxValue)
             }.store(in: &subscriptions)
         }
         else if let param = parameter as? DoubleParameter {
-            value = Float(param.value)
-            minValue = Float(param.min)
-            maxValue = Float(param.max)
+            value = Float(param.mainValue)
+            minValue = Float(param.mainMin)
+            maxValue = Float(param.mainMax)
             stringValue = String(format: "%.3f", value)
 
-            param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+            param.mainValuePublisher.sink { [weak self] newValue in
                 guard let self = self, let slider = self.slider, let inputField = self.input else { return }
                 inputField.text = String(format: "%.3f", newValue)
                 slider.value = Float(newValue)
             }.store(in: &subscriptions)
 
-            param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
+            param.mainMinValuePublisher.sink { [weak self] newMinValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.minimumValue = Float(newMinValue)
             }.store(in: &subscriptions)
 
-            param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
+            param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
                 guard let self = self, let slider = self.slider else { return }
                 slider.maximumValue = Float(newMaxValue)
             }.store(in: &subscriptions)
@@ -409,15 +409,15 @@ final class SliderViewController: WidgetViewController, UITextFieldDelegate {
         if let parameter = parameter {
             if parameter is FloatParameter {
                 let floatParam = parameter as! FloatParameter
-                floatParam.value = value
+                floatParam.submit(value)
             }
             else if parameter is DoubleParameter {
                 let doubleParam = parameter as! DoubleParameter
-                doubleParam.value = Double(value)
+                doubleParam.submit(Double(value))
             }
             else if parameter is IntParameter {
                 let intParam = parameter as! IntParameter
-                intParam.value = Int(value)
+                intParam.submit(Int(value))
             }
         }
     }

@@ -74,20 +74,6 @@ public class ARBackgroundEncoder: PostProcessEncoder {
         _updateGeometry = true
     }
 
-    override public func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor,
-                                     commands: GPUCommandRecording, viewports: [MTLViewport],
-                                     viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-        try super.encodeEffect(frame: frame, renderPassDescriptor: renderPassDescriptor, commands: commands,
-                               viewports: viewports, viewMappings: viewMappings)
-        // mesh.update() refreshed these wrappers while preparing the quad above.
-        retainCapturedTextures(in: commands)
-    }
-
-    func retainCapturedTextures(in commands: GPUCommandRecording) {
-        if let capturedImageTextureY { commands.holdUntilCompleted(capturedImageTextureY) }
-        if let capturedImageTextureCbCr { commands.holdUntilCompleted(capturedImageTextureCbCr) }
-    }
-
     override public func resize(size: (width: Float, height: Float), scaleFactor: Float) {
         super.resize(size: size, scaleFactor: scaleFactor)
         _updateGeometry = true

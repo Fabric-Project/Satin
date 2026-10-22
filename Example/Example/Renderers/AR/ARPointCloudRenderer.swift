@@ -19,7 +19,7 @@ final class ARPointCloudRenderer: BaseRenderer {
     final class PointMaterial: SourceMaterial {}
     final class PointComputeSystem: BufferComputeSystem {
         var depthTexture: CVMetalTexture?
-        override func bind(_ computeEncoder: ComputeCommandEncoder) -> Int {
+        override func bind(_ computeEncoder: MTLComputeCommandEncoder) -> Int {
             if let depthTexture {
                 computeEncoder.setTexture(CVMetalTextureGetTexture(depthTexture), index: ComputeTextureIndex.Custom0.rawValue)
             }
@@ -94,7 +94,7 @@ final class ARPointCloudRenderer: BaseRenderer {
     // MARK: - Draw
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        try backgroundRenderer.draw(
+        backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

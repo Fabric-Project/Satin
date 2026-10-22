@@ -51,7 +51,24 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 
     public var drawableSize: CGSize { metalLayer.drawableSize }
 
-    weak var delegate: ViewRendererDelegate?
+    weak var delegate: ViewRendererDelegate? {
+        didSet {
+            let delegate = delegate
+            drawingDelegate = delegate
+            if let displayLinkThread, let displayLinkTicker {
+                displayLinkThread.perform { displayLinkTicker.drawingDelegate = delegate }
+            }
+        }
+    }
+
+    /// Where the display link ticks when the delegate asks for ticks off the main thread.
+    private var displayLinkThread: DisplayLinkThread?
+
+    /// What a link on `displayLinkThread` draws with; only that thread touches its delegate.
+    private var displayLinkTicker: DisplayLinkTicker?
+
+    /// `delegate` for ticks and renders on the main thread; never read off it.
+    private var drawingDelegate: ViewRendererDelegate?
 
     public private(set) lazy var metalLayer: CAMetalLayer = self.layer as! CAMetalLayer
 
@@ -193,9 +210,19 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
         let link = CAMetalDisplayLink(metalLayer: metalLayer)
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 120, maximum: 120, preferred: 120)
         link.preferredFrameLatency = Float(maxBuffersInFlight)
-        link.delegate = self
         link.isPaused = _displayLinkPaused
-        link.add(to: .main, forMode: .common)
+        if delegate?.ticksOffMainThread == true {
+            let displayLinkThread = DisplayLinkThread()
+            let displayLinkTicker = DisplayLinkTicker(metalLayer: metalLayer, drawingDelegate: delegate)
+            self.displayLinkThread = displayLinkThread
+            self.displayLinkTicker = displayLinkTicker
+            link.delegate = displayLinkTicker
+            link.add(to: displayLinkThread.runLoop, forMode: .common)
+        }
+        else {
+            link.delegate = self
+            link.add(to: .main, forMode: .common)
+        }
         _displayLink = link
 
         NotificationCenter.default.addObserver(
@@ -207,8 +234,8 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
     }
 
     public func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
-        guard let delegate else { return }
-        delegate.draw(
+        guard let drawingDelegate else { return }
+        drawingDelegate.draw(
             metalLayer: metalLayer,
             drawable: update.drawable,
             hostTime: update.targetTimestamp,
@@ -220,25 +247,43 @@ public final class MetalView: NSView, CALayerDelegate, CAMetalDisplayLinkDelegat
 #if DEBUG_VIEW
         print("pauseRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
         _displayLinkPaused = true
+        guard let link = _displayLink else { return }
+        if let displayLinkThread { displayLinkThread.perform { link.isPaused = true } }
+        else { link.isPaused = true }
     }
 
     func resumeRenderLoop() {
 #if DEBUG_VIEW
         print("resumeRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = false
         _displayLinkPaused = false
+        guard let link = _displayLink else { return }
+        if let displayLinkThread { displayLinkThread.perform { link.isPaused = false } }
+        else { link.isPaused = false }
     }
 
     func stopRenderLoop() {
-        guard _displayLink != nil else { return }
+        guard let link = _displayLink else { return }
 #if DEBUG_VIEW
         print("stopRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.delegate = nil
-        _displayLink?.invalidate()
+        // A frame being drawn on the render thread finishes first; none follows.
+        if let displayLinkThread {
+            let displayLinkTicker = displayLinkTicker
+            displayLinkThread.perform {
+                link.delegate = nil
+                link.invalidate()
+                displayLinkTicker?.drawingDelegate = nil
+            }
+            displayLinkThread.stop()
+            self.displayLinkThread = nil
+            self.displayLinkTicker = nil
+        }
+        else {
+            link.delegate = nil
+            link.invalidate()
+        }
         _displayLink = nil
         NotificationCenter.default.removeObserver(self, name: NSWindow.willCloseNotification, object: window)
     }
@@ -393,7 +438,24 @@ public final class MetalView: UIView {
         }
     }
 
-    weak var delegate: ViewRendererDelegate?
+    weak var delegate: ViewRendererDelegate? {
+        didSet {
+            let delegate = delegate
+            drawingDelegate = delegate
+            if let displayLinkThread, let displayLinkTicker {
+                displayLinkThread.perform { displayLinkTicker.drawingDelegate = delegate }
+            }
+        }
+    }
+
+    /// Where the display link ticks when the delegate asks for ticks off the main thread.
+    private var displayLinkThread: DisplayLinkThread?
+
+    /// What a link on `displayLinkThread` draws with; only that thread touches its delegate.
+    private var displayLinkTicker: DisplayLinkTicker?
+
+    /// `delegate` for ticks and renders on the main thread; never read off it.
+    private var drawingDelegate: ViewRendererDelegate?
 
     public private(set) lazy var metalLayer: CAMetalLayer = self.layer as! CAMetalLayer
 
@@ -463,14 +525,27 @@ public final class MetalView: UIView {
 #if DEBUG_VIEW
         print("setupRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
-        _displayLink?.invalidate()
-        _displayLink = nil
+        stopRenderLoop()
 
-        let displayLink = CADisplayLink(target: self, selector: #selector(displayLinkFired(_:)))
+        let displayLink: CADisplayLink
+        if delegate?.ticksOffMainThread == true {
+            let displayLinkTicker = DisplayLinkTicker(metalLayer: metalLayer, drawingDelegate: delegate)
+            self.displayLinkTicker = displayLinkTicker
+            displayLink = CADisplayLink(target: displayLinkTicker, selector: #selector(DisplayLinkTicker.tick(_:)))
+        }
+        else {
+            displayLink = CADisplayLink(target: self, selector: #selector(displayLinkFired(_:)))
+        }
         displayLink.isPaused = _displayLinkPaused
         displayLink.preferredFramesPerSecond = preferredFramesPerSecond
-        displayLink.add(to: .main, forMode: .default)
+        if delegate?.ticksOffMainThread == true {
+            let displayLinkThread = DisplayLinkThread()
+            self.displayLinkThread = displayLinkThread
+            displayLink.add(to: displayLinkThread.runLoop, forMode: .default)
+        }
+        else {
+            displayLink.add(to: .main, forMode: .default)
+        }
 
         _displayLink = displayLink
 
@@ -493,31 +568,40 @@ public final class MetalView: UIView {
 #if DEBUG_VIEW
         print("didEnterBackground - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
+        setDisplayLinkPaused(true)
     }
 
     @objc func willResignActive(_ notification: Notification) {
 #if DEBUG_VIEW
         print("willResignActive - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
+        setDisplayLinkPaused(true)
     }
 
     @objc func willEnterForeground(_ notification: Notification) {
 #if DEBUG_VIEW
         print("willEnterForeground - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = _displayLinkPaused
+        setDisplayLinkPaused(_displayLinkPaused)
     }
 
     private func stopRenderLoop() {
-        guard _displayLink != nil else { return }
 #if DEBUG_VIEW
         print("stopRenderLoop - MetalView: \(delegate?.id)")
 #endif
-        _displayLink?.isPaused = true
-        _displayLink?.remove(from: .main, forMode: .default)
-        _displayLink?.invalidate()
+        guard let displayLink = _displayLink else { return }
+        // A frame being drawn on the render thread finishes first; none follows.
+        if let displayLinkThread {
+            let displayLinkTicker = displayLinkTicker
+            displayLinkThread.perform {
+                displayLink.invalidate()
+                displayLinkTicker?.drawingDelegate = nil
+            }
+            displayLinkThread.stop()
+            self.displayLinkThread = nil
+            self.displayLinkTicker = nil
+        }
+        else { displayLink.invalidate() }
         _displayLink = nil
     }
 
@@ -526,7 +610,7 @@ public final class MetalView: UIView {
         print("pauseRenderLoop - MetalView: \(delegate?.id)")
 #endif
         _displayLinkPaused = true
-        _displayLink?.isPaused = true
+        setDisplayLinkPaused(true)
     }
 
     private func resumeRenderLoop() {
@@ -534,13 +618,21 @@ public final class MetalView: UIView {
         print("resumeRenderLoop - MetalView: \(delegate?.id)")
 #endif
         _displayLinkPaused = false
-        _displayLink?.isPaused = false
+        setDisplayLinkPaused(false)
+    }
+
+    private func setDisplayLinkPaused(_ isPaused: Bool) {
+        guard let displayLink = _displayLink else { return }
+        if let displayLinkThread { displayLinkThread.perform { displayLink.isPaused = isPaused } }
+        else { displayLink.isPaused = isPaused }
     }
 
     // MARK: - Render
 
     @objc private func displayLinkFired(_ displayLink: CADisplayLink) {
-        render(hostTime: displayLink.timestamp, presentationHostTime: displayLink.targetTimestamp)
+        guard let drawingDelegate, let drawable = metalLayer.nextDrawable() else { return }
+        drawingDelegate.draw(metalLayer: metalLayer, drawable: drawable, hostTime: displayLink.timestamp,
+                             presentationHostTime: displayLink.targetTimestamp)
     }
 
     /// Renders now, outside the display link, so the frame targets the current host time.
@@ -550,8 +642,8 @@ public final class MetalView: UIView {
     }
 
     private func render(hostTime: TimeInterval, presentationHostTime: TimeInterval?) {
-        guard let drawable = metalLayer.nextDrawable() else { return }
-        delegate?.draw(metalLayer: metalLayer, drawable: drawable, hostTime: hostTime, presentationHostTime: presentationHostTime)
+        guard let delegate, let drawable = metalLayer.nextDrawable() else { return }
+        delegate.draw(metalLayer: metalLayer, drawable: drawable, hostTime: hostTime, presentationHostTime: presentationHostTime)
     }
 
     // MARK: - Event Based Rendering

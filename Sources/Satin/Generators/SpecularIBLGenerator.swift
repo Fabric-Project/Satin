@@ -32,13 +32,13 @@ public final class SpecularIBLGenerator {
         compute = SpecularIBLComputeProcessor(device: device)
     }
 
-    public func encode(context: ComputeEncodingContext, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {
+    public func encode(computeEncoder: MTLComputeCommandEncoder, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {
         let iterations = _encode(
             sourceTexture: sourceTexture,
             destinationTexture: destinationTexture
         )
 
-        compute.update(context, iterations: iterations)
+        compute.update(computeEncoder, iterations: iterations)
     }
 
     public func encode(commandBuffer: MTLCommandBuffer, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {

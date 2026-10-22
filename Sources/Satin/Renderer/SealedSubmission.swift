@@ -60,26 +60,19 @@ public final class SubmissionBuilder {
         encoder.record(scene: scene, into: self)
     }
 
-    /// Updates and records the scene and its complete pass plan now. preparationCommands captures
-    /// GPU preparation hooks before the scene's passes. preparationCommandBuffer is the immediate
-    /// compatibility path; do not supply both. Without either, schedule preparation separately.
+    /// Updates and records the operation's own scene and its complete pass plan now. With a
+    /// `preparationCommandBuffer`, the scene's GPU preparation (`encode(in:)`) is encoded into it
+    /// first; without one, schedule that work before the command buffer this is encoded into.
     public func record(scene: Object, renderPassDescriptor: MTLRenderPassDescriptor,
-                       viewMappings: [MTLVertexAmplificationViewMapping] = [], preparationCommandBuffer: MTLCommandBuffer? = nil,
-                       preparationCommands: GPUCommandRecording? = nil) throws {
+                       viewMappings: [MTLVertexAmplificationViewMapping] = [], preparationCommandBuffer: MTLCommandBuffer? = nil) throws {
         guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
-        precondition(preparationCommandBuffer == nil || preparationCommands == nil, "Choose one preparation command destination")
         recordedPasses = try encoder.prepare(builder: self, renderPassDescriptor: renderPassDescriptor, scene: scene,
-                                            viewMappings: viewMappings, preparationCommandBuffer: preparationCommandBuffer, preparationCommands: preparationCommands)
+                                            viewMappings: viewMappings, preparationCommandBuffer: preparationCommandBuffer)
     }
 
     /// For GPU preparation (`encode(in:)`) of what this operation records, into `commandBuffer`.
     public func encodingContext(commandBuffer: MTLCommandBuffer) -> EncodingContext {
         EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder)
-    }
-
-    /// GPU preparation into an ordered recording, without encoding on the producer.
-    public func encodingContext(commands: GPUCommandRecording) -> EncodingContext {
-        EncodingContext(commands: commands, frame: frame, views: views, recorder: recorder)
     }
 
     public func seal() throws -> SealedSubmission {
@@ -223,18 +216,6 @@ struct RecordedRenderPass {
 }
 
 extension MTLRenderPassDescriptor {
-    /// Redirect attachment zero without mutating the caller's descriptor.
-    func targeting(_ texture: MTLTexture, sampleCount: Int) -> MTLRenderPassDescriptor {
-        let descriptor = privateCopy()
-        if sampleCount > 1 { descriptor.colorAttachments[0].resolveTexture = texture }
-        else { descriptor.colorAttachments[0].texture = texture }
-        return descriptor
-    }
-
-    func colorTarget(sampleCount: Int) -> MTLTexture? {
-        sampleCount > 1 ? colorAttachments[0].resolveTexture : colorAttachments[0].texture
-    }
-
     /// A copy the caller can't change afterwards. `copy()` of a render pass descriptor is always one.
     func privateCopy() -> MTLRenderPassDescriptor {
         guard let copy = copy() as? MTLRenderPassDescriptor else {

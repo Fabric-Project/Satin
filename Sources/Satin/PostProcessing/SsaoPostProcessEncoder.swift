@@ -124,15 +124,15 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
     }
 
     private static func makeDepthContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r16Float, maxBuffersInFlight: context.maxBuffersInFlight)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r16Float)
     }
 
     private static func makeAoContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r8Unorm, maxBuffersInFlight: context.maxBuffersInFlight)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r8Unorm)
     }
 
     private static func makeCompositeContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
     }
 
     public required init(context: Context) {
@@ -262,10 +262,8 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         syncMaterialParameters()
-
-        let destination = renderPassDescriptor.colorTarget(sampleCount: compositeProcessor.context.sampleCount) ?? outputTexture
 
         let hasAOInputs = depthTexture != nil &&
             normalTexture != nil &&
@@ -288,28 +286,25 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
             denoiseMaterial.depthTexture = linearDepthTexture
             denoiseMaterial.update(camera: sceneCamera)
 
-            try commands.draw(prefilterProcessor,
+            try prefilterProcessor.draw(
                 frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
-                viewports: intermediateViewports(viewports, destination: destination, target: linearDepthTexture),
-                viewMappings: viewMappings,
+                commandBuffer: commandBuffer,
                 renderTarget: linearDepthTexture
             )
 
-            try super.encodeEffect(
+            try super.draw(
                 frame: frame,
-                renderPassDescriptor: MTLRenderPassDescriptor().targeting(rawTexture, sampleCount: context.sampleCount),
-                commands: commands,
-                viewports: intermediateViewports(viewports, destination: destination, target: rawTexture),
-                viewMappings: viewMappings
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: rawTexture
             )
 
             denoiseMaterial.aoTexture = rawTexture
-            try commands.draw(denoiseProcessor,
+            try denoiseProcessor.draw(
                 frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
-                viewports: intermediateViewports(viewports, destination: destination, target: denoisedTexture),
-                viewMappings: viewMappings,
+                commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
             )
         }
@@ -319,12 +314,11 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.aoTexture = compositeAOTexture
-        try commands.draw(compositeProcessor,
+        try compositeProcessor.draw(
             frame: frame,
-            renderPassDescriptor: renderPassDescriptor,
-            viewports: viewports,
-            viewMappings: viewMappings,
-            renderTarget: destination ?? outputTexture
+            renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
+            renderTarget: outputTexture
         )
     }
 

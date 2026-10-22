@@ -10,6 +10,7 @@ import Combine
 import Foundation
 import Metal
 import simd
+import Synchronization
 
 #if SWIFT_PACKAGE
 import SatinCore
@@ -159,10 +160,12 @@ open class Object: Codable {
     /// Advances when this object's own transform (position, orientation, scale) changes value.
     public private(set) var localRevision: UInt64 = 0
 
-    /// Advances whenever any object's transform or parent changes. Only a shortcut: an object
-    /// validated at the current epoch knows nothing above it moved. Not a revision of any object.
-    /// Transforms are read and written on the rendering thread only.
-    nonisolated(unsafe) static var transformEpoch: UInt64 = 0
+    /// Advances whenever any object's transform or parent changes, in any scene on any thread. Only
+    /// a shortcut: an object validated at the current epoch knows nothing above it moved. Not a
+    /// revision of any object. Atomic, so scenes owned by different threads share it safely; a
+    /// change elsewhere only costs another object one ancestor walk. Relaxed is enough: each scene
+    /// still has one owner, which orders its own changes before its own reads.
+    static let transformEpoch = Atomic<UInt64>(0)
 
     #if DEBUG
     /// This object's validations that had to look at its parent: the epoch had moved.
@@ -176,7 +179,7 @@ open class Object: Codable {
         _localMatrix.clear()
         _localMatrixInverse.clear()
         localRevision &+= 1
-        Object.transformEpoch &+= 1
+        Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
         // Descendant changes still mark ancestor bounds: a parent's cached bounds can't find out
         // about a child by looking.
         updateLocalBounds = true
@@ -206,7 +209,8 @@ open class Object: Codable {
     /// `worldRevision`, when what they were derived from changed. Returns at once while nothing
     /// anywhere has moved since the last validation.
     func validateWorld() {
-        guard worldValidatedEpoch != Object.transformEpoch else { return }
+        let epoch = Object.transformEpoch.load(ordering: .relaxed)
+        guard worldValidatedEpoch != epoch else { return }
         #if DEBUG
         worldValidationWalkCount += 1
         #endif
@@ -224,7 +228,7 @@ open class Object: Codable {
             _worldRevision &+= 1
             clearWorldCaches()
         }
-        worldValidatedEpoch = Object.transformEpoch
+        worldValidatedEpoch = epoch
     }
 
     private func clearWorldCaches() {
@@ -423,7 +427,7 @@ open class Object: Codable {
         didSet {
             parentIdentifier = parent.map(ObjectIdentifier.init)
             parentLinkRevision &+= 1
-            Object.transformEpoch &+= 1
+            Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
             updateWorldBounds = true
         }
     }
@@ -474,7 +478,8 @@ open class Object: Codable {
     private(set) var structureRevision: UInt64 = 0
 
     private var lastStructureChangeToken: UInt64 = 0
-    private nonisolated(unsafe) static var structureChangeTokenCount: UInt64 = 0
+    /// Hands out one token per structure change, unique across every scene and thread.
+    private static let structureChangeTokenCount = Atomic<UInt64>(0)
 
     private var cachedSceneIndex: SceneIndex?
 
@@ -503,8 +508,8 @@ open class Object: Codable {
 
     private func childrenDidChange() {
         updateLocalBounds = true
-        Object.structureChangeTokenCount &+= 1
-        structureDidChange(token: Object.structureChangeTokenCount)
+        let token = Object.structureChangeTokenCount.wrappingAdd(1, ordering: .relaxed).newValue
+        structureDidChange(token: token)
     }
 
     /// Marks this object and every container above it as structurally changed, once per change.

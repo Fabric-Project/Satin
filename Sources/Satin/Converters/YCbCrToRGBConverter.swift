@@ -21,7 +21,7 @@ public final class YCbCrToRGBConverter {
             )
         }
 
-        override func bind(computeEncoder: ComputeCommandEncoder, iteration: Int) -> Int {
+        override func bind(computeEncoder: MTLComputeCommandEncoder, iteration: Int) -> Int {
             let index = super.bind(computeEncoder: computeEncoder, iteration: iteration)
             computeEncoder.setTexture(yTexture, index: index)
             computeEncoder.setTexture(cbcrTexture, index: index)
@@ -39,15 +39,6 @@ public final class YCbCrToRGBConverter {
             mipmapped: false
         )
         compute = YCbCrToRGBComputeSystem(device: device, textureDescriptor: textureDescriptor)
-    }
-
-    public func encode(commands: GPUCommandRecording, yTexture: MTLTexture, cbcrTexture: MTLTexture) -> MTLTexture? {
-        compute.yTexture = yTexture
-        compute.cbcrTexture = cbcrTexture
-        commands.compute(compute)
-        let texture = compute.dstTexture
-        texture?.label = "\(compute.label) Texture"
-        return texture
     }
 
     public func encode(commandBuffer: MTLCommandBuffer, yTexture: MTLTexture, cbcrTexture: MTLTexture) -> MTLTexture? {

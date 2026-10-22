@@ -20,8 +20,17 @@ class BaseRenderer: ViewRenderer {
         super.init(context: context)
     }
 
+    override init(context: Context, renderQueue: DispatchQueue?) {
+        super.init(context: context, renderQueue: renderQueue)
+    }
+
     convenience init() {
         self.init(context: .makePlatformDefault())
+    }
+
+    /// Draws every frame on `renderQueue` instead of the main thread.
+    convenience init(renderQueue: DispatchQueue) {
+        self.init(context: .makePlatformDefault(), renderQueue: renderQueue)
     }
 
     // MARK: - Paths
@@ -51,6 +60,9 @@ class BaseRenderer: ViewRenderer {
     }
 
     override func setup() throws {
+        // The inspector edits these groups from the main thread; with a render queue, the
+        // renderer owns their values and the inspector goes through `submit` and `mainValue`.
+        for case let group? in params.values { group.renderQueue = renderQueue }
         setupInspector()
     }
 
@@ -101,7 +113,10 @@ class BaseRenderer: ViewRenderer {
     override func cleanup() throws {
         try super.cleanup()
 #if os(macOS)
-        inspectorWindow?.close()
+        // With a render queue, cleanup runs there; the window is AppKit's, so close it on main.
+        let inspectorWindow = inspectorWindow
+        if Thread.isMainThread { inspectorWindow?.close() }
+        else { DispatchQueue.main.async { inspectorWindow?.close() } }
 #endif
     }
 

@@ -38,7 +38,7 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         postProcessRenderer.colorLoadAction = .load
     }
 
-    func updateCameraGrain() {
+    func update(commandBuffer: MTLCommandBuffer, renderPassDescriptor: MTLRenderPassDescriptor) {
         guard let frame = session.currentFrame else { return }
         if let material = mesh.material as? ARPostMaterial {
             material.set("Camera Grain Intensity", frame.cameraGrainIntensity)
@@ -46,13 +46,15 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override public func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording,
-                                     viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-        updateCameraGrain()
-        try super.encodeEffect(frame: frame, renderPassDescriptor: renderPassDescriptor, commands: commands,
-                               viewports: viewports, viewMappings: viewMappings)
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) throws {
+        update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: renderTarget)
+    }
 }
 
 #endif

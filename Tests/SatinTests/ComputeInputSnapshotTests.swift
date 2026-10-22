@@ -1,11 +1,11 @@
 @testable import Satin
-import Dispatch
 import Foundation
 import Metal
 import XCTest
 
 /// Uses real kernels and deliberately delays commit: rewriting every source ring slot must not
-/// alter a compute dispatch's recorded inputs. No render-queue API is needed to expose this race.
+/// alter a compute dispatch's inputs. An Iterator updates one processor many times inside one
+/// command buffer, so its dispatches outnumber the ring's slots.
 final class ComputeInputSnapshotTests: XCTestCase {
     private var device: MTLDevice!
     private var commandQueue: MTLCommandQueue!
@@ -119,7 +119,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
                     input.update(data: [UInt8](repeating: value, count: length))
                     let output = try XCTUnwrap(device.makeBuffer(length: 8, options: .storageModeShared))
                     fixture.owner.set(output, index: .Custom1)
-                    fixture.owner.bind(in: ComputeEncodingContext(commandBuffer: commandBuffer, computeEncoder: encoder))
+                    fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
                     encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
                     outputs.append(output)
                 }
@@ -156,62 +156,29 @@ final class ComputeInputSnapshotTests: XCTestCase {
         }
     }
 
-    func testAbandonedLargeComputeCopiesReturnTheirArenaStorage() throws {
-        let arena = FrameArena(device: device, initialChunkLength: 8192, maximumChunkLength: 8192)
-        let snapshots = ComputeInputSnapshots(arena: arena)
-        let input = StructBuffer<UInt8>(device: device, count: 4097)
-        input.update(data: [UInt8](repeating: 7, count: 4097))
-
-        try autoreleasepool {
-            let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            let encoder = try XCTUnwrap(commandBuffer.makeComputeCommandEncoder())
-            snapshots.bind(input, at: .Custom0, in: ComputeEncodingContext(commandBuffer: commandBuffer, computeEncoder: encoder))
-            encoder.endEncoding()
-            // Dropped before enqueue/commit, like a failed effect preparation.
-        }
-
-        XCTAssertEqual(arena.chunkCount, 1)
-        let probe = arena.lease(frame: .zero)
-        _ = probe.allocate(length: 4097)
-        XCTAssertEqual(arena.chunkCount, 1, "the binding helper must not leave abandoned copies leased")
-    }
-
-    func testRecordedComputeBindingsSurviveMutationBeforeWorkerEncoding() throws {
+    func testInputsSurviveRingWrapWithoutACommandBuffer() throws {
         for kind in BindingOwner.Kind.allCases {
             for length in [4, 4096, 4097] {
                 let fixture = try makeFixture(kind: kind, inputIndex: .Custom0, length: length)
                 let input = StructBuffer<UInt8>(device: device, count: length)
-                var source = [UInt8](repeating: 7, count: length)
-                source[length - 1] = 17
-                input.update(data: source)
                 fixture.owner.set(input, index: .Custom0)
-                let output = try XCTUnwrap(device.makeBuffer(length: 8, options: .storageModeShared))
-                output.contents().initializeMemory(as: UInt8.self, repeating: 0xFF, count: 8)
-                fixture.owner.set(output, index: .Custom1)
-                let commands = GPUCommandRecording(device: device)
-                let key = DispatchSpecificKey<Bool>()
-                let queue = DispatchQueue(label: "Recorded compute bindings")
-                queue.setSpecific(key: key, value: true)
-                commands.compute(label: "Captured bindings") { context in
-                    XCTAssertNil(DispatchQueue.getSpecific(key: key), "binding hooks run on the producer")
-                    context.computeEncoder.setComputePipelineState(fixture.pipeline)
-                    fixture.owner.bind(in: context)
-                    context.computeEncoder.append(ObservingComputeWork { _ in
-                        XCTAssertEqual(DispatchQueue.getSpecific(key: key), true, "Metal encoding runs on the worker")
-                    })
-                    context.computeEncoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1),
-                        threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
+                let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+                let encoder = try XCTUnwrap(commandBuffer.makeComputeCommandEncoder())
+                encoder.setComputePipelineState(fixture.pipeline)
+                var outputs: [MTLBuffer] = []
+                for value in [UInt8(3), 5, 7, 11, 13] {
+                    input.update(data: [UInt8](repeating: value, count: length))
+                    let output = try XCTUnwrap(device.makeBuffer(length: 8, options: .storageModeShared))
+                    fixture.owner.set(output, index: .Custom1)
+                    fixture.owner.bind(encoder: encoder, commandBuffer: nil)
+                    encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
+                    outputs.append(output)
                 }
-                let recorded = commands.seal()
-                for _ in 0 ..< Satin.maxBuffersInFlight + 1 {
-                    input.update(data: [UInt8](repeating: 99, count: length))
+                encoder.endEncoding()
+                try complete(commandBuffer)
+                for (output, expected) in zip(outputs, [UInt32(3), 5, 7, 11, 13]) {
+                    XCTAssertEqual(read(output), [expected, expected], "\(kind)")
                 }
-                let caller = try XCTUnwrap(commandQueue.makeCommandBuffer())
-                let admission = QueuedSubmission.Admission(limit: 1)
-                let buffer = try QueuedSubmission.begin(commandBuffer: caller, renderQueue: queue, admission: admission)
-                QueuedSubmission.schedule(recorded, satinBuffer: buffer, renderQueue: queue, admission: admission)
-                try complete(caller)
-                XCTAssertEqual(read(output), [7, 17], "\(kind), \(length) bytes were copied before worker encoding")
             }
         }
     }
@@ -258,7 +225,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
         output.contents().initializeMemory(as: UInt8.self, repeating: 0xFF, count: 8)
         fixture.owner.set(output, index: .Custom1)
         encoder.setComputePipelineState(fixture.pipeline)
-        fixture.owner.bind(in: ComputeEncodingContext(commandBuffer: commandBuffer, computeEncoder: encoder))
+        fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
         encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
         encoder.endEncoding()
         return (commandBuffer, output)
@@ -346,14 +313,18 @@ final class ComputeInputSnapshotTests: XCTestCase {
             }
         }
 
-        func bind(in context: ComputeEncodingContext) {
+        /// Binds as an update does: through `update(_ commandBuffer:)` when there is a command
+        /// buffer, `update(_ computeEncoder:)` otherwise.
+        func bind(encoder: MTLComputeCommandEncoder, commandBuffer: MTLCommandBuffer?) {
             switch self {
                 case let .processor(processor):
-                    processor.bindUniforms(context)
-                    processor.bindBuffers(context)
+                    processor.inputCopies.commandBuffer = commandBuffer
+                    processor.bindUniforms(encoder)
+                    processor.bindBuffers(encoder)
                 case let .system(system):
-                    system.bindUniforms(context)
-                    system.bindBuffers(context)
+                    system.inputCopies.commandBuffer = commandBuffer
+                    system.bindUniforms(encoder)
+                    system.bindBuffers(encoder)
             }
         }
     }

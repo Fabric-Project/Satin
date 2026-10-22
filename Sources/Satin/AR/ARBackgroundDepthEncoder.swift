@@ -128,20 +128,17 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
-    func update(_ commands: GPUCommandRecording) {
+    func update(_ commandBuffer: MTLCommandBuffer) {
         if upscaleDepth,
            let capturedImageTextureY = capturedImageTextureY,
            let yTexture = CVMetalTextureGetTexture(capturedImageTextureY),
            let capturedImageTextureCbCr = capturedImageTextureCbCr,
            let cbcrTexture = CVMetalTextureGetTexture(capturedImageTextureCbCr),
-           let depthTextureWrapper = sceneDepthTexture,
-           let depthTexture = CVMetalTextureGetTexture(depthTextureWrapper)
+           let depthTexture = sceneDepthTexture,
+           let depthTexture = CVMetalTextureGetTexture(depthTexture)
         {
-            commands.holdUntilCompleted(capturedImageTextureY)
-            commands.holdUntilCompleted(capturedImageTextureCbCr)
-            commands.holdUntilCompleted(depthTextureWrapper)
             upscaledSceneDepthTexture = depthUpscaler.update(
-                commands: commands,
+                commandBuffer: commandBuffer,
                 yTexture: yTexture,
                 cbcrTexture: cbcrTexture,
                 depthTexture: depthTexture
@@ -155,15 +152,52 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         background.position = [0, 0, -1.0 / tan(degToRad(depthCamera.fov * 0.5))]
     }
 
-    override public func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording,
-                                     viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-        update(commands)
-        let resolvedViewports = viewports.isEmpty ? [postProcessRenderer.viewport] : viewports
-        try commands.draw(depthRenderer, frame: frame, renderPassDescriptor: renderPassDescriptor,
-                               scene: depthScene, cameras: Array(repeating: depthCamera, count: max(context.vertexAmplificationCount, resolvedViewports.count)),
-                               viewports: resolvedViewports, viewMappings: viewMappings)
-        retainCapturedTextures(in: commands)
-        if let sceneDepthTexture { commands.holdUntilCompleted(sceneDepthTexture) }
+    override public func draw(
+        frame: FrameTime,
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer
+    ) {
+        update(commandBuffer)
+
+        // A post-processor's draw doesn't throw: a rejected depth draw is reported here.
+        do {
+            try depthRenderer.draw(
+                frame: frame,
+                renderPassDescriptor: renderPassDescriptor,
+                commandBuffer: commandBuffer,
+                scene: depthScene,
+                camera: depthCamera
+            )
+        } catch {
+            reportDepthDrawFailure(error)
+        }
+    }
+
+    override public func draw(
+        frame: FrameTime,
+        renderPassDescriptor: MTLRenderPassDescriptor,
+        commandBuffer: MTLCommandBuffer,
+        renderTarget: MTLTexture
+    ) {
+        update(commandBuffer)
+
+        do {
+            try depthRenderer.draw(
+                frame: frame,
+                renderPassDescriptor: renderPassDescriptor,
+                commandBuffer: commandBuffer,
+                scene: depthScene,
+                camera: depthCamera,
+                renderTarget: renderTarget
+            )
+        } catch {
+            reportDepthDrawFailure(error)
+        }
+    }
+
+    private func reportDepthDrawFailure(_ error: Error) {
+        print("\(label): depth draw failed: \(error)")
+        assertionFailure("\(label): depth draw failed: \(error)")
     }
 
     override public func resize(size: (width: Float, height: Float), scaleFactor: Float) {

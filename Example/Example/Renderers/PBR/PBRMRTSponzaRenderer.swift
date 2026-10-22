@@ -5,7 +5,6 @@
 //  Created by OpenAI Codex on 4/30/26.
 //
 
-import Dispatch
 import Metal
 import MetalKit
 import Satin
@@ -55,35 +54,15 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override var paramKeys: [String] {
-        ["Rendering", "SSAO", "Motion Blur", "DOF"]
+        ["SSAO", "Motion Blur", "DOF"]
     }
 
     override var params: [String: ParameterGroup?] {
         [
-            "Rendering": renderingParameters,
             "SSAO": ssaoPostProcessEncoder.parameters,
             "Motion Blur": motionBlurPostProcessEncoder.motionBlurMaterial.parameters,
             "DOF": bokehDepthOfFieldPostProcessEncoder.parameters
         ]
-    }
-
-    private let dedicatedRenderQueue = DispatchQueue(label: "Sponza Render Encoding", qos: .userInteractive)
-    private let dedicatedRenderQueueParameter = BoolParameter("Dedicated Render Queue", false, .toggle)
-    private lazy var renderingParameters = ParameterGroup("Rendering", [dedicatedRenderQueueParameter])
-    private var usesDedicatedRenderQueue = false
-
-    /// Switch the complete dependency chain between frames. The host committed the previous
-    /// caller buffer before this update; no GPU wait or change to the rendering workload is needed.
-    private func updateRenderQueue() {
-        let enabled = dedicatedRenderQueueParameter.value
-        guard enabled != usesDedicatedRenderQueue else { return }
-        usesDedicatedRenderQueue = enabled
-        let queue = enabled ? dedicatedRenderQueue : nil
-        sceneRenderer.renderQueue = queue
-        ssaoPostProcessEncoder.renderQueue = queue
-        motionBlurPostProcessEncoder.renderQueue = queue
-        bokehDepthOfFieldPostProcessEncoder.renderQueue = queue
-        overlayRenderer.renderQueue = queue
     }
 
     private let allOutputs: RendererOutputs = [.color, .albedo, .normals, .pbr, .velocity, .emissive]
@@ -227,6 +206,8 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         setupOverlayScene()
 
         scene.environmentIntensity = 0.000025
+        // Made here, on main, so its event monitors are registered on main; frames update it later.
+        _ = cameraController
 
 #if os(visionOS)
         metalView.backgroundColor = .clear
@@ -238,7 +219,6 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
 
     override func update(frame: FrameTime) throws {
         try super.update(frame: frame)
-        updateRenderQueue()
 
         
         let time = Float(frame.time)

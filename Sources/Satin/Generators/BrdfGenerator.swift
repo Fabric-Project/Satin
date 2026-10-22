@@ -39,8 +39,8 @@ public final class BrdfGenerator {
         return compute.computeTextures[.Custom0]
     }
 
-    public func encode(context: ComputeEncodingContext) -> MTLTexture? {
-        compute.update(context)
+    public func encode(computeEncoder: MTLComputeCommandEncoder) -> MTLTexture? {
+        compute.update(computeEncoder)
         return compute.computeTextures[.Custom0]
     }
 }

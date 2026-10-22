@@ -398,7 +398,7 @@ final class ARPBRRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        try backgroundRenderer.draw(
+        backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer

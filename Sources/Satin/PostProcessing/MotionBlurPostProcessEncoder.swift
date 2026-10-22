@@ -76,14 +76,14 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     public required init(context: Context) {
         // Pipeline must not expect a depth attachment — use a depth-free context.
-        let blurContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        let blurContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
         colorPixelFormat = context.colorPixelFormat
         motionBlurMaterial = MotionBlurMaterial(context: blurContext)
-        let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat)
         tileMaxMaterial = MotionBlurTileMaxMaterial(context: tileMaxContext)
         tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial)
         // One material and encoder per pass, so each keeps its own uniforms within a frame.
-        let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat)
         let jumpFloodMaterials = (0 ..< Self.jumpFloodPassCount).map { _ in MotionBlurJumpFloodMaterial(context: pointerContext) }
         self.jumpFloodMaterials = jumpFloodMaterials
         jumpFloodEncoders = jumpFloodMaterials.enumerated().map { pass, material in
@@ -112,16 +112,16 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     // MARK: - Draw
 
-    override open func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let outputTexture else { return }
 
         motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
-        let depthTexture = resolveDepthTexture(commands: commands)
+        let depthTexture = resolveDepthTexture(commandBuffer: commandBuffer)
         motionBlurMaterial.depthTexture = depthTexture
-        try encodeVelocityDilation(frame: frame, depthTexture: depthTexture, commands: commands)
+        try encodeVelocityDilation(frame: frame, depthTexture: depthTexture, commandBuffer: commandBuffer)
         motionBlurMaterial.frame = frameCounter
         frameCounter = frameCounter &+ 1
-        try super.encodeEffect(frame: frame, renderPassDescriptor: renderPassDescriptor.targeting(renderPassDescriptor.colorTarget(sampleCount: context.sampleCount) ?? outputTexture, sampleCount: context.sampleCount), commands: commands, viewports: viewports, viewMappings: viewMappings)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: outputTexture)
     }
 
     // MARK: - Velocity Dilation
@@ -140,7 +140,7 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     /// Tile max, the jump-flood passes, then neighbor max, at tile resolution. Hands the
     /// blur its tile max and neighbor-max pointers; without a velocity texture there are none.
-    private func encodeVelocityDilation(frame: FrameTime, depthTexture: MTLTexture?, commands: GPUCommandRecording) throws {
+    private func encodeVelocityDilation(frame: FrameTime, depthTexture: MTLTexture?, commandBuffer: MTLCommandBuffer) throws {
         guard let velocityTexture else {
             motionBlurMaterial.tileMaxTexture = nil
             motionBlurMaterial.neighborMaxTexture = nil
@@ -164,7 +164,7 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         tileMaxMaterial.velocityTexture = velocityTexture
         tileMaxMaterial.depthTexture = depthTexture
         tileMaxMaterial.tileSize = tileSize
-        try commands.draw(tileMaxEncoder, frame: frame, renderPassDescriptor: tilePassDescriptor, renderTarget: tileMaxTexture)
+        try tileMaxEncoder.draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: tileMaxTexture)
 
         let shutterFraction = motionBlurMaterial.shutterAngle / 360
         for (pass, material) in jumpFloodMaterials.enumerated() {
@@ -176,12 +176,12 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
             material.isFirstPass = pass == 0
             material.shutterFraction = shutterFraction
             material.perpendicularTolerance = perpendicularTolerance
-            try commands.draw(jumpFloodEncoders[pass], frame: frame, renderPassDescriptor: tilePassDescriptor, renderTarget: output)
+            try jumpFloodEncoders[pass].draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: output)
         }
 
         neighborMaxMaterial.tileMaxTexture = tileMaxTexture
         neighborMaxMaterial.jumpFloodTexture = jumpFloodTextures[(Self.jumpFloodPassCount - 1) % 2]
-        try commands.draw(neighborMaxEncoder, frame: frame, renderPassDescriptor: tilePassDescriptor, renderTarget: neighborMaxTexture)
+        try neighborMaxEncoder.draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: neighborMaxTexture)
 
         motionBlurMaterial.tileMaxTexture = tileMaxTexture
         motionBlurMaterial.neighborMaxTexture = neighborMaxTexture
@@ -216,7 +216,7 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         return tex
     }
 
-    private func resolveDepthTexture(commands: GPUCommandRecording) -> MTLTexture? {
+    private func resolveDepthTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
         if let depthTexture {
             return depthTexture
         }
@@ -232,14 +232,14 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
             descriptor.storageMode = .private
             fallbackDepthTexture = context.device.makeTexture(descriptor: descriptor)
             fallbackDepthTexture?.label = label + " Fallback Depth"
-            // Cleared once, by the draw that makes it.
+            // Cleared once: nothing else writes it.
             if let fallbackDepthTexture {
                 let renderPassDescriptor = MTLRenderPassDescriptor()
                 renderPassDescriptor.depthAttachment.texture = fallbackDepthTexture
                 renderPassDescriptor.depthAttachment.loadAction = .clear
                 renderPassDescriptor.depthAttachment.storeAction = .store
                 renderPassDescriptor.depthAttachment.clearDepth = 0.0
-                commands.clear(renderPassDescriptor, label: "Motion Blur Fallback Depth")
+                commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)?.endEncoding()
             }
         }
 

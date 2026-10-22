@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARLidarMeshRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARLidarMeshRenderer())
+        SatinMetalView(renderer: ARLidarMeshRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Lidar Mesh")
     }

@@ -101,14 +101,14 @@ final class TransformRevisionTests: XCTestCase {
         let object = Object(context: context, label: "Object")
         object.position = [1, 2, 3]
         let local = object.localRevision
-        let epoch = Object.transformEpoch
+        let epoch = Object.transformEpoch.load(ordering: .relaxed)
 
         object.position = [1, 2, 3]
         object.scale = .one
         object.orientation = simd_quatf(matrix_identity_float4x4)
 
         XCTAssertEqual(object.localRevision, local)
-        XCTAssertEqual(Object.transformEpoch, epoch)
+        XCTAssertEqual(Object.transformEpoch.load(ordering: .relaxed), epoch)
     }
 
     #if DEBUG
@@ -119,13 +119,13 @@ final class TransformRevisionTests: XCTestCase {
         root.position = [1, 0, 0]
         // Per object, and only while the process-wide epoch holds: anything moving elsewhere in
         // the process moves the epoch, which correctly costs one walk.
-        let epoch = Object.transformEpoch
+        let epoch = Object.transformEpoch.load(ordering: .relaxed)
         _ = leaf.worldMatrix
         let walks = leaf.worldValidationWalkCount + middle.worldValidationWalkCount + root.worldValidationWalkCount
 
         for _ in 0 ..< 10 { _ = leaf.worldMatrix }
 
-        if Object.transformEpoch == epoch {
+        if Object.transformEpoch.load(ordering: .relaxed) == epoch {
             XCTAssertEqual(leaf.worldValidationWalkCount + middle.worldValidationWalkCount + root.worldValidationWalkCount, walks,
                            "nothing moved, so validation returns at once")
         }

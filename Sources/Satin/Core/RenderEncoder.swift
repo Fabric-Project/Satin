@@ -6,7 +6,6 @@
 //  Copyright © 2019 Reza Ali. All rights reserved.
 //
 
-import Dispatch
 import Metal
 import simd
 
@@ -15,16 +14,6 @@ open class RenderEncoder {
 
     public var onUpdate: (() -> Void)?
 
-    /// Opt-in CPU queue for encoding sealed scenes. Nil encodes into the caller's command buffer.
-    /// Set this on the serial producer that owns scene/configuration changes. The supplied queue
-    /// must be serial and independently runnable: it cannot be, or target, the producer queue.
-    ///
-    /// Queued work uses a private command buffer from the caller's Metal command queue. All work
-    /// left in the caller's buffer runs after these submissions, even when encoded before draw.
-    /// Commit earlier immediate work before issuing queued work that depends on it. Raw resource
-    /// contents must stay valid through every GPU reader; retaining them does not freeze bytes.
-    public var renderQueue: DispatchQueue?
-    private let submissionAdmission: QueuedSubmission.Admission
 
     // MARK: - Configuration
 
@@ -467,7 +456,6 @@ open class RenderEncoder {
     ) {
         self.label = label
         self.context = context
-        submissionAdmission = QueuedSubmission.Admission(limit: context.maxBuffersInFlight)
         self.colorPixelFormat = colorPixelFormat
         self.depthPixelFormat = depthPixelFormat
         self.stencilPixelFormat = stencilPixelFormat
@@ -625,25 +613,12 @@ open class RenderEncoder {
         RecordingProfile.noteFrame(frame.frameNumber)
         RecordingProfile.begin(.scenePlanning)
         defer { RecordingProfile.end() }
-        let encodeQueue = renderQueue
-        let encodingBuffer: MTLCommandBuffer
-        if let encodeQueue {
-            encodingBuffer = try QueuedSubmission.begin(commandBuffer: commandBuffer, renderQueue: encodeQueue, admission: submissionAdmission)
-            encodingBuffer.label = "\(label) Submission"
-        } else {
-            encodingBuffer = commandBuffer
-        }
-        do {
-            let commands = encodeQueue == nil ? GPUCommandRecording(commandBuffer: encodingBuffer) : GPUCommandRecording(device: context.device)
-            try commands.draw(self, frame: frame, renderPassDescriptor: renderPassDescriptor, scene: scene,
-                              cameras: cameras, viewports: viewports, viewMappings: viewMappings)
-            if let encodeQueue {
-                QueuedSubmission.schedule(commands.seal(), satinBuffer: encodingBuffer, renderQueue: encodeQueue, admission: submissionAdmission)
-            }
-        } catch {
-            if encodeQueue != nil { QueuedSubmission.cancel(satinBuffer: encodingBuffer, admission: submissionAdmission) }
-            throw error
-        }
+        let builder = makeSubmissionBuilder(frame: frame, cameras: cameras, viewports: viewports)
+        try builder.record(scene: scene, renderPassDescriptor: renderPassDescriptor, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
+        let sealed = try builder.seal()
+        RecordingProfile.begin(.replay)
+        defer { RecordingProfile.end() }
+        try sealed.encode(into: commandBuffer)
     }
 
     /// Creates a producer-only operation with frozen views and renderer settings. Record its scene
@@ -701,8 +676,7 @@ open class RenderEncoder {
     }
 
     func prepare(builder submission: SubmissionBuilder, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor,
-              scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil,
-              preparationCommands: GPUCommandRecording? = nil) throws -> [RecordedRenderPass] {
+              scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil) throws -> [RecordedRenderPass] {
         guard !submission.isConsumed else { throw SubmissionError.alreadyDrawn }
         try validate(inputDescriptor, against: submission.destination)
         let renderPassDescriptor = inputDescriptor.privateCopy()
@@ -715,7 +689,7 @@ open class RenderEncoder {
 
         let recorder = submission.recorder
         let frame = submission.frame
-        let commands = preparationCommands ?? preparationCommandBuffer.map { GPUCommandRecording(commandBuffer: $0) }
+        let commandBuffer = preparationCommandBuffer
         let cameras = submission.cameras
         let viewports = submission.viewports
         self.recorder = recorder
@@ -733,7 +707,7 @@ open class RenderEncoder {
             cameras: cameras,
             viewports: simd_viewports,
             recorder: recorder,
-            encodingContext: commands.map { EncodingContext(commands: $0, frame: frame, views: submission.views, recorder: recorder) }
+            encodingContext: commandBuffer.map { EncodingContext(commandBuffer: $0, frame: frame, views: submission.views, recorder: recorder) }
         )
 
         // The scene is one record: its shadows and colour passes share palette snapshots.

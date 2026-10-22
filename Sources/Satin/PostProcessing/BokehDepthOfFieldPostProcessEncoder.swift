@@ -206,7 +206,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
     }
 
     public required init(context: Context) {
-        let compositeContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        let compositeContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
         compositeMaterial = BokehDepthOfFieldCompositeMaterial(context: compositeContext)
 
         let pipelineURL = getPipelinesComputeURL("BokehDepthOfField")!.appendingPathComponent("Shaders.metal")
@@ -270,7 +270,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         resizeResourcesIfNeeded(force: false)
 
         guard let colorTexture,
@@ -300,7 +300,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         generateCoCProcessor.set("Far End", resolvedSettings.farEnd)
         generateCoCProcessor.set(fullResolutionCoCTexture, index: .Custom0)
         generateCoCProcessor.set(depthTexture, index: .Custom1)
-        commands.compute(generateCoCProcessor)
+        generateCoCProcessor.update(commandBuffer)
 
         downsampleProcessor.set("Far Boost", Float(5.0))
         downsampleProcessor.set(downsampledCoCTexture, index: .Custom0)
@@ -308,28 +308,28 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         downsampleProcessor.set(colorMulFarTexture, index: .Custom2)
         downsampleProcessor.set(fullResolutionCoCTexture, index: .Custom3)
         downsampleProcessor.set(colorTexture, index: .Custom4)
-        commands.compute(downsampleProcessor)
+        downsampleProcessor.update(commandBuffer)
 
         let nearFilterRadius = nearCoCFilterRadius(for: resolvedSettings)
         nearCoCBoxHorizontalProcessor.set(nearCoCBoxIntermediateTexture, index: .Custom0)
         nearCoCBoxHorizontalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCBoxHorizontalProcessor.set(downsampledCoCTexture, index: .Custom1)
-        commands.compute(nearCoCBoxHorizontalProcessor)
+        nearCoCBoxHorizontalProcessor.update(commandBuffer)
 
         nearCoCBoxVerticalProcessor.set(nearCoCBoxTexture, index: .Custom0)
         nearCoCBoxVerticalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCBoxVerticalProcessor.set(nearCoCBoxIntermediateTexture, index: .Custom1)
-        commands.compute(nearCoCBoxVerticalProcessor)
+        nearCoCBoxVerticalProcessor.update(commandBuffer)
 
         nearCoCMaxHorizontalProcessor.set(nearCoCMaxIntermediateTexture, index: .Custom0)
         nearCoCMaxHorizontalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCMaxHorizontalProcessor.set(nearCoCBoxTexture, index: .Custom1)
-        commands.compute(nearCoCMaxHorizontalProcessor)
+        nearCoCMaxHorizontalProcessor.update(commandBuffer)
 
         nearCoCMaxVerticalProcessor.set(nearCoCTexture, index: .Custom0)
         nearCoCMaxVerticalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCMaxVerticalProcessor.set(nearCoCMaxIntermediateTexture, index: .Custom1)
-        commands.compute(nearCoCMaxVerticalProcessor)
+        nearCoCMaxVerticalProcessor.update(commandBuffer)
 
         horizontalProcessor.set("Max Radius", resolvedSettings.maxRadius)
         horizontalProcessor.set(farHorizontalTextures[0], index: .Custom0)
@@ -343,7 +343,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         horizontalProcessor.set(downsampledCoCTexture, index: .Custom8)
         horizontalProcessor.set(nearCoCTexture, index: .Custom9)
         horizontalProcessor.set(colorMulFarTexture, index: .Custom10)
-        commands.compute(horizontalProcessor)
+        horizontalProcessor.update(commandBuffer)
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.cocTexture = downsampledCoCTexture
@@ -359,12 +359,11 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         compositeMaterial.maxBlurRadius = resolvedSettings.maxRadius
         compositeMaterial.blend = resolvedSettings.blend
 
-        try super.encodeEffect(
+        try super.draw(
             frame: frame,
-            renderPassDescriptor: renderPassDescriptor.targeting(renderPassDescriptor.colorTarget(sampleCount: context.sampleCount) ?? outputTexture, sampleCount: context.sampleCount),
-            commands: commands,
-            viewports: viewports,
-            viewMappings: viewMappings
+            renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
+            renderTarget: outputTexture
         )
     }
 

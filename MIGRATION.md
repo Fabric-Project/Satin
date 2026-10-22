@@ -2,228 +2,17 @@
 
 Satin now records every draw into plain-data render packets and encodes them per pass, instead of each object encoding itself into the live render encoder. Rendering the same scene more than once a frame (an Iterator, a render-to-texture) uses one **submission** with a **record** per iteration, in place of repeated encoding. This guide lists every public change and what to write instead.
 
-## Queued scene submissions (Stage 4, opt-in)
+## Encoding happens on the thread that draws
 
-`RenderEncoder.renderQueue` defaults to nil. Set it to an independently runnable serial
-`DispatchQueue` to record on your producer and encode the sealed scene on that queue:
+Satin encodes into the command buffer you pass, at the point you call `draw`, on whichever thread calls it. There is no encoding queue: `renderQueue` on `RenderEncoder` and `PostProcessEncoder` is gone, as are `GPUCommandRecording`, `RecordedGPUCommands`, `RecordedGPUWork`, `RecordedComputeWork`, `ComputeCommandEncoder`, `ComputeEncodingContext` and `holdUntilCompleted(_:)`. To keep rendering off the main thread, draw the whole frame on another thread; raw Metal and MPS work encoded into the same command buffer keeps its order with Satin's passes.
 
-```swift
-renderEncoder.renderQueue = DispatchQueue(label: "Scene encoding")
-try renderEncoder.draw(frame: frameTime, renderPassDescriptor: descriptor,
-                       commandBuffer: commandBuffer, scene: scene, camera: camera)
-// Present and commit commandBuffer as usual after recording its downstream work.
-```
-
-Updates, traversal, input snapshots, command recording and admission waits happen on the producer.
-Scene/effect GPU preparation commands now replay on the encoding queue as well.
-One serial producer owns scene and encoder mutation, including resize and queue changes. The
-encode queue must not be, or target, that producer queue; this is checked where possible in
-Release. Already-recorded work can encode while the producer edits the scene. Long producer
-work can still starve the render queue; this does not create an independent render loop.
-
-Each queued draw creates a private command buffer from the caller's Metal command queue.
-Preparation commands are captured before the scene and replayed into that same private buffer;
-its GPU position is
-reserved on the producer **after recording succeeds**. Different CPU encode queues may finish
-in any order; buffers on one Metal command queue retain producer enqueue order.
-
-**Ordering is not call-site transparent:**
-
-- All work in the caller's buffer runs after its queued scene submissions, even work encoded
-  before a queued draw. Keep readback and present there; preceding producers belong in a
-  separately committed buffer on the same Metal queue, or require explicit synchronization.
-- Mixing queued and immediate encoders in a dependency chain is caller error. In particular,
-  immediate A in an uncommitted buffer followed by queued B runs B before A. Commit A's buffer
-  first and use a new caller buffer for B. No GPU completion wait is needed on the same queue.
-- Queue every scene/effect encoder in a dependent chain together. `PostProcessEncoder.renderQueue`
-  uses the same scheduling boundary for the entire compound effect; private children stay immediate
-  inside its private buffer. Standalone `ARMatteEncoder` remains immediate.
-- Normally tracked resources on one Metal queue use Metal's hazard tracking. Untracked/aliased
-  resources and work on different Metal queues need the caller's own synchronization.
-
-One encoder admits at most `context.maxBuffersInFlight` outstanding queued submissions. Its
-permit releases when its private GPU buffer completes, not when CPU encoding ends. This does
-not bound complete frames, downstream consumers, other encoders or drawables. Frame admission
-remains the frame owner's responsibility. `Context` now requires a count in `1...3`.
-
-The caller's command buffer must be `.notEnqueued`; otherwise the queued draw throws
-`SubmissionError.commandBufferAlreadyEnqueued` before scene updates. Failure to create the
-private buffer throws `.commandBufferUnavailable`. Recording failure releases admission and
-does not enqueue the failed buffer. Target-overload descriptor changes are restored on throws.
-
-Scene values and managed input snapshots may change after recording. Raw buffer contents and
-textures remain retained resources, not immutable copies. Caller-buffer completion is a
-conservative release boundary for resources read by its preceding queued work, but targets
-sampled by additional consumers must remain unavailable for reuse until every reader finishes.
-Queue changes do not remove these ownership or ordering obligations. The explicit builder/seal/
-encode API still leaves scheduling entirely to its caller; `renderQueue` affects convenience draws.
-
-## Queued effects and Sponza comparison
-
-`PostProcessEncoder.renderQueue` defaults to nil. Each public effect invocation uses one private
-command buffer and one admission permit. With a queue set, **all recorded Metal encoding**—scene
-preparation, compute dispatches, render passes, clears, blits and MPS—runs on that queue. Private
-children append in order to the same recording; they do not schedule or take permits themselves.
-Updates, pipeline preparation/compilation, snapshot copies and recording remain on the producer.
-There is no independent render loop; long producer work can still delay submission.
-
-Every `PostProcessEncoder.draw(...)` and `PostProcessRenderEncoder.draw(...)` throws. Add `try`
-and handle errors at the frame owner. Effect subclasses now receive `GPUCommandRecording`
-instead of a raw command buffer:
-
-```swift
-override func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor,
-                           commands: GPUCommandRecording, viewports: [MTLViewport],
-                           viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-    // Preparation runs now; bindings, dispatch sizes and material values are captured now.
-    commands.compute(processor)
-    try commands.draw(child, frame: frame, renderPassDescriptor: intermediateDescriptor,
-                      renderTarget: intermediateTexture)
-    try super.encodeEffect(frame: frame, renderPassDescriptor: renderPassDescriptor,
-                           commands: commands, viewports: viewports, viewMappings: viewMappings)
-}
-```
-
-The public draw overloads are final. `super.encodeEffect` records the quad without a second permit.
-An empty viewport list means the pass's configured viewport, resolved after preparation-time
-resize. Explicit viewports/mappings describe the final destination; built-in SSAO/SSGI scale them
-for intermediate textures. Explicit targets redirect the final composite only. Caller descriptors
-are preserved. Nil queue preserves immediate encoding through the same command destination API.
-
-`EncodingContext.commandBuffer` is replaced by `commands` and `device`. In object, geometry and
-material GPU preparation hooks, append work to that destination:
-
-**Custom GPU work: conform to `RecordedGPUWork`.** Blits, MPS kernels and any other Metal work Satin
-doesn't encode itself are values with one method, `encode(into: MTLCommandBuffer)`:
-
-```swift
-struct CopyWork: RecordedGPUWork {
-    let source: MTLBuffer
-    let destination: MTLBuffer
-    let length: Int
-
-    func encode(into commandBuffer: MTLCommandBuffer) {
-        guard let blit = commandBuffer.makeBlitCommandEncoder() else { return }
-        blit.copy(from: source, sourceOffset: 0, to: destination, destinationOffset: 0, size: length)
-        blit.endEncoding()
-    }
-}
-
-context.commands.append(CopyWork(source: uploadBuffer, destination: outputBuffer, length: byteCount))
-```
-
-An MPS kernel works the same way: store a copy of the configured kernel (`kernel.copy()`) and its
-textures, and encode them in `encode(into:)`. `ARDepthUpscaler` is an in-tree example.
-
-The contract:
-- **Values and Metal resources only.** A work value never reads or mutates a scene, material,
-  encoder, node or parameter group once recorded. Its stored properties are everything that crosses
-  to the encode queue.
-- **Encoded exactly once,** in order with the operation's render and compute work: at once into the
-  caller's buffer with no `renderQueue`, otherwise on that queue.
-- **Released after its command buffer completes,** possibly on Metal's completion thread.
-- **Holding a buffer or texture doesn't freeze its contents:** raw resources keep the existing
-  synchronization contract.
-
-`addCommands` (both the command-buffer and compute-encoder versions) is gone. Move each closure body
-into a `RecordedGPUWork` (or `RecordedComputeWork`) value, turning what it captured into stored
-properties.
-
-**External resource lifetime: `holdUntilCompleted(_:)`** (replaces `retainUntilCompleted(_:)`). It
-keeps an owner outside Satin alive until the operation's GPU work completes:
-- object lifetime: a `CVMetalTexture`'s texture is invalid once the wrapper is released;
-- content lifetime: a pooled `CVPixelBuffer` or `IOSurface` (movie, camera, Syphon frames) is
-  recycled, and overwritten by a later frame, once its owner lets it go.
-
-With a `renderQueue`, the GPU reads later than `draw` returns, so hold such owners for every frame
-that reads them. Hold only owners whose `deinit` is safe on Metal's completion thread: CoreVideo and
-IOSurface types are, scene objects aren't.
-
-Compute binding/dispatch hooks and `preCompute`/`preReset`/`preUpdate` closures now receive a
-`ComputeCommandEncoder` value facade. Usual `setBuffer`, `setTexture`, `setBytes`, sampler and
-dispatch calls either encode immediately or capture values for replay. These hooks execute on the
-producer, never on the worker. For other compute encoder commands, append a `RecordedComputeWork`
-value (`encode(into: MTLComputeCommandEncoder)`), with the same contract as `RecordedGPUWork`. Never
-save a compute recording context beyond its callback.
-`ComputeEncodingContext` no longer exposes the raw command buffer.
-
-Custom multi-encoder processors can override `update(_ commands: GPUCommandRecording, iterations:)`.
-Move custom GPU logic from command-buffer update overrides into this hook to participate in queued
-composition. The existing raw command-buffer update overload remains an explicit immediate API, now final.
-It routes through these same hooks. A subclass overriding that old entry must migrate (the final
-entry makes a missed migration a compile error rather than silently skipping custom logic).
-Managed uniform/struct bytes are copied from the uploaded slot; dispatch/reset pipelines, textures,
-buffers and sizes are resolved before returning from recording. Large copies keep their arena leases
-until replay transfers them to GPU completion. The convenience draw seals and schedules as one
-operation. A caller using `GPUCommandRecording` directly must encode a sealed recording once.
-
-**Vertex uniforms are written when the submission encodes.** Recording reserves each render event's
-`VertexUniforms` slot and records the occurrence's transforms and the views as values. The per-view
-matrices are computed and written just before replay, on the encode queue with a `renderQueue`, on the
-producer without one. Hooks keep binding `context.vertexUniforms` exactly as before. Its bytes aren't
-written yet while recording, though: don't read them, and don't copy them with `copyOnRecordLength`
-(that's a precondition failure).
-
-**A throw fails the frame.**
-- Satin's own errors are thrown before anything changes: a mismatched descriptor, an
-  already-enqueued or unavailable command buffer.
-- A throw from partway through preparation drops the whole operation. That can come from a custom
-  `encodeEffect`, or from a later child in a compound effect.
-- Nothing is rolled back. One-time state that preparation already advanced stays advanced, as if its
-  GPU work had run:
-  - a feedback compute's reset and ping-pong index;
-  - a tessellated mesh's frozen factors;
-  - motion blur's fallback-depth clear;
-  - the cleaned flag of a static shadow.
-- To recover after a failed `draw`, call `reset()` on affected compute systems and set
-  `needsUpdate` on affected shadows.
-
-`RenderEncoder.abandon(_:)` is unrelated: it's for a sealed submission you choose not to encode.
-
-In the Sponza Example, press **P → Rendering → Dedicated Render Queue**. It defaults off and changes
-scene, SSAO, motion blur, Bokeh and overlay together in update, after the previous frame's caller
-buffer has been committed. Compare Release captures with the same scene settings. A background
-capture should now place Bokeh dispatch and postprocess render encoding beneath
-`RecordedGPUCommands.encode` on the worker. Preparation/recording remains on main. No performance
-improvement has yet been established. Fabric's wider step-3 API adoption remains separate.
-
-## Compute input snapshots (Stage 4 prerequisite)
-
-`ComputeProcessor` and `ComputeSystem` now copy their automatic uniforms and registered
-`UniformBuffer` / `StructBuffer` inputs when binding. Copies use the last uploaded slot, so
-changing a parameter without uploading it does not change a registered buffer's contents.
-Up to 4096 bytes use `setBytes` (copied into a value recording before deferred encoding); larger
-copies use the processor's own arena, leased until the owning command buffer completes. Reusing or destroying the processor does not release
-pending copies. No render queue is enabled by this change.
-
-Plain `MTLBuffer` and texture bindings remain retained resources: their contents must be
-versioned or protected until all readers finish. A `BindableBuffer` with no uploaded bytes
-keeps its previous placeholder binding; reading unuploaded contents is still undefined.
-Managed input buffers must have current CPU-visible contents before binding.
-
-When supplying an existing compute encoder, also supply its owning command buffer:
-
-```swift
-let context = ComputeEncodingContext(commandBuffer: commandBuffer, computeEncoder: computeEncoder)
-compute.update(context, iterations: 1) // replaces update(computeEncoder, iterations:)
-```
-
-`update(commandBuffer, iterations:)` is unchanged. `ComputeEncodingContext` neither ends
-the encoder nor commits the command buffer; those remain the caller's responsibility.
-Its compute encoder must belong to its command buffer, and both must be used on the producer.
-
-Custom `bindUniforms` overrides now receive the same context:
-
-```swift
-override func bindUniforms(_ context: ComputeEncodingContext) {
-    super.bindUniforms(context)
-    // Additional bindings use context.computeEncoder.
-}
-```
-
-The encoder-taking overloads of `BrdfGenerator`, `DiffuseIBLGenerator` and
-`SpecularIBLGenerator` likewise become `encode(context:…)`. Their command-buffer overloads
-are unchanged. `Tessellator`'s encoder-taking `update` now accepts `ComputeEncodingContext`.
+- **Drawing off the main thread:** give the renderer a serial queue when you make it, `super.init(context: context, renderQueue: DispatchQueue(label: "Render", qos: .userInteractive))`. Frames, resize, appearance and cleanup then run on that queue; setup and events stay on main. Anything else a frame reads must reach the renderer through `renderQueue.async { … }`, never by writing it from main.
+- **Parameters and UI:** with a render queue, give the renderer's parameter groups the same queue (`group.renderQueue = renderQueue`) before frames run. UI writes with `parameter.submit(value)` instead of assigning `value`, shows `mainValue`, and subscribes to `mainValuePublisher` instead of `valuePublisher.receive(on: .main)`. Engine code keeps reading and writing `value` on the owner. Without a queue, the new API behaves exactly like the old.
+- **Camera controllers:** call `update(frame:)` every frame, as before; it now also applies the mouse and gesture input queued since the last frame. Subscribers to the controller's publishers are called from `update(frame:)`, on the renderer's queue when it has one.
+- **Custom GPU work:** encode it into the command buffer, before or after the Satin draw it belongs with.
+- **Compute:** `update(commandBuffer, iterations:)` and `update(computeEncoder, iterations:)`; overrides of `bind`, `bindUniforms`, `dispatchThreads` and `dispatchThreadgroups`, and the `preCompute` / `preUpdate` / `preReset` hooks, take an `MTLComputeCommandEncoder`. The generators' encoder-taking overloads take the `MTLComputeCommandEncoder` again (`encode(computeEncoder:…)`, and `encode(commandEncoder:…)` on `DiffuseIBLGenerator`).
+- **External resource lifetime** (a `CVMetalTexture`, a pooled `CVPixelBuffer` or `IOSurface`): keep the owner alive until the GPU is done with `commandBuffer.addCompletedHandler { _ in withExtendedLifetime(owner) {} }`.
+- **Post-processing:** `PostProcessEncoder.draw(…)` throws, as `RenderEncoder.draw(…)` does, and stays `open`. Overrides are `throws` and call `try super.draw(…)`.
 
 ## Renderer subclasses
 
@@ -409,11 +198,7 @@ try sealed.encode(into: commandBuffer)
 
 The one-line `draw(...)` overloads make a builder, record, seal and encode it back to back. `PostProcessRenderEncoder.seal(frame:renderPassDescriptor:mesh:cameras:viewports:viewMappings:)` records and seals a post-processing quad in one call.
 
-CPU `update()` / `onUpdate` still run while recording. GPU preparation through custom `encode(in:)` hooks appends to an ordered command destination.
-Pass `preparationCommands` when recording a builder to include those hooks, append the sealed scene
-to the same recording, then submit it. `preparationCommandBuffer` remains an explicit immediate
-compatibility path. Without either, schedule preparation yourself before encoding the sealed scene.
-The one-line `draw(...)` overloads select the immediate or recorded destination automatically.
+CPU `update()` / `onUpdate` still run while recording. GPU preparation through custom `encode(in:)` hooks is encoded into `preparationCommandBuffer` when you pass one to `record`; without one, encode that preparation yourself before the command buffer the sealed scene is encoded into. The one-line `draw(...)` overloads pass the command buffer they draw into.
 
 Holding a Metal resource keeps its identity alive, not its contents immutable. External buffers/textures must remain unchanged until completion, or use versioned resources. Draw-context buffer setters accept an explicit `copyOnRecordLength:` for CPU-readable buffer snapshots; the default retains the supplied buffer. Renderer-owned output textures still follow the immediate reuse policy: callers recording distinct render-to-texture results must supply distinct targets and keep them unavailable for reuse until every GPU reader completes. Frame-level output leases and scheduling come next.
 
@@ -424,3 +209,10 @@ Packet finishing records commands directly again; the experimental gather-and-co
 Cached pipeline requirements remain for correctness: custom shadow vertex and fragment functions must not depend on what the colour shader happens to read. Shadow-only buffers/textures, displacement, custom cutout fragment uniforms, and unreflected pipeline overrides retain their resources. StandardMaterial skips its maps for a known depth-only shadow, but keeps them available to unknown/custom shadow fragments. Base shadow setup honours makeShadowPipeline(), as layout variants do. Colour texture arrays include every reflected element, and reload rebuilds resource requirements.
 
 Explicit draw-context bindings are preserved without packet filtering. Light/shadow/projector pass bindings, resource lifetimes, and frame scheduling are unchanged. This does not add built-in alpha-cutout or coloured shadow rendering, and does not assume future shadows or cookies are position-only or monochrome.
+
+
+## Logical-frame completion
+
+`Renderer` now returns its in-flight permit from the command buffer committed by `postDraw`, rather than the buffer created by `preDraw`. This keeps a logical frame admitted while an MPS wrapper commits intermediate segments. Hosts that override final submission must call `super.postDraw(commandBuffer:)`, as the standard display host does. The visionOS host registers its permit at its final submission too.
+
+Compute inputs over 4 KB bound through an encoder-only update now get dedicated immutable buffer copies instead of retaining live ring bytes. With an unretained Metal command buffer, use the command-buffer update overload so Satin can supply explicit completion-owned storage.

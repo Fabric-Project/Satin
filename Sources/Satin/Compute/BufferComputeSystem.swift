@@ -83,21 +83,32 @@ open class BufferComputeSystem: ComputeSystem {
         super.update()
     }
 
-    override open func update(_ context: ComputeEncodingContext, iterations: Int = 1) {
-        super.update(context)
-        if count > 0, bufferMap.count > 0 {
-            encode(context, iterations: iterations)
+    override open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
+        super.update(commandBuffer)
+
+        guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
+
+        if count > 0, bufferMap.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            computeEncoder.label = label
+            encode(computeEncoder, iterations: iterations)
+            computeEncoder.endEncoding()
         }
     }
 
-    open func bind(_ computeEncoder: ComputeCommandEncoder) -> Int {
+    override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
+        super.update(computeEncoder)
+        if count > 0, bufferMap.count > 0 {
+            encode(computeEncoder, iterations: iterations)
+        }
+    }
+
+    open func bind(_ computeEncoder: MTLComputeCommandEncoder) -> Int {
         bindBuffers(computeEncoder, ComputeBufferIndex.Custom0.rawValue)
     }
 
-    private func encode(_ context: ComputeEncodingContext, iterations: Int = 1) {
-        let computeEncoder = context.computeEncoder
-        bindUniforms(context)
-        bindBuffers(context)
+    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
+        bindUniforms(computeEncoder)
+        bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
 
         if _reset, let pipeline = resetPipeline {
@@ -194,7 +205,7 @@ open class BufferComputeSystem: ComputeSystem {
         delegate?.updated(computeSystem: self)
     }
 
-    private func bindBuffers(_ computeEncoder: ComputeCommandEncoder, _ offset: Int) -> Int {
+    private func bindBuffers(_ computeEncoder: MTLComputeCommandEncoder, _ offset: Int) -> Int {
         var indexOffset = offset
         if feedback {
             for key in bufferOrder {
@@ -228,7 +239,7 @@ open class BufferComputeSystem: ComputeSystem {
     // MARK: - Dispatching
 
     #if os(macOS) || os(iOS) || os(visionOS)
-    override open func dispatchThreads(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
+    override open func dispatchThreads(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
         let gridSize = MTLSizeMake(_count, 1, 1)
 
         var threadGroupSize = pipeline.maxTotalThreadsPerThreadgroup
@@ -239,7 +250,7 @@ open class BufferComputeSystem: ComputeSystem {
     }
     #endif
 
-    override open func dispatchThreadgroups(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
+    override open func dispatchThreadgroups(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
         let m = pipeline.maxTotalThreadsPerThreadgroup
         let threadsPerThreadgroup = MTLSizeMake(m, 1, 1)
         let threadgroupsPerGrid = MTLSize(width: (_count + m - 1) / m, height: 1, depth: 1)

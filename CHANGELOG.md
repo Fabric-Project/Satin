@@ -1,71 +1,56 @@
 # Satin 2.0 Changelog
 
-## Stage 4: complete GPU command recording
+## Stage 4: one drawing thread, plain command buffers
 
-- Per-view vertex uniforms are reserved while recording and written when the submission encodes, from
-  recorded transforms and views as values: with a `renderQueue`, that maths leaves the producer.
+- Queued encoding is gone: `RenderEncoder.renderQueue`, `PostProcessEncoder.renderQueue`, submission
+  admission, `GPUCommandRecording` / `RecordedGPUCommands`, `RecordedGPUWork`, `RecordedComputeWork`,
+  `ComputeCommandEncoder`, `ComputeEncodingContext`, compute input snapshots and `holdUntilCompleted(_:)`.
+  Satin encodes into the caller's command buffer on whichever thread draws. A host that wants rendering
+  off the main thread moves the whole frame there; raw Metal and MPS work in the same command buffer
+  then keeps call order with Satin's passes.
+- A renderer can own its frames' queue: `Renderer(context:renderQueue:)`. With a serial queue, a
+  `MetalViewController`'s display link ticks on a thread of its own and the renderer runs each frame
+  on its queue, skipping a tick while the frame before is still running, so a busy main thread
+  doesn't stop frames (60 frames presented at 120 Hz with main blocked for 500 ms). Resize,
+  appearance and cleanup reach it on the queue too; setup and events stay on main. Renderers on
+  their own queues compose with GCD (groups, barriers). Nil, the default, draws on main as before.
+- Scenes owned by different threads no longer race: the process-wide transform epoch and structure
+  token counters are atomic. A change in one scene only costs another scene's objects one extra
+  ancestor walk.
+- Compute inputs Satin owns (automatic uniforms, registered `UniformBuffer` / `StructBuffer` inputs)
+  are copied as they're bound: up to 4 KB with `setBytes`, larger into storage held until the
+  command buffer completes. A processor updated more often than its ring has slots, inside an
+  Iterator for instance, no longer rewrites what earlier dispatches read. Raw `MTLBuffer` and
+  texture bindings are unchanged. Large inputs bound through `update(_ computeEncoder:)` have no
+  command buffer to hold a copy, so they bind as before (a debug build says so once).
+- With a render queue, each frame resizes the renderer from its own drawable's size before update,
+  so no frame reaches a new-size drawable ahead of its resize. A display link stopping on its own
+  thread keeps its delegate there until it has stopped. A disabled camera controller drops input
+  queued before it was disabled.
+- Parameters can be owned by a render queue: set `ParameterGroup.renderQueue`. UI then writes with
+  `submit(_:)` and reads `mainValue`, `mainValuePublisher` (and `mainMin` / `mainMax` with their
+  publishers); the owner applies the latest submitted value on its queue, one block per group per
+  burst (every press, in order, for a button), and values set on the owner, in `update(frame:)` for
+  instance, reach the main-thread mirror the same way. An owner value older than a pending submit
+  never pulls the UI back. `valuePublisher` still fires synchronously wherever `value` is set.
+  Without a queue nothing changes: `submit` sets `value` and the mirror is `value`. Ownership is
+  for life: a group's `renderQueue` is set once, and its parameters stay with that queue.
+- Camera controllers apply input where the camera is owned. Event handlers on the main thread only
+  queue what they saw; `update(frame:)` applies it before tweening, so a renderer on its own queue
+  can be driven by the mouse safely. A drag reaches the camera on the next update instead of at
+  once, and `onStartPublisher`, `onChangePublisher` and `onEndPublisher` fire from `update(frame:)`.
+- `Satin.xcodeproj` and the Example now target macOS 15, iOS 18 and visionOS 2, as `Package.swift` does.
+- Compute is plain Metal again: `update(_ commandBuffer:)`, `update(_ computeEncoder:)`, `bind`,
+  `bindUniforms`, `dispatchThreads` / `dispatchThreadgroups` and the `pre…` hooks take an
+  `MTLComputeCommandEncoder`.
+- Post-processing draws throw, as scene draws do, and stay `open`; overrides call `super` with `try`.
+- Per-view vertex uniforms are reserved while recording and written when the submission encodes.
   Hooks bind `vertexUniforms` as before; reading or copying its bytes while recording isn't supported.
 - `PointShadow.recordsCastersOnceForAllFaces` and `PacketRecorder.alignsViewSlots` are gone. Casters
   are recorded once for every point-light face, and separately encoded views use 256-byte-aligned slots.
-
 - Development profiling: launch with `SATIN_RECORDING_PROFILE=1` to print, every 120 frames, exclusive
-  ms and calls per frame for each producer recording category (update, culling, hooks, uniforms,
-  bookkeeping, planning, effects, replay, admission wait) and for encode-queue replay. Off by default
-  (one branch per marker).
-
-- Custom GPU work is an open protocol, `RecordedGPUWork` (and `RecordedComputeWork` inside a compute
-  pass): values and Metal resources only, encoded once in order, released after completion. It
-  replaces the `addCommands` closures on `GPUCommandRecording` and `ComputeCommandEncoder`.
-  `ARDepthUpscaler`'s MPS work is the in-tree example.
-- A throw fails the frame. Abandoned preparation no longer rolls back one-time producer state
-  (feedback reset/index, frozen tessellation factors, fallback-depth clear, cleaned shadows), and the
-  closure-based `onAbandon` is gone. Recover with `reset()` / `needsUpdate`.
-- `holdUntilCompleted(_:)` replaces `retainUntilCompleted(_:)` for external resource owners
-  (`CVMetalTexture`, pooled `CVPixelBuffer` / `IOSurface`), covering both object and content lifetime.
-
-- Queued scenes/effects now replay GPU preparation, render passes, compute dispatches, clears,
-  blits and captured MPS work on the supplied queue. Effect queues no longer mean commit-only.
-- Added one shared GPUCommandRecording boundary and a compute command facade. Pipelines,
-  resource bindings, uploaded CPU bytes and dispatch dimensions are captured on the producer.
-- Migrated effect/preparation hooks to recorded commands, including Bokeh, tessellation and AR
-  depth upscaling; private children compose inside one outer submission. Compute's final raw-buffer
-  entry routes through shared hooks, so old overrides fail compilation rather than being skipped.
-- External resource owners and input snapshots survive through GPU completion.
-- Added suspended-worker affinity/isolation, deferred compute input, abandonment and retained-owner
-  regression coverage. No builds, tests or performance measurements run for this increment.
-
-## Stage 4: compound effects and Sponza queue comparison
-
-- Added opt-in `PostProcessEncoder.renderQueue`: one private command buffer and permit per
-  complete effect invocation, preserving child-pass, compute and raw-clear order.
-- Final throwing `draw` overloads route through overridable `encodeEffect`. Migrated built-in
-  effects, AR effect overrides and Example callers; postprocess errors now propagate.
-- Compound effects preserve configured admission limits and final destination view mappings.
-- Sponza has a default-off Dedicated Render Queue inspector control for its complete chain.
-- Added scene/effect/overlay equivalence, compound failure/admission, queue-transition,
-  motion-blur fallback-clear and Bokeh ring-wrap tests. These additions have not been run.
-
-## Stage 4: queued scene admission and scheduling
-
-- Opt-in `RenderEncoder.renderQueue` records on the producer and encodes sealed scene packets
-  on a caller-supplied serial queue. Nil preserves immediate encoding.
-- A shared scheduler owns private command buffers, enqueue order, GPU-completion admission and
-  failure cleanup. Preparatory GPU work uses the same private buffer as its scene.
-- Added Release caller-buffer validation and submission errors; `Context` validates counts in
-  `1...3`. Documented ordering, resource lifetime and per-encoder admission boundaries.
-- Added scene queue regression tests and concurrent recording stress coverage. Standalone AR
-  matte queuing and device-specific validation remain separate follow-up work.
-
-## Stage 4: compute snapshot prerequisite
-
-- Compute uniforms and registered uniform/struct inputs are copied at binding time, preserving
-  the last uploaded slot at all sizes. Small copies use `setBytes`; larger copies use
-  completion-held arena storage. Raw buffers and textures retain their existing contract.
-- Encoder-taking compute updates and custom uniform-binding hooks use `ComputeEncodingContext`
-  to identify the owning command buffer. Command-buffer-taking updates are unchanged.
-- Updated generator overloads, the Jump Flood Example and Fabric's compute callers. Added GPU
-  regression coverage for ring reuse, upload semantics, large-copy lifetime and abandonment.
-- This prerequisite adds no background encoding or render-queue opt-in yet.
+  ms and calls per frame for each recording category (update, culling, hooks, uniforms, bookkeeping,
+  planning, effects, replay). Off by default (one branch per marker).
 
 ## Context Init
 
@@ -290,3 +275,8 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 * Fix bug with anisotropic rendering
 * Fix a bug with some UV’s in geometry generators
 * Add texture matrix support for all materials which consume textures.
+
+## Frame contract correctness
+
+* Keep renderer frame permits until the final command-buffer segment completes, including MPS continuation. Return an admission slot if command-buffer creation fails.
+* Copy large encoder-only compute inputs rather than allowing later ring updates to overwrite dispatch contents.

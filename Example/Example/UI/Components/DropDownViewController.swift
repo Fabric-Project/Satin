@@ -64,13 +64,13 @@ public final class DropDownViewController: NSViewController {
             dropDownMenu.wantsLayer = true
             dropDownMenu.translatesAutoresizingMaskIntoConstraints = false
             dropDownMenu.addItems(withTitles: options)
-            dropDownMenu.selectItem(withTitle: parameter.value)
+            dropDownMenu.selectItem(withTitle: parameter.mainValue)
             dropDownMenu.target = self
             dropDownMenu.action = #selector(onSelected)
             dropDownMenu.bezelStyle = .texturedRounded
             hStack.addView(dropDownMenu, in: .trailing)
 
-            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
+            subscription = parameter.mainValuePublisher.sink { [weak self] value in
                 guard let self,
                       let selectedItem = self.dropDownMenu.selectedItem,
                       selectedItem.title != value
@@ -81,8 +81,8 @@ public final class DropDownViewController: NSViewController {
     }
 
     @objc func onSelected(_ sender: NSPopUpButton) {
-        guard let parameter = parameter, parameter.value != sender.title else { return }
-        parameter.value = sender.title
+        guard let parameter = parameter, parameter.mainValue != sender.title else { return }
+        parameter.submit(sender.title)
     }
 
     deinit {}
@@ -155,8 +155,8 @@ class DropDownViewController: WidgetViewController {
     override func setupBinding() {
         var stringValue = ""
         if let param = parameter as? StringParameter {
-            stringValue = param.value
-            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
+            stringValue = param.mainValue
+            subscription = param.mainValuePublisher.sink { [weak self] value in
                 guard let self else { return }
                 self.setValue(value)
             }
@@ -180,8 +180,8 @@ class DropDownViewController: WidgetViewController {
     }
 
     func setValue(_ value: String) {
-        if let param = parameter as? StringParameter, param.value != value {
-            param.value = value
+        if let param = parameter as? StringParameter, param.mainValue != value {
+            param.submit(value)
         }
         if let button = button {
             button.setTitle(value, for: .normal)

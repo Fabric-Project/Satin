@@ -28,10 +28,10 @@ public final class ColorPaletteViewController: NSViewController, NSWindowDelegat
             var value: simd_float4 = .one
 
             if let param = parameter as? Float4Parameter {
-                value = param.value
+                value = param.mainValue
             }
             else if let param = parameter as? Float3Parameter {
-                value = simd_make_float4(param.value, 1.0)
+                value = simd_make_float4(param.mainValue, 1.0)
             }
 
             let button = NSButton()
@@ -53,13 +53,13 @@ public final class ColorPaletteViewController: NSViewController, NSWindowDelegat
             parametersMap[index] = button
 
             if let param = parameter as? Float4Parameter {
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak button] newValue in
+                param.mainValuePublisher.sink { [weak button] newValue in
                     guard let button else { return }
                     button.layer?.backgroundColor = NSColor(deviceRed: CGFloat(newValue.x), green: CGFloat(newValue.y), blue: CGFloat(newValue.z), alpha: CGFloat(newValue.w)).cgColor
                 }.store(in: &cancellables)
             }
             else if let param = parameter as? Float3Parameter {
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak button] newValue in
+                param.mainValuePublisher.sink { [weak button] newValue in
                     guard let button else { return }
                     button.layer?.backgroundColor = NSColor(deviceRed: CGFloat(newValue.x), green: CGFloat(newValue.y), blue: CGFloat(newValue.z), alpha: 1.0).cgColor
                 }.store(in: &cancellables)
@@ -107,10 +107,10 @@ public final class ColorPaletteViewController: NSViewController, NSWindowDelegat
         var value: simd_float4 = .one
 
         if let param = param as? Float4Parameter {
-            value = param.value
+            value = param.mainValue
         }
         else if let param = param as? Float3Parameter {
-            value = simd_make_float4(param.value, 1.0)
+            value = simd_make_float4(param.mainValue, 1.0)
         }
 
         cp.color = NSColor(deviceRed: CGFloat(value.x), green: CGFloat(value.y), blue: CGFloat(value.z), alpha: CGFloat(value.w))
@@ -131,10 +131,10 @@ public final class ColorPaletteViewController: NSViewController, NSWindowDelegat
         color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
         if let param = parameters[activeIndex] as? Float4Parameter {
-            param.value = simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha))
+            param.submit(simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha)))
         }
         else if let param = parameters[activeIndex] as? Float3Parameter {
-            param.value = simd_make_float3(Float(red), Float(green), Float(blue))
+            param.submit(simd_make_float3(Float(red), Float(green), Float(blue)))
         }
     }
 
@@ -201,27 +201,27 @@ final class ColorPaletteViewController: WidgetViewController {
                 color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
                 if let param = colorParameter as? Float4Parameter {
-                    param.value = simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha))
+                    param.submit(simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha)))
                 }
                 else if let param = colorParameter as? Float3Parameter {
-                    param.value = simd_make_float3(Float(red), Float(green), Float(blue))
+                    param.submit(simd_make_float3(Float(red), Float(green), Float(blue)))
                 }
 
             }), for: .valueChanged)
 
             if let param = colorParameter as? Float4Parameter {
                 colorWell.selectedColor = UIColor(
-                    red: CGFloat(param.value.x),
-                    green: CGFloat(param.value.y),
-                    blue: CGFloat(param.value.z),
-                    alpha: CGFloat(param.value.w)
+                    red: CGFloat(param.mainValue.x),
+                    green: CGFloat(param.mainValue.y),
+                    blue: CGFloat(param.mainValue.z),
+                    alpha: CGFloat(param.mainValue.w)
                 )
             }
             else if let param = colorParameter as? Float3Parameter {
                 colorWell.selectedColor = UIColor(
-                    red: CGFloat(param.value.x),
-                    green: CGFloat(param.value.y),
-                    blue: CGFloat(param.value.z),
+                    red: CGFloat(param.mainValue.x),
+                    green: CGFloat(param.mainValue.y),
+                    blue: CGFloat(param.mainValue.z),
                     alpha: CGFloat(1.0)
                 )
             }
@@ -234,7 +234,7 @@ final class ColorPaletteViewController: WidgetViewController {
     override func setupBinding() {
         for (index, parameter) in parameters.enumerated() {
             if let param = parameter as? Float4Parameter {
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
+                param.mainValuePublisher.sink { [weak self] value in
                     guard let self else { return }
                     self.colorWells[index].selectedColor = UIColor(
                         red: CGFloat(value.x),
@@ -244,7 +244,7 @@ final class ColorPaletteViewController: WidgetViewController {
                     )
                 }.store(in: &subscriptions)
 
-                let value = param.value
+                let value = param.mainValue
                 colorWells[index].selectedColor = UIColor(
                     red: CGFloat(value.x),
                     green: CGFloat(value.y),
@@ -253,7 +253,7 @@ final class ColorPaletteViewController: WidgetViewController {
                 )
             }
             else if let param = parameter as? Float3Parameter {
-                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
+                param.mainValuePublisher.sink { [weak self] value in
                     guard let self else { return }
                     self.colorWells[index].selectedColor = UIColor(
                         red: CGFloat(value.x),
@@ -263,7 +263,7 @@ final class ColorPaletteViewController: WidgetViewController {
                     )
                 }.store(in: &subscriptions)
 
-                let value = param.value
+                let value = param.mainValue
                 colorWells[index].selectedColor = UIColor(
                     red: CGFloat(value.x),
                     green: CGFloat(value.y),

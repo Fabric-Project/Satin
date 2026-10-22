@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARRenderer())
+        SatinMetalView(renderer: ARRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Hello World")
     }

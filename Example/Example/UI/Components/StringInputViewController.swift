@@ -26,7 +26,7 @@ final class StringInputViewController: InputViewController, NSTextFieldDelegate 
         view.heightAnchor.constraint(equalToConstant: 32).isActive = true
 
         if let parameter = parameter {
-            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+            subscription = parameter.mainValuePublisher.sink { [weak self] newValue in
                 guard let self = self, let field = self.inputField, field.stringValue != newValue else { return }
                 field.stringValue = newValue
                 field.layout()
@@ -70,7 +70,7 @@ final class StringInputViewController: InputViewController, NSTextFieldDelegate 
             inputField.font = .boldSystemFont(ofSize: 11)
             inputField.wantsLayer = true
             inputField.translatesAutoresizingMaskIntoConstraints = false
-            inputField.stringValue = parameter.value
+            inputField.stringValue = parameter.mainValue
             inputField.isEditable = true
             inputField.isBordered = false
             inputField.isBezeled = true
@@ -95,7 +95,7 @@ final class StringInputViewController: InputViewController, NSTextFieldDelegate 
 
     func setValue(_ value: String) {
         if let parameter = parameter {
-            parameter.value = value
+            parameter.submit(value)
         }
     }
 
@@ -136,8 +136,8 @@ final class StringInputViewController: NumberInputViewController {
     }
 
     func setValue(_ text: String) {
-        if let parameter = parameter as? StringParameter, parameter.value != text {
-            parameter.value = text
+        if let parameter = parameter as? StringParameter, parameter.mainValue != text {
+            parameter.submit(text)
         }
     }
 
@@ -148,14 +148,14 @@ final class StringInputViewController: NumberInputViewController {
     override func setupBinding() {
         guard let param = self.parameter as? StringParameter else { return }
 
-        subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+        subscription = param.mainValuePublisher.sink { [weak self] newValue in
             guard let self = self, let input = self.input, !input.isFirstResponder else { return }
             self.setValue(newValue)
         }
 
         guard let input = input else { return }
 
-        input.text = param.value
+        input.text = param.mainValue
 
         guard let label = label, let parameter = parameter else { return }
         label.text = "\(parameter.label)"

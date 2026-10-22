@@ -73,11 +73,11 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
     }
 
     private static func makeSsgiContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float, maxBuffersInFlight: context.maxBuffersInFlight)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float)
     }
 
     private static func makeCompositeContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, maxBuffersInFlight: context.maxBuffersInFlight)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
     }
 
     public required init(context: Context) {
@@ -181,9 +181,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func encodeEffect(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-        let destination = renderPassDescriptor.colorTarget(sampleCount: compositeProcessor.context.sampleCount) ?? outputTexture
-
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         let hasInputs = colorTexture != nil &&
             depthTexture != nil &&
             normalTexture != nil &&
@@ -198,23 +196,21 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         if hasInputs, let rawTexture, let denoisedTexture, let sceneCamera {
             ssgiMaterial.update(camera: sceneCamera, viewportHeight: Float(rawTexture.height))
 
-            try super.encodeEffect(
+            try super.draw(
                 frame: frame,
-                renderPassDescriptor: MTLRenderPassDescriptor().targeting(rawTexture, sampleCount: context.sampleCount),
-                commands: commands,
-                viewports: intermediateViewports(viewports, destination: destination, target: rawTexture),
-                viewMappings: viewMappings
+                renderPassDescriptor: MTLRenderPassDescriptor(),
+                commandBuffer: commandBuffer,
+                renderTarget: rawTexture
             )
 
             blurMaterial.ssgiTexture = rawTexture
             blurMaterial.blueNoiseTexture = blueNoiseTexture
             blurMaterial.noiseIndex = Int32(frameIndex & 3)
             blurMaterial.update(camera: sceneCamera)
-            try commands.draw(blurProcessor,
+            try blurProcessor.draw(
                 frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
-                viewports: intermediateViewports(viewports, destination: destination, target: denoisedTexture),
-                viewMappings: viewMappings,
+                commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
             )
 
@@ -226,12 +222,11 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.ssgiTexture = compositeSsgiTexture
-        try commands.draw(compositeProcessor,
+        try compositeProcessor.draw(
             frame: frame,
-            renderPassDescriptor: renderPassDescriptor,
-            viewports: viewports,
-            viewMappings: viewMappings,
-            renderTarget: destination ?? outputTexture
+            renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
+            renderTarget: outputTexture
         )
     }
 

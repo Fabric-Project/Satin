@@ -55,15 +55,15 @@ open class TessellationMesh: Mesh {
         if tessellate {
             let factors = context.allocate(length: tessellator.factorsLength)
             tessellator.factorsDestination = factors
-            context.commands.compute(tessellator, iterations: 1)
+            tessellator.update(context.commandBuffer, iterations: 1)
             encodedFactors = factors
         } else if factorsNeedFreezing {
             // A new buffer per freeze: draws still in flight keep reading the previous one, which
             // their command buffers hold until they complete.
-            if let frozenFactors = context.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
+            if let frozenFactors = context.commandBuffer.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
                 frozenFactors.label = "\(label) Frozen Tessellation Factors"
                 tessellator.factorsDestination = (frozenFactors, 0)
-                context.commands.compute(tessellator, iterations: 1)
+                tessellator.update(context.commandBuffer, iterations: 1)
                 encodedFactors = (frozenFactors, 0)
             }
             factorsNeedFreezing = false

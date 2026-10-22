@@ -79,6 +79,7 @@
 		E101A8AD2C070E8E0055FABA /* ComputeShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */; };
 		E101A8AE2C070E8E0055FABA /* ComputeShaderConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */; };
 		E101A8AF2C070E8E0055FABA /* ComputeShaderLibraryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */; };
+		7F1A0000000000000000D001 /* ComputeInputCopies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000D000 /* ComputeInputCopies.swift */; };
 		E101A8B02C070E8E0055FABA /* ComputeShaderLibraryConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */; };
 		E101A8B12C070E8E0055FABA /* ComputeShaderLibrarySourceCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */; };
 		E101A8B22C070E8E0055FABA /* ComputeShaderPipelineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */; };
@@ -216,6 +217,7 @@
 		E101A9222C070E8E0055FABA /* Float4x4Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */; };
 		E101A9232C070E8E0055FABA /* FloatParameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */; };
 		E101A9242C070E8E0055FABA /* GenericParameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */; };
+		7F1A0000000000000000C001 /* ParameterChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000C000 /* ParameterChannel.swift */; };
 		E101A9252C070E8E0055FABA /* Int2Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */; };
 		E101A9262C070E8E0055FABA /* Int3Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */; };
 		E101A9272C070E8E0055FABA /* Int4Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */; };
@@ -265,6 +267,7 @@
 		E101A9572C070EA00055FABA /* MetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED82C06A24B00B5A6C8 /* MetalView.swift */; };
 		E101A9582C070EA00055FABA /* MetalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */; };
 		E101A9592C070EA00055FABA /* ViewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */; };
+		7F1A0000000000000000B001 /* DisplayLinkThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000B000 /* DisplayLinkThread.swift */; };
 		E101A95A2C070EA00055FABA /* ViewRendererDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */; };
 		E101A95B2C070EA00055FABA /* SatinImmersiveSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */; };
 		E101A95C2C070EA00055FABA /* SatinMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDD2C06A24B00B5A6C8 /* SatinMetalView.swift */; };
@@ -304,14 +307,7 @@
 		F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B100012E06000200AAA005 /* SlugTextTests.swift */; };
 		F1A000012F00000100AAA001 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000022F00000100AAA001 /* Renderer.swift */; };
 		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
-		7F1A00000000000000000061 /* ComputeEncodingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000060 /* ComputeEncodingContext.swift */; };
-		7F1A00000000000000000063 /* ComputeInputSnapshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000062 /* ComputeInputSnapshots.swift */; };
-		7F1A00000000000000000065 /* ComputeInputSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */; };
-		7F1A00000000000000000067 /* QueuedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000066 /* QueuedSubmission.swift */; };
 		7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000A000 /* RecordingProfile.swift */; };
-		7F1A00000000000000000069 /* RenderQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000068 /* RenderQueueTests.swift */; };
-		7F1A00000000000000000071 /* ComputeCommandEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000070 /* ComputeCommandEncoder.swift */; };
-		7F1A00000000000000000073 /* GPUCommandRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000072 /* GPUCommandRecording.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -369,6 +365,7 @@
 		66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShader.swift; sourceTree = "<group>"; };
 		66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderConfiguration.swift; sourceTree = "<group>"; };
 		66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibraryCache.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000D000 /* ComputeInputCopies.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeInputCopies.swift; sourceTree = "<group>"; };
 		66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibraryConfiguration.swift; sourceTree = "<group>"; };
 		66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibrarySourceCache.swift; sourceTree = "<group>"; };
 		66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderPipelineCache.swift; sourceTree = "<group>"; };
@@ -507,6 +504,7 @@
 		66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Float4x4Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FloatParameter.swift; sourceTree = "<group>"; };
 		66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GenericParameter.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000C000 /* ParameterChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ParameterChannel.swift; sourceTree = "<group>"; };
 		66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int2Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int3Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int4Parameter.swift; sourceTree = "<group>"; };
@@ -556,6 +554,7 @@
 		66D7DED82C06A24B00B5A6C8 /* MetalView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalView.swift; sourceTree = "<group>"; };
 		66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalViewController.swift; sourceTree = "<group>"; };
 		66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewRenderer.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000B000 /* DisplayLinkThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLinkThread.swift; sourceTree = "<group>"; };
 		66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewRendererDelegate.swift; sourceTree = "<group>"; };
 		66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SatinImmersiveSpace.swift; sourceTree = "<group>"; };
 		66D7DEDD2C06A24B00B5A6C8 /* SatinMetalView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SatinMetalView.swift; sourceTree = "<group>"; };
@@ -624,14 +623,7 @@
 		F0B100012E06000200AAA005 /* SlugTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextTests.swift; sourceTree = "<group>"; };
 		F1A000022F00000100AAA001 /* Renderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
 		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000060 /* ComputeEncodingContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeEncodingContext.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000062 /* ComputeInputSnapshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeInputSnapshots.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeInputSnapshotTests.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000066 /* QueuedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueuedSubmission.swift; sourceTree = "<group>"; };
 		7F1A0000000000000000A000 /* RecordingProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingProfile.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000068 /* RenderQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderQueueTests.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000070 /* ComputeCommandEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeCommandEncoder.swift; sourceTree = "<group>"; };
-		7F1A00000000000000000072 /* GPUCommandRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUCommandRecording.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -751,10 +743,10 @@
 			isa = PBXGroup;
 			children = (
 				66D7DD5D2C06A24B00B5A6C8 /* ComputeConfiguration.swift */,
-				7F1A00000000000000000062 /* ComputeInputSnapshots.swift */,
 				66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */,
 				66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */,
 				66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */,
+				7F1A0000000000000000D000 /* ComputeInputCopies.swift */,
 				66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */,
 				66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */,
 				66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */,
@@ -772,8 +764,6 @@
 				66D7DD672C06A24B00B5A6C8 /* TextureComputeSystem.swift */,
 				E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */,
 				E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */,
-				7F1A00000000000000000060 /* ComputeEncodingContext.swift */,
-				7F1A00000000000000000070 /* ComputeCommandEncoder.swift */,
 			);
 			path = Compute;
 			sourceTree = "<group>";
@@ -999,6 +989,7 @@
 				66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */,
 				66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */,
 				66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */,
+				7F1A0000000000000000C000 /* ParameterChannel.swift */,
 				66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */,
 				66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */,
 				66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */,
@@ -1029,9 +1020,7 @@
 				7F1A00000000000000000050 /* ViewFrustum.swift */,
 				7F1A00000000000000000052 /* ShadowCasterRecording.swift */,
 				7F1A00000000000000000019 /* RenderSubmission.swift */,
-				7F1A00000000000000000066 /* QueuedSubmission.swift */,
 				7F1A0000000000000000A000 /* RecordingProfile.swift */,
-				7F1A00000000000000000072 /* GPUCommandRecording.swift */,
 				7F1A0000000000000000001B /* EncodingContext.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
@@ -1130,6 +1119,7 @@
 				66D7DED82C06A24B00B5A6C8 /* MetalView.swift */,
 				66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */,
 				66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */,
+				7F1A0000000000000000B000 /* DisplayLinkThread.swift */,
 				66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */,
 				F1A000022F00000100AAA001 /* Renderer.swift */,
 				66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */,
@@ -1241,8 +1231,6 @@
 				E18ABF832CBCDC9000F54A6D /* MutexTests.swift */,
 				E125E6942CA9EABF005D3A0E /* ObjectTests.swift */,
 				E125E6952CA9EABF005D3A0E /* RenderableTests.swift */,
-				7F1A00000000000000000064 /* ComputeInputSnapshotTests.swift */,
-				7F1A00000000000000000068 /* RenderQueueTests.swift */,
 				F0B100012E06000200AAA005 /* SlugTextTests.swift */,
 			);
 			path = SatinTests;
@@ -1403,9 +1391,6 @@
 				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
 				7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
-				7F1A00000000000000000063 /* ComputeInputSnapshots.swift in Sources */,
-				7F1A00000000000000000061 /* ComputeEncodingContext.swift in Sources */,
-				7F1A00000000000000000071 /* ComputeCommandEncoder.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
 				E101A8572C07061D0055FABA /* Conversions.mm in Sources */,
@@ -1461,6 +1446,7 @@
 				E101A9572C070EA00055FABA /* MetalView.swift in Sources */,
 				E101A9582C070EA00055FABA /* MetalViewController.swift in Sources */,
 				E101A9592C070EA00055FABA /* ViewRenderer.swift in Sources */,
+				7F1A0000000000000000B001 /* DisplayLinkThread.swift in Sources */,
 				E101A95A2C070EA00055FABA /* ViewRendererDelegate.swift in Sources */,
 				F1A000012F00000100AAA001 /* Renderer.swift in Sources */,
 				E14638662C8CB4C4005E36E9 /* TextureComputeProcessor.swift in Sources */,
@@ -1501,6 +1487,7 @@
 				E101A8AD2C070E8E0055FABA /* ComputeShader.swift in Sources */,
 				E101A8AE2C070E8E0055FABA /* ComputeShaderConfiguration.swift in Sources */,
 				E101A8AF2C070E8E0055FABA /* ComputeShaderLibraryCache.swift in Sources */,
+				7F1A0000000000000000D001 /* ComputeInputCopies.swift in Sources */,
 				E101A8B02C070E8E0055FABA /* ComputeShaderLibraryConfiguration.swift in Sources */,
 				E10A52D52C581CE300BB537A /* CodingUserInfoKey+Extensions.swift in Sources */,
 				E101A8B12C070E8E0055FABA /* ComputeShaderLibrarySourceCache.swift in Sources */,
@@ -1549,9 +1536,7 @@
 				7F1A00000000000000000051 /* ViewFrustum.swift in Sources */,
 				7F1A00000000000000000053 /* ShadowCasterRecording.swift in Sources */,
 				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
-				7F1A00000000000000000067 /* QueuedSubmission.swift in Sources */,
 				7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */,
-				7F1A00000000000000000073 /* GPUCommandRecording.swift in Sources */,
 				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
@@ -1665,6 +1650,7 @@
 				E101A9222C070E8E0055FABA /* Float4x4Parameter.swift in Sources */,
 				E101A9232C070E8E0055FABA /* FloatParameter.swift in Sources */,
 				E101A9242C070E8E0055FABA /* GenericParameter.swift in Sources */,
+				7F1A0000000000000000C001 /* ParameterChannel.swift in Sources */,
 				E101A9252C070E8E0055FABA /* Int2Parameter.swift in Sources */,
 				E101A9262C070E8E0055FABA /* Int3Parameter.swift in Sources */,
 				E101A9272C070E8E0055FABA /* Int4Parameter.swift in Sources */,
@@ -1686,8 +1672,6 @@
 				E125E69A2CA9EABF005D3A0E /* BoundsTests.swift in Sources */,
 				E125E69B2CA9EABF005D3A0E /* TriangulatorTests.swift in Sources */,
 				E125E69C2CA9EABF005D3A0E /* RenderableTests.swift in Sources */,
-				7F1A00000000000000000065 /* ComputeInputSnapshotTests.swift in Sources */,
-				7F1A00000000000000000069 /* RenderQueueTests.swift in Sources */,
 				E18ABF842CBCDC9600F54A6D /* MutexTests.swift in Sources */,
 				E125E69D2CA9EABF005D3A0E /* ObjectTests.swift in Sources */,
 				F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */,
@@ -1863,7 +1847,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Hi-Rez, Inc. All rights reserved.";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1873,7 +1857,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = mh_dylib;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				MODULEMAP_FILE = Sources/Satin/module.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
@@ -1892,7 +1876,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				USE_HEADERMAP = YES;
-				XROS_DEPLOYMENT_TARGET = 1.1;
+				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Debug;
 		};
@@ -1916,7 +1900,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Hi-Rez, Inc. All rights reserved.";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1926,7 +1910,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = mh_dylib;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				MODULEMAP_FILE = Sources/Satin/module.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
@@ -1945,7 +1929,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				USE_HEADERMAP = YES;
-				XROS_DEPLOYMENT_TARGET = 1.1;
+				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Release;
 		};
@@ -1957,7 +1941,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 56B82GMHZR;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.hi-rez.SatinTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1976,7 +1960,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 56B82GMHZR;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.hi-rez.SatinTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";

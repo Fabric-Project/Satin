@@ -100,7 +100,7 @@ final class ARDrawingRenderer: BaseRenderer {
     // MARK: - Draw
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        try backgroundRenderer.draw(
+        backgroundRenderer.draw(
             frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer

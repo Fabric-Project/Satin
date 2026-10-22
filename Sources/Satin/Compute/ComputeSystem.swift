@@ -34,9 +34,9 @@ open class ComputeSystem: ComputeShaderDelegate {
     public var dstIndex: Int { (_index + 1) % feedbackCount }
     public var feedbackCount: Int { feedback ? 2 : 1 }
 
-    public var preUpdate: ((_ computeEncoder: ComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
-    public var preReset: ((_ computeEncoder: ComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
-    public var preCompute: ((_ computeEncoder: ComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
+    public var preUpdate: ((_ computeEncoder: MTLComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
+    public var preReset: ((_ computeEncoder: MTLComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
+    public var preCompute: ((_ computeEncoder: MTLComputeCommandEncoder, _ offset: inout Int, _ iteration: Int) -> Void)?
 
     public private(set) var computeUniformBuffers: [ComputeBufferIndex: UniformBuffer] = [:]
     public private(set) var computeStructBuffers: [ComputeBufferIndex: BindableBuffer] = [:]
@@ -72,7 +72,6 @@ open class ComputeSystem: ComputeShaderDelegate {
     }
 
     public private(set) var uniforms: UniformBuffer?
-    private lazy var inputSnapshots = ComputeInputSnapshots(device: device, label: "\(label) Compute Inputs")
     private var uniformsNeedsUpdate = true
 
     public var device: MTLDevice
@@ -186,21 +185,18 @@ open class ComputeSystem: ComputeShaderDelegate {
 
     // MARK: - Update
 
-    /// Record an invocation on the producer. Override this for multi-encoder work (blits/MPS);
-    /// record that work as a `RecordedGPUWork` value rather than retaining live processor state.
-    open func update(_ commands: GPUCommandRecording, iterations: Int = 1) {
-        commands.compute(label: label) { update($0, iterations: iterations) }
-    }
-
-    /// Immediate entry point through the same recording-aware hooks used by queued composition.
-    /// Override update(GPUCommandRecording) or update(ComputeEncodingContext), not this boundary.
-    public final func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        update(GPUCommandRecording(commandBuffer: commandBuffer), iterations: iterations)
-    }
-
-    open func update(_ context: ComputeEncodingContext, iterations: Int = 1) {
+    open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
+        inputCopies.commandBuffer = commandBuffer
         update()
     }
+
+    open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
+        inputCopies.commandBuffer = nil
+        update()
+    }
+
+    /// Copies Satin-owned inputs as they're bound; see `ComputeInputCopies`.
+    lazy var inputCopies = ComputeInputCopies(device: device, label: "Compute \(label) Inputs")
 
     // MARK: - Reset
 
@@ -215,7 +211,7 @@ open class ComputeSystem: ComputeShaderDelegate {
 
     // MARK: - Dispatch
 
-    func dispatch(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
+    func dispatch(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {
 #if os(macOS) || os(iOS) || os(visionOS)
         if _useDispatchThreads {
             dispatchThreads(computeEncoder: computeEncoder, pipeline: pipeline, iteration: iteration)
@@ -228,10 +224,10 @@ open class ComputeSystem: ComputeShaderDelegate {
     }
 
 #if os(macOS) || os(iOS) || os(visionOS)
-    open func dispatchThreads(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {}
+    open func dispatchThreads(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {}
 #endif
 
-    open func dispatchThreadgroups(computeEncoder: ComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {}
+    open func dispatchThreadgroups(computeEncoder: MTLComputeCommandEncoder, pipeline: MTLComputePipelineState, iteration: Int) {}
 
     // MARK: - Ping / Pong
 
@@ -252,26 +248,26 @@ open class ComputeSystem: ComputeShaderDelegate {
         uniforms?.update()
     }
 
-    open func bindUniforms(_ context: ComputeEncodingContext) {
+    open func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) {
         guard let uniforms, let shader, shader.resetWantsUniforms || shader.updateWantsUniforms else { return }
-        inputSnapshots.bind(uniforms, at: .Uniforms, in: context)
+        inputCopies.bind(uniforms, at: .Uniforms, encoder: computeEncoder)
     }
 
-    func bindBuffers(_ context: ComputeEncodingContext) {
+    func bindBuffers(_ computeEncoder: MTLComputeCommandEncoder) {
         guard let shader else { return }
 
         for index in shader.bufferBindingIsUsed {
             if let uniformBuffer = computeUniformBuffers[index] {
-                inputSnapshots.bind(uniformBuffer, at: index, in: context)
+                inputCopies.bind(uniformBuffer, at: index, encoder: computeEncoder)
             } else if let structBuffer = computeStructBuffers[index] {
-                inputSnapshots.bind(structBuffer, at: index, in: context)
+                inputCopies.bind(structBuffer, at: index, encoder: computeEncoder)
             } else if let buffer = computeBuffers[index] {
-                context.computeEncoder.setBuffer(buffer, offset: 0, index: index.rawValue)
+                computeEncoder.setBuffer(buffer, offset: 0, index: index.rawValue)
             }
         }
     }
 
-    func bindTextures(_ computeEncoder: ComputeCommandEncoder) {
+    func bindTextures(_ computeEncoder: MTLComputeCommandEncoder) {
         guard let shader else { return }
 
         for index in shader.textureBindingIsUsed {

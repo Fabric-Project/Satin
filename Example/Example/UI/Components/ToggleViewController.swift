@@ -24,9 +24,9 @@ final class ToggleViewController: NSViewController {
         view.translatesAutoresizingMaskIntoConstraints = false
 
         if let parameter = parameter {
-            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] _ in
+            subscription = parameter.mainValuePublisher.sink { [weak self] _ in
                 guard let self, let paramater = self.parameter else { return }
-                let newState: NSControl.StateValue = (paramater.value ? .on : .off)
+                let newState: NSControl.StateValue = (paramater.mainValue ? .on : .off)
                 if self.button.state != newState {
                     self.button.state = newState
                 }
@@ -62,7 +62,7 @@ final class ToggleViewController: NSViewController {
             button.title = parameter.label
             button.translatesAutoresizingMaskIntoConstraints = false
             hStack.addView(button, in: .leading)
-            button.state = (parameter.value ? .on : .off)
+            button.state = (parameter.mainValue ? .on : .off)
             button.target = self
             button.action = #selector(ToggleViewController.onButtonChange)
 
@@ -72,8 +72,8 @@ final class ToggleViewController: NSViewController {
 
     @objc func onButtonChange() {
         let newValue = button.state == .on
-        guard let parameter, parameter.value != newValue else { return }
-        parameter.value = newValue
+        guard let parameter, parameter.mainValue != newValue else { return }
+        parameter.submit(newValue)
     }
 
     deinit {}
@@ -108,7 +108,7 @@ final class ToggleViewController: WidgetViewController {
         let toggle = UISwitch()
         toggle.addAction(UIAction(handler: { [unowned self] _ in
             if let parameter = self.parameter as? BoolParameter {
-                parameter.value = toggle.isOn
+                parameter.submit(toggle.isOn)
             }
         }), for: .primaryActionTriggered)
         toggle.translatesAutoresizingMaskIntoConstraints = false
@@ -118,14 +118,14 @@ final class ToggleViewController: WidgetViewController {
 
     override func setupBinding() {
         if let parameter = parameter as? BoolParameter {
-            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
+            subscription = parameter.mainValuePublisher.sink { [weak self] newValue in
                 guard let self = self, let toggle = self.toggle, toggle.isOn != newValue else { return }
                 toggle.isOn = newValue
             }
         }
 
         if let toggle = toggle, let parameter = parameter as? BoolParameter {
-            toggle.isOn = parameter.value
+            toggle.isOn = parameter.mainValue
         }
 
         super.setupBinding()

@@ -156,8 +156,6 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
 
         drawable.deviceAnchor = deviceAnchor
 
-        registerInFlight(commandBuffer)
-
         return (
             drawable: drawable,
             commandBuffer: commandBuffer,
@@ -263,6 +261,7 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
     open func postDraw(frame: LayerRenderer.Frame, drawable: LayerRenderer.Drawable, commandBuffer: MTLCommandBuffer) {
         drawable.encodePresent(commandBuffer: commandBuffer)
 
+        registerInFlight(commandBuffer)
         commandBuffer.commit()
 
         frame.endSubmission()

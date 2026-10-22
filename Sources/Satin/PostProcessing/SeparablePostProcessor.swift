@@ -61,23 +61,25 @@ final class SeparablePostProcessEncoder {
 
     func draw(
         frame: FrameTime,
-        commands: GPUCommandRecording,
+        commandBuffer: MTLCommandBuffer,
         inputTexture: MTLTexture,
         configurePass: (Pass, MTLTexture) -> Void
     ) throws {
         guard let intermediateTexture, let outputTexture else { return }
 
         configurePass(.horizontal, inputTexture)
-        try commands.draw(horizontalProcessor,
+        try horizontalProcessor.draw(
             frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
             renderTarget: intermediateTexture
         )
 
         configurePass(.vertical, intermediateTexture)
-        try commands.draw(verticalProcessor,
+        try verticalProcessor.draw(
             frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
+            commandBuffer: commandBuffer,
             renderTarget: outputTexture
         )
     }

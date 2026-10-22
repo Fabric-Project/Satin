@@ -92,19 +92,45 @@ public final class MetalViewController: NSViewController {
     }
 
     private func cleanupRenderer() {
-        guard self.renderer.isSetup else { return }
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        do {
-            try self.renderer.cleanup()
-        } catch {
-            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        let renderer = self.renderer
+        if let renderQueue = renderer.renderQueue {
+            // After any frame running on the queue, and before its next work.
+            renderQueue.async { Self.cleanup(renderer) }
         }
-        self.renderer.isSetup = false
+        else {
+            Self.cleanup(renderer)
+        }
+    }
+
+    private static func cleanup(_ renderer: ViewRenderer) {
+        guard renderer.isSetup else { return }
+        do {
+            try renderer.cleanup()
+        } catch {
+            renderer.errorDelegate?.renderer(renderer, didFailWith: error)
+        }
+        renderer.isSetup = false
     }
 
     // MARK: - Appearance
+
+    /// Passes an appearance change on to a set-up renderer, where its frames are drawn.
+    private func setAppearance(_ appearance: ViewRenderer.Appearance) {
+        let renderer = renderer
+        if let renderQueue = renderer.renderQueue {
+            renderQueue.async {
+                guard renderer.isSetup else { return }
+                renderer.appearance = appearance
+            }
+        }
+        else {
+            guard renderer.isSetup else { return }
+            renderer.appearance = appearance
+        }
+    }
 
     private func getAppearance() -> ViewRenderer.Appearance {
         let name = self.metalView.effectiveAppearance.name
@@ -192,8 +218,7 @@ public final class MetalViewController: NSViewController {
     }
 
     @objc func updateAppearance() {
-        guard self.renderer.isSetup else { return }
-        self.renderer.appearance = self.getAppearance()
+        setAppearance(getAppearance())
     }
 
     private func removeEvents() {
@@ -405,6 +430,21 @@ public final class MetalViewController: UIViewController {
         }
     }
 
+    /// Passes an appearance change on to a set-up renderer, where its frames are drawn.
+    private func setAppearance(_ appearance: ViewRenderer.Appearance) {
+        let renderer = renderer
+        if let renderQueue = renderer.renderQueue {
+            renderQueue.async {
+                guard renderer.isSetup else { return }
+                renderer.appearance = appearance
+            }
+        }
+        else {
+            guard renderer.isSetup else { return }
+            renderer.appearance = appearance
+        }
+    }
+
     private func getAppearance() -> ViewRenderer.Appearance {
         if self.traitCollection.userInterfaceStyle == .dark {
             return .dark
@@ -421,23 +461,33 @@ public final class MetalViewController: UIViewController {
     }
 
     private func cleanupRenderer() {
-        guard self.renderer.isSetup else { return }
 #if DEBUG_VIEWS
         print("cleanupRenderer - MetalViewController: \(self.renderer.id)")
 #endif
-        do {
-            try self.renderer.cleanup()
-        } catch {
-            self.renderer.errorDelegate?.renderer(self.renderer, didFailWith: error)
+        let renderer = self.renderer
+        if let renderQueue = renderer.renderQueue {
+            // After any frame running on the queue, and before its next work.
+            renderQueue.async { Self.cleanup(renderer) }
         }
-        self.renderer.isSetup = false
+        else {
+            Self.cleanup(renderer)
+        }
+    }
+
+    private static func cleanup(_ renderer: ViewRenderer) {
+        guard renderer.isSetup else { return }
+        do {
+            try renderer.cleanup()
+        } catch {
+            renderer.errorDelegate?.renderer(renderer, didFailWith: error)
+        }
+        renderer.isSetup = false
     }
 
     func setupAppearance() {
         registerForTraitChanges([UITraitUserInterfaceStyle.self], handler: { (self: Self, previousTraitCollection: UITraitCollection) in
-            guard self.renderer.isSetup,
-                  previousTraitCollection.userInterfaceStyle != self.traitCollection.userInterfaceStyle else { return }
-            self.renderer.appearance = self.getAppearance()
+            guard previousTraitCollection.userInterfaceStyle != self.traitCollection.userInterfaceStyle else { return }
+            self.setAppearance(self.getAppearance())
         })
     }
 

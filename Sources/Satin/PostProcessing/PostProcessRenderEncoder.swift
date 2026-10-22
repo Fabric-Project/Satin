@@ -194,16 +194,14 @@ open class PostProcessRenderEncoder {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping] = []
     ) throws {
+        RecordingProfile.noteFrame(frame.frameNumber)
+        RecordingProfile.begin(.effects)
+        defer { RecordingProfile.end() }
         let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
                                        viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
+        RecordingProfile.begin(.replay)
+        defer { RecordingProfile.end() }
         try sealed.encode(into: commandBuffer)
-    }
-
-    func record(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commands: GPUCommandRecording, mesh: Mesh,
-                cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping]) throws {
-        let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
-                                       viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: nil, preparationCommands: commands)
-        try commands.append(sealed)
     }
 
     /// Captures a postprocess pass without a command buffer. Custom GPU preparation must be
@@ -216,7 +214,7 @@ open class PostProcessRenderEncoder {
 
     private func prepareSubmission(frame: FrameTime, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
                                    cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping],
-                                   preparationCommandBuffer: MTLCommandBuffer?, preparationCommands: GPUCommandRecording? = nil) -> SealedSubmission {
+                                   preparationCommandBuffer: MTLCommandBuffer?) -> SealedSubmission {
         let renderContext = fastRenderContext()
         let lease = frameArena.lease(frame: frame)
         let recorder = PacketRecorder(storage: packetStoragePool.lease(), lease: lease)
@@ -225,8 +223,8 @@ open class PostProcessRenderEncoder {
             RenderView(camera: camera, viewport: viewports.isEmpty ? .zero : viewports[min(index, viewports.count - 1)].float4, frame: frame)
         }
         mesh.update()
-        if let commands = preparationCommands ?? preparationCommandBuffer.map({ GPUCommandRecording(commandBuffer: $0) }) {
-            mesh.encode(in: EncodingContext(commands: commands, frame: frame, views: views, recorder: recorder))
+        if let commandBuffer = preparationCommandBuffer {
+            mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
         }
         mesh.beginOccurrence(frame: frame)
         let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)

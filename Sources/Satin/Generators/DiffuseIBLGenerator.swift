@@ -25,9 +25,9 @@ public final class DiffuseIBLGenerator {
         compute = DiffuseIBLComputeProcessor(device: device)
     }
 
-    public func encode(context: ComputeEncodingContext, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {
+    public func encode(commandEncoder: MTLComputeCommandEncoder, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {
         let iterations = _encode(sourceTexture: sourceTexture, destinationTexture: destinationTexture)
-        compute.update(context, iterations: iterations)
+        compute.update(commandEncoder, iterations: iterations)
     }
 
     public func encode(commandBuffer: MTLCommandBuffer, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {

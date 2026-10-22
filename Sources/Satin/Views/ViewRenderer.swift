@@ -22,6 +22,14 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
     }
 
     public internal(set) unowned var metalView: MetalView!
+    /// Whether a frame handed to `renderQueue` is still running; ticks meanwhile are skipped, so
+    /// frames never queue up behind a slow one.
+    private let pendingFrameLock = UnfairLock()
+    private var isFramePending = false
+    /// Under `pendingFrameLock`: the view's latest scale factor.
+    private var latestScaleFactor: Float = 1
+    /// `renderQueue` only: the drawable size the last resize was for.
+    private var drawnSize: (Float, Float)?
     public weak var errorDelegate: ErrorRenderDelegate?
 
     public internal(set) var appearance: Appearance = .unspecified {
@@ -109,8 +117,30 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
 
     // MARK: - ViewRendererDelegate
 
+    var ticksOffMainThread: Bool { renderQueue != nil }
+
+    /// A display tick: draws now, or on `renderQueue` unless the frame before is still running there.
     func draw(metalLayer: CAMetalLayer, drawable: CAMetalDrawable, hostTime: TimeInterval, presentationHostTime: TimeInterval?) {
-        guard isSetup, let commandBuffer = preDraw() else { return }
+        guard let renderQueue else {
+            drawFrame(drawable: drawable, hostTime: hostTime, presentationHostTime: presentationHostTime)
+            return
+        }
+        let isFree = pendingFrameLock.sync {
+            guard !isFramePending else { return false }
+            isFramePending = true
+            return true
+        }
+        guard isFree else { return }
+        renderQueue.async {
+            self.drawFrame(drawable: drawable, hostTime: hostTime, presentationHostTime: presentationHostTime)
+            self.pendingFrameLock.sync { self.isFramePending = false }
+        }
+    }
+
+    private func drawFrame(drawable: CAMetalDrawable, hostTime: TimeInterval, presentationHostTime: TimeInterval?) {
+        guard isSetup else { return }
+        if renderQueue != nil { resizeIfNeeded(for: drawable.texture) }
+        guard let commandBuffer = preDraw() else { return }
 
         let frame = nextFrameTime(hostTime: hostTime, presentationHostTime: presentationHostTime)
 
@@ -128,6 +158,21 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
 #if DEBUG_VIEWS
         print("renderer resize: \(size), scaleFactor: \(scaleFactor) - ViewRenderer: \(id)")
 #endif
-        resize(size: (Float(size.width), Float(size.height)), scaleFactor: Float(scaleFactor))
+        guard renderQueue != nil else {
+            resize(size: (Float(size.width), Float(size.height)), scaleFactor: Float(scaleFactor))
+            return
+        }
+        // The size arrives with the next frame's drawable; only the scale has to be passed on.
+        pendingFrameLock.sync { latestScaleFactor = Float(scaleFactor) }
+    }
+
+    /// With a `renderQueue`, the size a frame's drawable has is the size it draws at: resizing
+    /// here, before update, means no frame can reach a new-size drawable before its resize.
+    func resizeIfNeeded(for texture: MTLTexture) {
+        let size = (Float(texture.width), Float(texture.height))
+        if let drawnSize, drawnSize == size { return }
+        drawnSize = size
+        let scaleFactor = pendingFrameLock.sync { latestScaleFactor }
+        resize(size: size, scaleFactor: scaleFactor)
     }
 }
