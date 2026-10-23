@@ -1,5 +1,5 @@
 import Metal
-import Satin
+@testable import Satin
 import XCTest
 
 final class SourceShaderReloadTests: XCTestCase {
@@ -45,11 +45,21 @@ final class SourceShaderReloadTests: XCTestCase {
 
         XCTAssertNil(shader.pipelineError)
         XCTAssertEqual(shader.fragmentTextureBindingIsUsed, [.Custom0])
+        let recorded = RecordedLightingPipeline(shader: shader, renderContext: context, layout: nil)
+        let recordedPipeline = try XCTUnwrap(recorded.resolve(lightCount: 1, shadowCount: 0,
+                                                             shadowTextureCount: 0, projectorCount: 0))
 
         try shaderSource(textureCount: 2).write(to: pipelineURL, atomically: false, encoding: .utf8)
         shader.reloadFromSource()
 
         XCTAssertNil(shader.pipelineError)
         XCTAssertEqual(shader.fragmentTextureBindingIsUsed, [.Custom0, .Custom1])
+        let reloaded = RecordedLightingPipeline(shader: shader, renderContext: context, layout: nil)
+        let reloadedPipeline = try XCTUnwrap(reloaded.resolve(lightCount: 1, shadowCount: 0,
+                                                             shadowTextureCount: 0, projectorCount: 0))
+        XCTAssertFalse(recordedPipeline === reloadedPipeline, "Reload invalidates lighting variants too")
+        XCTAssertTrue(recordedPipeline === recorded.resolve(lightCount: 1, shadowCount: 0,
+                                                            shadowTextureCount: 0, projectorCount: 0),
+                      "Already captured work retains its resolved pipeline")
     }
 }

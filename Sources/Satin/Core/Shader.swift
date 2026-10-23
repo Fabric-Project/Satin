@@ -185,6 +185,8 @@ open class Shader {
 
     /// The interned layout of `renderingConfiguration.vertexDescriptor`.
     private var configuredVertexLayout = InternedVertexLayout()
+    /// Captured lighting configurations shared across frames and outstanding recordings.
+    var recordedLightingPipelines: [RecordedLightingPipelineState] = []
     /// One per distinct context, pass and layout this shader is drawn with: a handful, so every draw
     /// finds its variant by comparing a few values in turn rather than hashing a key.
     private var layoutVariants: [LayoutVariant] = []
@@ -457,6 +459,7 @@ open class Shader {
     public var configurationNeedsUpdate = true {
         didSet {
             if configurationNeedsUpdate {
+                recordedLightingPipelines.removeAll(keepingCapacity: true)
                 clearContextStates()
                 pipelineReflection = nil
                 pipelineError = nil
@@ -740,6 +743,8 @@ open class Shader {
     /// Drops every layout variant and its cached source, library and pipeline, as a live
     /// reload does for the base pipelines.
     func invalidateLayoutVariants() {
+        for state in recordedLightingPipelines { state.invalidateCachedSources() }
+        recordedLightingPipelines.removeAll(keepingCapacity: true)
         for variant in layoutVariants {
             ShaderLibrarySourceCache.invalidateLibrarySource(configuration: variant.configuration.getLibraryConfiguration())
             ShaderLibraryCache.invalidateLibrary(configuration: variant.configuration.getLibraryConfiguration())

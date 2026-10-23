@@ -137,6 +137,6 @@ open class SourceShader: Shader {
 
     /// The `#define`, not the bare name, which AlphaOIT.metal's own comments mention.
     private func readAlphaOrderIndependentTransparency() {
-        definesAlphaOrderIndependentTransparency = (try? ShaderSourceCache.getSource(url: pipelineURL))?.contains("#define SATIN_ALPHA_OIT_ENABLED") ?? false
+        definesAlphaOrderIndependentTransparency = (try? ShaderSourceCache.definesAlphaOrderIndependentTransparency(url: pipelineURL)) ?? false
     }
 }
