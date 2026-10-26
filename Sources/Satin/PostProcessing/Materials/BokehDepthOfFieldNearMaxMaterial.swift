@@ -15,8 +15,9 @@ public final class BokehDepthOfFieldNearMaxMaterial: Material {
     )
     private var passUniformsNeedUpdate = true
 
-    public unowned var radiusTexture: MTLTexture? {
-        didSet { set(radiusTexture, index: FragmentTextureIndex.Custom0) }
+    public var radiusTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
     public var maxRadius: Int32 {

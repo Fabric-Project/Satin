@@ -11,6 +11,10 @@
   cache dependency, and abandoning a recording invalidates its own pending versions. Static maps
   remain reusable after encoding. Failure to create a render encoder now throws a SubmissionError.
 
+## Dynamic geometry bounds
+
+- Culling no longer builds a triangle BVH just to compute bounds. Bounds reuse an already-current hierarchy or scan positions, so morphing and regenerated meshes avoid a hierarchy build per frame. Spatial queries still build the hierarchy lazily. Bounds scans respect interleaved position offsets.
+
 ## Stage 4: one drawing thread, plain command buffers
 
 - Queued encoding is gone: `RenderEncoder.renderQueue`, `PostProcessEncoder.renderQueue`, submission
@@ -42,6 +46,14 @@
 - `PointShadow.recordsCastersOnceForAllFaces` and `PacketRecorder.alignsViewSlots` are gone. Casters
   are recorded once for every point-light face, and separately encoded views use 256-byte-aligned slots.
 
+
+## Deferred shadow variants
+
+- Deferred lighting keeps shadow support when a renderer first draws an unshadowed target and later records a shadowed one. Target-wide counts still control whether shadow resources and sampling are included.
+
+## Material texture ownership
+
+- Named texture properties on post-processing, motion-blur and AR post materials now share their retained binding slot. Generic slot replacement or removal updates the property too, preventing stale `unowned` texture access without adding duplicate ownership.
 
 ## Context Init
 

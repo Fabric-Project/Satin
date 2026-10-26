@@ -634,6 +634,13 @@ open class Material: Codable {
         fragmentBufferSlots[index.rawValue].buffer = buffer
     }
 
+    /// Named texture properties use the binding itself as their storage, so generic slot edits
+    /// cannot leave an unowned alias pointing at a released or replaced resource.
+    func texture(at index: FragmentTextureIndex) -> MTLTexture? {
+        let slot = index.rawValue
+        return slot < fragmentTextureSlots.count ? fragmentTextureSlots[slot] : nil
+    }
+
     public func set(_ texture: MTLTexture?, index: FragmentTextureIndex) {
         Self.makeRoom(in: &fragmentTextureSlots, for: index.rawValue, empty: nil)
         fragmentTextureSlots[index.rawValue] = texture

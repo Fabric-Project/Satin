@@ -657,7 +657,7 @@ open class Geometry {
         else if let interleavedBufferAttribute = positionAttribute as? InterleavedBufferAttribute {
             let interleavedBuffer = interleavedBufferAttribute.parent
             return createBVHFromFloatData(
-                interleavedBuffer.data,
+                interleavedBuffer.data?.advanced(by: interleavedBufferAttribute.offset),
                 Int32(interleavedBuffer.stride/MemoryLayout<Float>.size),
                 Int32(interleavedBuffer.count),
                 elementBuffer?.data,
@@ -679,7 +679,9 @@ open class Geometry {
                 return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)
             }
         }
-        if primitiveType == .triangle, let bvh = bvh, let node = bvh.getNode(index: 0) {
+        // Bounds are needed by culling on every geometry change. Reuse a current hierarchy,
+        // but never build one just for its root box: a position scan is enough.
+        if primitiveType == .triangle, !updateBVH, let node = _bvh?.getNode(index: 0) {
             return node.aabb
         }
         else if let positionAttribute = vertexAttributes[.Position] {
@@ -707,7 +709,7 @@ open class Geometry {
             else if let interleavedBufferAttribute = positionAttribute as? InterleavedBufferAttribute {
                 let interleavedBuffer = interleavedBufferAttribute.parent
                 return computeBoundsFromFloatData(
-                    interleavedBuffer.data,
+                    interleavedBuffer.data?.advanced(by: interleavedBufferAttribute.offset),
                     Int32(interleavedBuffer.stride/MemoryLayout<Float>.size),
                     Int32(interleavedBuffer.count)
                 )

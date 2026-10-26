@@ -32,6 +32,95 @@ final class SealedSubmissionTests: XCTestCase {
         return try builder.seal()
     }
 
+    func testSharedMaterialLightingMatchesIsolatedDrawsInBothRecordingOrders() throws {
+        // Different target-wide light counts, and the same light set with and without shadows.
+        // Compare pixels, rather than only checking that packet tables contain different counts.
+        let configurations = [(lights: 0, shadows: false), (lights: 1, shadows: false),
+                              (lights: 2, shadows: false), (lights: 2, shadows: true)]
+        for mode in [RenderingMode.forward, .forwardPlus, .deferredGeometry] {
+            let references = try configurations.map { configuration -> [UInt8] in
+                let renderer = RenderEncoder(context: context)
+                renderer.renderingMode = mode
+                let material = BasicDiffuseMaterial(context: context)
+                return try renderLighting(configuration, renderer: renderer, material: material)
+            }
+            XCTAssertNotEqual(references[0], references[1], "Unlit and lit controls must differ in \(mode)")
+            XCTAssertNotEqual(references[1], references[2], "The additional blue light must affect the image in \(mode)")
+
+            XCTAssertNotEqual(references[2], references[3], "Shadows must affect visible receiver pixels in \(mode)")
+
+            for order in [[0, 1, 2, 3], [3, 2, 1, 0]] {
+                let renderer = RenderEncoder(context: context)
+                renderer.renderingMode = mode
+                let material = BasicDiffuseMaterial(context: context)
+                var submissions: [(index: Int, sealed: SealedSubmission, target: MTLTexture)] = []
+                for index in order {
+                    let output = try target()
+                    let sealed = try recordLighting(configurations[index], renderer: renderer, material: material, output: output)
+                    submissions.append((index, sealed, output))
+                }
+                // Replay in the opposite order, after all recordings changed the shared shader.
+                let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+                for submission in submissions.reversed() {
+                    try submission.sealed.encode(into: commandBuffer)
+                }
+                commandBuffer.commit()
+                commandBuffer.waitUntilCompleted()
+                XCTAssertEqual(commandBuffer.status, .completed, String(describing: commandBuffer.error))
+                for submission in submissions {
+                    let actual = bytes(submission.target)
+                    let expected = references[submission.index]
+                    let differentBytes = zip(actual, expected).filter { $0 != $1 }.count
+                    XCTAssertEqual(differentBytes, 0,
+                                   "Shared material, \(mode), recording order \(order), configuration \(submission.index)")
+                }
+            }
+        }
+    }
+
+    private func renderLighting(_ configuration: (lights: Int, shadows: Bool), renderer: RenderEncoder,
+                                material: Material) throws -> [UInt8] {
+        let output = try target()
+        let submission = try recordLighting(configuration, renderer: renderer, material: material, output: output)
+        let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
+        try submission.encode(into: commandBuffer)
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        XCTAssertEqual(commandBuffer.status, .completed, String(describing: commandBuffer.error))
+        return bytes(output)
+    }
+
+    private func recordLighting(_ configuration: (lights: Int, shadows: Bool), renderer: RenderEncoder,
+                                material: Material, output: MTLTexture) throws -> SealedSubmission {
+        renderer.resize((32, 32))
+        let mesh = Mesh(context: context, geometry: BoxGeometry(context: context), material: material)
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        let receiver = Mesh(context: context, geometry: QuadGeometry(context: context, size: 3), material: material)
+        receiver.position.z = -1
+        receiver.receiveShadow = true
+        let scene = Object(context: context, label: "Lighting isolation", [receiver, mesh])
+        for index in 0 ..< configuration.lights {
+            let light = DirectionalLight(context: context, color: index == 0 ? [1, 0, 0] : [0, 0, 1])
+            light.position = [2, 1, 5]
+            light.lookAt(target: .zero)
+            light.castShadow = configuration.shadows && index == 0
+            light.shadow.resolution = (32, 32)
+            scene.add(light)
+        }
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let viewport = MTLViewport(originX: 0, originY: 0, width: 32, height: 32, znear: 0, zfar: 1)
+        let descriptor = MTLRenderPassDescriptor()
+        descriptor.colorAttachments[0].texture = output
+        let builder = renderer.makeSubmissionBuilder(frame: .zero, cameras: [camera], viewports: [viewport])
+        mesh.update()
+        receiver.update()
+        // This is the Iterator path: capture children first, finalize against the target afterwards.
+        try builder.record(scene: scene)
+        try builder.record(scene: Object(context: context), renderPassDescriptor: descriptor)
+        return try builder.seal()
+    }
+
     func testSealAMutateAndSealBThenEncodeAWithoutLiveReads() throws {
         let encoder = RenderEncoder(context: context)
         encoder.resize((32, 32))

@@ -23,20 +23,24 @@ public final class SsaoDenoiseMaterial: Material {
     private var viewMatrix = matrix_identity_float4x4
     private var uniformsNeedUpdate = true
 
-    public unowned var aoTexture: MTLTexture? {
-        didSet { set(aoTexture, index: FragmentTextureIndex.Custom0) }
+    public var aoTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom2) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
-    public unowned var blueNoiseTexture: MTLTexture? {
-        didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom3) }
+    public var blueNoiseTexture: MTLTexture? {
+        get { texture(at: .Custom3) }
+        set { set(newValue, index: FragmentTextureIndex.Custom3) }
     }
 
     public var quality: Int32 = 2 {

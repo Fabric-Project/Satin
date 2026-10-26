@@ -111,6 +111,46 @@ final class OwnershipLinkTests: XCTestCase {
         XCTAssertEqual(container.structureRevision, revision + 1, "one occurrence remains, so it still contains the child")
     }
 
+    // MARK: - Material texture bindings
+
+    func testNamedTexturesFollowGenericBindingReplacementAndRemoval() throws {
+        try checkTextureBinding(SsaoCompositeMaterial(context: context), property: \.colorTexture, index: .Custom0)
+        try checkTextureBinding(MotionBlurMaterial(context: context), property: \.depthTexture, index: .Custom3)
+        try checkTextureBinding(ARPostMaterial(context: context), property: \.cameraGrainTexture, index: .Custom1)
+    }
+
+    func testNamedTextureIsRetainedOnlyUntilItsBindingIsCleared() throws {
+        let material = SsaoCompositeMaterial(context: context)
+        weak var retainedTexture: MTLTexture?
+        try autoreleasepool {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+            let texture = try XCTUnwrap(context.device.makeTexture(descriptor: descriptor))
+            retainedTexture = texture
+            material.colorTexture = texture
+        }
+        XCTAssertNotNil(retainedTexture, "The binding owns its texture after the caller releases it")
+        autoreleasepool {
+            material.set(nil as MTLTexture?, index: FragmentTextureIndex.Custom0)
+        }
+        XCTAssertNil(retainedTexture, "The named property must not keep a second owner")
+        XCTAssertNil(material.colorTexture, "Reading after release must be safe")
+    }
+
+    private func checkTextureBinding<MaterialType: Material>(_ material: MaterialType,
+        property: ReferenceWritableKeyPath<MaterialType, MTLTexture?>, index: FragmentTextureIndex) throws {
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        let original = try XCTUnwrap(context.device.makeTexture(descriptor: descriptor))
+        let replacement = try XCTUnwrap(context.device.makeTexture(descriptor: descriptor))
+        material[keyPath: property] = original
+        XCTAssertTrue(material[keyPath: property] === original)
+        material.set(replacement, index: index)
+        XCTAssertTrue(material[keyPath: property] === replacement, "The named property and binding are one value")
+        material.set(nil as MTLTexture?, index: index)
+        // Keep both textures alive through the assertion: the old unowned alias otherwise traps.
+        XCTAssertNil(material[keyPath: property], "Clearing the binding also clears its named property")
+        withExtendedLifetime((original, replacement)) {}
+    }
+
     // MARK: - Subscriptions
 
     func testAGeometryOutlivingItsMeshCanStillChange() {

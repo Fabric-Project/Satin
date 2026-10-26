@@ -172,6 +172,8 @@ Binding the render event's `vertexUniforms` to any stage follows the view being 
 
 Every pass now skips a renderable whose world bounds are wholly outside its views: each colour view (a multiview pass keeps it if any view may see it), each spot or directional shadow camera, and each point-light face. Only the four side planes of a view are tested, never near or far, and empty or non-finite bounds are never culled, so a renderable whose bounds cover what it draws renders exactly as before.
 
+Bounds queries reuse the BVH root only when that hierarchy is already current. Otherwise they scan the CPU position attribute, without triggering a BVH build; unused positions can make that box more conservative than an indexed triangle hierarchy. Raycasts and explicit `geometry.bvh` reads still build a stale hierarchy lazily.
+
 A renderable that draws outside its geometry's bounds must opt out with `frustumCulled = false`: vertex displacement (tessellation with a displacement map included), billboards, shaders that place vertices in clip space themselves, or custom renderables whose bounds don't describe what they draw.
 
 ## Point-light shadows
@@ -201,7 +203,7 @@ The one-line `draw(...)` overloads make a builder, record, seal and encode it ba
 
 CPU `update()` / `onUpdate` still run while recording. GPU preparation through custom `encode(in:)` hooks is encoded into `preparationCommandBuffer` when you pass one to `record`; without one, encode that preparation yourself before the command buffer the sealed scene is encoded into. The one-line `draw(...)` overloads pass the command buffer they draw into.
 
-Holding a Metal resource keeps its identity alive, not its contents immutable. External buffers/textures must remain unchanged until completion, or use versioned resources. Draw-context buffer setters accept an explicit `copyOnRecordLength:` for CPU-readable buffer snapshots; the default retains the supplied buffer. Renderer-owned output textures still follow the immediate reuse policy: callers recording distinct render-to-texture results must supply distinct targets and keep them unavailable for reuse until every GPU reader completes. Frame-level output leases and scheduling come next.
+Holding a Metal resource keeps its identity alive, not its contents immutable. External buffers/textures must remain unchanged until completion, or use versioned resources. Draw-context buffer setters accept an explicit `copyOnRecordLength:` for CPU-readable buffer snapshots; the default retains the supplied buffer. Renderer-owned output textures still follow the immediate reuse policy: callers recording distinct render-to-texture results must supply distinct targets and keep them unavailable for reuse until every GPU reader completes. Satin does not schedule frames or manage an output-image pool; the host owns target reuse. Thread scheduling and UI-to-execution handoff are deferred.
 
 ## Custom shadow resource bindings
 
@@ -232,7 +234,7 @@ Writable resources are caller-owned GPU state: keep their bytes stable while pen
 
 ## Tessellation preparation success
 
-`Tessellator` now requires `encodeFactors(_:into:iterations:) -> Bool`. `TessellationMesh` uses this operation to prepare each destination and publishes it only when the tessellator reports success. A missing pipeline or unavailable encoder therefore leaves no factors bound, suppresses that draw, and keeps a requested freeze pending for retry. This reports encoding success, not GPU completion, and adds no wait.
+`Tessellator` now requires `encodeFactors(_:into:iterations:) throws -> Bool`. `TessellationMesh` uses this operation to prepare each destination and publishes it only when the tessellator reports success. A missing pipeline or unavailable encoder therefore leaves no factors bound, suppresses that draw, and keeps a requested freeze pending for retry. This reports encoding success, not GPU completion, and adds no wait.
 
 `TessellationProcessor` implements the operation through its existing `update` path. Its standard implementation reports success only after a dispatch; the supplied destination is scoped to that preparation. Existing direct `update` calls remain available. Custom tessellators that produce factors through their own Metal/blit work must implement or override `encodeFactors` and return true only after encoding that work. They must not assume a Void update means factors exist.
 
@@ -247,3 +249,7 @@ Frame-arena allocation and immutable compute-input copies throw `GPUError.alloca
 - `IBLScene.setEnvironment` and `setEnvironmentCubemap` remain asynchronous and require a `completion: (Result<Void, Error>) -> Void`. Success is delivered after GPU completion; failures include preparation/allocation errors and Metal execution errors. Completion runs on the preparation worker or Metal callback thread; the caller chooses where to handle it. Command-queue/buffer creation failures and an execution failure without a Metal error use the corresponding `GPUError` cases.
 
 The view renderer's existing error boundary reports failures through `errorDelegate` and submits the frame's remaining command buffer so its frame permit and already-used storage retire normally. Direct command-buffer callers must still complete or abandon their own work; an error does not implicitly commit their buffer.
+
+## Named material textures share binding storage
+
+The named texture properties on post-processing, motion-blur and AR post materials read and write the material's retained fragment texture slot directly. Replacing or clearing that slot with `set(_:index:)` is visible through the named property too; no separate `unowned` texture alias remains. Recorded packets still retain the textures captured at record time, independently of later material changes.

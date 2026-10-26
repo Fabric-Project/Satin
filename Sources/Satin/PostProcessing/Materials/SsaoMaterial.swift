@@ -25,16 +25,19 @@ public final class SsaoMaterial: Material {
     private var viewMatrix = matrix_identity_float4x4
     private var uniformsNeedUpdate = true
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom0) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom1) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var blueNoiseTexture: MTLTexture? {
-        didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom2) }
+    public var blueNoiseTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
     public var radius: Float {
@@ -54,9 +57,9 @@ public final class SsaoMaterial: Material {
     }
 
     public init(context: Context, depthTexture: MTLTexture? = nil, normalTexture: MTLTexture? = nil) {
+        super.init(context: context)
         self.depthTexture = depthTexture
         self.normalTexture = normalTexture
-        super.init(context: context)
         configure()
     }
 

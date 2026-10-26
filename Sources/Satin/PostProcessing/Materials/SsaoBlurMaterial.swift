@@ -15,16 +15,19 @@ public final class SsaoBlurMaterial: Material {
     )
     private var passUniformsNeedUpdate = true
 
-    public unowned var ssaoTexture: MTLTexture? {
-        didSet { set(ssaoTexture, index: FragmentTextureIndex.Custom0) }
+    public var ssaoTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom2) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
     public var depthPhi: Float {

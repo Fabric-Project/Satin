@@ -46,6 +46,55 @@ final class GeometryBufferObserverTests: XCTestCase {
         XCTAssertEqual(parent.worldBounds.max.x, 2, accuracy: 1e-5, "the cached bounds are invalidated without an update")
     }
 
+    func testWorldBoundsDoNotBuildATriangleHierarchy() {
+        let geometry = BoxGeometry(context: context, width: 1, height: 1, depth: 1)
+        let mesh = Mesh(context: context, geometry: geometry, material: nil)
+        mesh.position = [3, 0, 0]
+
+        XCTAssertTrue(geometry.updateBVH)
+        XCTAssertEqual(mesh.worldBounds.min.x, 2.5, accuracy: 1e-5)
+        XCTAssertEqual(mesh.worldBounds.max.x, 3.5, accuracy: 1e-5)
+        XCTAssertTrue(geometry.updateBVH, "Culling needs bounds, not a triangle hierarchy")
+    }
+
+    func testChangedPositionsUseFreshBoundsWithoutRebuildingAStaleHierarchy() throws {
+        let positions = Float3BufferAttribute(defaultValue: .zero, data: [[0, 0, 0], [1, 0, 0], [0, 1, 0]])
+        let geometry = Geometry(context: context)
+        geometry.addAttribute(positions, for: .Position)
+        XCTAssertNotNil(geometry.bvh, "An explicit spatial query can build the hierarchy")
+        XCTAssertFalse(geometry.updateBVH)
+        XCTAssertEqual(geometry.bounds.max.x, 1, accuracy: 1e-5)
+
+        positions.data = [[10, 0, 0], [12, 0, 0], [10, 2, 0]]
+        XCTAssertTrue(geometry.updateBVH)
+        XCTAssertEqual(geometry.bounds.min.x, 10, accuracy: 1e-5)
+        XCTAssertEqual(geometry.bounds.max.x, 12, accuracy: 1e-5)
+        XCTAssertTrue(geometry.updateBVH, "Reading changed bounds must leave the stale hierarchy lazy")
+
+        let rebuilt = try XCTUnwrap(geometry.bvh)
+        XCTAssertFalse(geometry.updateBVH)
+        XCTAssertEqual(try XCTUnwrap(rebuilt.getNode(index: 0)).aabb.max.x, 12, accuracy: 1e-5,
+                       "A later spatial query still rebuilds against the new positions")
+    }
+
+    func testBoundsScanHonorsInterleavedPositionOffset() {
+        var vertices: [SIMD4<Float>] = [[100, 100, 100, 0], [-2, -3, -4, 1],
+                                      [100, 100, 100, 0], [2, 3, 4, 1],
+                                      [100, 100, 100, 0], [0, 0, 0, 1]]
+        vertices.withUnsafeMutableBytes { bytes in
+            let buffer = InterleavedBuffer(index: .Vertices, data: bytes.baseAddress,
+                stride: MemoryLayout<SIMD4<Float>>.stride * 2, count: 3, source: nil)
+            let geometry = Geometry(context: context)
+            geometry.addAttribute(Float4InterleavedBufferAttribute(parent: buffer, offset: MemoryLayout<SIMD4<Float>>.stride), for: .Position)
+            XCTAssertEqual(geometry.bounds.min, [-2, -3, -4])
+            XCTAssertEqual(geometry.bounds.max, [2, 3, 4])
+            XCTAssertTrue(geometry.updateBVH)
+            XCTAssertEqual(geometry.bvh?.getNode(index: 0)?.aabb.min, [-2, -3, -4])
+            geometry.updateBounds = true
+            XCTAssertEqual(geometry.bounds.max, [2, 3, 4], "Reusing the hierarchy must agree with the scan")
+        }
+    }
+
     // MARK: - Lifetime
 
     func testAGeometryBeingDestroyedSendsNoUpdate() throws {

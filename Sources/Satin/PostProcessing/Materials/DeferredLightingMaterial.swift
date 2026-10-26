@@ -4,9 +4,9 @@ import simd
 private final class DeferredLightingShader: StandardShader {
     override func getDefines() -> [ShaderDefine] {
         var results = super.getDefines()
-        if directShadowCount > 0, directShadowTextureCount > 0 {
-            results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true")))
-        }
+        // The resolve always supports shadows. Target-wide count defines decide whether the
+        // shader declares/samples them; capability must not depend on the first recorded target.
+        results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true")))
         return results
     }
 }
@@ -15,24 +15,29 @@ public final class DeferredLightingMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
     override public var supportedOutputs: RendererOutputs { [.color] }
 
-    public unowned var albedoTexture: MTLTexture? {
-        didSet { set(albedoTexture, index: FragmentTextureIndex.Custom0) }
+    public var albedoTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom1) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var pbrTexture: MTLTexture? {
-        didSet { set(pbrTexture, index: FragmentTextureIndex.Custom2) }
+    public var pbrTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
-    public unowned var emissiveTexture: MTLTexture? {
-        didSet { set(emissiveTexture, index: FragmentTextureIndex.Custom3) }
+    public var emissiveTexture: MTLTexture? {
+        get { texture(at: .Custom3) }
+        set { set(newValue, index: FragmentTextureIndex.Custom3) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom4) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom4) }
+        set { set(newValue, index: FragmentTextureIndex.Custom4) }
     }
 
     public var reflectionTexture: MTLTexture? {

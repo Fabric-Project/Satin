@@ -5,12 +5,14 @@ import Metal
 public final class MotionBlurNeighborMaxMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    public unowned var tileMaxTexture: MTLTexture? {
-        didSet { set(tileMaxTexture, index: FragmentTextureIndex.Custom0) }
+    public var tileMaxTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var jumpFloodTexture: MTLTexture? {
-        didSet { set(jumpFloodTexture, index: FragmentTextureIndex.Custom1) }
+    public var jumpFloodTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
     public required init(context: Context) {

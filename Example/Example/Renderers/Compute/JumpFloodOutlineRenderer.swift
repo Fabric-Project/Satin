@@ -25,8 +25,8 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         var spacing: Int = 8
         var initTexture: MTLTexture?
 
-        override func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) {
-            super.bindUniforms(computeEncoder)
+        override func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) throws {
+            try super.bindUniforms(computeEncoder)
             computeEncoder.setBytes(&spacing, length: MemoryLayout<Int>.size, index: ComputeBufferIndex.Custom0.rawValue)
         }
 
