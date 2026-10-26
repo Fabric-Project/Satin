@@ -80,13 +80,13 @@ open class BasicTextureMaterial: BasicColorMaterial {
         }
     }
 
-    override public func draw(in context: MaterialDrawContext) {
+    override public func draw(in context: MaterialDrawContext) throws {
         if let texture {
             context.setFragmentTexture(texture, index: .Custom0)
         }
         if let sampler {
             context.setFragmentSamplerState(sampler, index: .Custom0)
         }
-        super.draw(in: context)
+        try super.draw(in: context)
     }
 }

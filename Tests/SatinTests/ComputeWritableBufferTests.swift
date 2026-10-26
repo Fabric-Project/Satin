@@ -62,7 +62,7 @@ final class ComputeWritableBufferTests: XCTestCase {
             values.update(data: [UInt32](repeating: 0, count: count))
             processor.set(values, index: .Custom0)
             let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            processor.update(commandBuffer)
+            try processor.update(commandBuffer)
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
             XCTAssertEqual(commandBuffer.status, .completed, String(describing: commandBuffer.error))
@@ -78,10 +78,10 @@ final class ComputeWritableBufferTests: XCTestCase {
         values.update(data: [0, 0, 0, 0])
         processor.set(values, index: .Custom0)
         weak var weakCommandBuffer: MTLCommandBuffer?
-        autoreleasepool {
+        try autoreleasepool {
             let commandBuffer = commandQueue.makeCommandBuffer()!
             weakCommandBuffer = commandBuffer
-            processor.update(commandBuffer)
+            try processor.update(commandBuffer)
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
         }

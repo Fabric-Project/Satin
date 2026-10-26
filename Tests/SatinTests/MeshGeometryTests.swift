@@ -47,7 +47,7 @@ final class MeshGeometryTests: XCTestCase {
         mesh.update()
         mesh.beginOccurrence(frame: .zero)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all,
+        let packets = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all,
                                       views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
         return (packets.map { storage.packets[$0].cullMode }, storage)
     }

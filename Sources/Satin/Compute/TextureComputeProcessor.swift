@@ -48,33 +48,33 @@ open class TextureComputeProcessor: ComputeProcessor {
 
     // MARK: - Reset
 
-    override open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        super.update(commandBuffer)
+    override open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) throws {
+        try super.update(commandBuffer)
 
         guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
 
         if computeTextures.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            defer { computeEncoder.endEncoding() }
             computeEncoder.label = label
-            inputCopies.withCommandBuffer(commandBuffer) {
-                encode(computeEncoder, iterations: iterations)
+            try inputCopies.withCommandBuffer(commandBuffer) {
+                try encode(computeEncoder, iterations: iterations)
             }
-            computeEncoder.endEncoding()
         }
     }
 
-    override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        super.update(computeEncoder)
+    override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try super.update(computeEncoder)
 
         if computeTextures.count > 0 {
-            inputCopies.withCommandBuffer(nil) {
-                encode(computeEncoder, iterations: iterations)
+            try inputCopies.withCommandBuffer(nil) {
+                try encode(computeEncoder, iterations: iterations)
             }
         }
     }
 
-    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        bindUniforms(computeEncoder)
-        bindBuffers(computeEncoder)
+    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try bindUniforms(computeEncoder)
+        try bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
 
         if _reset, let pipeline = resetPipeline {

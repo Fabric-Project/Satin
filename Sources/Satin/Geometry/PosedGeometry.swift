@@ -56,14 +56,14 @@ open class PosedGeometry: Geometry {
         updatePose()
     }
 
-    override open func encode(in context: EncodingContext) {
-        source.encode(in: context)
+    override open func encode(in context: EncodingContext) throws {
+        try source.encode(in: context)
     }
 
     /// Draws through the source's own `draw(in:)`, with this view's palette replacing the source's
     /// when this view is skinned.
-    override open func draw(in context: GeometryDrawContext) {
-        source.draw(in: context.replacingJointPalette(isSkinned ? jointPalette : context.jointPalette))
+    override open func draw(in context: GeometryDrawContext) throws {
+        try source.draw(in: context.replacingJointPalette(isSkinned ? jointPalette : context.jointPalette))
     }
 
     /// The source's vertices, moved by this view's palette.

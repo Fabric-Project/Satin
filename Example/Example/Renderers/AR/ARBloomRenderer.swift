@@ -164,7 +164,7 @@ final class ARBloomRenderer: BaseRenderer {
         )
 
         if let colorTexture = bloomRenderer.colorTexture {
-            postMaterial.bloomTexture = bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture)
+            postMaterial.bloomTexture = try bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture)
         }
 
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture

@@ -128,7 +128,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
-    func update(_ commandBuffer: MTLCommandBuffer) {
+    func update(_ commandBuffer: MTLCommandBuffer) throws {
         if upscaleDepth,
            let capturedImageTextureY = capturedImageTextureY,
            let yTexture = CVMetalTextureGetTexture(capturedImageTextureY),
@@ -137,7 +137,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
            let depthTexture = sceneDepthTexture,
            let depthTexture = CVMetalTextureGetTexture(depthTexture)
         {
-            upscaledSceneDepthTexture = depthUpscaler.update(
+            upscaledSceneDepthTexture = try depthUpscaler.update(
                 commandBuffer: commandBuffer,
                 yTexture: yTexture,
                 cbcrTexture: cbcrTexture,
@@ -156,21 +156,15 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer
-    ) {
-        update(commandBuffer)
-
-        // A post-processor's draw doesn't throw: a rejected depth draw is reported here.
-        do {
-            try depthRenderer.draw(
-                frame: frame,
-                renderPassDescriptor: renderPassDescriptor,
-                commandBuffer: commandBuffer,
-                scene: depthScene,
-                camera: depthCamera
-            )
-        } catch {
-            reportDepthDrawFailure(error)
-        }
+    ) throws {
+        try update(commandBuffer)
+        try depthRenderer.draw(
+            frame: frame,
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            scene: depthScene,
+            camera: depthCamera
+        )
     }
 
     override public func draw(
@@ -178,26 +172,16 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         renderTarget: MTLTexture
-    ) {
-        update(commandBuffer)
-
-        do {
-            try depthRenderer.draw(
-                frame: frame,
-                renderPassDescriptor: renderPassDescriptor,
-                commandBuffer: commandBuffer,
-                scene: depthScene,
-                camera: depthCamera,
-                renderTarget: renderTarget
-            )
-        } catch {
-            reportDepthDrawFailure(error)
-        }
-    }
-
-    private func reportDepthDrawFailure(_ error: Error) {
-        print("\(label): depth draw failed: \(error)")
-        assertionFailure("\(label): depth draw failed: \(error)")
+    ) throws {
+        try update(commandBuffer)
+        try depthRenderer.draw(
+            frame: frame,
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            scene: depthScene,
+            camera: depthCamera,
+            renderTarget: renderTarget
+        )
     }
 
     override public func resize(size: (width: Float, height: Float), scaleFactor: Float) {

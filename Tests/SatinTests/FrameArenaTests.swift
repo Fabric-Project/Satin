@@ -15,21 +15,21 @@ final class FrameArenaTests: XCTestCase {
         try XCTUnwrap(lease).retain(untilCompleted: commandBuffer)
         lease = nil
         let other = arena.lease(frame: .zero)
-        XCTAssertFalse(other.allocate(length: 32).buffer === slice.buffer)
+        XCTAssertFalse(try other.allocate(length: 32).buffer === slice.buffer)
         XCTAssertEqual(slice.contents.load(as: UInt32.self), 42)
         complete(commandBuffer)
         let later = arena.lease(frame: .zero)
-        XCTAssertTrue(later.allocate(length: 32).buffer === slice.buffer)
+        XCTAssertTrue(try later.allocate(length: 32).buffer === slice.buffer)
     }
 
-    func testAbandonedLeaseImmediatelyReleasesItsStorage() {
+    func testAbandonedLeaseImmediatelyReleasesItsStorage() throws {
         let arena = FrameArena(device: device)
         var buffer: MTLBuffer?
         do {
             let lease = arena.lease(frame: .zero)
-            buffer = lease.allocate(length: 32).buffer
+            buffer = try lease.allocate(length: 32).buffer
         }
-        XCTAssertTrue(arena.lease(frame: .zero).allocate(length: 32).buffer === buffer)
+        XCTAssertTrue(try arena.lease(frame: .zero).allocate(length: 32).buffer === buffer)
     }
 
     func testACompletedSegmentDoesNotReleaseTheFramesProducerLease() throws {
@@ -41,7 +41,7 @@ final class FrameArenaTests: XCTestCase {
         lease?.retain(untilCompleted: prefix)
         complete(prefix)
         let unrelated = arena.lease(frame: .zero)
-        XCTAssertFalse(unrelated.allocate(length: 32).buffer === first.buffer, "the producer still holds the lease's chunks")
+        XCTAssertFalse(try unrelated.allocate(length: 32).buffer === first.buffer, "the producer still holds the lease's chunks")
         let second = try XCTUnwrap(lease).allocate(length: 32)
         XCTAssertTrue(second.buffer === first.buffer)
         XCTAssertNotEqual(second.offset, first.offset)
@@ -51,9 +51,9 @@ final class FrameArenaTests: XCTestCase {
         lease = nil
         // Kept alive, so its own chunk isn't free for the next lease to take instead.
         let probe = arena.lease(frame: .zero)
-        XCTAssertFalse(probe.allocate(length: 32).buffer === first.buffer, "the final segment still holds them")
+        XCTAssertFalse(try probe.allocate(length: 32).buffer === first.buffer, "the final segment still holds them")
         complete(final)
-        XCTAssertTrue(arena.lease(frame: .zero).allocate(length: 32).buffer === first.buffer, "and gives them back on completion")
+        XCTAssertTrue(try arena.lease(frame: .zero).allocate(length: 32).buffer === first.buffer, "and gives them back on completion")
         withExtendedLifetime((unrelated, probe)) {}
     }
 
@@ -84,12 +84,28 @@ final class FrameArenaTests: XCTestCase {
         lease.finishRecording()
     }
 
+    func testAllocationFailureThrowsAndLeavesLeaseUsable() throws {
+        let arena = FrameArena(device: device)
+        let lease = arena.lease(frame: .zero)
+        let first = try lease.allocate(length: 32)
+        first.contents.storeBytes(of: UInt32(123), as: UInt32.self)
+
+        XCTAssertThrowsError(try lease.allocate(length: device.maxBufferLength + 1)) { error in
+            XCTAssertEqual(error as? GPUError, .allocationFailed)
+        }
+        XCTAssertEqual(arena.chunkCount, 1)
+        XCTAssertEqual(first.contents.load(as: UInt32.self), 123)
+        let next = try lease.allocate(length: 32)
+        XCTAssertTrue(next.buffer === first.buffer)
+        XCTAssertGreaterThan(next.offset, first.offset)
+    }
+
     func testSlicesAreAligned() throws {
         let lease = FrameArena(device: device).lease(frame: .zero)
 
-        _ = lease.allocate(length: 3)
-        let aligned = lease.allocate(length: 64, alignment: 256)
-        let smallAlignment = lease.allocate(length: 8, alignment: 16)
+        _ = try lease.allocate(length: 3)
+        let aligned = try lease.allocate(length: 64, alignment: 256)
+        let smallAlignment = try lease.allocate(length: 8, alignment: 16)
 
         XCTAssertEqual(aligned.offset % 256, 0)
         XCTAssertEqual(smallAlignment.offset % 16, 0)
@@ -99,10 +115,10 @@ final class FrameArenaTests: XCTestCase {
     func testGrowthNeverMovesEarlierSlices() throws {
         let lease = FrameArena(device: device, initialChunkLength: 1024, maximumChunkLength: 4096).lease(frame: .zero)
 
-        let first = lease.allocate(length: 512)
+        let first = try lease.allocate(length: 512)
         first.contents.storeBytes(of: UInt32(0xC0FFEE), as: UInt32.self)
-        let second = lease.allocate(length: 900)
-        let oversized = lease.allocate(length: 10_000)
+        let second = try lease.allocate(length: 900)
+        let oversized = try lease.allocate(length: 10_000)
 
         XCTAssertFalse(first.buffer === second.buffer, "a full chunk is followed by a new one")
         XCTAssertGreaterThanOrEqual(oversized.buffer.length - oversized.offset, 10_000)
@@ -113,8 +129,8 @@ final class FrameArenaTests: XCTestCase {
         let arena = FrameArena(device: device)
         let lease = arena.lease(frame: .zero)
 
-        let first = lease.allocate(length: 64)
-        let second = lease.allocate(length: 64)
+        let first = try lease.allocate(length: 64)
+        let second = try lease.allocate(length: 64)
 
         XCTAssertTrue(first.buffer === second.buffer)
         XCTAssertEqual(arena.chunkCount, 1)
@@ -124,19 +140,19 @@ final class FrameArenaTests: XCTestCase {
         let arena = FrameArena(device: device)
         let inFlight = try makeCommandBuffer()
         let inFlightLease = arena.lease(frame: .zero)
-        let inFlightSlice = inFlightLease.allocate(length: 64)
+        let inFlightSlice = try inFlightLease.allocate(length: 64)
         submit(inFlightLease, to: inFlight)
 
         let concurrent = try makeCommandBuffer()
         let concurrentLease = arena.lease(frame: .zero)
-        let concurrentSlice = concurrentLease.allocate(length: 64)
+        let concurrentSlice = try concurrentLease.allocate(length: 64)
         submit(concurrentLease, to: concurrent)
         XCTAssertFalse(inFlightSlice.buffer === concurrentSlice.buffer, "an incomplete segment's chunk is not shared")
 
         complete(inFlight)
         complete(concurrent)
 
-        let laterSlice = arena.lease(frame: .zero).allocate(length: 64)
+        let laterSlice = try arena.lease(frame: .zero).allocate(length: 64)
         XCTAssertTrue(laterSlice.buffer === inFlightSlice.buffer || laterSlice.buffer === concurrentSlice.buffer)
         XCTAssertEqual(arena.chunkCount, 2, "no new chunk once completed ones are free")
     }
@@ -149,11 +165,11 @@ final class FrameArenaTests: XCTestCase {
         try autoreleasepool {
             let abandoned = try makeCommandBuffer()
             let lease = arena.lease(frame: .zero)
-            abandonedBuffer = lease.allocate(length: 64).buffer
+            abandonedBuffer = try lease.allocate(length: 64).buffer
             submit(lease, to: abandoned)
         }
 
-        XCTAssertTrue(arena.lease(frame: .zero).allocate(length: 64).buffer === abandonedBuffer)
+        XCTAssertTrue(try arena.lease(frame: .zero).allocate(length: 64).buffer === abandonedBuffer)
         XCTAssertEqual(arena.chunkCount, 1)
     }
 
@@ -162,7 +178,7 @@ final class FrameArenaTests: XCTestCase {
         func frame() throws {
             let commandBuffer = try makeCommandBuffer()
             let lease = arena.lease(frame: .zero)
-            for _ in 0 ..< 20 { _ = lease.allocate(length: 512) }
+            for _ in 0 ..< 20 { _ = try lease.allocate(length: 512) }
             submit(lease, to: commandBuffer)
             complete(commandBuffer)
         }

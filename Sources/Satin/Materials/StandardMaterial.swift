@@ -264,8 +264,8 @@ open class StandardMaterial: Material {
         StandardShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
-    override open func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
+    override open func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
         // The default depth-only shadow needs no maps. Unknown/custom shadow fragments keep
         // maps available for cutouts/transmission instead of borrowing colour-stage assumptions.
         if context.isShadowPass, context.storage.recordingPipelineUsage?.fragment.textures.isEmpty == true { return }

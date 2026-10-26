@@ -205,15 +205,15 @@ open class Mesh: Renderable {
     /// Binds the render event's vertex uniforms to the stages `material`'s shader reads them in.
     /// Called after the material records, so its pipeline, and with it which stages read them, is
     /// known. Repeat bindings across submeshes are skipped when the draws encode.
-    func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) {
+    func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) throws {
         guard let shader = material.shader else { return }
         let vertexUniforms = context.vertexUniforms
         let usage = context.storage.recordingPipelineUsage
         if shader.vertexWantsVertexUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.VertexUniforms.rawValue) ?? true) {
-            context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+            try context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
         if shader.fragmentWantsVertexUniforms || (usage?.fragment.buffers.contains(FragmentBufferIndex.VertexUniforms.rawValue) ?? true) {
-            context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
+            try context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
     }
 
@@ -245,13 +245,13 @@ open class Mesh: Renderable {
         updateBounds = true
     }
 
-    override open func encode(in context: EncodingContext) {
-        geometry.encode(in: context)
-        material?.encode(in: context)
+    override open func encode(in context: EncodingContext) throws {
+        try geometry.encode(in: context)
+        try material?.encode(in: context)
         for submesh in submeshes {
-            submesh.encode(in: context)
+            try submesh.encode(in: context)
         }
-        super.encode(in: context)
+        try super.encode(in: context)
     }
 
     private func updateAllMaterials()
@@ -271,14 +271,14 @@ open class Mesh: Renderable {
 
     // MARK: - Draw
 
-    override open func draw(in context: RenderableDrawContext) {
-        drawMesh(in: context, instanceCount: instanceCount)
+    override open func draw(in context: RenderableDrawContext) throws {
+        try drawMesh(in: context, instanceCount: instanceCount)
     }
 
     /// Records this mesh's draws with `instanceCount` instances: for each submesh drawn in this
     /// pass, or for itself, its material, vertex uniforms, then its geometry's `draw(in:)` (over the
     /// submesh's indices for a submesh). Nothing to draw records nothing.
-    func drawMesh(in context: RenderableDrawContext, instanceCount: Int) {
+    func drawMesh(in context: RenderableDrawContext, instanceCount: Int) throws {
         // Read once for the whole draw: a class property read is a checked access each time.
         let geometry = self.geometry
         guard instanceCount > 0, geometry.hasVertexBuffers else { return }
@@ -290,14 +290,14 @@ open class Mesh: Renderable {
                 guard let submeshMaterial = submesh.material,
                       materialMatchesCurrentPass(submeshMaterial, in: context)
                 else { continue }
-                submeshMaterial.draw(in: context.materialContext(layout: layout))
-                recordVertexUniforms(in: context, for: submeshMaterial)
-                geometry.draw(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: submesh.indexBufferOffset, elements: submesh.geometry))
+                try submeshMaterial.draw(in: context.materialContext(layout: layout))
+                try recordVertexUniforms(in: context, for: submeshMaterial)
+                try geometry.draw(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: submesh.indexBufferOffset, elements: submesh.geometry))
             }
         } else if let material, materialMatchesCurrentPass(material, in: context) {
-            material.draw(in: context.materialContext(layout: layout))
-            recordVertexUniforms(in: context, for: material)
-            geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
+            try material.draw(in: context.materialContext(layout: layout))
+            try recordVertexUniforms(in: context, for: material)
+            try geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
         }
     }
 

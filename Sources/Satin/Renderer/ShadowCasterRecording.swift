@@ -41,6 +41,11 @@ final class ShadowCasterRecording {
 
     func prepare(_ shadows: ContiguousArray<Shadow>, context: Context, renderables: ContiguousArray<Renderable>,
                  occurrences: [RecordedShadowOccurrence] = [], recorder: PacketRecorder) throws -> [RecordedRenderPass] {
+        defer {
+            batch.removeAll(keepingCapacity: true)
+            passes.removeAll(keepingCapacity: true)
+            casters.removeAll(keepingCapacity: true)
+        }
         var result: [RecordedRenderPass] = []
         batch.removeAll(keepingCapacity: true)
         var batchViewCount = 0
@@ -83,7 +88,6 @@ final class ShadowCasterRecording {
         for renderable in renderables where renderable.castShadow {
             var reached = allPasses
             if renderable.frustumCulled {
-                RecordingProfile.begin(.shadowCulling)
                 let bounds = renderable.worldBounds
                 reached = 0
                 var shadowReaches = false
@@ -93,7 +97,6 @@ final class ShadowCasterRecording {
                         reached |= UInt64(1) << UInt64(index)
                     }
                 }
-                RecordingProfile.end()
             }
             guard reached != 0 else { continue }
 
@@ -101,7 +104,7 @@ final class ShadowCasterRecording {
             // recorded again for each pass they reach.
             let servesEveryView = context.vertexAmplificationCount <= 1
             let packets = servesEveryView
-                ? recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: views)
+                ? try recorder.record(renderable, renderContext: context, pass: .shadow, materialPass: .all, views: views)
                 : 0 ..< 0
             casters.append(Caster(renderable: renderable, packets: packets, passes: reached, servesEveryView: servesEveryView))
         }
@@ -123,7 +126,7 @@ final class ShadowCasterRecording {
                 if caster.servesEveryView {
                     planned.commands.append(.range(caster.packets, viewIndex: index))
                 } else {
-                    let packets = recorder.record(caster.renderable, renderContext: context, pass: .shadow, materialPass: .all, views: [views[index]])
+                    let packets = try recorder.record(caster.renderable, renderContext: context, pass: .shadow, materialPass: .all, views: [views[index]])
                     planned.commands.append(.range(packets, viewIndex: 0))
                 }
             }
@@ -132,7 +135,7 @@ final class ShadowCasterRecording {
                     guard pass.shadow.mayReach(occurrence.bounds),
                           frusta[index].mayContain(occurrence.bounds) else { continue }
                 }
-                let uniforms = recorder.reserveVertexUniforms(occurrence: occurrence.occurrence,
+                let uniforms = try recorder.reserveVertexUniforms(occurrence: occurrence.occurrence,
                                                                viewCount: max(1, context.vertexAmplificationCount),
                                                                viewStride: PacketRecorder.vertexUniformsStride,
                                                                views: [views[index]])

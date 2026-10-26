@@ -630,9 +630,9 @@ open class Object: Codable {
     }
 
     /// Encodes this object's GPU work for the frame (compute, generated geometry), after `update()`
-    /// and before any pass draws it. Write outputs to slices from `context.allocate(length:)` so
+    /// and before any pass draws it. Write outputs to slices from `try context.allocate(length:)` so
     /// two encodes before the draws execute never overwrite each other.
-    open func encode(in context: EncodingContext) {}
+    open func encode(in context: EncodingContext) throws {}
 
 
     // MARK: - Inserting, Adding, Attaching & Removing

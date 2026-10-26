@@ -41,7 +41,11 @@ fileprivate final class ARScene:  IBLEnvironment {
         super.init(context:context, label: label, children)
         Task(priority: .background) {
             if let device = MTLCreateSystemDefaultDevice() {
-                self.generateBRDFLUT(device: device)
+                do {
+                    try self.generateBRDFLUT(device: device)
+                } catch {
+                    print("BRDF generation failed: \(error)")
+                }
             }
         }
     }
@@ -50,11 +54,11 @@ fileprivate final class ARScene:  IBLEnvironment {
         fatalError("init(from:) has not been implemented")
     }
 
-    func generateBRDFLUT(device: MTLDevice) {
+    func generateBRDFLUT(device: MTLDevice) throws {
         guard let commandQueue = device.makeCommandQueue(),
               let commandBuffer = commandQueue.makeCommandBuffer() else { return }
 
-        let _brdfTexture = BrdfGenerator(device: device, size: 512).encode(commandBuffer: commandBuffer)
+        let _brdfTexture = try BrdfGenerator(device: device, size: 512).encode(commandBuffer: commandBuffer)
 
         commandBuffer.addCompletedHandler { [weak self] _ in
             self?.brdfTexture = _brdfTexture
@@ -422,7 +426,7 @@ final class ARPBRRenderer: BaseRenderer {
         if let realDepthTexture = backgroundRenderer.depthTexture,
            let virtualDepthTexture = renderer.depthTexture
         {
-            featheredDepthMaskTexture = featheredDepthMaskGenerator.encode(
+            featheredDepthMaskTexture = try featheredDepthMaskGenerator.encode(
                 commandBuffer: commandBuffer,
                 realDepthTexture: realDepthTexture,
                 virtualDepthTexture: virtualDepthTexture

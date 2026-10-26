@@ -86,7 +86,7 @@ final class FlockingRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if !pauseParam.value {
-            particleSystem.update(commandBuffer)
+            try particleSystem.update(commandBuffer)
         }
         // Recorded with this frame's draw: the particle buffer ping-pongs and the uniforms advance.
         spriteMaterial.set(particleSystem.getBuffer("Flocking"), index: VertexBufferIndex.Custom0)

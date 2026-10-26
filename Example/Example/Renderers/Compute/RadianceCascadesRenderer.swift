@@ -60,7 +60,7 @@ final class RadianceCascadesRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        radianceCascadesProcessor.update(commandBuffer)
+        try radianceCascadesProcessor.update(commandBuffer)
 
         try renderer.draw(
             frame: frameTime,

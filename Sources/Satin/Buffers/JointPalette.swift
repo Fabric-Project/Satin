@@ -90,13 +90,13 @@ public final class JointPalette {
     /// The pose as it is now, with each joint's previous matrix, in `recorder`'s arena: taken once per
     /// record, so meshes sharing this palette in one record bind one snapshot and advance its motion
     /// once.
-    func snapshot(recorder: PacketRecorder) -> (buffer: MTLBuffer, offset: Int) {
+    func snapshot(recorder: PacketRecorder) throws -> (buffer: MTLBuffer, offset: Int) {
         if let snapshotBinding, snapshotRecordToken == recorder.recordToken {
             return snapshotBinding
         }
 
         motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: jointCount)
-        let slice = recorder.allocate(length: MemoryLayout<SkinJoint>.stride * jointCount)
+        let slice = try recorder.allocate(length: MemoryLayout<SkinJoint>.stride * jointCount)
         let joints = slice.contents.bindMemory(to: SkinJoint.self, capacity: jointCount)
         for jointIndex in 0 ..< jointCount {
             let current = matrices[jointIndex]

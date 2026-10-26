@@ -169,15 +169,15 @@ private final class CustomMaterial: SourceMaterial {
         return shader
     }
 
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        guard #available(macOS 13.0, iOS 16.0, *), let uniforms = uniformsBinding(in: context) else { return }
+    override func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
+        guard #available(macOS 13.0, iOS 16.0, *), let uniforms = try uniformsBinding(in: context) else { return }
 
         // The mesh pipeline reads material uniforms in its object and mesh stages too.
         context.setObjectBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         context.setMeshBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         if !context.isShadowPass {
-            context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+            try context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
     }
 }
@@ -194,13 +194,13 @@ private final class CustomMesh: Mesh {
 
     // MARK: - Draw
 
-    override func draw(in context: RenderableDrawContext) {
+    override func draw(in context: RenderableDrawContext) throws {
         guard #available(macOS 13.0, iOS 16.0, *),
               let material,
               let vertexBuffer = geometry.vertexBuffers[VertexBufferIndex.Vertices]
         else { return }
 
-        material.draw(in: context.materialContext(layout: nil))
+        try material.draw(in: context.materialContext(layout: nil))
 
         // A mesh-shader dispatch, recorded as data like any other draw.
         context.setObjectBuffer(vertexBuffer, index: .Vertices)

@@ -20,11 +20,11 @@ final class ComputeInputCopies {
 
     /// Non-escaping scope; nested updates restore their caller's lifetime context.
     @inline(__always)
-    func withCommandBuffer(_ commandBuffer: MTLCommandBuffer?, _ body: () -> Void) {
+    func withCommandBuffer(_ commandBuffer: MTLCommandBuffer?, _ body: () throws -> Void) rethrows {
         let previous = self.commandBuffer
         self.commandBuffer = commandBuffer
         defer { self.commandBuffer = previous }
-        body()
+        try body()
     }
 
     private let arena: FrameArena
@@ -34,23 +34,23 @@ final class ComputeInputCopies {
         arena = FrameArena(device: device, initialChunkLength: 4096, maximumChunkLength: 4096, label: label)
     }
 
-    func bind(_ uniforms: UniformBuffer, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder, readOnly: Bool) {
+    func bind(_ uniforms: UniformBuffer, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder, readOnly: Bool) throws {
         guard readOnly else {
             encoder.setBuffer(uniforms.buffer, offset: uniforms.offset, index: index.rawValue)
             return
         }
-        bind(uniforms.buffer, offset: uniforms.offset, length: uniforms.parameters.size, at: index, encoder: encoder)
+        try bind(uniforms.buffer, offset: uniforms.offset, length: uniforms.parameters.size, at: index, encoder: encoder)
     }
 
-    func bind(_ input: BindableBuffer, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder, readOnly: Bool) {
+    func bind(_ input: BindableBuffer, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder, readOnly: Bool) throws {
         guard readOnly else {
             encoder.setBuffer(input.buffer, offset: input.offset, index: index.rawValue)
             return
         }
-        bind(input.buffer, offset: input.offset, length: input.contentLength, at: index, encoder: encoder)
+        try bind(input.buffer, offset: input.offset, length: input.contentLength, at: index, encoder: encoder)
     }
 
-    private func bind(_ buffer: MTLBuffer, offset: Int, length: Int, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder) {
+    private func bind(_ buffer: MTLBuffer, offset: Int, length: Int, at index: ComputeBufferIndex, encoder: MTLComputeCommandEncoder) throws {
         precondition(offset >= 0 && offset <= buffer.length && length >= 0 && length <= buffer.length - offset,
                      "The uploaded compute input must fit inside its source buffer")
         // Before its first upload a buffer has no bytes to copy; keep binding it as it is.
@@ -66,7 +66,7 @@ final class ComputeInputCopies {
         } else if let commandBuffer {
             // FrameTime.zero only labels the lease; the command buffer decides its lifetime.
             let lease = arena.lease(frame: .zero)
-            let slice = lease.allocate(length: length)
+            let slice = try lease.allocate(length: length)
             slice.contents.copyMemory(from: source, byteCount: length)
             encoder.setBuffer(slice.buffer, offset: slice.offset, index: index.rawValue)
             lease.retain(untilCompleted: commandBuffer)
@@ -76,7 +76,7 @@ final class ComputeInputCopies {
             // copy follows Metal's normal retained-resource lifetime instead. Unretained command
             // buffers must use the command-buffer overload, which supplies explicit ownership.
             guard let copy = buffer.device.makeBuffer(bytes: source, length: length, options: .storageModeShared) else {
-                fatalError("Could not allocate immutable compute input storage")
+                throw GPUError.allocationFailed
             }
             encoder.setBuffer(copy, offset: 0, index: index.rawValue)
         }

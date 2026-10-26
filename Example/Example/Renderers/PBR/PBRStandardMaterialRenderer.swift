@@ -175,7 +175,7 @@ final class PBRStandardMaterialRenderer: BaseRenderer {
     func loadHdri() {
         let url = texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")
         if let hdr = loadHDR(device: device, url: url) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 }

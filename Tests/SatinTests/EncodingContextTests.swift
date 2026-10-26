@@ -58,7 +58,7 @@ final class EncodingContextTests: XCTestCase {
         let mesh = ViewRecordingMesh(context: context, geometry: BoxGeometry(context: context), material: BasicColorMaterial(context: context))
         let root = Object(context: context, label: "Encoded", [mesh])
         mesh.update()
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         try submission.record(scene: root)
 
         XCTAssertEqual(mesh.encodedViewMatrix, viewAtCreation, "encoding sees the view as it was when the submission was made")
@@ -74,8 +74,8 @@ final class EncodingContextTests: XCTestCase {
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let encodingContext = submission.encodingContext(commandBuffer: commandBuffer)
 
-        let first = encodingContext.allocate(length: 64)
-        let second = encodingContext.allocate(length: 64)
+        let first = try encodingContext.allocate(length: 64)
+        let second = try encodingContext.allocate(length: 64)
 
         let overlaps = first.buffer === second.buffer && abs(first.offset - second.offset) < 64
         XCTAssertFalse(overlaps, "the second encoding never overwrites the first's slice")
@@ -102,8 +102,8 @@ final class EncodingContextTests: XCTestCase {
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: true)
 
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 2)
         let first = try XCTUnwrap(tessellator.destinations.first)
@@ -118,11 +118,11 @@ final class EncodingContextTests: XCTestCase {
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: true)
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         mesh.tessellate = false
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 2, "one dispatch to freeze, then none")
         let frozen = try XCTUnwrap(tessellator.destinations.last)
@@ -136,8 +136,8 @@ final class EncodingContextTests: XCTestCase {
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: false)
 
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
 
         XCTAssertEqual(tessellator.destinations.count, 1)
         XCTAssertNotNil(mesh.encodedFactors)
@@ -149,12 +149,12 @@ final class EncodingContextTests: XCTestCase {
         let submission = try makeSubmission(encoder, camera: makeCamera())
         let (mesh, tessellator) = makeTessellatedMesh(tessellate: false)
 
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         let firstFrozen = try XCTUnwrap(mesh.encodedFactors?.buffer)
         mesh.tessellate = true
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         mesh.tessellate = false
-        mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commandBuffer))
         let secondFrozen = try XCTUnwrap(mesh.encodedFactors?.buffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
@@ -220,9 +220,9 @@ final class EncodingContextTests: XCTestCase {
 private final class ViewRecordingMesh: Mesh {
     private(set) var encodedViewMatrix: simd_float4x4?
 
-    override func encode(in context: EncodingContext) {
+    override func encode(in context: EncodingContext) throws {
         if encodedViewMatrix == nil { encodedViewMatrix = context.views.first?.viewMatrix }
-        super.encode(in: context)
+        try super.encode(in: context)
     }
 }
 
@@ -246,7 +246,7 @@ final class RecordingTessellator: TessellationProcessor<MTLTriangleTessellationF
     private(set) var destinations: [(buffer: MTLBuffer, offset: Int)] = []
     private(set) var fillValues: [UInt8] = []
 
-    override func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) -> Bool {
+    override func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) throws -> Bool {
         guard let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return false }
         let value = UInt8(fillValues.count + 1)
         blitEncoder.fill(buffer: destination.buffer, range: destination.offset ..< destination.offset + factorsLength, value: value)

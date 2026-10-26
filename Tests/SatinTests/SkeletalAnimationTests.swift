@@ -354,7 +354,7 @@ final class SkeletalAnimationTests: XCTestCase {
         let storage = snapshotPool.lease()
         defer { snapshotPool.returnStorage(storage) }
         let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: frame))
-        let snapshot = palette.snapshot(recorder: recorder)
+        let snapshot = try palette.snapshot(recorder: recorder)
         let joints = (snapshot.buffer.contents() + snapshot.offset).bindMemory(to: SkinJoint.self, capacity: palette.jointCount)
         return Array(UnsafeBufferPointer(start: joints, count: palette.jointCount))
     }

@@ -83,7 +83,7 @@ final class BufferComputeRenderer: BaseRenderer {
             height: Int(metalView.drawableSize.height)
         )
 
-        particleSystem.update(commandBuffer)
+        try particleSystem.update(commandBuffer)
         // Recorded with this frame's draw: the particle buffer ping-pongs.
         spriteMaterial.set(particleSystem.getBuffer("Particle"), index: VertexBufferIndex.Custom0)
 

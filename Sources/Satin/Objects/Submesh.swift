@@ -54,9 +54,9 @@ open class Submesh {
         geometry.update()
     }
 
-    open func encode(in context: EncodingContext) {
-        material?.encode(in: context)
-        geometry.encode(in: context)
+    open func encode(in context: EncodingContext) throws {
+        try material?.encode(in: context)
+        try geometry.encode(in: context)
     }
 
     open func setupMaterial(vertexGeometry: Geometry) {

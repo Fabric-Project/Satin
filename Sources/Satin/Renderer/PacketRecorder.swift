@@ -92,6 +92,22 @@ public final class PacketRecorder {
     /// The record in progress; `beginRecord()` starts the next.
     private(set) var recordToken: RecordToken
 
+    private var preparationSerial = 0
+    private var retainedPreparationSerial = -1
+
+    /// Contexts normally allocate nothing. An integer local to this recorder lets each context
+    /// retain preparation storage only when it first allocates, without a per-context wrapper.
+    func beginPreparation() -> Int {
+        preparationSerial += 1
+        return preparationSerial
+    }
+
+    func retainArena(for preparation: Int, untilCompleted commandBuffer: MTLCommandBuffer) {
+        guard retainedPreparationSerial != preparation else { return }
+        lease.retain(untilCompleted: commandBuffer)
+        retainedPreparationSerial = preparation
+    }
+
     /// Allocation and snapshots come from the frame's lease: recording needs no command buffer.
     init(storage: PacketStorage, lease: FrameArena.Lease) {
         self.storage = storage
@@ -106,14 +122,14 @@ public final class PacketRecorder {
     }
 
     /// `length` bytes valid until this draw's command buffer completes, for a snapshot.
-    func allocate(length: Int) -> FrameArena.Slice {
-        lease.allocate(length: length)
+    func allocate(length: Int) throws -> FrameArena.Slice {
+        try lease.allocate(length: length)
     }
 
     /// Copies pass data at its stride, into storage unique to this recording.
-    func snapshot<Sample>(_ values: [Sample]) -> FrameArena.Slice? {
+    func snapshot<Sample>(_ values: [Sample]) throws -> FrameArena.Slice? {
         guard !values.isEmpty else { return nil }
-        let slice = allocate(length: MemoryLayout<Sample>.stride * values.count)
+        let slice = try allocate(length: MemoryLayout<Sample>.stride * values.count)
         values.withUnsafeBytes { bytes in
             if let source = bytes.baseAddress {
                 slice.contents.copyMemory(from: source, byteCount: bytes.count)
@@ -125,13 +141,13 @@ public final class PacketRecorder {
     /// Opt-in snapshot for CPU-readable external data. By default (nil) bindings retain their
     /// buffer and the caller must leave its bytes unchanged until completion. Copying preserves
     /// `copyOnRecordLength` bytes from the binding offset, at a new aligned offset in the arena.
-    func bufferBinding(_ buffer: MTLBuffer, offset: Int, copyOnRecordLength: Int?) -> (buffer: MTLBuffer, offset: Int) {
+    func bufferBinding(_ buffer: MTLBuffer, offset: Int, copyOnRecordLength: Int?) throws -> (buffer: MTLBuffer, offset: Int) {
         guard let length = copyOnRecordLength else { return (buffer, offset) }
         precondition(buffer.storageMode != .private && buffer.storageMode != .memoryless, "copyOnRecord requires CPU-readable storage")
         precondition(offset >= 0 && length > 0 && offset + length <= buffer.length, "The copied range must be inside the buffer")
         precondition(!storage.reservesVertexUniforms(in: buffer, range: offset ..< offset + length),
                      "A render event's vertex uniforms are written when the submission encodes: bind them, don't copy them")
-        let slice = allocate(length: length)
+        let slice = try allocate(length: length)
         slice.contents.copyMemory(from: buffer.contents() + offset, byteCount: length)
         return (slice.buffer, slice.offset)
     }
@@ -145,29 +161,27 @@ public final class PacketRecorder {
         pass: RenderPass,
         materialPass: Renderable.MaterialPass,
         views: [RenderView]
-    ) -> Range<Int> {
+    ) throws -> Range<Int> {
         let firstPacket = storage.packetCount
         guard !views.isEmpty else { return firstPacket ..< firstPacket }
 
         // Every view gets its uniforms: the amplified views of one pass, or the views of a
         // multi-view shadow, each encoded in its own pass from this one recording.
         let isAmplified = renderContext.vertexAmplificationCount > 1
-        RecordingProfile.begin(.vertexUniforms)
-        let vertexUniforms = reserveVertexUniforms(
+        let vertexUniforms = try reserveVertexUniforms(
             occurrence: renderable.occurrence,
             viewCount: max(renderContext.vertexAmplificationCount, views.count, 1),
             viewStride: isAmplified ? Self.vertexUniformsStride : recordedViewStride,
             views: views
         )
-        RecordingProfile.end()
 
         // A double-sided transparent renderable is recorded twice, culling front faces and then back
         // faces, so all its back faces draw before its front faces, every submesh in each.
         if pass == .color, renderable.doubleSided, renderable.cullMode == .none, renderable.drawsTransparent(in: materialPass) {
-            recordOnce(renderable, cullMode: .front, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
-            recordOnce(renderable, cullMode: .back, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
+            try recordOnce(renderable, cullMode: .front, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
+            try recordOnce(renderable, cullMode: .back, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
         } else {
-            recordOnce(renderable, cullMode: renderable.cullMode, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
+            try recordOnce(renderable, cullMode: renderable.cullMode, renderContext: renderContext, pass: pass, materialPass: materialPass, vertexUniforms: vertexUniforms)
         }
 
         return firstPacket ..< storage.packetCount
@@ -180,9 +194,7 @@ public final class PacketRecorder {
         pass: RenderPass,
         materialPass: Renderable.MaterialPass,
         vertexUniforms: VertexUniformsBinding
-    ) {
-        RecordingProfile.begin(.hooks)
-        defer { RecordingProfile.end() }
+    ) throws {
         storage.beginRecording(
             cullMode: cullMode,
             windingOrder: renderable.windingOrder,
@@ -191,14 +203,14 @@ public final class PacketRecorder {
             vertexUniforms: vertexUniforms,
             debugLabel: renderable.label
         )
-        renderable.draw(in: RenderableDrawContext(
+        defer { storage.endRecording() }
+        try renderable.draw(in: RenderableDrawContext(
             renderContext: renderContext,
             pass: pass,
             materialPass: materialPass,
             vertexUniforms: vertexUniforms,
             recorder: self
         ))
-        storage.endRecording()
     }
 
     /// Encodes the packets at `packetIndices` into `state`, as their render event's view
@@ -211,8 +223,8 @@ public final class PacketRecorder {
     /// command buffer completes, and queues their write from the occurrence and the views as values.
     /// The slot is bound by hooks now and filled when the submission encodes. A pass with fewer views
     /// than the context's repeats its last view.
-    func reserveVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) -> VertexUniformsBinding {
-        let slice = allocate(length: viewStride * (viewCount - 1) + Self.vertexUniformsStride)
+    func reserveVertexUniforms(occurrence: Renderable.Occurrence, viewCount: Int, viewStride: Int, views: [RenderView]) throws -> VertexUniformsBinding {
+        let slice = try allocate(length: viewStride * (viewCount - 1) + Self.vertexUniformsStride)
         storage.appendVertexUniformsJob(VertexUniformsJob(
             slice: slice,
             modelMatrix: occurrence.modelMatrix,

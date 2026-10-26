@@ -13,14 +13,14 @@ final class SubmissionRecordTests: XCTestCase {
     private final class ShadowHookMesh: Mesh {
         var shadowDrawCount = 0
         var shadowInput: MTLBuffer?
-        override func draw(in context: RenderableDrawContext) {
+        override func draw(in context: RenderableDrawContext) throws {
             if context.isShadowPass {
                 shadowDrawCount += 1
                 if let shadowInput {
-                    context.setVertexBuffer(shadowInput, index: .Custom0, copyOnRecordLength: MemoryLayout<UInt32>.stride)
+                    try context.setVertexBuffer(shadowInput, index: .Custom0, copyOnRecordLength: MemoryLayout<UInt32>.stride)
                 }
             }
-            super.draw(in: context)
+            try super.draw(in: context)
         }
     }
 
@@ -245,7 +245,7 @@ final class SubmissionRecordTests: XCTestCase {
         let scene = makeScene()
         scene.mesh.beginOccurrence(frame: .zero)
         let camera = makeCamera()
-        let packets = recorder.record(scene.mesh, renderContext: context, pass: .color, materialPass: .all,
+        let packets = try recorder.record(scene.mesh, renderContext: context, pass: .color, materialPass: .all,
                                       views: [RenderView(camera: camera, viewport: [0, 0, 64, 64])])
         XCTAssertEqual(packets.count, 1)
         let before = try modelMatrix(of: storage.packets[packets.lowerBound], in: storage)
@@ -555,17 +555,17 @@ final class SubmissionRecordTests: XCTestCase {
         let frame0 = try makeSubmission(encoder, camera: camera)
         palette.update(matrices: [simd_float4x4(translation: [1, 0, 0])])
         frame0.recorder.beginRecord()
-        let shared = palette.snapshot(recorder: frame0.recorder)
-        let again = palette.snapshot(recorder: frame0.recorder)
+        let shared = try palette.snapshot(recorder: frame0.recorder)
+        let again = try palette.snapshot(recorder: frame0.recorder)
         XCTAssertTrue(shared.buffer === again.buffer && shared.offset == again.offset, "meshes sharing a palette in one record bind one snapshot")
         frame0.recorder.beginRecord()
         palette.update(matrices: [simd_float4x4(translation: [5, 0, 0])])
-        _ = palette.snapshot(recorder: frame0.recorder)
+        _ = try palette.snapshot(recorder: frame0.recorder)
 
         let frame1 = try makeSubmission(encoder, frame: FrameTime.zero.next(time: 1.0 / 60.0), camera: camera)
         frame1.recorder.beginRecord()
         palette.update(matrices: [simd_float4x4(translation: [2, 0, 0])])
-        let first = palette.snapshot(recorder: frame1.recorder)
+        let first = try palette.snapshot(recorder: frame1.recorder)
         let joint = (first.buffer.contents() + first.offset).load(as: SkinJoint.self)
         XCTAssertEqual(joint.previous.columns.3.x, 1, accuracy: 1e-5, "the first record pairs with last frame's first, not its last")
     }
@@ -818,9 +818,9 @@ private final class EncoderChangingObject: Object {
         fatalError("init(from:) has not been implemented")
     }
 
-    override func encode(in context: EncodingContext) {
+    override func encode(in context: EncodingContext) throws {
         encoder.clearColor = newClearColor
         clearColorDuringDraw = encoder.clearColor
-        super.encode(in: context)
+        try super.encode(in: context)
     }
 }

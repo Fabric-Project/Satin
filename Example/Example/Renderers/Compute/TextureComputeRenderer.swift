@@ -84,7 +84,7 @@ class TextureComputeRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        textureCompute.update(commandBuffer, iterations: 30)
+        try textureCompute.update(commandBuffer, iterations: 30)
         material.set(textureCompute.dstTexture, index: VertexTextureIndex.Custom0)
 
         try renderer.draw(

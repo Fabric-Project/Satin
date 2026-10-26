@@ -25,7 +25,7 @@ struct SubmissionConfiguration {
 
 /// Why recording, sealing or encoding a submission failed.
 public enum SubmissionError: Swift.Error, Equatable {
-    /// The builder was already sealed, or the sealed submission already encoded or abandoned.
+    /// The builder was sealed or discarded after failure, or the sealed submission was encoded or abandoned.
     case alreadyDrawn
     /// The builder has not recorded its render operation.
     case notRecorded

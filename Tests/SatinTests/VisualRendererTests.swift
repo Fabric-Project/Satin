@@ -11,7 +11,7 @@ final class VisualRendererTests: XCTestCase {
             let commandBuffer = commandQueue.makeCommandBuffer()!
 
             let generator = RandomNoiseGenerator(device: device, size: (64, 64), range: 0.0 ... 1.0, seed: 42)
-            let noiseTexture = generator.encode(commandBuffer: commandBuffer)
+            let noiseTexture = try generator.encode(commandBuffer: commandBuffer)
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
 

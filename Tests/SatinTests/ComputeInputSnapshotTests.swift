@@ -119,7 +119,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
                     input.update(data: [UInt8](repeating: value, count: length))
                     let output = try XCTUnwrap(device.makeBuffer(length: 8, options: .storageModeShared))
                     fixture.owner.set(output, index: .Custom1)
-                    fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
+                    try fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
                     encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
                     outputs.append(output)
                 }
@@ -170,7 +170,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
                     input.update(data: [UInt8](repeating: value, count: length))
                     let output = try XCTUnwrap(device.makeBuffer(length: 8, options: .storageModeShared))
                     fixture.owner.set(output, index: .Custom1)
-                    fixture.owner.bind(encoder: encoder, commandBuffer: nil)
+                    try fixture.owner.bind(encoder: encoder, commandBuffer: nil)
                     encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
                     outputs.append(output)
                 }
@@ -222,11 +222,14 @@ final class ComputeInputSnapshotTests: XCTestCase {
         let copies = ComputeInputCopies(device: device, label: "Nested compute scope")
         let outer = try XCTUnwrap(commandQueue.makeCommandBuffer())
         let inner = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        copies.withCommandBuffer(outer) {
+        try copies.withCommandBuffer(outer) {
             XCTAssertTrue(copies.commandBuffer === outer)
             copies.withCommandBuffer(nil) { XCTAssertNil(copies.commandBuffer) }
             XCTAssertTrue(copies.commandBuffer === outer)
             copies.withCommandBuffer(inner) { XCTAssertTrue(copies.commandBuffer === inner) }
+            XCTAssertThrowsError(try copies.withCommandBuffer(inner) { throw GPUError.allocationFailed }) { error in
+                XCTAssertEqual(error as? GPUError, .allocationFailed)
+            }
             XCTAssertTrue(copies.commandBuffer === outer)
         }
         XCTAssertNil(copies.commandBuffer)
@@ -276,7 +279,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
         output.contents().initializeMemory(as: UInt8.self, repeating: 0xFF, count: 8)
         fixture.owner.set(output, index: .Custom1)
         encoder.setComputePipelineState(fixture.pipeline)
-        fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
+        try fixture.owner.bind(encoder: encoder, commandBuffer: commandBuffer)
         encoder.dispatchThreadgroups(MTLSize(width: 1, height: 1, depth: 1), threadsPerThreadgroup: MTLSize(width: 1, height: 1, depth: 1))
         encoder.endEncoding()
         return (commandBuffer, output)
@@ -366,17 +369,17 @@ final class ComputeInputSnapshotTests: XCTestCase {
 
         /// Binds as an update does: through `update(_ commandBuffer:)` when there is a command
         /// buffer, `update(_ computeEncoder:)` otherwise.
-        func bind(encoder: MTLComputeCommandEncoder, commandBuffer: MTLCommandBuffer?) {
+        func bind(encoder: MTLComputeCommandEncoder, commandBuffer: MTLCommandBuffer?) throws {
             switch self {
                 case let .processor(processor):
-                    processor.inputCopies.withCommandBuffer(commandBuffer) {
-                        processor.bindUniforms(encoder)
-                        processor.bindBuffers(encoder)
+                    try processor.inputCopies.withCommandBuffer(commandBuffer) {
+                        try processor.bindUniforms(encoder)
+                        try processor.bindBuffers(encoder)
                     }
                 case let .system(system):
-                    system.inputCopies.withCommandBuffer(commandBuffer) {
-                        system.bindUniforms(encoder)
-                        system.bindBuffers(encoder)
+                    try system.inputCopies.withCommandBuffer(commandBuffer) {
+                        try system.bindUniforms(encoder)
+                        try system.bindBuffers(encoder)
                     }
             }
         }

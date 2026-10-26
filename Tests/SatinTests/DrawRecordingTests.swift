@@ -66,7 +66,7 @@ final class DrawRecordingTests: XCTestCase {
             let (drawContext, storage) = try makeRecording(pass: .color)
             _ = drawContext.materialContext(layout: nil)
             storage.setPipeline(pipeline)
-            geometry.draw(in: drawContext.geometryContext(instanceCount: 3, indexBufferOffset: indexBufferOffset))
+            try geometry.draw(in: drawContext.geometryContext(instanceCount: 3, indexBufferOffset: indexBufferOffset))
             storage.endRecording()
             XCTAssertEqual(storage.packets.count, 1)
             return (try XCTUnwrap(storage.packets.first), storage)
@@ -98,7 +98,7 @@ final class DrawRecordingTests: XCTestCase {
         material.update()
         let (drawContext, storage) = try makeRecording(pass: .color)
 
-        material.draw(in: drawContext.materialContext(layout: nil))
+        try material.draw(in: drawContext.materialContext(layout: nil))
 
         XCTAssertTrue(storage.commands.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true } else { return false } })
         XCTAssertTrue(storage.commands.contains { if case .fragmentSampler(_, .Custom0) = $0 { return true } else { return false } })
@@ -112,7 +112,7 @@ final class DrawRecordingTests: XCTestCase {
 
         func recordsMaps(_ pass: RenderPass) throws -> Bool {
             let (drawContext, storage) = try makeRecording(pass: pass)
-            material.draw(in: drawContext.materialContext(layout: nil))
+            try material.draw(in: drawContext.materialContext(layout: nil))
             // Finish the packet, as a geometry does after the material records its bindings.
             storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
             storage.endRecording()
@@ -128,7 +128,7 @@ final class DrawRecordingTests: XCTestCase {
         material.update()
         let (drawContext, storage) = try makeRecording(pass: .color)
 
-        material.draw(in: drawContext.materialContext(layout: nil))
+        try material.draw(in: drawContext.materialContext(layout: nil))
 
         XCTAssertTrue(storage.commands.dropLast().contains { if case .fragmentBuffer = $0 { return true } else { return false } }, "super's bindings come first")
         guard case .fragmentBuffer(_, _, .Custom0) = storage.commands.last else { return XCTFail("the subclass's binding is the last recorded command") }
@@ -142,8 +142,8 @@ final class DrawRecordingTests: XCTestCase {
         let size = material.parameters.size
         let (drawContext, storage) = try makeRecording(pass: .color)
 
-        material.draw(in: drawContext.materialContext(layout: nil))
-        material.draw(in: drawContext.materialContext(layout: nil))
+        try material.draw(in: drawContext.materialContext(layout: nil))
+        try material.draw(in: drawContext.materialContext(layout: nil))
         let unchanged = materialUniformBindings(in: storage)
         XCTAssertFalse(unchanged.isEmpty, "the material records its uniforms")
         XCTAssertTrue(unchanged.allSatisfy { $0.buffer === unchanged[0].buffer && $0.offset == unchanged[0].offset }, "an unchanged material snapshots once per lease")
@@ -151,7 +151,7 @@ final class DrawRecordingTests: XCTestCase {
 
         // Changed, and drawn again with no read of `parameters.data` in between.
         material.color = [1, 0, 0, 1]
-        material.draw(in: drawContext.materialContext(layout: nil))
+        try material.draw(in: drawContext.materialContext(layout: nil))
         let changed = try XCTUnwrap(materialUniformBindings(in: storage).last)
         XCTAssertFalse(changed.buffer === unchanged[0].buffer && changed.offset == unchanged[0].offset, "a change takes a new snapshot")
         let changedBytes = Array(UnsafeRawBufferPointer(start: changed.buffer.contents() + changed.offset, count: size))
@@ -164,7 +164,7 @@ final class DrawRecordingTests: XCTestCase {
 
     func testResetClearsPacketsAndCommands() throws {
         let (drawContext, storage) = try makeRecording(pass: .color)
-        drawContext.setVertexBuffer(try XCTUnwrap(context.device.makeBuffer(length: 16)), index: .Custom0)
+        try drawContext.setVertexBuffer(try XCTUnwrap(context.device.makeBuffer(length: 16)), index: .Custom0)
         storage.reset()
         XCTAssertTrue(storage.commands.isEmpty)
         XCTAssertTrue(storage.packets.isEmpty)
@@ -180,7 +180,7 @@ final class DrawRecordingTests: XCTestCase {
         mesh.update()
         mesh.beginOccurrence(frame: .zero)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        _ = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
+        _ = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
         return storage
     }
 
@@ -250,9 +250,9 @@ final class ExtraBindingMaterial: BasicColorMaterial {
 
     private lazy var extra: MTLBuffer? = context.device.makeBuffer(length: 16)
 
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        if let extra { context.setFragmentBuffer(extra, index: .Custom0) }
+    override func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
+        if let extra { try context.setFragmentBuffer(extra, index: .Custom0) }
     }
 }
 
@@ -265,8 +265,8 @@ final class CountingGeometry: SatinGeometry {
         generateQuadGeometryData(1)
     }
 
-    override func draw(in context: GeometryDrawContext) {
+    override func draw(in context: GeometryDrawContext) throws {
         drawCount += 1
-        super.draw(in: context)
+        try super.draw(in: context)
     }
 }

@@ -129,7 +129,7 @@ final class CullingTests: XCTestCase {
             PerspectiveCamera(context: context, position: [0, 1, 5], near: 0.1, far: 100, fov: 30),
         ]
 
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: [0, 0, 64, 64]) })
+        let packets = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: [0, 0, 64, 64]) })
 
         XCTAssertFalse(packets.isEmpty)
         let packet = storage.packets[packets.lowerBound]
@@ -213,10 +213,10 @@ final class CullingTests: XCTestCase {
 private final class DrawCountingMesh: Mesh {
     var shadowDraws = 0
 
-    override func draw(in context: RenderableDrawContext) {
+    override func draw(in context: RenderableDrawContext) throws {
         if context.pass == .shadow {
             shadowDraws += 1
         }
-        super.draw(in: context)
+        try super.draw(in: context)
     }
 }

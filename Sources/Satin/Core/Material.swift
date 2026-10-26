@@ -447,7 +447,7 @@ open class Material: Codable {
         if depthNeedsUpdate { setupDepthStencilState() }
     }
 
-    open func encode(in context: EncodingContext) {}
+    open func encode(in context: EncodingContext) throws {}
 
     // MARK: - Draw
 
@@ -455,7 +455,7 @@ open class Material: Codable {
     /// layout, depth state, uniforms, buffers and textures. Subclasses add their own bindings and
     /// call `super`, through the context's typed bindings (object, mesh and tessellation stages
     /// included).
-    open func draw(in context: MaterialDrawContext) {
+    open func draw(in context: MaterialDrawContext) throws {
         let shadow = context.isShadowPass
         // Read once for the whole draw: a class property read is a checked access each time.
         guard let shader else {
@@ -468,9 +468,9 @@ open class Material: Codable {
         let defersLighting = context.recorder.defersLightingPipelines && !shadow && lighting
             && !(context.renderContext.renderingMode == .deferredGeometry && lightingModel == .surface && blending == .disabled)
         let usage = defersLighting ? nil : pipeline.flatMap { shader.resourceUsage(for: $0) }
-        recordUniforms(in: context, shader: shader, shadow: shadow, usage: usage)
+        try recordUniforms(in: context, shader: shader, shadow: shadow, usage: usage)
         recordDepthState(in: context, shadow: shadow)
-        recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
+        try recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
         recordTextures(in: context, shader: shader, conservative: shadow || usage == nil)
         if let pipeline {
             context.setPipeline(pipeline, usage: usage)
@@ -482,21 +482,21 @@ open class Material: Codable {
         }
     }
 
-    private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool, usage: PipelineResourceUsage?) {
-        guard let uniforms = uniformsBinding(in: context) else { return }
+    private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool, usage: PipelineResourceUsage?) throws {
+        guard let uniforms = try uniformsBinding(in: context) else { return }
 
         if shader.vertexWantsMaterialUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.MaterialUniforms.rawValue) ?? true) {
-            context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+            try context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
 
         if (!shadow && shader.fragmentWantsMaterialUniforms) || (usage?.fragment.buffers.contains(FragmentBufferIndex.MaterialUniforms.rawValue) ?? true) {
-            context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
+            try context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
     }
 
     /// This material's uniforms as they are now, in the draw's arena: the slice its draws bind,
     /// for a subclass that binds them to stages the context doesn't model. Nil when it has none.
-    public func uniformsBinding(in context: MaterialDrawContext) -> (buffer: MTLBuffer, offset: Int)? {
+    public func uniformsBinding(in context: MaterialDrawContext) throws -> (buffer: MTLBuffer, offset: Int)? {
         let parameters = self.parameters
         let leaseToken = context.storage.leaseToken
         let revision = parameters.contentRevision
@@ -512,7 +512,7 @@ open class Material: Codable {
         let size = parameters.size
         guard size > 0 else { return nil }
 
-        let slice = context.recorder.allocate(length: size)
+        let slice = try context.recorder.allocate(length: size)
         slice.contents.copyMemory(from: parameters.data, byteCount: size)
         let snapshot = (buffer: slice.buffer, offset: slice.offset)
         uniformsSnapshot = snapshot
@@ -532,7 +532,7 @@ open class Material: Codable {
         )
     }
 
-    private func recordBuffers(in context: MaterialDrawContext, shader: Shader, conservative: Bool) {
+    private func recordBuffers(in context: MaterialDrawContext, shader: Shader, conservative: Bool) throws {
         let vertexIndices = shader.vertexBufferBindingIsUsed
         let vertexCount = conservative ? vertexBufferSlots.count : vertexIndices.count
         for position in 0 ..< vertexCount {
@@ -541,12 +541,12 @@ open class Material: Codable {
             guard slot < vertexBufferSlots.count else { continue }
             if let uniformBuffer = vertexBufferSlots[slot].uniformBuffer {
                 // Ring slots are rewritten in place: the recording keeps its own copy.
-                context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
+                try context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
             } else if let structBuffer = vertexBufferSlots[slot].structBuffer {
-                context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                try context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
                                         copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
             } else if let buffer = vertexBufferSlots[slot].buffer {
-                context.setVertexBuffer(buffer, offset: 0, index: index)
+                try context.setVertexBuffer(buffer, offset: 0, index: index)
             }
         }
 
@@ -557,12 +557,12 @@ open class Material: Codable {
             let slot = index.rawValue
             guard slot < fragmentBufferSlots.count else { continue }
             if let uniformBuffer = fragmentBufferSlots[slot].uniformBuffer {
-                context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
+                try context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
             } else if let structBuffer = fragmentBufferSlots[slot].structBuffer {
-                context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                try context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
                                           copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
             } else if let buffer = fragmentBufferSlots[slot].buffer {
-                context.setFragmentBuffer(buffer, offset: 0, index: index)
+                try context.setFragmentBuffer(buffer, offset: 0, index: index)
             }
         }
     }

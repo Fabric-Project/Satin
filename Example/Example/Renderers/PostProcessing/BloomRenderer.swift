@@ -132,7 +132,7 @@ final class BloomRenderer: BaseRenderer {
             renderTarget: renderTexture
         )
 
-        let bloomTexture = bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: renderTexture)
+        let bloomTexture = try bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: renderTexture)
         postProcessor.mesh.material?.set(renderTexture, index: FragmentTextureIndex.Custom0)
         postProcessor.mesh.material?.set(bloomTexture, index: FragmentTextureIndex.Custom1)
 

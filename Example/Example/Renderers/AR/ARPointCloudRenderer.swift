@@ -110,7 +110,7 @@ final class ARPointCloudRenderer: BaseRenderer {
                     Float(currentFrame.camera.imageResolution.height)))
             }
 
-            pointCloud.update(commandBuffer)
+            try pointCloud.update(commandBuffer)
         }
         mesh.material?.set(pointCloud.getBuffer("Point"), index: VertexBufferIndex.Custom0)
 

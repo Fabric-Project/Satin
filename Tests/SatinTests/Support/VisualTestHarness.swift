@@ -81,7 +81,7 @@ enum VisualTestHarness {
 
     static func render(
         size: SIMD2<Int>,
-        configure: (RenderEncoder, Camera) -> (scene: Object, camera: Camera)
+        configure: (RenderEncoder, Camera) throws -> (scene: Object, camera: Camera)
     ) throws -> RGBAImage {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw NSError(domain: "VisualTestHarness", code: 1, userInfo: [NSLocalizedDescriptionKey: "Metal is unavailable"])
@@ -93,7 +93,7 @@ enum VisualTestHarness {
     static func render(
         context: Context,
         size: SIMD2<Int>,
-        configure: (RenderEncoder, Camera) -> (scene: Object, camera: Camera)
+        configure: (RenderEncoder, Camera) throws -> (scene: Object, camera: Camera)
     ) throws -> RGBAImage {
         let device = context.device
         guard let commandQueue = device.makeCommandQueue() else {
@@ -106,7 +106,7 @@ enum VisualTestHarness {
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100.0, fov: 30.0)
         camera.aspect = Float(size.x) / Float(size.y)
 
-        let sceneResult = configure(renderer, camera)
+        let sceneResult = try configure(renderer, camera)
 
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,

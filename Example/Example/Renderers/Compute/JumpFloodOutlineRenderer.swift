@@ -117,7 +117,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
             computeEncoder.label = "Selection Processor Compute Encoder"
 
             jumpFloodInit.set(renderTexture, index: ComputeTextureIndex.Custom1)
-            jumpFloodInit.update(computeEncoder)
+            try jumpFloodInit.update(computeEncoder)
 
             jumpFlood.resetIndex()
 
@@ -128,7 +128,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
 
             while spacing >= 1 {
                 jumpFlood.spacing = Int(spacing)
-                jumpFlood.update(computeEncoder)
+                try jumpFlood.update(computeEncoder)
 
                 jumpFlood.initTexture = nil
                 spacing /= 2

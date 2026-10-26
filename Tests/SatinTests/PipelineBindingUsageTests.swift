@@ -20,13 +20,13 @@ final class PipelineBindingUsageTests: XCTestCase {
         return geometry
     }
 
-    private func record(_ mesh: Mesh, pass: RenderPass, recorder: PacketRecorder? = nil) -> (PacketRecorder, Range<Int>) {
+    private func record(_ mesh: Mesh, pass: RenderPass, recorder: PacketRecorder? = nil) throws -> (PacketRecorder, Range<Int>) {
         mesh.castShadow = true
         mesh.update()
         mesh.beginOccurrence(frame: .zero)
         let recorder = recorder ?? PacketRecorder(storage: PacketStoragePool().lease(), lease: FrameArena(device: device).lease(frame: .zero))
         let camera = OrthographicCamera(context: context)
-        let packets = recorder.record(mesh, renderContext: context, pass: pass, materialPass: .all, views: [RenderView(camera: camera, viewport: [0,0,32,32])])
+        let packets = try recorder.record(mesh, renderContext: context, pass: pass, materialPass: .all, views: [RenderView(camera: camera, viewport: [0,0,32,32])])
         return (recorder, packets)
     }
 
@@ -46,12 +46,12 @@ final class PipelineBindingUsageTests: XCTestCase {
         }
     }
 
-    func testDefaultShadowKeepsConservativeGeometryBindingsWithoutPacketPruning() {
+    func testDefaultShadowKeepsConservativeGeometryBindingsWithoutPacketPruning() throws {
         let mesh = Mesh(context: context, geometry: geometry(), material: PhysicalMaterial(context: context))
-        let (recorder, packets) = record(mesh, pass: .shadow)
+        let (recorder, packets) = try record(mesh, pass: .shadow)
         XCTAssertEqual(packets.count, 1)
         XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .Normal, .Texcoord, .MaterialUniforms, .VertexUniforms]))
-        let color = record(mesh, pass: .color, recorder: recorder)
+        let color = try record(mesh, pass: .color, recorder: recorder)
         let slots = vertexSlots(commands(color.0, color.1))
         XCTAssertTrue(slots.contains(.Normal), "pruning a shadow must not alter colour usage")
         XCTAssertTrue(slots.contains(.MaterialUniforms))
@@ -93,7 +93,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         material.set(try texture(), index: VertexTextureIndex.Custom0)
         material.set(try texture(), index: VertexTextureIndex.Custom1)
         material.set(try XCTUnwrap(device.makeBuffer(length: 256, options: .storageModeShared)), index: VertexBufferIndex.Custom0)
-        let (recorder, packets) = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
+        let (recorder, packets) = try record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
         XCTAssertEqual(packets.count, 1)
         let recorded = commands(recorder, packets)
         let slots = vertexSlots(recorded)
@@ -103,14 +103,14 @@ final class PipelineBindingUsageTests: XCTestCase {
         XCTAssertTrue(slots.contains(.Texcoord), "geometry binding is conservative again")
         let textures: [VertexTextureIndex] = recorded.compactMap { if case let .vertexTexture(_,slot) = $0 { return slot }; return nil }
         XCTAssertEqual(textures, [.Custom0, .Custom1], "shadow custom resources remain conservative without packet pruning")
-        _ = record(Mesh(context: context, geometry: geometry(), material: material), pass: .color, recorder: recorder)
-        let again = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow, recorder: recorder)
+        _ = try record(Mesh(context: context, geometry: geometry(), material: material), pass: .color, recorder: recorder)
+        let again = try record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow, recorder: recorder)
         XCTAssertTrue(vertexSlots(commands(again.0, again.1)).contains(.Custom0))
         let source = try String(contentsOf: shader.pipelineURL, encoding: .utf8)
         try source.replacing("+ offset", with: "+ 0.0").write(to: shader.pipelineURL, atomically: true, encoding: .utf8)
         shader.reloadFromSource()
         let reloadedMesh = Mesh(context: context, geometry: geometry(), material: material)
-        let reloaded = record(reloadedMesh, pass: .shadow)
+        let reloaded = try record(reloadedMesh, pass: .shadow)
         XCTAssertTrue(vertexSlots(commands(reloaded.0, reloaded.1)).contains(.Custom0), "registered custom shadow buffers stay available")
         let pipeline = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: true, layout: reloadedMesh.drawLayout))
         let usage = try XCTUnwrap(shader.resourceUsage(for: pipeline))
@@ -129,7 +129,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         let fallback = SourceShader(configuration: configuration)
         let material = Material(shader: fallback)
         material.set(try XCTUnwrap(device.makeBuffer(length: 256, options: .storageModeShared)), index: VertexBufferIndex.Custom0)
-        let (recorder, packets) = record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
+        let (recorder, packets) = try record(Mesh(context: context, geometry: geometry(), material: material), pass: .shadow)
         XCTAssertEqual(packets.count, 1)
         XCTAssertEqual(Set(vertexSlots(commands(recorder, packets))), Set([.Position, .Normal, .Texcoord, .Custom0]))
     }
@@ -143,7 +143,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         let material = Material(shader: shader)
         for index in [FragmentTextureIndex.Custom0, .Custom1, .Custom2] { material.set(try texture(), index: index) }
         let mesh = Mesh(context: context, geometry: geometry(), material: material)
-        let (recorder, packets) = record(mesh, pass: .color)
+        let (recorder, packets) = try record(mesh, pass: .color)
         XCTAssertEqual(packets.count, 1)
         let textures: [FragmentTextureIndex] = commands(recorder, packets).compactMap {
             if case let .fragmentTexture(_,slot) = $0 { return slot }; return nil
@@ -237,7 +237,7 @@ final class PipelineBindingUsageTests: XCTestCase {
             var pixel: [UInt8] = [255, 255, 255, alpha]
             mask.replace(region: MTLRegionMake2D(0,0,1,1), mipmapLevel: 0, withBytes: &pixel, bytesPerRow: 4)
             material.set(mask, index: FragmentTextureIndex.Custom0)
-            let (recorder, packets) = record(mesh, pass: .shadow)
+            let (recorder, packets) = try record(mesh, pass: .shadow)
             XCTAssertEqual(packets.count, 1)
             let recorded = commands(recorder, packets)
             XCTAssertTrue(recorded.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true }; return false })

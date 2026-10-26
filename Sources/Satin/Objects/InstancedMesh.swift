@@ -127,7 +127,7 @@ public class InstancedMesh: Mesh {
 
     /// The instances' matrices as they are now, with each one's previous matrix, in `recorder`'s
     /// arena: taken once per occurrence and shared by its passes.
-    private func instanceSnapshot(recorder: PacketRecorder) -> (buffer: MTLBuffer, offset: Int) {
+    private func instanceSnapshot(recorder: PacketRecorder) throws -> (buffer: MTLBuffer, offset: Int) {
         let leaseToken = recorder.storage.leaseToken
         let occurrenceSerial = occurrence.serial
         if let instanceSnapshot, instanceSnapshotLeaseToken == leaseToken, instanceSnapshotOccurrence == occurrenceSerial {
@@ -137,7 +137,7 @@ public class InstancedMesh: Mesh {
         let count = instanceMatricesUniforms.count
         motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: count)
 
-        let slice = recorder.allocate(length: MemoryLayout<InstanceMatrixUniforms>.stride * count)
+        let slice = try recorder.allocate(length: MemoryLayout<InstanceMatrixUniforms>.stride * count)
         let uniforms = slice.contents.bindMemory(to: InstanceMatrixUniforms.self, capacity: count)
         for index in 0 ..< count {
             var instance = instanceMatricesUniforms[index]
@@ -292,12 +292,12 @@ public class InstancedMesh: Mesh {
 //    }
 
     
-    override public func draw(in context: RenderableDrawContext) {
+    override public func draw(in context: RenderableDrawContext) throws {
         // Nothing to draw without matrices for every instance, or with a draw count of zero.
         guard instanceCount > 0, instanceMatricesUniforms.count >= instanceCount else { return }
-        let instances = instanceSnapshot(recorder: context.recorder)
-        context.setVertexBuffer(instances.buffer, offset: instances.offset, index: .InstanceMatrixUniforms)
-        drawMesh(in: context, instanceCount: drawCount.map { min($0, instanceCount) } ?? instanceCount)
+        let instances = try instanceSnapshot(recorder: context.recorder)
+        try context.setVertexBuffer(instances.buffer, offset: instances.offset, index: .InstanceMatrixUniforms)
+        try drawMesh(in: context, instanceCount: drawCount.map { min($0, instanceCount) } ?? instanceCount)
     }
 
     // MARK: - Intersections

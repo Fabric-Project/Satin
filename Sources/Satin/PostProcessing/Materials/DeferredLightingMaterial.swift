@@ -168,8 +168,8 @@ public final class DeferredLightingMaterial: Material {
         pbrShader.tonemapping = tonemapping
     }
 
-    override public func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
+    override public func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
         if !context.isShadowPass {
             for (index, texture) in maps.enumerated() where texture != nil {
                 context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])

@@ -356,13 +356,13 @@ open class Geometry {
         updateBuffers()
     }
 
-    open func encode(in context: EncodingContext) {}
+    open func encode(in context: EncodingContext) throws {}
 
     // MARK: - Bind
 
     /// Records this geometry's vertex buffers and its joint palette: the context's when a posed view
     /// gives one, otherwise its own when skinned.
-    final func recordBindings(in context: GeometryDrawContext) {
+    final func recordBindings(in context: GeometryDrawContext) throws {
         if !vertexBufferBindingsAreCurrent {
             vertexBufferBindings = ContiguousArray(vertexBuffers
                 .map { (index: $0.key, buffer: $0.value, offset: vertexBufferOffsets[$0.key, default: 0]) }
@@ -370,12 +370,12 @@ open class Geometry {
             vertexBufferBindingsAreCurrent = true
         }
         for binding in vertexBufferBindings {
-            context.setVertexBuffer(binding.buffer, offset: binding.offset, index: binding.index)
+            try context.setVertexBuffer(binding.buffer, offset: binding.offset, index: binding.index)
         }
         if let jointPalette = context.jointPalette {
-            context.setJointPalette(jointPalette)
+            try context.setJointPalette(jointPalette)
         } else if isSkinned, let jointPalette {
-            context.setJointPalette(jointPalette)
+            try context.setJointPalette(jointPalette)
         }
     }
 
@@ -385,8 +385,8 @@ open class Geometry {
     /// default records its bindings, then its draw call, after the draw's material: a slot both
     /// bind takes the geometry's. Override to add bindings or replace the draw call, and call
     /// `super` for the defaults. A replaced draw call draws `context.elements`' indices when given.
-    open func draw(in context: GeometryDrawContext) {
-        recordBindings(in: context)
+    open func draw(in context: GeometryDrawContext) throws {
+        try recordBindings(in: context)
         recordDrawCall(in: context)
     }
 

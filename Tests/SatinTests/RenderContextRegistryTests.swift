@@ -67,7 +67,7 @@ final class RenderContextRegistryTests: XCTestCase {
         XCTAssertNotNil(material.getPipeline(renderContext: context, shadow: false))
 
         let vertexUniformsBuffer = try XCTUnwrap(device.makeBuffer(length: 4096))
-        func recordsAlbedo() -> Bool {
+        func recordsAlbedo() throws -> Bool {
             let storage = PacketStoragePool().lease()
             let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: .zero))
             storage.beginRecording(cullMode: .back, windingOrder: .counterClockwise, triangleFillMode: .fill, renderOrder: 0, debugLabel: "Test")
@@ -78,12 +78,12 @@ final class RenderContextRegistryTests: XCTestCase {
                 vertexUniforms: VertexUniformsBinding(buffer: vertexUniformsBuffer, offset: 0),
                 recorder: recorder
             )
-            material.draw(in: drawContext.materialContext(layout: nil))
+            try material.draw(in: drawContext.materialContext(layout: nil))
             return storage.commands.contains { if case .fragmentTexture(_, .Custom0) = $0 { return true } else { return false } }
         }
 
-        XCTAssertTrue(recordsAlbedo())
+        XCTAssertTrue(try recordsAlbedo())
         material.albedoTexture = nil
-        XCTAssertFalse(recordsAlbedo())
+        XCTAssertFalse(try recordsAlbedo())
     }
 }

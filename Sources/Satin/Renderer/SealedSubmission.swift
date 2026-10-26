@@ -65,7 +65,12 @@ public final class SubmissionBuilder {
     /// Neither updates nor encodes it: do both first. Call before `record(scene:renderPassDescriptor:)`.
     public func record(scene: Object) throws {
         guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
-        try encoder.record(scene: scene, into: self)
+        do {
+            try encoder.record(scene: scene, into: self)
+        } catch {
+            discardFailedRecording()
+            throw error
+        }
     }
 
     /// Updates and records the operation's own scene and its complete pass plan now. With a
@@ -74,8 +79,27 @@ public final class SubmissionBuilder {
     public func record(scene: Object, renderPassDescriptor: MTLRenderPassDescriptor,
                        viewMappings: [MTLVertexAmplificationViewMapping] = [], preparationCommandBuffer: MTLCommandBuffer? = nil) throws {
         guard !isConsumed, recordedPasses == nil else { throw SubmissionError.alreadyDrawn }
-        recordedPasses = try encoder.prepare(builder: self, renderPassDescriptor: renderPassDescriptor, scene: scene,
-                                            viewMappings: viewMappings, preparationCommandBuffer: preparationCommandBuffer)
+        // Rejection here precedes all preparation and leaves the builder reusable.
+        try encoder.validate(renderPassDescriptor, against: destination)
+        do {
+            recordedPasses = try encoder.prepare(builder: self, renderPassDescriptor: renderPassDescriptor, scene: scene,
+                                                viewMappings: viewMappings, preparationCommandBuffer: preparationCommandBuffer)
+        } catch {
+            discardFailedRecording()
+            throw error
+        }
+    }
+
+    /// A partial record cannot be sealed or retried. Preparation segments retain their arena
+    /// independently; storage that was never submitted returns immediately.
+    private func discardFailedRecording() {
+        isConsumed = true
+        for invalidation in recorder.shadowInvalidations { invalidation.invalidate() }
+        recordedPasses = nil
+        shadowOccurrences.removeAll()
+        lightOccurrences.removeAll()
+        lease.finishRecording()
+        pool.returnStorage(recorder.storage)
     }
 
     /// For GPU preparation (`encode(in:)`) of what this operation records, into `commandBuffer`.

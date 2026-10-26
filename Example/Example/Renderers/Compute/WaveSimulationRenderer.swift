@@ -91,7 +91,7 @@ final class WaveSimulationRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        computer.update(commandBuffer, iterations: appParams.get("Iterations", as: IntParameter.self)?.value ?? 1)
+        try computer.update(commandBuffer, iterations: appParams.get("Iterations", as: IntParameter.self)?.value ?? 1)
         material.set(computer.dstTexture, index: VertexTextureIndex.Custom0)
         material.set(computer.dstTexture, index: FragmentTextureIndex.Custom0)
 

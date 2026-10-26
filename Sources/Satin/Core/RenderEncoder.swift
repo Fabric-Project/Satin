@@ -239,7 +239,7 @@ open class RenderEncoder {
             if oldValue != emissiveTextureStorageMode { updateEmissiveTexture = true }
         }
     }
-    
+
     // MARK: -
 
     public var viewport = MTLViewport()
@@ -610,14 +610,9 @@ open class RenderEncoder {
     /// Shadow passes run before the main scene pass. Surface materials render first according to
     /// `renderingMode`; unlit materials always render in a subsequent forward pass on top.
     public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, scene: Object, cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) throws {
-        RecordingProfile.noteFrame(frame.frameNumber)
-        RecordingProfile.begin(.scenePlanning)
-        defer { RecordingProfile.end() }
         let builder = makeSubmissionBuilder(frame: frame, cameras: cameras, viewports: viewports)
         try builder.record(scene: scene, renderPassDescriptor: renderPassDescriptor, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
         let sealed = try builder.seal()
-        RecordingProfile.begin(.replay)
-        defer { RecordingProfile.end() }
         try sealed.encode(into: commandBuffer)
     }
 
@@ -643,7 +638,7 @@ open class RenderEncoder {
 
     /// Throws when an attachment `renderPassDescriptor` supplies doesn't have the destination's pixel
     /// format. Attachments it leaves empty are the encoder's to make, and always match.
-    private func validate(_ renderPassDescriptor: MTLRenderPassDescriptor, against destination: RenderDestination) throws {
+    func validate(_ renderPassDescriptor: MTLRenderPassDescriptor, against destination: RenderDestination) throws {
         let colorAttachment = renderPassDescriptor.colorAttachments[0]
         if let expected = destination.colorPixelFormats.first, expected != .invalid {
             for texture in [colorAttachment?.texture, colorAttachment?.resolveTexture] {
@@ -671,7 +666,6 @@ open class RenderEncoder {
     func prepare(builder submission: SubmissionBuilder, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor,
               scene: Object, viewMappings: [MTLVertexAmplificationViewMapping], preparationCommandBuffer: MTLCommandBuffer? = nil) throws -> [RecordedRenderPass] {
         guard !submission.isConsumed else { throw SubmissionError.alreadyDrawn }
-        try validate(inputDescriptor, against: submission.destination)
         let renderPassDescriptor = inputDescriptor.privateCopy()
         preparedPasses.removeAll(keepingCapacity: true)
         preparingViews = submission.views
@@ -694,8 +688,7 @@ open class RenderEncoder {
         }
 
         let simd_viewports = submission.simdViewports
-        RecordingProfile.begin(.updateAndTraversal)
-        update(
+        try update(
             scene: scene,
             cameras: cameras,
             viewports: simd_viewports,
@@ -711,7 +704,6 @@ open class RenderEncoder {
         for collectedObject in renderCollection.objects {
             collectedObject.renderable?.beginOccurrence(frame: frame)
         }
-        RecordingProfile.end()
 
         var arrayLength = 1
         for viewMapping in viewMappings {
@@ -736,10 +728,8 @@ open class RenderEncoder {
         recorder.passBindings.shadowTextures = directShadowTextures
         recorder.passBindings.projectorTextures = projectorTextures
 
-        recordScene(recorder: recorder, views: submission.views)
-        RecordingProfile.begin(.bookkeeping)
+        try recordScene(recorder: recorder, views: submission.views)
         buildRouteEntries(storage: recorder.storage)
-        RecordingProfile.end()
 
         let inColorTexture = renderPassDescriptor.colorAttachments[0].texture
         let inColorResolveTexture = renderPassDescriptor.colorAttachments[0].resolveTexture
@@ -873,7 +863,7 @@ open class RenderEncoder {
 
         setupAuxiliaryTextures()
 
-        _ = prepareMainRenderPasses(
+        _ = try prepareMainRenderPasses(
             renderPassDescriptor: renderPassDescriptor,
             viewports: viewports,
             simdViewports: simd_viewports,
@@ -973,12 +963,12 @@ open class RenderEncoder {
     /// Records the scene's colour passes: every collected renderable, once per route it draws in, in
     /// each layer's draw order (render order when sorting). Each recording is a render event with its
     /// own vertex uniforms; its packets are a run for that layer and route.
-    private func recordScene(recorder: PacketRecorder, views: [RenderView]) {
+    private func recordScene(recorder: PacketRecorder, views: [RenderView]) throws {
         let routes = recordedRoutes
         let frusta = Self.frusta(of: views)
         for renderLayer in renderCollection.activeLayers {
             for renderable in renderCollection.renderables(renderLayer: renderLayer, sorted: sortObjects) {
-                recordColorPasses(of: renderable, renderLayer: renderLayer, routes: routes, recorder: recorder, views: views, frusta: frusta, isRecorded: false)
+                try recordColorPasses(of: renderable, renderLayer: renderLayer, routes: routes, recorder: recorder, views: views, frusta: frusta, isRecorded: false)
             }
         }
     }
@@ -1005,24 +995,20 @@ open class RenderEncoder {
 
     /// Records `renderable` once per route of `routes` it draws in, as runs of its layer, unless it
     /// is outside every view.
-    private func recordColorPasses(of renderable: Renderable, renderLayer: Int, routes: [RenderRoute], recorder: PacketRecorder, views: [RenderView], frusta: ContiguousArray<ViewFrustum>, isRecorded: Bool) {
-        RecordingProfile.begin(.colourCulling)
+    private func recordColorPasses(of renderable: Renderable, renderLayer: Int, routes: [RenderRoute], recorder: PacketRecorder, views: [RenderView], frusta: ContiguousArray<ViewFrustum>, isRecorded: Bool) throws {
         let mayBeSeen = Self.mayBeSeen(renderable, in: frusta)
-        RecordingProfile.end()
         guard mayBeSeen else { return }
         let membership = routeMembership(of: renderable)
         for route in routes where membership & (1 << route.rawValue) != 0 {
             let phase = Self.phase(for: route)
-            let packets = recorder.record(
+            let packets = try recorder.record(
                 renderable,
                 renderContext: renderContext(for: renderable, phase: phase),
                 pass: .color,
                 materialPass: materialPass(for: phase),
                 views: views
             )
-            RecordingProfile.begin(.bookkeeping)
             recorder.storage.appendRun(renderLayer: renderLayer, routeIndex: route.rawValue, packets: packets, isRecorded: isRecorded)
-            RecordingProfile.end()
         }
     }
 
@@ -1040,7 +1026,7 @@ open class RenderEncoder {
 
         renderCollection.reset()
         sceneTraversal.collect(scene: scene, into: renderCollection)
-        updateScene(cameras: submission.cameras, viewports: submission.simdViewports,
+        try updateScene(cameras: submission.cameras, viewports: submission.simdViewports,
                     recorder: recorder, encodingContext: nil, runsMaterialUpdates: false)
         for (index, light) in renderCollection.lights.enumerated() {
             let identity = RecordedLightIdentity(record: recorder.recordToken, occurrenceIndex: index)
@@ -1054,9 +1040,7 @@ open class RenderEncoder {
         }
         if sortObjects {
             // Stable: equal render orders keep the scene's order.
-            RecordingProfile.begin(.bookkeeping)
             recordedRenderables.sort { $0.renderOrder < $1.renderOrder }
-            RecordingProfile.end()
         }
 
         let routes = recordedRoutes
@@ -1064,7 +1048,7 @@ open class RenderEncoder {
         for renderable in recordedRenderables {
             renderable.beginOccurrence(frame: recorder.frame)
             if renderable.castShadow {
-                let packets = recorder.record(renderable, renderContext: context, pass: .shadow,
+                let packets = try recorder.record(renderable, renderContext: context, pass: .shadow,
                                                materialPass: .all, views: submission.views)
                 if !packets.isEmpty {
                     submission.shadowOccurrences.append(RecordedShadowOccurrence(packets: packets,
@@ -1073,7 +1057,7 @@ open class RenderEncoder {
                                                                                   frustumCulled: renderable.frustumCulled))
                 }
             }
-            recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)
+            try recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)
         }
         recordedRenderables.removeAll(keepingCapacity: true)
     }
@@ -1321,7 +1305,7 @@ open class RenderEncoder {
         unlitEntries: [RenderRouteEntry] = [],
         finalDepthStoreAction: MTLStoreAction = .dontCare,
         finalStencilStoreAction: MTLStoreAction = .dontCare
-    ) -> Bool {
+    ) throws -> Bool {
         guard albedoTexture != nil,
               normalTexture != nil,
               pbrTexture != nil,
@@ -1368,7 +1352,7 @@ open class RenderEncoder {
                 RenderView(camera: deferredLightingCamera, viewport: simdViewports.isEmpty ? .zero : simdViewports[min(index, simdViewports.count - 1)], frame: recorder.frame)
             }
             deferredLightingMesh.beginOccurrence(frame: recorder.frame)
-            let packets = recorder.record(deferredLightingMesh, renderContext: renderContext(for: deferredLightingMesh, phase: .unlitOpaque), pass: .color, materialPass: materialPass(for: .unlitOpaque), views: lightingViews)
+            let packets = try recorder.record(deferredLightingMesh, renderContext: renderContext(for: deferredLightingMesh, phase: .unlitOpaque), pass: .color, materialPass: materialPass(for: .unlitOpaque), views: lightingViews)
             preparedPasses[resolve].commands.append(.range(packets, viewIndex: 0))
         }
         if let entry = unlitEntries.first { preparedPasses[resolve].commands.append(.indices(entry.packets, viewIndex: 0)) }
@@ -1573,7 +1557,7 @@ open class RenderEncoder {
         finalColorStoreAction: MTLStoreAction,
         finalDepthStoreAction: MTLStoreAction,
         finalStencilStoreAction: MTLStoreAction
-    ) -> Bool {
+    ) throws -> Bool {
         let hasAlphaTransparentRenderables = !routePassEntries(route: .alphaTransparent).isEmpty
         let hasClassicTransparentRenderables = !routePassEntries(route: .classicTransparent).isEmpty
         let hasTransparentRenderables = hasAlphaTransparentRenderables || hasClassicTransparentRenderables
@@ -1825,7 +1809,7 @@ open class RenderEncoder {
                     auxiliaryAttachmentIndices: auxiliaryAttachmentIndices,
                     clearWhenEmpty: true
                 )
-                let resolveEncoded = prepareDeferredLightingPass(
+                let resolveEncoded = try prepareDeferredLightingPass(
                     renderPassDescriptor: renderPassDescriptor,
 
                     sceneView: preparingViews.first,
@@ -1962,7 +1946,7 @@ open class RenderEncoder {
     // MARK: - Internal Update
 
     private func update(scene: Object, cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?,
-                         lightOccurrences: [RecordedLightOccurrence] = []) {
+                         lightOccurrences: [RecordedLightOccurrence] = []) throws {
         for camera in cameras {
             camera.update()
         }
@@ -1973,20 +1957,20 @@ open class RenderEncoder {
         sceneTraversal.updateAndCollect(scene: scene, into: renderCollection)
         renderCollection.includeLights(lightOccurrences)
 
-        updateScene(
+        try updateScene(
             cameras: cameras,
             viewports: viewports,
             recorder: recorder, encodingContext: encodingContext
         )
 
         updateLights(recordedLights: lightOccurrences)
-        recorder.passBindings.lights = recorder.snapshot(uploadedLightData)
+        recorder.passBindings.lights = try recorder.snapshot(uploadedLightData)
         recorder.passBindings.bindsLights = !renderCollection.lightReceivers.isEmpty
     }
 
     private func updateScene(cameras: [Camera], viewports: [simd_float4], recorder: PacketRecorder, encodingContext: EncodingContext?,
-                             runsMaterialUpdates: Bool = true) {
-        updateDirectLightingState(recorder: recorder)
+                             runsMaterialUpdates: Bool = true) throws {
+        try updateDirectLightingState(recorder: recorder)
 
         let lightCount = renderCollection.lights.count
         let directShadowCount = directShadowLights.count
@@ -2073,7 +2057,7 @@ open class RenderEncoder {
                 }
             }
 
-            if let encodingContext { object.encode(in: encodingContext) }
+            if let encodingContext { try object.encode(in: encodingContext) }
         }
     }
 
@@ -2345,7 +2329,7 @@ open class RenderEncoder {
         lightDataUploadCount += 1
     }
 
-    private func updateDirectLightingState(recorder: PacketRecorder) {
+    private func updateDirectLightingState(recorder: PacketRecorder) throws {
         directShadowLights.removeAll(keepingCapacity: true)
         directShadowTextures.removeAll(keepingCapacity: true)
         projectorLights.removeAll(keepingCapacity: true)
@@ -2427,10 +2411,10 @@ open class RenderEncoder {
         directShadowTextures = Array(repeating: nil, count: directShadowTextureIndex)
         projectorTextures = Array(repeating: nil, count: projectorLights.count)
 
-        recorder.passBindings.shadowData = recorder.snapshot(directShadowData)
-        recorder.passBindings.shadowMatrices = recorder.snapshot(directShadowMatrices)
-        recorder.passBindings.projectorMatrices = recorder.snapshot(projectorMatrices)
-        recorder.passBindings.projectorTransforms = recorder.snapshot(projectorTransforms)
+        recorder.passBindings.shadowData = try recorder.snapshot(directShadowData)
+        recorder.passBindings.shadowMatrices = try recorder.snapshot(directShadowMatrices)
+        recorder.passBindings.projectorMatrices = try recorder.snapshot(projectorMatrices)
+        recorder.passBindings.projectorTransforms = try recorder.snapshot(projectorTransforms)
     }
 
     private func updateDirectShadowTextures() {

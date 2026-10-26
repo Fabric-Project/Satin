@@ -82,8 +82,8 @@ public final class TessellationGeometry: Geometry {
     }
 
     /// Records its bindings, then its patches.
-    override public func draw(in context: GeometryDrawContext) {
-        recordBindings(in: context)
+    override public func draw(in context: GeometryDrawContext) throws {
+        try recordBindings(in: context)
         if let indexBuffer {
             context.drawIndexedPatches(controlPointCount: controlPointsPerPatch, patchCount: patchCount,
                                        controlPointIndexBuffer: indexBuffer, instanceCount: context.instanceCount)

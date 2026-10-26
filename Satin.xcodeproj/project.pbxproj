@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7FAD00000000000000000002 /* GPUError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAD00000000000000000001 /* GPUError.swift */; };
 		4113CF3BF9DA4D7F8ACD4DC1 /* RecordedLightingPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */; };
 		49637A7F7C9B42BB973E21F1 /* RecordedSceneOccurrences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */; };
 		CF4500000000000000000003 /* SealedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000004 /* SealedSubmission.swift */; };
@@ -307,7 +308,6 @@
 		F0B100012E06000100AAA005 /* SlugTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B100012E06000200AAA005 /* SlugTextTests.swift */; };
 		F1A000012F00000100AAA001 /* Renderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A000022F00000100AAA001 /* Renderer.swift */; };
 		F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */; };
-		7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000A000 /* RecordingProfile.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -321,6 +321,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		7FAD00000000000000000001 /* GPUError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUError.swift; sourceTree = "<group>"; };
 		B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedLightingPipeline.swift; sourceTree = "<group>"; };
 		2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedSceneOccurrences.swift; sourceTree = "<group>"; };
 		CF4500000000000000000004 /* SealedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SealedSubmission.swift; sourceTree = "<group>"; };
@@ -623,7 +624,6 @@
 		F0B100012E06000200AAA005 /* SlugTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlugTextTests.swift; sourceTree = "<group>"; };
 		F1A000022F00000100AAA001 /* Renderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Renderer.swift; sourceTree = "<group>"; };
 		F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CycloramaGeometry.swift; sourceTree = "<group>"; };
-		7F1A0000000000000000A000 /* RecordingProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingProfile.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1021,7 +1021,6 @@
 				7F1A00000000000000000050 /* ViewFrustum.swift */,
 				7F1A00000000000000000052 /* ShadowCasterRecording.swift */,
 				7F1A00000000000000000019 /* RenderSubmission.swift */,
-				7F1A0000000000000000A000 /* RecordingProfile.swift */,
 				7F1A0000000000000000001B /* EncodingContext.swift */,
 				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
@@ -1096,6 +1095,7 @@
 		66D7DED62C06A24B00B5A6C8 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				7FAD00000000000000000001 /* GPUError.swift */,
 				E18ABF812CBCD89C00F54A6D /* Locks.swift */,
 				7F1A00000000000000000009 /* VertexLayoutRegistry.swift */,
 				7F1A00000000000000000013 /* RenderContextRegistry.swift */,
@@ -1387,6 +1387,7 @@
 			files = (
 				E101A85E2C07061D0055FABA /* Types.mm in Sources */,
 				E101A8542C07061D0055FABA /* Bezier.mm in Sources */,
+				7FAD00000000000000000002 /* GPUError.swift in Sources */,
 				E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */,
 				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
 				7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */,
@@ -1537,7 +1538,6 @@
 				7F1A00000000000000000051 /* ViewFrustum.swift in Sources */,
 				7F1A00000000000000000053 /* ShadowCasterRecording.swift in Sources */,
 				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
-				7F1A0000000000000000A001 /* RecordingProfile.swift in Sources */,
 				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
 				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,

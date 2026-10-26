@@ -51,14 +51,14 @@ open class TessellationMesh: Mesh {
     /// not, the frozen factors.
     private(set) var encodedFactors: (buffer: MTLBuffer, offset: Int)?
 
-    override public func encode(in context: EncodingContext) {
+    override public func encode(in context: EncodingContext) throws {
         if tessellate {
             // An earlier arena slice may already have retired. Never fall back to it
             // when this preparation cannot produce factors.
             encodedFactors = nil
             if tessellator.factorsLength > 0 {
-                let factors = context.allocate(length: tessellator.factorsLength)
-                if tessellator.encodeFactors(context.commandBuffer, into: factors, iterations: 1) {
+                let factors = try context.allocate(length: tessellator.factorsLength)
+                if try tessellator.encodeFactors(context.commandBuffer, into: factors, iterations: 1) {
                     encodedFactors = factors
                 }
             }
@@ -69,28 +69,28 @@ open class TessellationMesh: Mesh {
             if tessellator.factorsLength > 0,
                let frozenFactors = context.commandBuffer.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
                 frozenFactors.label = "\(label) Frozen Tessellation Factors"
-                if tessellator.encodeFactors(context.commandBuffer, into: (frozenFactors, 0), iterations: 1) {
+                if try tessellator.encodeFactors(context.commandBuffer, into: (frozenFactors, 0), iterations: 1) {
                     encodedFactors = (frozenFactors, 0)
                     factorsNeedFreezing = false
                 }
             }
         }
-        super.encode(in: context)
+        try super.encode(in: context)
     }
 
     // MARK: - Draw
 
-    override public func draw(in context: RenderableDrawContext) {
+    override public func draw(in context: RenderableDrawContext) throws {
         guard instanceCount > 0, let material, let encodedFactors, !geometry.vertexBuffers.isEmpty,
               context.isShadowPass || context.materialPass.includes(material)
         else { return }
 
-        context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
-        material.draw(in: context.materialContext(layout: nil))
+        try context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
+        try material.draw(in: context.materialContext(layout: nil))
 
         // Recorded now: the draw binds the factors encoded for it, whatever is encoded later.
         context.setTessellationFactorBuffer(encodedFactors.buffer, offset: encodedFactors.offset)
 
-        geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
+        try geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
     }
 }

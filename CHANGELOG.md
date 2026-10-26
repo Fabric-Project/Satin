@@ -41,9 +41,7 @@
   Hooks bind `vertexUniforms` as before; reading or copying its bytes while recording isn't supported.
 - `PointShadow.recordsCastersOnceForAllFaces` and `PacketRecorder.alignsViewSlots` are gone. Casters
   are recorded once for every point-light face, and separately encoded views use 256-byte-aligned slots.
-- Development profiling: launch with `SATIN_RECORDING_PROFILE=1` to print, every 120 frames, exclusive
-  ms and calls per frame for each recording category (update, culling, hooks, uniforms, bookkeeping,
-  planning, effects, replay). Off by default (one branch per marker).
+
 
 ## Context Init
 
@@ -270,6 +268,12 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 * Add texture matrix support for all materials which consume textures.
 
 ## Frame contract correctness
+
+- Frame-arena and immutable compute-input allocation failures now throw `GPUError.allocationFailed`.
+  Recording/preparation hooks and compute encoding propagate failures; owned encoders close on error,
+  partial recordings return their storage, and pending preparation keeps its arena memory alive.
+- Asynchronous IBL scene loading now requires a Result completion callback, reporting preparation
+  errors or success after GPU completion.
 
 
 - Preserve captured point-shadow reach and cull recorded casters outside it, matching root casters.

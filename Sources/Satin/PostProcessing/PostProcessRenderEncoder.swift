@@ -194,45 +194,48 @@ open class PostProcessRenderEncoder {
         viewports: [MTLViewport],
         viewMappings: [MTLVertexAmplificationViewMapping] = []
     ) throws {
-        RecordingProfile.noteFrame(frame.frameNumber)
-        RecordingProfile.begin(.effects)
-        defer { RecordingProfile.end() }
-        let sealed = prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
+        let sealed = try prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
                                        viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: commandBuffer)
-        RecordingProfile.begin(.replay)
-        defer { RecordingProfile.end() }
         try sealed.encode(into: commandBuffer)
     }
 
     /// Captures a postprocess pass without a command buffer. Custom GPU preparation must be
     /// scheduled separately before this pass; draw(...) retains its automatic immediate hooks.
     public func seal(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
-                     cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) -> SealedSubmission {
-        prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
+                     cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping] = []) throws -> SealedSubmission {
+        try prepareSubmission(frame: frame, renderPassDescriptor: renderPassDescriptor, mesh: mesh, cameras: cameras,
                           viewports: viewports, viewMappings: viewMappings, preparationCommandBuffer: nil)
     }
 
     private func prepareSubmission(frame: FrameTime, renderPassDescriptor inputDescriptor: MTLRenderPassDescriptor, mesh: Mesh,
                                    cameras: [Camera], viewports: [MTLViewport], viewMappings: [MTLVertexAmplificationViewMapping],
-                                   preparationCommandBuffer: MTLCommandBuffer?) -> SealedSubmission {
+                                   preparationCommandBuffer: MTLCommandBuffer?) throws -> SealedSubmission {
         let renderContext = fastRenderContext()
         let lease = frameArena.lease(frame: frame)
         let recorder = PacketRecorder(storage: packetStoragePool.lease(), lease: lease)
+        var didRecord = false
+        defer {
+            if !didRecord {
+                lease.finishRecording()
+                packetStoragePool.returnStorage(recorder.storage)
+            }
+        }
         for camera in cameras { camera.update() }
         let views = cameras.enumerated().map { index, camera in
             RenderView(camera: camera, viewport: viewports.isEmpty ? .zero : viewports[min(index, viewports.count - 1)].float4, frame: frame)
         }
         mesh.update()
         if let commandBuffer = preparationCommandBuffer {
-            mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
+            try mesh.encode(in: EncodingContext(commandBuffer: commandBuffer, frame: frame, views: views, recorder: recorder))
         }
         mesh.beginOccurrence(frame: frame)
-        let packets = recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)
+        let packets = try recorder.record(mesh, renderContext: renderContext, pass: .color, materialPass: .all, views: views)
         let descriptor = inputDescriptor.privateCopy()
         prepare(descriptor)
         var pass = RecordedRenderPass(descriptor: descriptor, label: label, viewports: viewports,
                                       amplificationCount: context.vertexAmplificationCount, viewMappings: viewMappings)
         pass.commands.append(.range(packets, viewIndex: 0))
+        didRecord = true
         return SealedSubmission(frame: frame, recorder: recorder, lease: lease, pool: packetStoragePool, passes: [pass])
     }
 

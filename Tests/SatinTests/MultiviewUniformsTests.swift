@@ -22,7 +22,7 @@ final class MultiviewUniformsTests: XCTestCase {
         ]
         let viewport = simd_float4(0, 0, 64, 64)
 
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: viewport) })
+        let packets = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: cameras.map { RenderView(camera: $0, viewport: viewport) })
 
         XCTAssertEqual(packets.count, 1, "one draw covers both views")
         let packet = storage.packets[packets.lowerBound]

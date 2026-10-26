@@ -17,9 +17,9 @@ final class TessellationPreparationTests: XCTestCase {
         var updateCount = 0
         override func setup() {}
         override func update() {}
-        override func update(_ commands: MTLCommandBuffer, iterations: Int = 1) {
+        override func update(_ commands: MTLCommandBuffer, iterations: Int = 1) throws {
             updateCount += 1
-            super.update(commands, iterations: iterations)
+            try super.update(commands, iterations: iterations)
         }
     }
 
@@ -66,7 +66,7 @@ final class TessellationPreparationTests: XCTestCase {
             let commands = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
             let (mesh, tessellator) = fixture(tessellate: tessellate)
             for attempt in 1...3 {
-                mesh.encode(in: submission.encodingContext(commandBuffer: commands))
+                try mesh.encode(in: submission.encodingContext(commandBuffer: commands))
                 XCTAssertNil(mesh.encodedFactors, "No pipeline wrote the requested factors")
                 XCTAssertEqual(tessellator.updateCount, attempt, "Failed preparation must be retried")
                 XCTAssertNil(tessellator.factorsDestination, "A frame-arena destination must not escape preparation")
@@ -82,12 +82,12 @@ final class TessellationPreparationTests: XCTestCase {
         let commands = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
         let (mesh, tessellator) = fixture(tessellate: false)
         let encoding = submission.encodingContext(commandBuffer: commands)
-        mesh.encode(in: encoding)
+        try mesh.encode(in: encoding)
         XCTAssertNil(mesh.encodedFactors)
         try installPipeline(on: tessellator)
-        mesh.encode(in: encoding)
+        try mesh.encode(in: encoding)
         let frozen = try XCTUnwrap(mesh.encodedFactors)
-        mesh.encode(in: encoding)
+        try mesh.encode(in: encoding)
         XCTAssertEqual(tessellator.updateCount, 2, "A successful freeze must not dispatch again")
         XCTAssertTrue(mesh.encodedFactors?.buffer === frozen.buffer)
 
@@ -110,10 +110,10 @@ final class TessellationPreparationTests: XCTestCase {
         let commands = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
         let (mesh, tessellator) = fixture(tessellate: true)
         try installPipeline(on: tessellator)
-        mesh.encode(in: submission.encodingContext(commandBuffer: commands))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commands))
         XCTAssertNotNil(mesh.encodedFactors)
         tessellator.shader?.updatePipeline = nil
-        mesh.encode(in: submission.encodingContext(commandBuffer: commands))
+        try mesh.encode(in: submission.encodingContext(commandBuffer: commands))
         XCTAssertNil(mesh.encodedFactors, "An earlier slice is not a fallback for a failed preparation")
         commands.commit()
         commands.waitUntilCompleted()
@@ -124,8 +124,8 @@ final class TessellationPreparationTests: XCTestCase {
         try installPipeline(on: tessellator, resetOnly: true)
         let commands = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
         let destination = try XCTUnwrap(context.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate))
-        XCTAssertTrue(tessellator.encodeFactors(commands, into: (destination, 0)))
-        XCTAssertFalse(tessellator.encodeFactors(commands, into: (destination, 0)), "Reset has already run and there is no update pipeline")
+        XCTAssertTrue(try tessellator.encodeFactors(commands, into: (destination, 0)))
+        XCTAssertFalse(try tessellator.encodeFactors(commands, into: (destination, 0)), "Reset has already run and there is no update pipeline")
         commands.commit()
         commands.waitUntilCompleted()
     }

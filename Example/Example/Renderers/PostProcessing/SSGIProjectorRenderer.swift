@@ -212,7 +212,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
     private func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
             scene.environmentIntensity = appParams.get("Environment Intensity", as: FloatParameter.self)?.value ?? 0.025
         }
     }

@@ -30,15 +30,15 @@ public struct MaterialDrawContext {
 
     /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
     /// that many bytes from `offset` are copied into the frame. The default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) throws {
+        let binding = try recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
     /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
     /// that many bytes from `offset` are copied into the frame. The default retains without copying.
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) throws {
+        let binding = try recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
@@ -107,8 +107,8 @@ public struct GeometryDrawContext {
 
     /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
     /// that many bytes from `offset` are copied into the frame. The default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) throws {
+        let binding = try recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
@@ -167,8 +167,8 @@ public struct GeometryDrawContext {
     }
 
     /// Binds `palette`'s snapshot for this record at the joint-matrices index.
-    func setJointPalette(_ palette: JointPalette) {
-        let snapshot = palette.snapshot(recorder: recorder)
+    func setJointPalette(_ palette: JointPalette) throws {
+        let snapshot = try palette.snapshot(recorder: recorder)
         storage.appendVertexBuffer(snapshot.buffer, offset: snapshot.offset, slot: .JointMatrices)
     }
 }
@@ -206,15 +206,15 @@ public struct RenderableDrawContext {
 
     /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
     /// that many bytes from `offset` are copied into the frame. The default retains without copying.
-    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
+    public func setVertexBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: VertexBufferIndex, copyOnRecordLength: Int? = nil) throws {
+        let binding = try recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendVertexBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 
     /// Set `copyOnRecordLength` for CPU-readable data that will change before this draw completes:
     /// that many bytes from `offset` are copied into the frame. The default retains without copying.
-    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) {
-        let binding = recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
+    public func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int = 0, index: FragmentBufferIndex, copyOnRecordLength: Int? = nil) throws {
+        let binding = try recorder.bufferBinding(buffer, offset: offset, copyOnRecordLength: copyOnRecordLength)
         storage.appendFragmentBuffer(binding.buffer, offset: binding.offset, slot: index)
     }
 

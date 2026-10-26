@@ -41,16 +41,17 @@ final class FrameArena {
             self.label = label
         }
 
-        func take(minimumLength: Int) -> Chunk {
-            lock.sync {
+        func take(minimumLength: Int) throws -> Chunk {
+            try lock.sync {
                 if let index = freeChunks.firstIndex(where: { $0.length >= minimumLength }) {
                     return freeChunks.remove(at: index)
                 }
                 let length = max(minimumLength, nextChunkLength)
-                nextChunkLength = min(nextChunkLength * 2, maximumChunkLength)
-                guard let buffer = device.makeBuffer(length: length, options: [.storageModeShared, .cpuCacheModeWriteCombined]) else {
-                    fatalError("\(label): could not allocate a \(length) byte chunk")
+                guard length <= device.maxBufferLength,
+                      let buffer = device.makeBuffer(length: length, options: [.storageModeShared, .cpuCacheModeWriteCombined]) else {
+                    throw GPUError.allocationFailed
                 }
+                nextChunkLength = min(nextChunkLength * 2, maximumChunkLength)
                 buffer.label = "\(label) Chunk \(createdChunkCount)"
                 createdChunkCount += 1
                 return Chunk(buffer: buffer)
@@ -81,9 +82,9 @@ final class FrameArena {
             contents = Contents(pool: pool)
         }
 
-        func allocate(length: Int, alignment: Int = 256) -> Slice {
+        func allocate(length: Int, alignment: Int = 256) throws -> Slice {
             guard let contents else { preconditionFailure("Recording has finished") }
-            return contents.allocate(length: length, alignment: alignment)
+            return try contents.allocate(length: length, alignment: alignment)
         }
 
         func retain(untilCompleted commandBuffer: MTLCommandBuffer) {
@@ -114,17 +115,17 @@ final class FrameArena {
             init(pool: Pool) { self.pool = pool }
             deinit { pool.recycle(chunks) }
 
-            func allocate(length: Int, alignment: Int) -> Slice {
+            func allocate(length: Int, alignment: Int) throws -> Slice {
                 precondition(alignment > 0 && alignment.nonzeroBitCount == 1, "Alignment must be a power of two")
                 let length = max(length, 1)
                 if let chunk = chunks.last {
                     let offset = (chunk.used + alignment - 1) & ~(alignment - 1)
-                    if offset + length <= chunk.length {
+                    if offset <= chunk.length, length <= chunk.length - offset {
                         chunk.used = offset + length
                         return Slice(buffer: chunk.buffer, offset: offset, length: length)
                     }
                 }
-                let chunk = pool.take(minimumLength: length)
+                let chunk = try pool.take(minimumLength: length)
                 chunks.append(chunk)
                 chunk.used = length
                 return Slice(buffer: chunk.buffer, offset: 0, length: length)

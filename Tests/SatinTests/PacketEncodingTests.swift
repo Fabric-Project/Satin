@@ -20,9 +20,9 @@ final class PacketEncodingTests: XCTestCase {
         storage.beginMaterial()
         storage.setPipeline(try pipeline())
         let drawContext = MaterialDrawContext(renderContext: context, pass: .color, layout: nil, recorder: recorder)
-        drawContext.setVertexBuffer(source, offset: 256, index: .Vertices, copyOnRecordLength: 4)
+        try drawContext.setVertexBuffer(source, offset: 256, index: .Vertices, copyOnRecordLength: 4)
         source.contents().advanced(by: 256).storeBytes(of: UInt32(99), as: UInt32.self)
-        drawContext.setVertexBuffer(source, offset: 256, index: .VertexUniforms)
+        try drawContext.setVertexBuffer(source, offset: 256, index: .VertexUniforms)
         storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
         storage.endRecording()
         let bindings = vertexBufferBindings(in: storage)
@@ -52,7 +52,7 @@ final class PacketEncodingTests: XCTestCase {
         mesh.beginOccurrence(frame: .zero)
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
 
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all,
+        let packets = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all,
                                       views: [RenderView(camera: camera, viewport: [0, 0, 64, 64])])
 
         XCTAssertEqual(storage.vertexUniformsJobs.count, 1, "recording reserves the uniforms and queues their write")
@@ -75,7 +75,7 @@ final class PacketEncodingTests: XCTestCase {
             mesh.position = [Float(x), 0, 0]
             mesh.update()
             mesh.beginOccurrence(frame: .zero)
-            recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: views)
+            try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: views)
         }
         XCTAssertEqual(storage.vertexUniformsJobs.count, 3)
         XCTAssertEqual(storage.viewTable.count, 1, "three records of the same views share one table entry")
@@ -85,8 +85,8 @@ final class PacketEncodingTests: XCTestCase {
         let lease = FrameArena(device: device).lease(frame: .zero)
         let recorder = PacketRecorder(storage: PacketStoragePool().lease(), lease: lease)
         let source = try XCTUnwrap(device.makeBuffer(length: 64 * 1024, options: .storageModeShared))
-        let copied = recorder.bufferBinding(source, offset: 256, copyOnRecordLength: 4)
-        let next = recorder.allocate(length: 4)
+        let copied = try recorder.bufferBinding(source, offset: 256, copyOnRecordLength: 4)
+        let next = try recorder.allocate(length: 4)
         XCTAssertTrue(next.buffer === copied.buffer)
         XCTAssertEqual(next.offset, copied.offset + 256, "4 bytes were copied, not the rest of the 64 KB buffer")
     }
@@ -104,7 +104,7 @@ final class PacketEncodingTests: XCTestCase {
         beginRecording(storage)
         storage.beginMaterial()
         // A shadow pass records every slot the material set, not only those its colour shader reads.
-        material.draw(in: MaterialDrawContext(renderContext: context, pass: .shadow, layout: nil, recorder: recorder))
+        try material.draw(in: MaterialDrawContext(renderContext: context, pass: .shadow, layout: nil, recorder: recorder))
         for _ in 0 ..< Satin.maxBuffersInFlight { ring.update(data: [simd_float4(0, 0, 1, 1)]) }
         storage.setPipeline(try pipeline())
         storage.finishPacket(drawCall: .primitives(.triangle, vertexStart: 0, vertexCount: 3, instanceCount: 1))
@@ -299,7 +299,7 @@ final class PacketEncodingTests: XCTestCase {
         mesh.beginOccurrence(frame: .zero)
 
         let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
-        let packets = recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
+        let packets = try recorder.record(mesh, renderContext: context, pass: .color, materialPass: .all, views: [RenderView(camera: camera, viewport: simd_float4(0, 0, 64, 64))])
 
         XCTAssertEqual(packets.count, 2)
         XCTAssertEqual(storage.packets[packets.lowerBound].cullMode, .front)

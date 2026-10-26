@@ -261,7 +261,7 @@ final class SealedSubmissionTests: XCTestCase {
             material.set("Color", simd_float4(red, 0, 0, 1))
             let texture = try target()
             descriptor.colorAttachments[0].texture = texture
-            items.append((texture, encoder.seal(frame: .zero, renderPassDescriptor: descriptor, mesh: mesh, cameras: [camera], viewports: [viewport])))
+            items.append((texture, try encoder.seal(frame: .zero, renderPassDescriptor: descriptor, mesh: mesh, cameras: [camera], viewports: [viewport])))
         }
         material.set("Color", simd_float4(0, 1, 0, 1))
         let commandBuffer = try XCTUnwrap(queue.makeCommandBuffer())
@@ -358,8 +358,8 @@ final class ExternalColorMaterial: BasicColorMaterial {
 
     var colors: MTLBuffer?
 
-    override func draw(in context: MaterialDrawContext) {
-        super.draw(in: context)
-        if let colors { context.setFragmentBuffer(colors, index: .MaterialUniforms, copyOnRecordLength: colors.length) }
+    override func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
+        if let colors { try context.setFragmentBuffer(colors, index: .MaterialUniforms, copyOnRecordLength: colors.length) }
     }
 }

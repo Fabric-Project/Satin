@@ -518,7 +518,7 @@ final class ParametricSurfacesRenderer: BaseRenderer {
     private func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
             scene.environmentIntensity = 0.05
         }
     }

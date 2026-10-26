@@ -76,9 +76,9 @@ public class ARLidarMesh: Renderable {
 
     // MARK: - Update
 
-    override public func encode(in context: EncodingContext) {
-        material?.encode(in: context)
-        super.encode(in: context)
+    override public func encode(in context: EncodingContext) throws {
+        try material?.encode(in: context)
+        try super.encode(in: context)
     }
 
     override public func update() {
@@ -88,15 +88,15 @@ public class ARLidarMesh: Renderable {
 
     // MARK: - Draw
 
-    override public func draw(in context: RenderableDrawContext) {
+    override public func draw(in context: RenderableDrawContext) throws {
         guard let vertexBuffer = vertexBuffer,
               let indexBuffer = indexBuffer,
               let material = material
         else { return }
 
-        context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
-        context.setVertexBuffer(vertexBuffer, offset: 0, index: .Vertices)
-        material.draw(in: context.materialContext(layout: nil))
+        try context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
+        try context.setVertexBuffer(vertexBuffer, offset: 0, index: .Vertices)
+        try material.draw(in: context.materialContext(layout: nil))
 
         context.geometryContext(instanceCount: 1).drawIndexedPrimitives(
             type: .triangle,

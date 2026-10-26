@@ -17,9 +17,9 @@ public protocol Tessellator: ComputeProcessor {
     var factorsDestination: (buffer: MTLBuffer, offset: Int)? { get set }
     /// Returns true only after work producing the destination's factors was encoded.
     /// No GPU wait is performed. Custom tessellators must report a failed preparation as false.
-    func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int) -> Bool
-    func update(_ commandBuffer: MTLCommandBuffer, iterations: Int)
-    func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int)
+    func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int) throws -> Bool
+    func update(_ commandBuffer: MTLCommandBuffer, iterations: Int) throws
+    func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int) throws
 }
 
 open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
@@ -46,12 +46,12 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
     /// Keeps existing update overrides in the dispatch path while reporting whether the
     /// standard processor actually dispatched. Custom encoders may override this operation.
     @discardableResult
-    open func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) -> Bool {
+    open func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) throws -> Bool {
         let previousDestination = factorsDestination
         factorsDestination = destination
         factorsWereEncoded = false
         defer { factorsDestination = previousDestination }
-        update(commandBuffer, iterations: iterations)
+        try update(commandBuffer, iterations: iterations)
         return factorsWereEncoded
     }
 
@@ -73,35 +73,35 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
 
     // MARK: - Reset
 
-    override public func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        super.update(commandBuffer)
+    override public func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) throws {
+        try super.update(commandBuffer)
         factorsWereEncoded = false
 
         guard geometry.patchCount > 0, (_reset && resetPipeline != nil) || (iterations > 0 && updatePipeline != nil) else { return }
 
         if factorsDestination != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            defer { computeEncoder.endEncoding() }
             computeEncoder.label = label
-            inputCopies.withCommandBuffer(commandBuffer) {
-                encode(computeEncoder, iterations: iterations)
+            try inputCopies.withCommandBuffer(commandBuffer) {
+                try encode(computeEncoder, iterations: iterations)
             }
-            computeEncoder.endEncoding()
         }
     }
 
-    override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        super.update(computeEncoder)
+    override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try super.update(computeEncoder)
         factorsWereEncoded = false
 
         if geometry.patchCount > 0, factorsDestination != nil {
-            inputCopies.withCommandBuffer(nil) {
-                encode(computeEncoder, iterations: iterations)
+            try inputCopies.withCommandBuffer(nil) {
+                try encode(computeEncoder, iterations: iterations)
             }
         }
     }
 
-    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        bindUniforms(computeEncoder)
-        bindBuffers(computeEncoder)
+    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try bindUniforms(computeEncoder)
+        try bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
         if let factorsDestination {
             computeEncoder.setBuffer(factorsDestination.buffer, offset: factorsDestination.offset, index: ComputeBufferIndex.TessellationFactors.rawValue)
