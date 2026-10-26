@@ -246,12 +246,13 @@ final class RecordingTessellator: TessellationProcessor<MTLTriangleTessellationF
     private(set) var destinations: [(buffer: MTLBuffer, offset: Int)] = []
     private(set) var fillValues: [UInt8] = []
 
-    override func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        guard let destination = factorsDestination, let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return }
+    override func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) -> Bool {
+        guard let blitEncoder = commandBuffer.makeBlitCommandEncoder() else { return false }
         let value = UInt8(fillValues.count + 1)
         blitEncoder.fill(buffer: destination.buffer, range: destination.offset ..< destination.offset + factorsLength, value: value)
         blitEncoder.endEncoding()
         destinations.append(destination)
         fillValues.append(value)
+        return true
     }
 }

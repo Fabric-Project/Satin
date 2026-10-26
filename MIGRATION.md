@@ -228,3 +228,9 @@ Lit colour pipelines are finalized using the complete target's light, shadow and
 Compute bindings now distinguish read-only inputs from writable resources using cached reset/update pipeline reflection. Read-only `UniformBuffer` and `StructBuffer` bindings retain their per-dispatch snapshot behavior. If either kernel can write a binding, or access is unknown, Satin binds the original buffer and uploaded offset so the caller can observe GPU writes. Raw `MTLBuffer` bindings remain direct. No setter signature changes are required.
 
 Writable resources are caller-owned GPU state: keep their bytes stable while pending work reads them, and use separate/versioned storage for distinct published outputs. Binding a buffer directly does not make CPU overwrites during GPU execution safe. Processor command-buffer context is now scoped to encoding and restored afterward, including nested updates; completed command buffers are no longer retained as the last update context.
+
+## Tessellation preparation success
+
+`Tessellator` now requires `encodeFactors(_:into:iterations:) -> Bool`. `TessellationMesh` uses this operation to prepare each destination and publishes it only when the tessellator reports success. A missing pipeline or unavailable encoder therefore leaves no factors bound, suppresses that draw, and keeps a requested freeze pending for retry. This reports encoding success, not GPU completion, and adds no wait.
+
+`TessellationProcessor` implements the operation through its existing `update` path. Its standard implementation reports success only after a dispatch; the supplied destination is scoped to that preparation. Existing direct `update` calls remain available. Custom tessellators that produce factors through their own Metal/blit work must implement or override `encodeFactors` and return true only after encoding that work. They must not assume a Void update means factors exist.

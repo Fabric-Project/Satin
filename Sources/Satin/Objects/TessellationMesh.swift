@@ -53,20 +53,27 @@ open class TessellationMesh: Mesh {
 
     override public func encode(in context: EncodingContext) {
         if tessellate {
-            let factors = context.allocate(length: tessellator.factorsLength)
-            tessellator.factorsDestination = factors
-            tessellator.update(context.commandBuffer, iterations: 1)
-            encodedFactors = factors
+            // An earlier arena slice may already have retired. Never fall back to it
+            // when this preparation cannot produce factors.
+            encodedFactors = nil
+            if tessellator.factorsLength > 0 {
+                let factors = context.allocate(length: tessellator.factorsLength)
+                if tessellator.encodeFactors(context.commandBuffer, into: factors, iterations: 1) {
+                    encodedFactors = factors
+                }
+            }
         } else if factorsNeedFreezing {
             // A new buffer per freeze: draws still in flight keep reading the previous one, which
             // their command buffers hold until they complete.
-            if let frozenFactors = context.commandBuffer.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
+            encodedFactors = nil
+            if tessellator.factorsLength > 0,
+               let frozenFactors = context.commandBuffer.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
                 frozenFactors.label = "\(label) Frozen Tessellation Factors"
-                tessellator.factorsDestination = (frozenFactors, 0)
-                tessellator.update(context.commandBuffer, iterations: 1)
-                encodedFactors = (frozenFactors, 0)
+                if tessellator.encodeFactors(context.commandBuffer, into: (frozenFactors, 0), iterations: 1) {
+                    encodedFactors = (frozenFactors, 0)
+                    factorsNeedFreezing = false
+                }
             }
-            factorsNeedFreezing = false
         }
         super.encode(in: context)
     }
@@ -74,7 +81,7 @@ open class TessellationMesh: Mesh {
     // MARK: - Draw
 
     override public func draw(in context: RenderableDrawContext) {
-        guard instanceCount > 0, let material, !geometry.vertexBuffers.isEmpty,
+        guard instanceCount > 0, let material, let encodedFactors, !geometry.vertexBuffers.isEmpty,
               context.isShadowPass || context.materialPass.includes(material)
         else { return }
 
@@ -82,9 +89,7 @@ open class TessellationMesh: Mesh {
         material.draw(in: context.materialContext(layout: nil))
 
         // Recorded now: the draw binds the factors encoded for it, whatever is encoded later.
-        if let encodedFactors {
-            context.setTessellationFactorBuffer(encodedFactors.buffer, offset: encodedFactors.offset)
-        }
+        context.setTessellationFactorBuffer(encodedFactors.buffer, offset: encodedFactors.offset)
 
         geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
     }
