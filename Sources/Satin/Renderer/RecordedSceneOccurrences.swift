@@ -75,6 +75,7 @@ final class RecordedLightOccurrence: Light {
 /// Each changing light occurrence owns its shadow destinations, including all point-light faces.
 /// A deliberately cached shadow can retain its unchanged map; it is not redrawn by this snapshot.
 final class RecordedShadow: Shadow {
+    private let capturedReachBounds: Bounds?
     private let capturedCameras: [Camera]
     private let capturedTextures: [MTLTexture]
     private let sourceState: ShadowRecordingState
@@ -83,6 +84,7 @@ final class RecordedShadow: Shadow {
 
     init(_ source: Shadow, context: Context) throws {
         source.prepareForDrawing(context: context)
+        capturedReachBounds = source.reachBounds
         sourceState = source.recordingState
         sourceRevision = source.recordingState.revision
         sourceGeneration = source.shouldRender ? source.recordingState.captureVersion() : source.recordingState.generation
@@ -118,6 +120,7 @@ final class RecordedShadow: Shadow {
         needsUpdate = source.shouldRender
     }
 
+    override var reachBounds: Bounds? { capturedReachBounds }
     override var textures: [MTLTexture] { capturedTextures }
     override var matrices: [simd_float4x4] { capturedCameras.map(\.viewProjectionMatrix) }
     override var viewCount: Int { capturedCameras.count }

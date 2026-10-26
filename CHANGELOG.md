@@ -289,6 +289,8 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 ## Frame contract correctness
 
+- Preserve captured point-shadow reach and cull recorded casters outside it, matching root casters.
+
 * Bind tessellation factors only after successful preparation. Skip draws without valid factors and retry freezes after missing pipelines or allocation failures.
 * Preserve GPU writes to registered compute buffers. Snapshot only reflected read-only inputs; writable or unknown-access buffers bind their original storage. Release the processor's command-buffer context after encoding.
 * Keep renderer frame permits until the final command-buffer segment completes, including MPS continuation. Return an admission slot if command-buffer creation fails.

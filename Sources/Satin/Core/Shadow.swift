@@ -113,9 +113,15 @@ public class Shadow {
         texture = version.textures.first
     }
 
-    /// Whether a caster within `bounds` may reach any of this shadow's passes, beyond what each
-    /// pass's frustum says: a point light's far planes. True when it can't tell.
-    func mayReach(_ bounds: Bounds) -> Bool { true }
+    /// Conservative world-space reach shared by all passes, captured with recorded shadows.
+    /// Nil means the pass frusta alone determine reach.
+    var reachBounds: Bounds? { nil }
+
+    /// Whether a caster may reach any pass, including far planes omitted by the pass frusta.
+    func mayReach(_ bounds: Bounds) -> Bool {
+        guard let reachBounds else { return true }
+        return ViewFrustum.mayIntersect(bounds, reachBounds)
+    }
 
     /// The viewport every pass draws with: the whole map.
     var passViewport: simd_float4 {

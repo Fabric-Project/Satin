@@ -128,7 +128,10 @@ final class ShadowCasterRecording {
                 }
             }
             for occurrence in occurrences {
-                if occurrence.frustumCulled, !frusta[index].mayContain(occurrence.bounds) { continue }
+                if occurrence.frustumCulled {
+                    guard pass.shadow.mayReach(occurrence.bounds),
+                          frusta[index].mayContain(occurrence.bounds) else { continue }
+                }
                 let uniforms = recorder.reserveVertexUniforms(occurrence: occurrence.occurrence,
                                                                viewCount: max(1, context.vertexAmplificationCount),
                                                                viewStride: PacketRecorder.vertexUniformsStride,

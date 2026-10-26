@@ -146,10 +146,10 @@ public final class PointShadow: Shadow {
 
     /// Every face's far plane is `far` along its axis: together they bound a cube around the
     /// light, and nothing outside it reaches any face.
-    override func mayReach(_ bounds: Bounds) -> Bool {
+    override var reachBounds: Bounds? {
         let lightPosition = cameras[0].worldPosition
         let reach = simd_float3(repeating: cameras[0].far)
-        return ViewFrustum.mayIntersect(bounds, Bounds(min: lightPosition - reach, max: lightPosition + reach))
+        return Bounds(min: lightPosition - reach, max: lightPosition + reach)
     }
 
     private func setupTextures() {
