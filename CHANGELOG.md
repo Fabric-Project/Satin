@@ -289,6 +289,8 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 ## Frame contract correctness
 
+- Reset the view renderer's cached drawable size on lifecycle transitions so re-setup at the same size still initializes render targets.
+
 - Preserve captured point-shadow reach and cull recorded casters outside it, matching root casters.
 
 * Bind tessellation factors only after successful preparation. Skip draws without valid factors and retry freezes after missing pipelines or allocation failures.

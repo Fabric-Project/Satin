@@ -7,6 +7,8 @@ import XCTest
 final class ViewRendererResizeTests: XCTestCase {
     private final class ResizeRecordingRenderer: ViewRenderer {
         var resizes: [(width: Float, height: Float, scaleFactor: Float)] = []
+        override func setup() throws {}
+        override func cleanup() throws {}
         override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
             resizes.append((size.width, size.height, scaleFactor))
         }
@@ -33,6 +35,32 @@ final class ViewRendererResizeTests: XCTestCase {
         XCTAssertEqual(renderer.resizes.map(\.width), [100, 300])
         XCTAssertEqual(renderer.resizes.map(\.height), [50, 200])
         XCTAssertEqual(renderer.resizes.map(\.scaleFactor), [2, 2])
+    }
+
+    func testReSetupAtTheSameDrawableSizeResizesAgain() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let renderer = ResizeRecordingRenderer(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm),
+                                               renderQueue: DispatchQueue(label: "Owner"))
+        let texture = try makeTexture(device, width: 100, height: 50)
+        // Match the lifecycle transitions performed by MetalViewController. Cache invalidation
+        // must not depend on subclasses calling super.setup() or super.cleanup().
+        try renderer.setup()
+        renderer.isSetup = true
+        renderer.drawableResized(size: CGSize(width: 100, height: 50), scaleFactor: 2)
+        renderer.resizeIfNeeded(for: texture)
+        renderer.resizeIfNeeded(for: texture)
+        XCTAssertEqual(renderer.resizes.count, 1)
+
+        try renderer.cleanup()
+        renderer.isSetup = false
+        try renderer.setup()
+        renderer.isSetup = true
+        renderer.drawableResized(size: CGSize(width: 100, height: 50), scaleFactor: 1)
+        renderer.resizeIfNeeded(for: texture)
+        renderer.resizeIfNeeded(for: texture)
+        XCTAssertEqual(renderer.resizes.map(\.width), [100, 100])
+        XCTAssertEqual(renderer.resizes.map(\.height), [50, 50])
+        XCTAssertEqual(renderer.resizes.map(\.scaleFactor), [2, 1])
     }
 
     func testWithoutAQueueTheViewsResizeAppliesAtOnce() throws {

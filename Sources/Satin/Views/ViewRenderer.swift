@@ -38,6 +38,12 @@ open class ViewRenderer: Renderer, ViewRendererDelegate {
         }
     }
 
+    // A new setup needs its initial resize even if the drawable dimensions have not changed.
+    // Observe the lifecycle state rather than requiring every setup/cleanup override to call super.
+    override public internal(set) var isSetup: Bool {
+        didSet { drawnSize = nil }
+    }
+
     open func updateAppearance() {}
 
     open override func cleanup() throws {
