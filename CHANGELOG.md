@@ -11,6 +11,10 @@
   cache dependency, and abandoning a recording invalidates its own pending versions. Static maps
   remain reusable after encoding. Failure to create a render encoder now throws a SubmissionError.
 
+## Tessellation example
+
+- The example uses dynamic per-mesh tessellation preparation, rather than freezing the first factors. Animated factors stay above zero so starting at time zero does not discard every patch.
+
 ## Dynamic geometry bounds
 
 - Culling no longer builds a triangle BVH just to compute bounds. Bounds reuse an already-current hierarchy or scan positions, so morphing and regenerated meshes avoid a hierarchy build per frame. Spatial queries still build the hierarchy lazily. Bounds scans respect interleaved position offsets.

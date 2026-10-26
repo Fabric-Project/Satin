@@ -59,6 +59,57 @@ final class TessellationPreparationTests: XCTestCase {
         else { shader.updatePipeline = pipeline }
     }
 
+    private final class Tessellated: TessellationProcessor<MTLTriangleTessellationFactorsHalf> {}
+    private final class TessellatedMaterial: SourceMaterial {}
+
+    func testExampleShadersRenderAndRespondToLaterFactors() throws {
+        let pipelines = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Example/Assets/TessellationRenderer/Pipelines")
+        let geometry = TessellationGeometry(baseGeometry: IcoSphereGeometry(context: context, radius: 1, resolution: 1))
+        let tessellator = Tessellated(device: context.device,
+            pipelineURL: pipelines.appending(path: "Tessellated/Compute.metal"), live: false, geometry: geometry)
+        let material = TessellatedMaterial(context: context, pipelinesURL: pipelines)
+        let mesh = TessellationMesh(context: context, label: "Example tessellation", geometry: geometry,
+            material: material, tessellator: tessellator)
+        let scene = Object(context: context, [mesh])
+        let renderer = RenderEncoder(context: context, clearColor: [0, 0, 0, 1])
+        renderer.resize((32, 32))
+        let camera = PerspectiveCamera(context: context, position: [0, 0, 5], near: 0.1, far: 100, fov: 30)
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 32, height: 32, mipmapped: false)
+        descriptor.storageMode = .shared
+        descriptor.usage = [.renderTarget, .shaderRead]
+        let output = try XCTUnwrap(context.device.makeTexture(descriptor: descriptor))
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = output
+
+        func render(factor: Float, frame: FrameTime) throws -> Int {
+            tessellator.set("Edge Tessellation Factor", factor)
+            tessellator.set("Inside Tessellation Factor", factor)
+            material.set("Color", SIMD4<Float>(repeating: 1))
+            let commands = try XCTUnwrap(context.commandQueue.makeCommandBuffer())
+            try renderer.draw(frame: frame, renderPassDescriptor: pass, commandBuffer: commands, scene: scene, camera: camera)
+            commands.commit()
+            commands.waitUntilCompleted()
+            XCTAssertEqual(commands.status, .completed, String(describing: commands.error))
+            var pixels = [UInt8](repeating: 0, count: 32 * 32 * 4)
+            output.getBytes(&pixels, bytesPerRow: 32 * 4, from: MTLRegionMake2D(0, 0, 32, 32), mipmapLevel: 0)
+            return stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 0 || pixels[$0 + 1] > 0 || pixels[$0 + 2] > 0 }.count
+        }
+
+        XCTAssertEqual(try render(factor: 0, frame: .zero), 0, "Zero edge factors discard patches")
+        XCTAssertGreaterThan(try render(factor: 4, frame: .zero.next(time: 1)), 100,
+                             "A later nonzero factor must produce visible pixels with the real example shaders")
+
+        mesh.tessellate = false
+        XCTAssertEqual(try render(factor: 0, frame: .zero.next(time: 2)), 0)
+        XCTAssertEqual(try render(factor: 4, frame: .zero.next(time: 3)), 0,
+                       "Freezing zero factors keeps the surface invisible despite later parameter changes")
+        mesh.tessellate = true
+        XCTAssertGreaterThan(try render(factor: 4, frame: .zero.next(time: 4)), 100,
+                             "Re-enabling tessellation must regenerate visible patches")
+    }
+
     func testMissingPipelineDoesNotPublishFactorsAndRetriesAFreeze() throws {
         for tessellate in [true, false] {
             let renderer = RenderEncoder(context: context)
