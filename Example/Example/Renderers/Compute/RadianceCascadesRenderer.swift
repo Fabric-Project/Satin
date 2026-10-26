@@ -46,8 +46,10 @@ final class RadianceCascadesRenderer: BaseRenderer {
 #endif
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
         if updateRadianceCascadeTextures {
             radianceCascadeTexture = createRadianceCascadeTextures()
             mesh.material?.set(radianceCascadeTexture, index: FragmentTextureIndex.Custom0)

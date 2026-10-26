@@ -63,8 +63,10 @@ final class OcclusionRenderer: BaseRenderer {
     lazy var cameraController = PerspectiveCameraController(camera: camera, view: metalView)
     lazy var renderer = RenderEncoder(context: defaultContext)
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {

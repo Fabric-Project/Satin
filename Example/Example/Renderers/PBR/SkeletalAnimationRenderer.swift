@@ -47,7 +47,6 @@ final class SkeletalAnimationRenderer: BaseRenderer {
     lazy var textureLoader = MTKTextureLoader(device: device)
 
     var animation: AssetAnimation?
-    lazy var startTime = getTime()
 
     override func setup() throws {
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")) {
@@ -107,11 +106,13 @@ final class SkeletalAnimationRenderer: BaseRenderer {
         }
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
         // Loops the animation; set once per frame, so velocity sees one step.
         guard let animation, let timeRange = animation.timeRange, timeRange.upperBound > timeRange.lowerBound else { return }
-        let elapsed = getTime() - startTime
+        let elapsed = frame.time
         animation.setTime(timeRange.lowerBound + elapsed.truncatingRemainder(dividingBy: timeRange.upperBound - timeRange.lowerBound))
     }
 

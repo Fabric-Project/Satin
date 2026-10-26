@@ -36,7 +36,6 @@ final class SlugTextRenderer: BaseRenderer {
         return mesh
     }()
 
-    private var frame: Int = 0
     private var cancellable: AnyCancellable?
 
     override var paramKeys: [String] {
@@ -62,10 +61,11 @@ final class SlugTextRenderer: BaseRenderer {
         try super.setup()
     }
 
-    override func update() throws {
-        textMesh.text = "Satin 2.0\nframe: \(frame)"
-        frame += 1
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        textMesh.text = "Satin 2.0\nframe: \(frame.frameNumber)"
+        cameraController.update(frame: frame)
     }
     
 //    override func update() throws {

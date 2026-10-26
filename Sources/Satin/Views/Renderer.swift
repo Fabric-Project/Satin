@@ -20,8 +20,20 @@ open class Renderer {
 
     public let context: Context
 
-    public internal(set) var isSetup = false
-    public var frameIndex: Int = -1
+    /// Setting up, or cleaning up, starts frame time over.
+    public internal(set) var isSetup = false {
+        didSet {
+            resetFrameTime()
+        }
+    }
+
+    /// The frame being rendered, `.zero` before the first: stored by `update(frame:)`, whoever
+    /// drives the frame. Its `frameNumber` also picks the in-flight slot.
+    public private(set) var frameTime: FrameTime = .zero
+
+    /// The host time of the first frame since frame time started over, which `frameTime.time`
+    /// counts from; nil until that frame.
+    private var firstFrameHostTime: TimeInterval?
 
     public var device: MTLDevice { context.device }
     public var commandQueue: MTLCommandQueue { context.commandQueue }
@@ -94,9 +106,33 @@ open class Renderer {
         }
     }
 
+    /// The frame after `frameTime`, for the render loop to pass to `update(frame:)`, made from its
+    /// clock: `hostTime` is the host time (`CACurrentMediaTime`) its display link targets for this
+    /// frame, and `presentationHostTime` when the frame is expected on screen, nil when unknown.
+    /// Time, delta and display time all come from those timestamps.
+    func nextFrameTime(hostTime: TimeInterval, presentationHostTime: TimeInterval?) -> FrameTime {
+        let isFirstFrame = self.firstFrameHostTime == nil
+        let firstFrameHostTime = self.firstFrameHostTime ?? hostTime
+        self.firstFrameHostTime = firstFrameHostTime
+
+        return FrameTime(
+            time: hostTime - firstFrameHostTime,
+            deltaTime: isFirstFrame ? 0 : hostTime - frameTime.hostMediaTime,
+            displayTime: presentationHostTime.map { $0 - firstFrameHostTime },
+            systemTime: Date.timeIntervalSinceReferenceDate,
+            hostMediaTime: hostTime,
+            frameNumber: isFirstFrame ? 0 : frameTime.frameNumber + 1
+        )
+    }
+
+    /// The next frame is the first again: frame 0, at time 0.
+    func resetFrameTime() {
+        frameTime = .zero
+        firstFrameHostTime = nil
+    }
+
     open func preDraw() -> MTLCommandBuffer? {
         waitForAvailableFrameSlot()
-        frameIndex += 1
 
         if let commandBuffer = commandQueue.makeCommandBuffer() {
             registerInFlight(commandBuffer)
@@ -108,7 +144,7 @@ open class Renderer {
 
     open func draw(texture: MTLTexture, commandBuffer: MTLCommandBuffer) throws {
         let renderPassDescriptor = MTLRenderPassDescriptor()
-        let index = frameIndex % maxBuffersInFlight
+        let index = frameTime.frameNumber % maxBuffersInFlight
 
         if sampleCount > 1 {
             renderPassDescriptor.colorAttachments[0].texture = getMultisampleColorTexture(ref: texture, index: index)
@@ -140,7 +176,11 @@ open class Renderer {
 
     open func setup() throws {}
 
-    open func update() throws {}
+    /// Updates for `frame`, once per frame before drawing it. Overrides must call `super` first:
+    /// it stores the frame as `frameTime`.
+    open func update(frame: FrameTime) throws {
+        frameTime = frame
+    }
 
     open func cleanup() throws {}
 

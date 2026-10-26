@@ -41,8 +41,10 @@ final class ProjectedShadowRenderer: BaseRenderer {
         shadowMaterial.blending = .alpha
     }
 
-    override func update() throws {
-        cameraController.update()
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
 
         mesh.orientation = simd_quatf(angle: angle, axis: simd_normalize([sin(angle), cos(angle), 0.25]))
         angle += 0.015

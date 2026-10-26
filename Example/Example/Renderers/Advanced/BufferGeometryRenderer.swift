@@ -63,9 +63,11 @@ final class BufferGeometryRenderer: BaseRenderer {
 
     var theta: Float = 0.0
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         setupInterleavedBufferGeometry(size: 1.0 + 0.25 * sin(theta))
-        cameraController.update()
+        cameraController.update(frame: frame)
 
         theta += 0.1
     }

@@ -39,10 +39,11 @@ final class PBRCustomizationRenderer: BaseRenderer {
         }
     }
 
-    lazy var startTime = getTime()
-    override func update() throws {
-        cameraController.update()
-        let osc = Float(sin(getTime() - startTime)) * 0.5
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
+        cameraController.update(frame: frame)
+        let osc = Float(sin(frame.time)) * 0.5
         let scale = simd_float2(repeating: osc + 1.0)
         let rotation: Float = osc * Float.pi
         let offset = simd_float2(repeating: -0.5)
