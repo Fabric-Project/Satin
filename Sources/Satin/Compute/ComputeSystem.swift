@@ -186,12 +186,10 @@ open class ComputeSystem: ComputeShaderDelegate {
     // MARK: - Update
 
     open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        inputCopies.commandBuffer = commandBuffer
         update()
     }
 
     open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        inputCopies.commandBuffer = nil
         update()
     }
 
@@ -250,7 +248,7 @@ open class ComputeSystem: ComputeShaderDelegate {
 
     open func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) {
         guard let uniforms, let shader, shader.resetWantsUniforms || shader.updateWantsUniforms else { return }
-        inputCopies.bind(uniforms, at: .Uniforms, encoder: computeEncoder)
+        inputCopies.bind(uniforms, at: .Uniforms, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: .Uniforms))
     }
 
     func bindBuffers(_ computeEncoder: MTLComputeCommandEncoder) {
@@ -258,9 +256,9 @@ open class ComputeSystem: ComputeShaderDelegate {
 
         for index in shader.bufferBindingIsUsed {
             if let uniformBuffer = computeUniformBuffers[index] {
-                inputCopies.bind(uniformBuffer, at: index, encoder: computeEncoder)
+                inputCopies.bind(uniformBuffer, at: index, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: index))
             } else if let structBuffer = computeStructBuffers[index] {
-                inputCopies.bind(structBuffer, at: index, encoder: computeEncoder)
+                inputCopies.bind(structBuffer, at: index, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: index))
             } else if let buffer = computeBuffers[index] {
                 computeEncoder.setBuffer(buffer, offset: 0, index: index.rawValue)
             }

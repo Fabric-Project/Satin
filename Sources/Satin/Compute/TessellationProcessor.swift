@@ -64,7 +64,9 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
 
         if factorsDestination != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(commandBuffer) {
+                encode(computeEncoder, iterations: iterations)
+            }
             computeEncoder.endEncoding()
         }
     }
@@ -73,7 +75,9 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         super.update(computeEncoder)
 
         if factorsDestination != nil {
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(nil) {
+                encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 

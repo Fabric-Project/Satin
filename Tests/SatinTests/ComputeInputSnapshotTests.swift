@@ -183,6 +183,55 @@ final class ComputeInputSnapshotTests: XCTestCase {
         }
     }
 
+    func testRegisteredWritableStructBuffersKeepGPUWritesAtSmallAndLargeSizes() throws {
+        for kind in BindingOwner.Kind.allCases {
+            for length in [4, 4096, 4097] {
+                let fixture = try makeFixture(kind: kind, inputIndex: .Custom0, length: length, writesInput: true)
+                let input = StructBuffer<UInt8>(device: device, count: length)
+                input.update(data: [UInt8](repeating: 0, count: length))
+                fixture.owner.set(input, index: .Custom0)
+                let encoded = try encode(fixture)
+                try complete(encoded.commandBuffer)
+                let values = (input.buffer.contents() + input.offset).assumingMemoryBound(to: UInt8.self)
+                XCTAssertEqual([values[0], values[length - 1]], [31, 47], "\(kind), \(length) bytes")
+                XCTAssertEqual(read(encoded.output), [31, 47])
+            }
+        }
+    }
+
+    func testAWriteInEitherPipelinePreventsInputCopiesAndReloadRebuildsAccess() throws {
+        let reader = try makeFixture(kind: .processor, inputIndex: .Custom0, length: 4)
+        let writer = try makeFixture(kind: .processor, inputIndex: .Custom0, length: 4, writesInput: true)
+        let shader = reader.shader
+        XCTAssertTrue(shader.bufferIsReadOnly(at: .Custom0))
+        shader.resetPipelineReflection = writer.shader.updatePipelineReflection
+        XCTAssertFalse(shader.bufferIsReadOnly(at: .Custom0), "Reset can write even when update only reads")
+        shader.resetPipelineReflection = nil
+        XCTAssertTrue(shader.bufferIsReadOnly(at: .Custom0))
+        let original = shader.updatePipelineReflection
+        shader.updatePipelineReflection = writer.shader.updatePipelineReflection
+        XCTAssertFalse(shader.bufferIsReadOnly(at: .Custom0))
+        shader.updatePipelineReflection = original
+        XCTAssertTrue(shader.bufferIsReadOnly(at: .Custom0), "Reload must not retain stale writable flags")
+        shader.updatePipeline = reader.pipeline
+        shader.updatePipelineReflection = nil
+        XCTAssertFalse(shader.bufferIsReadOnly(at: .Custom0), "Unknown access must not copy away GPU writes")
+    }
+
+    func testNestedInputCopyScopesRestoreAndReleaseCommandBuffers() throws {
+        let copies = ComputeInputCopies(device: device, label: "Nested compute scope")
+        let outer = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        let inner = try XCTUnwrap(commandQueue.makeCommandBuffer())
+        copies.withCommandBuffer(outer) {
+            XCTAssertTrue(copies.commandBuffer === outer)
+            copies.withCommandBuffer(nil) { XCTAssertNil(copies.commandBuffer) }
+            XCTAssertTrue(copies.commandBuffer === outer)
+            copies.withCommandBuffer(inner) { XCTAssertTrue(copies.commandBuffer === inner) }
+            XCTAssertTrue(copies.commandBuffer === outer)
+        }
+        XCTAssertNil(copies.commandBuffer)
+    }
+
     private func makeParameters(count: Int) -> ParameterGroup {
         let parameters = ParameterGroup("Snapshot", [FloatParameter("Amount", 1)])
         for index in 1 ..< count { parameters.append(FloatParameter("Padding \(index)", 0)) }
@@ -192,9 +241,10 @@ final class ComputeInputSnapshotTests: XCTestCase {
     private struct Fixture {
         let owner: BindingOwner
         let pipeline: MTLComputePipelineState
+        let shader: ComputeShader
     }
 
-    private func makeFixture(kind: BindingOwner.Kind, inputIndex: ComputeBufferIndex, length: Int, lastByte: Int? = nil) throws -> Fixture {
+    private func makeFixture(kind: BindingOwner.Kind, inputIndex: ComputeBufferIndex, length: Int, lastByte: Int? = nil, writesInput: Bool = false) throws -> Fixture {
         // For uniforms, read the first float's bytes, not trailing parameter padding. Struct
         // inputs also read their final byte, so truncating a large snapshot is observable.
         let sampledByte = lastByte ?? (length - 1)
@@ -202,8 +252,9 @@ final class ComputeInputSnapshotTests: XCTestCase {
         #include <metal_stdlib>
         using namespace metal;
         kernel void snapshotInput(
-            const device uchar *input [[buffer(\(inputIndex.rawValue))]],
+            \(writesInput ? "" : "const ")device uchar *input [[buffer(\(inputIndex.rawValue))]],
             device uint *output [[buffer(\(ComputeBufferIndex.Custom1.rawValue))]]) {
+            \(writesInput ? "input[0] = 31; input[\(sampledByte)] = 47;" : "")
             output[0] = input[0];
             output[1] = input[\(sampledByte)];
         }
@@ -215,7 +266,7 @@ final class ComputeInputSnapshotTests: XCTestCase {
         let shader = ComputeShader(label: "Snapshot bindings")
         let owner = BindingOwner(kind: kind, device: device, shader: shader)
         shader.updatePipelineReflection = try XCTUnwrap(reflection)
-        return Fixture(owner: owner, pipeline: pipeline)
+        return Fixture(owner: owner, pipeline: pipeline, shader: shader)
     }
 
     private func encode(_ fixture: Fixture, commandBuffer suppliedCommandBuffer: MTLCommandBuffer? = nil) throws -> (commandBuffer: MTLCommandBuffer, output: MTLBuffer) {
@@ -318,13 +369,15 @@ final class ComputeInputSnapshotTests: XCTestCase {
         func bind(encoder: MTLComputeCommandEncoder, commandBuffer: MTLCommandBuffer?) {
             switch self {
                 case let .processor(processor):
-                    processor.inputCopies.commandBuffer = commandBuffer
-                    processor.bindUniforms(encoder)
-                    processor.bindBuffers(encoder)
+                    processor.inputCopies.withCommandBuffer(commandBuffer) {
+                        processor.bindUniforms(encoder)
+                        processor.bindBuffers(encoder)
+                    }
                 case let .system(system):
-                    system.inputCopies.commandBuffer = commandBuffer
-                    system.bindUniforms(encoder)
-                    system.bindBuffers(encoder)
+                    system.inputCopies.withCommandBuffer(commandBuffer) {
+                        system.bindUniforms(encoder)
+                        system.bindBuffers(encoder)
+                    }
             }
         }
     }

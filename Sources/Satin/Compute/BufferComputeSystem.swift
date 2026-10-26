@@ -90,7 +90,9 @@ open class BufferComputeSystem: ComputeSystem {
 
         if count > 0, bufferMap.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(commandBuffer) {
+                encode(computeEncoder, iterations: iterations)
+            }
             computeEncoder.endEncoding()
         }
     }
@@ -98,7 +100,9 @@ open class BufferComputeSystem: ComputeSystem {
     override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
         super.update(computeEncoder)
         if count > 0, bufferMap.count > 0 {
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(nil) {
+                encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 

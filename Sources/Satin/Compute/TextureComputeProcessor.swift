@@ -55,7 +55,9 @@ open class TextureComputeProcessor: ComputeProcessor {
 
         if computeTextures.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(commandBuffer) {
+                encode(computeEncoder, iterations: iterations)
+            }
             computeEncoder.endEncoding()
         }
     }
@@ -64,7 +66,9 @@ open class TextureComputeProcessor: ComputeProcessor {
         super.update(computeEncoder)
 
         if computeTextures.count > 0 {
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(nil) {
+                encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 

@@ -289,5 +289,6 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 ## Frame contract correctness
 
+* Preserve GPU writes to registered compute buffers. Snapshot only reflected read-only inputs; writable or unknown-access buffers bind their original storage. Release the processor's command-buffer context after encoding.
 * Keep renderer frame permits until the final command-buffer segment completes, including MPS continuation. Return an admission slot if command-buffer creation fails.
 * Copy large encoder-only compute inputs rather than allowing later ring updates to overwrite dispatch contents.

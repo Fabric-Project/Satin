@@ -152,7 +152,9 @@ open class TextureComputeSystem: ComputeSystem {
 
         if textures.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(commandBuffer) {
+                encode(computeEncoder, iterations: iterations)
+            }
             computeEncoder.endEncoding()
         }
     }
@@ -161,7 +163,9 @@ open class TextureComputeSystem: ComputeSystem {
         super.update(computeEncoder)
 
         if textures.count > 0 {
-            encode(computeEncoder, iterations: iterations)
+            inputCopies.withCommandBuffer(nil) {
+                encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 
