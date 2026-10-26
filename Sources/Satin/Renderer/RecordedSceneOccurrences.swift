@@ -16,7 +16,13 @@ struct RecordedShadowOccurrence {
 }
 
 /// A light's values and views, independent of the live light modified by the next iteration.
+struct RecordedLightIdentity: Equatable {
+    let record: RecordToken
+    let occurrenceIndex: Int
+}
+
 final class RecordedLightOccurrence: Light {
+    let identity: RecordedLightIdentity
     private let capturedType: LightType
     private let capturedData: LightData
     let projectorTexture: MTLTexture?
@@ -31,7 +37,8 @@ final class RecordedLightOccurrence: Light {
         return value
     }
 
-    init(_ light: Light) throws {
+    init(_ light: Light, identity: RecordedLightIdentity) throws {
+        self.identity = identity
         light.updateViewIfNeeded()
         capturedType = light.type
         capturedData = light.data

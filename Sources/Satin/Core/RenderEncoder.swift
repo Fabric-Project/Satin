@@ -379,7 +379,11 @@ open class RenderEncoder {
     /// CPU light data is rebuilt only when a light, its transform, properties or assigned indices
     /// change. Every draw snapshots the cached values into its own arena storage.
     private struct UploadedLight {
-        let identity: ObjectIdentifier
+        enum Identity: Equatable {
+            case object(ObjectIdentifier)
+            case recorded(RecordedLightIdentity)
+        }
+        let identity: Identity
         let worldRevision: UInt64
         let lightRevision: UInt64
         let shadowIndex: Int
@@ -1038,8 +1042,9 @@ open class RenderEncoder {
         sceneTraversal.collect(scene: scene, into: renderCollection)
         updateScene(cameras: submission.cameras, viewports: submission.simdViewports,
                     recorder: recorder, encodingContext: nil, runsMaterialUpdates: false)
-        for light in renderCollection.lights {
-            submission.lightOccurrences.append(try RecordedLightOccurrence(light))
+        for (index, light) in renderCollection.lights.enumerated() {
+            let identity = RecordedLightIdentity(record: recorder.recordToken, occurrenceIndex: index)
+            submission.lightOccurrences.append(try RecordedLightOccurrence(light, identity: identity))
         }
         submission.hasRecordedShadowReceivers = submission.hasRecordedShadowReceivers || !renderCollection.shadowReceivers.isEmpty
         submission.hasRecordedLightReceivers = submission.hasRecordedLightReceivers || !renderCollection.lightReceivers.isEmpty
@@ -1974,7 +1979,7 @@ open class RenderEncoder {
             recorder: recorder, encodingContext: encodingContext
         )
 
-        updateLights()
+        updateLights(recordedLights: lightOccurrences)
         recorder.passBindings.lights = recorder.snapshot(uploadedLightData)
         recorder.passBindings.bindsLights = !renderCollection.lightReceivers.isEmpty
     }
@@ -2292,7 +2297,7 @@ open class RenderEncoder {
     /// Rebuilds the collected lights' data when any light, its order, its transform, its properties
     /// or its assigned shadow or projector index changed. Runs after `updateDirectLightingState`,
     /// which re-aims the lights' views and assigns those indices.
-    private func updateLights() {
+    private func updateLights(recordedLights: [RecordedLightOccurrence]) {
         let lights = renderCollection.lights
         guard !lights.isEmpty else {
             uploadedLights.removeAll(keepingCapacity: true)
@@ -2300,11 +2305,21 @@ open class RenderEncoder {
             return
         }
 
+        // includeLights appends the captured occurrences after the live scene lights.
+        // Read their existing record identities directly: no casts, hashes or new IDs.
+        let liveLightCount = lights.count - recordedLights.count
+        func identity(at index: Int) -> UploadedLight.Identity {
+            if index >= liveLightCount {
+                return .recorded(recordedLights[index - liveLightCount].identity)
+            }
+            return .object(ObjectIdentifier(lights[index]))
+        }
+
         var changed = lights.count != uploadedLights.count
         if !changed {
             for (index, light) in lights.enumerated() {
                 let uploaded = uploadedLights[index]
-                if uploaded.identity != ObjectIdentifier(light) || uploaded.worldRevision != light.worldRevision
+                if uploaded.identity != identity(at: index) || uploaded.worldRevision != light.worldRevision
                     || uploaded.lightRevision != light.lightRevision || uploaded.shadowIndex != light.shadowIndex
                     || uploaded.projectorIndex != light.projectorIndex
                 {
@@ -2317,9 +2332,9 @@ open class RenderEncoder {
 
         uploadedLights.removeAll(keepingCapacity: true)
         uploadedLightData.removeAll(keepingCapacity: true)
-        for light in lights {
+        for (index, light) in lights.enumerated() {
             uploadedLights.append(UploadedLight(
-                identity: ObjectIdentifier(light),
+                identity: identity(at: index),
                 worldRevision: light.worldRevision,
                 lightRevision: light.lightRevision,
                 shadowIndex: light.shadowIndex,
