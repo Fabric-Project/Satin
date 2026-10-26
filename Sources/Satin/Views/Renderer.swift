@@ -70,26 +70,8 @@ open class Renderer {
     private var inFlightSemaphoreWait = 0
     private var inFlightSemaphoreRelease = 0
 
-    /// The serial queue that owns this renderer's frames; nil draws on the main thread.
-    ///
-    /// With a queue, a `MetalViewController`'s display link ticks on a thread of its own and the
-    /// renderer runs each frame on this queue, skipping a tick while the frame before is still
-    /// running, so a busy main thread doesn't stop frames. Resize, appearance and cleanup reach it
-    /// on this queue too, in order. Setup and events stay on main.
-    ///
-    /// Anything else a frame reads must reach the renderer on this queue (`renderQueue.async`),
-    /// never by writing it from main. It's an ordinary queue, so renderers compose with GCD: groups,
-    /// barriers and target queues.
-    public let renderQueue: DispatchQueue?
-
     public init(context: Context) {
         self.context = context
-        renderQueue = nil
-    }
-
-    public init(context: Context, renderQueue: DispatchQueue?) {
-        self.context = context
-        self.renderQueue = renderQueue
     }
 
     deinit {

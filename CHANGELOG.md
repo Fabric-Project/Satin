@@ -15,41 +15,23 @@
 
 - Queued encoding is gone: `RenderEncoder.renderQueue`, `PostProcessEncoder.renderQueue`, submission
   admission, `GPUCommandRecording` / `RecordedGPUCommands`, `RecordedGPUWork`, `RecordedComputeWork`,
-  `ComputeCommandEncoder`, `ComputeEncodingContext`, compute input snapshots and `holdUntilCompleted(_:)`.
+  `ComputeCommandEncoder`, `ComputeEncodingContext` and `holdUntilCompleted(_:)`.
   Satin encodes into the caller's command buffer on whichever thread draws. A host that wants rendering
   off the main thread moves the whole frame there; raw Metal and MPS work in the same command buffer
   then keeps call order with Satin's passes.
-- A renderer can own its frames' queue: `Renderer(context:renderQueue:)`. With a serial queue, a
-  `MetalViewController`'s display link ticks on a thread of its own and the renderer runs each frame
-  on its queue, skipping a tick while the frame before is still running, so a busy main thread
-  doesn't stop frames (60 frames presented at 120 Hz with main blocked for 500 ms). Resize,
-  appearance and cleanup reach it on the queue too; setup and events stay on main. Renderers on
-  their own queues compose with GCD (groups, barriers). Nil, the default, draws on main as before.
+- Removed the unused render-queue experiment: `Renderer(context:renderQueue:)`, parameter UI
+  channels and mirrors, the private display-link thread and queued camera input. View lifecycle,
+  display ticks and input run directly on main. Threading is deferred; direct Satin callers keep
+  one execution owner for their scene and renderer. Examples use ordinary parameter values again.
 - Scenes owned by different threads no longer race: the process-wide transform epoch and structure
   token counters are atomic. A change in one scene only costs another scene's objects one extra
   ancestor walk.
-- Compute inputs Satin owns (automatic uniforms, registered `UniformBuffer` / `StructBuffer` inputs)
-  are copied as they're bound: up to 4 KB with `setBytes`, larger into storage held until the
+- Read-only compute inputs Satin owns (automatic uniforms, registered `UniformBuffer` / `StructBuffer`
+  inputs) are copied as they're bound: up to 4 KB with `setBytes`, larger into storage held until the
   command buffer completes. A processor updated more often than its ring has slots, inside an
   Iterator for instance, no longer rewrites what earlier dispatches read. Raw `MTLBuffer` and
-  texture bindings are unchanged. Large inputs bound through `update(_ computeEncoder:)` have no
-  command buffer to hold a copy, so they bind as before (a debug build says so once).
-- With a render queue, each frame resizes the renderer from its own drawable's size before update,
-  so no frame reaches a new-size drawable ahead of its resize. A display link stopping on its own
-  thread keeps its delegate there until it has stopped. A disabled camera controller drops input
-  queued before it was disabled.
-- Parameters can be owned by a render queue: set `ParameterGroup.renderQueue`. UI then writes with
-  `submit(_:)` and reads `mainValue`, `mainValuePublisher` (and `mainMin` / `mainMax` with their
-  publishers); the owner applies the latest submitted value on its queue, one block per group per
-  burst (every press, in order, for a button), and values set on the owner, in `update(frame:)` for
-  instance, reach the main-thread mirror the same way. An owner value older than a pending submit
-  never pulls the UI back. `valuePublisher` still fires synchronously wherever `value` is set.
-  Without a queue nothing changes: `submit` sets `value` and the mirror is `value`. Ownership is
-  for life: a group's `renderQueue` is set once, and its parameters stay with that queue.
-- Camera controllers apply input where the camera is owned. Event handlers on the main thread only
-  queue what they saw; `update(frame:)` applies it before tweening, so a renderer on its own queue
-  can be driven by the mouse safely. A drag reaches the camera on the next update instead of at
-  once, and `onStartPublisher`, `onChangePublisher` and `onEndPublisher` fire from `update(frame:)`.
+  texture bindings are unchanged. Writable or unknown-access compute buffers bind their original
+  storage. Large encoder-only read-only inputs use dedicated copies retained by Metal.
 - `Satin.xcodeproj` and the Example now target macOS 15, iOS 18 and visionOS 2, as `Package.swift` does.
 - Compute is plain Metal again: `update(_ commandBuffer:)`, `update(_ computeEncoder:)`, `bind`,
   `bindUniforms`, `dispatchThreads` / `dispatchThreadgroups` and the `pre…` hooks take an
@@ -289,7 +271,6 @@ Satin 2.0 records each draw into plain-data render packets and encodes them per 
 
 ## Frame contract correctness
 
-- Reset the view renderer's cached drawable size on lifecycle transitions so re-setup at the same size still initializes render targets.
 
 - Preserve captured point-shadow reach and cull recorded casters outside it, matching root casters.
 

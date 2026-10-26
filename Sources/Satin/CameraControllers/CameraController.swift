@@ -39,31 +39,6 @@ public protocol CameraController {
     func load(url: URL)
 }
 
-/// What a camera controller's event handlers saw, held until its `update(frame:)` applies it on
-/// the thread that owns the camera. Events arrive on the main thread and frames may run on a
-/// renderer's queue, so handlers never touch the camera themselves. The pending buffer and the
-/// caller's trade places, so nothing allocates once both have grown to a frame's worth of input.
-final class CameraControllerInputQueue<Input> {
-    private let lock = UnfairLock()
-    private var pending = ContiguousArray<Input>()
-
-    func append(_ input: Input) {
-        lock.sync { pending.append(input) }
-    }
-
-    /// Drops input not yet taken: a disabled controller must not apply gestures it saw before.
-    func discardPending() {
-        lock.sync { pending.removeAll(keepingCapacity: true) }
-    }
-
-    /// Moves everything appended so far, in order, into `inputs`, which must be empty; its storage
-    /// takes the next appends.
-    func take(into inputs: inout ContiguousArray<Input>) {
-        precondition(inputs.isEmpty, "Take into an empty buffer")
-        lock.sync { swap(&pending, &inputs) }
-    }
-}
-
 #if os(macOS)
 func cameraControllerEventTargetsView(_ event: NSEvent, view: MetalView) -> Bool {
     guard let window = event.window, window == view.window else { return false }

@@ -64,23 +64,6 @@ public final class OrthographicCameraController: CameraController, Codable {
     private var panCurrentPoint: simd_float2 = .zero
     private var panPreviousPoint: simd_float2 = .zero
 
-    /// What the event handlers saw, for `update(frame:)` to apply where the camera is owned. Pans
-    /// and zooms are fractions of the view's size.
-    enum Input {
-        case begin(CameraControllerState)
-        case pan(simd_float2)
-        case zoom(Float)
-        case roll(Float)
-        case end
-        case reset
-    }
-
-    let inputQueue = CameraControllerInputQueue<Input>()
-    private var takenInputs = ContiguousArray<Input>()
-
-    /// The gesture the event handlers are following. Main thread only; `state` is the camera side.
-    private var gesture: CameraControllerState = .inactive
-
     #if os(macOS)
 
     private var leftMouseDownHandler: Any?
@@ -142,32 +125,6 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     public func update(frame: FrameTime) {
         setup()
-        applyInput()
-    }
-
-    /// Applies what the event handlers queued since the last update, in order.
-    private func applyInput() {
-        takenInputs.removeAll(keepingCapacity: true)
-        inputQueue.take(into: &takenInputs)
-        for input in takenInputs {
-            switch input {
-                case let .begin(newState):
-                    state = newState
-                case let .pan(delta):
-                    guard state == .panning else { continue }
-                    pan(delta.x, delta.y)
-                case let .zoom(amount):
-                    guard state == .zooming else { continue }
-                    zoom(amount)
-                case let .roll(amount):
-                    guard state == .rolling else { continue }
-                    roll(amount)
-                case .end:
-                    state = .inactive
-                case .reset:
-                    reset()
-            }
-        }
     }
 
     // MARK: - Enable & Disable
@@ -184,9 +141,6 @@ public final class OrthographicCameraController: CameraController, Codable {
         guard isEnabled else { return }
 
         disableEvents()
-        // Gestures seen before disabling never reach the camera.
-        inputQueue.discardPending()
-        gesture = .inactive
 
         isEnabled = false
     }
@@ -526,46 +480,33 @@ public final class OrthographicCameraController: CameraController, Codable {
         #endif
     }
 
-    // MARK: - Gestures (main thread)
-
-    private func begin(_ newGesture: CameraControllerState) {
-        gesture = newGesture
-        inputQueue.append(.begin(newGesture))
-    }
-
-    private func end() {
-        gesture = .inactive
-        inputQueue.append(.end)
-    }
-
     #if os(macOS)
 
     // MARK: - Mouse
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.end()
+            self?.state = .inactive
         }) else { return event }
 
         if event.clickCount == 2 {
-            gesture = .inactive
-            inputQueue.append(.reset)
+            reset()
         } else {
-            begin(.panning)
+            state = .panning
         }
 
         return event
     }
 
     private func mouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .panning else { return event }
-        inputQueue.append(.pan(simd_make_float2(Float(event.deltaX / view.frame.size.width), Float(event.deltaY / view.frame.size.height))))
+        guard let view = view, event.window == view.window, state == .panning else { return event }
+        pan(Float(event.deltaX / view.frame.size.width), Float(event.deltaY / view.frame.size.height))
         return event
     }
 
     private func mouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .panning else { return event }
-        end()
+        guard let view = view, event.window == view.window, state == .panning else { return event }
+        state = .inactive
         return event
     }
 
@@ -573,21 +514,21 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.end()
+            self?.state = .inactive
         }) else { return event }
-        begin(.zooming)
+        state = .zooming
         return event
     }
 
     private func rightMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .zooming else { return event }
-        inputQueue.append(.zoom(Float(-event.deltaY / view.frame.size.height)))
+        guard let view = view, event.window == view.window, state == .zooming else { return event }
+        zoom(Float(-event.deltaY / view.frame.size.height))
         return event
     }
 
     private func rightMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .zooming else { return event }
-        end()
+        guard let view = view, event.window == view.window, state == .zooming else { return event }
+        state = .inactive
         return event
     }
 
@@ -597,16 +538,15 @@ public final class OrthographicCameraController: CameraController, Codable {
         guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
         if event.phase == .began {
-            begin(.panning)
+            state = .panning
         }
 
-        guard gesture == .panning else { return event }
+        guard state == .panning else { return event }
 
         if event.phase == .changed {
-            inputQueue.append(.pan(simd_make_float2(Float(event.scrollingDeltaX / view.frame.size.width),
-                                                    Float(event.scrollingDeltaY / view.frame.size.height))))
+            pan(Float(event.scrollingDeltaX / view.frame.size.width), Float(event.scrollingDeltaY / view.frame.size.height))
         } else if event.phase == .ended {
-            end()
+            state = .inactive
         }
 
         return event
@@ -615,30 +555,31 @@ public final class OrthographicCameraController: CameraController, Codable {
     @objc private func magnifyGesture(_ gestureRecognizer: NSMagnificationGestureRecognizer) {
         let newMagnification = Float(gestureRecognizer.magnification)
         if gestureRecognizer.state == .began {
-            begin(.zooming)
+            state = .zooming
             magnification = newMagnification
         }
 
-        guard gesture == .zooming else { return }
+        guard state == .zooming else { return }
 
         if gestureRecognizer.state == .changed {
-            inputQueue.append(.zoom(magnification - newMagnification))
+            let delta = magnification - newMagnification
+            zoom(delta)
             magnification = newMagnification
         } else if gestureRecognizer.state == .ended {
-            end()
+            state = .inactive
         }
     }
 
     @objc private func rollGesture(_ gestureRecognizer: NSRotationGestureRecognizer) {
-        if gestureRecognizer.state == .began { begin(.rolling) }
+        if gestureRecognizer.state == .began { state = .rolling }
 
-        guard gesture == .rolling else { return }
+        guard state == .rolling else { return }
 
         if gestureRecognizer.state == .changed {
-            inputQueue.append(.roll(-Float(gestureRecognizer.rotation)))
+            roll(-Float(gestureRecognizer.rotation))
             gestureRecognizer.rotation = 0.0
         } else if gestureRecognizer.state == .ended {
-            end()
+            state = .inactive
         }
     }
 
@@ -648,23 +589,22 @@ public final class OrthographicCameraController: CameraController, Codable {
 
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
         if gestureRecognizer.state == .ended {
-            gesture = .inactive
-            inputQueue.append(.reset)
+            reset()
         }
     }
 
     @objc private func rollGesture(_ gestureRecognizer: UIRotationGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            begin(.rolling)
+            state = .rolling
         }
 
-        guard gesture == .rolling else { return }
+        guard state == .rolling else { return }
 
         if gestureRecognizer.state == .changed {
-            inputQueue.append(.roll(Float(gestureRecognizer.rotation)))
+            roll(Float(gestureRecognizer.rotation))
             gestureRecognizer.rotation = 0.0
         } else if gestureRecognizer.state == .ended {
-            end()
+            state = .inactive
         }
     }
 
@@ -672,12 +612,12 @@ public final class OrthographicCameraController: CameraController, Codable {
         guard let view = view else { return }
 
         if gestureRecognizer.state == .began {
-            begin(.panning)
+            state = .panning
             let translation = gestureRecognizer.translation(in: view)
             panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
         }
 
-        guard gesture == .panning else { return }
+        guard state == .panning else { return }
 
         if gestureRecognizer.state == .changed {
             let translation = gestureRecognizer.translation(in: view)
@@ -689,27 +629,28 @@ public final class OrthographicCameraController: CameraController, Codable {
             let dx = deltaX / Float(view.frame.size.width)
             let dy = deltaY / Float(view.frame.size.height)
 
-            inputQueue.append(.pan(simd_make_float2(dx, dy)))
+            pan(dx, dy)
             panPreviousPoint = panCurrentPoint
         } else if gestureRecognizer.state == .ended {
-            end()
+            state = .inactive
         }
     }
 
     @objc private func pinchGesture(_ gestureRecognizer: UIPinchGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            begin(.zooming)
+            state = .zooming
             pinchScale = Float(gestureRecognizer.scale)
         }
 
-        guard gesture == .zooming else { return }
+        guard state == .zooming else { return }
 
         if gestureRecognizer.state == .changed {
             let newScale = Float(gestureRecognizer.scale)
-            inputQueue.append(.zoom(pinchScale - newScale))
+            let delta = pinchScale - newScale
+            zoom(delta)
             pinchScale = newScale
         } else if gestureRecognizer.state == .ended {
-            end()
+            state = .inactive
         }
     }
 

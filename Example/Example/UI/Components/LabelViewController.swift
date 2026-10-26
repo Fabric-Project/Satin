@@ -70,7 +70,7 @@ final class LabelViewController: NSViewController, NSTextFieldDelegate {
             labelValue.isSelectable = true
             labelValue.maximumNumberOfLines = 100
             labelValue.backgroundColor = .clear
-            labelValue.stringValue = parameter.mainValue
+            labelValue.stringValue = parameter.value
             labelValue.alignment = .right
             hStack.addView(labelValue, in: .trailing)
 
@@ -80,7 +80,7 @@ final class LabelViewController: NSViewController, NSTextFieldDelegate {
             viewWidthConstraint = view.widthAnchor.constraint(equalToConstant: 240)
             viewWidthConstraint.isActive = false
 
-            subscription = parameter.mainValuePublisher.sink { [weak self] newValue in
+            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self, self.labelValue.stringValue != newValue else { return }
                 self.labelValue.stringValue = newValue
                 self.labelValue.layout()
@@ -151,7 +151,7 @@ final class LabelViewController: WidgetViewController {
     override func setupBinding() {
         guard let parameter = parameter as? StringParameter else { return }
 
-        subscription = parameter.mainValuePublisher.sink { [weak self] newValue in
+        subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
             guard let self, let valueLabel, valueLabel.text != newValue else { return }
             valueLabel.text = newValue
         }
@@ -161,7 +161,7 @@ final class LabelViewController: WidgetViewController {
         }
 
         if let value = valueLabel {
-            value.text = "\(parameter.mainValue)"
+            value.text = "\(parameter.value)"
         }
     }
 }

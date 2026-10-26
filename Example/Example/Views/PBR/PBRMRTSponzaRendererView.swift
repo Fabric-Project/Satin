@@ -10,7 +10,7 @@ import SwiftUI
 
 struct PBRMRTSponzaRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: PBRMRTSponzaRenderer(renderQueue: DispatchQueue(label: "Sponza Render", qos: .userInteractive)))
+        SatinMetalView(renderer: PBRMRTSponzaRenderer())
             .navigationTitle("Deferred Rendering Sponza")
     }
 }

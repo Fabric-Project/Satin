@@ -30,17 +30,6 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible, CustomDe
 
     var valuePublisher: PassthroughSubject<ValueType, Never> { get }
     var valueDidChange:Bool { get }
-
-    /// The value as the main thread sees it, for UI. With no `renderQueue` on the parameter's
-    /// group it is `value`; with one, it follows `value` a moment behind, and shows a submitted
-    /// value at once.
-    var mainValue: ValueType { get }
-    /// Sends `mainValue` on the main thread when it changes.
-    var mainValuePublisher: PassthroughSubject<ValueType, Never> { get }
-    /// Sets the value from the UI, on the main thread. With no `renderQueue` it sets `value` now;
-    /// with one, the owner applies the latest submitted value on its queue (every press, in
-    /// order, for a button).
-    func submit(_ value: ValueType)
     
     func alignData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
     func writeData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer

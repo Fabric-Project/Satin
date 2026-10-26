@@ -50,27 +50,6 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     /// can be kept and used while it is unchanged.
     public private(set) var structureRevision: UInt64 = 0
 
-    /// The serial queue that owns these parameters' values, usually the renderer's `renderQueue`;
-    /// nil when everything happens on the main thread.
-    ///
-    /// With a queue, UI writes these parameters with `submit(_:)` and reads them with `mainValue`
-    /// and `mainValuePublisher`; the owner applies submitted values on this queue, one block per
-    /// burst, and its own changes reach the main thread the same way.
-    ///
-    /// Set it once, before frames run. Ownership is for life: the group and its parameters stay
-    /// with this queue, including a parameter later removed from the group, and can't move to
-    /// another (a precondition).
-    public var renderQueue: DispatchQueue? {
-        didSet {
-            guard renderQueue !== oldValue else { return }
-            precondition(oldValue == nil, "A parameter group's render queue is set once")
-            channel = renderQueue.map { ParameterChannel(renderQueue: $0) }
-            for param in params { (param as? any ParameterChannelMember)?.attach(to: channel) }
-        }
-    }
-
-    private var channel: ParameterChannel?
-
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 
     public let parameterAddedPublisher = PassthroughSubject<any Parameter, Never>()
@@ -108,7 +87,6 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public func append(_ param: some Parameter) {
         params.append(param)
         paramsMap[param.label] = param
-        if let channel { (param as? any ParameterChannelMember)?.attach(to: channel) }
         // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
         // capture needs no side table on an object every frame retains.
         paramSubscriptions[param.label] = param.valuePublisher.sink { [unowned self] _ in

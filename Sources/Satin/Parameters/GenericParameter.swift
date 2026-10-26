@@ -8,7 +8,7 @@
 import Combine
 import Foundation
 
-public class GenericParameter<T: Codable & Equatable>: Parameter, ParameterChannelMember {
+public class GenericParameter<T: Codable & Equatable>: Parameter {
     public var id: UUID
 
     public typealias ValueType = T
@@ -46,101 +46,8 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ParameterChann
             {
                 self.valueDidChange = true
                 valuePublisher.send(self.value)
-                valueDidChangeForMain()
             }
         }
-    }
-
-    // MARK: - Main-thread mirror and UI writes
-
-    public let mainValuePublisher = PassthroughSubject<ValueType, Never>()
-
-    public var mainValue: ValueType { channel == nil ? value : _mainValue }
-
-    /// Set while the parameter's group has a `renderQueue`; assigned before frames run.
-    private(set) var channel: ParameterChannel?
-
-    var isQueuedForApply = false
-    var isQueuedForPublish = false
-
-    /// Main thread only.
-    private var _mainValue: ValueType
-    private var submitSequence: UInt64 = 0
-
-    /// Under the channel's lock.
-    private var submittedValues = ContiguousArray<ValueType>()
-    private var submittedSequence: UInt64 = 0
-    private var publishedValue: ValueType?
-    private var publishedSequence: UInt64 = 0
-
-    /// Owner only.
-    private var applyingValues = ContiguousArray<ValueType>()
-    private var appliedSequence: UInt64 = 0
-
-    public func submit(_ newValue: ValueType) {
-        guard let channel else {
-            value = newValue
-            return
-        }
-        submitSequence &+= 1
-        let sequence = submitSequence
-        let keepsEveryValue = controlType == .button
-        channel.lock.sync {
-            if !keepsEveryValue { submittedValues.removeAll(keepingCapacity: true) }
-            submittedValues.append(newValue)
-            submittedSequence = sequence
-        }
-        if _mainValue != newValue {
-            _mainValue = newValue
-            mainValuePublisher.send(newValue)
-        }
-        channel.scheduleApply(self)
-    }
-
-    func applySubmittedValues(from drainingChannel: ParameterChannel) {
-        guard let channel, channel === drainingChannel else { return }
-        channel.lock.sync {
-            swap(&submittedValues, &applyingValues)
-            appliedSequence = submittedSequence
-        }
-        for submitted in applyingValues { value = submitted }
-        applyingValues.removeAll(keepingCapacity: true)
-    }
-
-    private func valueDidChangeForMain() {
-        guard let channel else {
-            mainValuePublisher.send(value)
-            return
-        }
-        let value = value
-        let sequence = appliedSequence
-        channel.lock.sync {
-            publishedValue = value
-            publishedSequence = sequence
-        }
-        channel.schedulePublish(self)
-    }
-
-    func publishToMain(from drainingChannel: ParameterChannel) {
-        guard let channel, channel === drainingChannel else { return }
-        let (published, sequence) = channel.lock.sync { (publishedValue, publishedSequence) }
-        // A newer submit is still on its way to the owner: keep showing it.
-        guard let published, sequence >= submitSequence, _mainValue != published else { return }
-        _mainValue = published
-        mainValuePublisher.send(published)
-    }
-
-    /// Binds the parameter to its owner's channel, once: ownership is for the parameter's life.
-    /// A second group on the same queue keeps the first channel, so one lock guards its values.
-    func attach(to newChannel: ParameterChannel?) {
-        guard let newChannel else { return }
-        if let channel {
-            precondition(channel.renderQueue === newChannel.renderQueue,
-                         "Parameter \(label) is owned by one render queue and can't move to another")
-            return
-        }
-        channel = newChannel
-        _mainValue = value
     }
 
     public var defaultValue: ValueType
@@ -167,7 +74,6 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ParameterChann
         let value = try container.decode(ValueType.self, forKey: .value)
 
         self.value = value
-        self._mainValue = value
 
         if let defaultValue = try container.decodeIfPresent(ValueType.self, forKey: .defaultValue) {
             self.defaultValue = defaultValue
@@ -208,7 +114,6 @@ public class GenericParameter<T: Codable & Equatable>: Parameter, ParameterChann
         self.id = UUID()
         self.label = label
         self.value = value
-        self._mainValue = value
         self.defaultValue = value
         self.controlType = controlType
         self.description = description
@@ -247,7 +152,6 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
         didSet {
             minValuePublisher.send(min)
             valuePublisher.send(value)
-            rangeDidChangeForMain()
         }
     }
 
@@ -257,53 +161,7 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
         didSet {
             maxValuePublisher.send(max)
             valuePublisher.send(value)
-            rangeDidChangeForMain()
         }
-    }
-
-    public let mainMinValuePublisher = PassthroughSubject<ValueType, Never>()
-    public let mainMaxValuePublisher = PassthroughSubject<ValueType, Never>()
-
-    /// `min` and `max` as the main thread sees them; see `mainValue`.
-    public var mainMin: ValueType { channel == nil ? min : _mainMin }
-    public var mainMax: ValueType { channel == nil ? max : _mainMax }
-
-    /// Main thread only.
-    private var _mainMin: ValueType
-    private var _mainMax: ValueType
-    /// Under the channel's lock.
-    private var publishedRange: (min: ValueType, max: ValueType)?
-
-    private func rangeDidChangeForMain() {
-        guard let channel else {
-            mainMinValuePublisher.send(min)
-            mainMaxValuePublisher.send(max)
-            return
-        }
-        let range = (min, max)
-        channel.lock.sync { publishedRange = range }
-        channel.schedulePublish(self)
-    }
-
-    override func publishToMain(from drainingChannel: ParameterChannel) {
-        super.publishToMain(from: drainingChannel)
-        guard let channel, channel === drainingChannel, let range = channel.lock.sync(execute: { publishedRange }) else { return }
-        if _mainMin != range.min {
-            _mainMin = range.min
-            mainMinValuePublisher.send(range.min)
-        }
-        if _mainMax != range.max {
-            _mainMax = range.max
-            mainMaxValuePublisher.send(range.max)
-        }
-    }
-
-    override func attach(to newChannel: ParameterChannel?) {
-        let wasAttached = channel != nil
-        super.attach(to: newChannel)
-        guard !wasAttached, channel != nil else { return }
-        _mainMin = min
-        _mainMax = max
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -314,8 +172,6 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
     public init(_ label: String, _ value: ValueType, _ min: ValueType, _ max: ValueType, _ controlType: ControlType = .none,  _ description:String = "") {
         self.min = min
         self.max = max
-        self._mainMin = min
-        self._mainMax = max
         super.init(label, value, controlType, description)
     }
 
@@ -323,8 +179,6 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.min = try container.decode(ValueType.self, forKey: .min)
         self.max = try container.decode(ValueType.self, forKey: .max)
-        self._mainMin = min
-        self._mainMax = max
         try super.init(from: decoder)
     }
 

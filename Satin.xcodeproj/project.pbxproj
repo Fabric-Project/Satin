@@ -219,7 +219,6 @@
 		E101A9222C070E8E0055FABA /* Float4x4Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */; };
 		E101A9232C070E8E0055FABA /* FloatParameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */; };
 		E101A9242C070E8E0055FABA /* GenericParameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */; };
-		7F1A0000000000000000C001 /* ParameterChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000C000 /* ParameterChannel.swift */; };
 		E101A9252C070E8E0055FABA /* Int2Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */; };
 		E101A9262C070E8E0055FABA /* Int3Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */; };
 		E101A9272C070E8E0055FABA /* Int4Parameter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */; };
@@ -269,7 +268,6 @@
 		E101A9572C070EA00055FABA /* MetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED82C06A24B00B5A6C8 /* MetalView.swift */; };
 		E101A9582C070EA00055FABA /* MetalViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */; };
 		E101A9592C070EA00055FABA /* ViewRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */; };
-		7F1A0000000000000000B001 /* DisplayLinkThread.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000B000 /* DisplayLinkThread.swift */; };
 		E101A95A2C070EA00055FABA /* ViewRendererDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */; };
 		E101A95B2C070EA00055FABA /* SatinImmersiveSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */; };
 		E101A95C2C070EA00055FABA /* SatinMetalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DEDD2C06A24B00B5A6C8 /* SatinMetalView.swift */; };
@@ -508,7 +506,6 @@
 		66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Float4x4Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FloatParameter.swift; sourceTree = "<group>"; };
 		66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GenericParameter.swift; sourceTree = "<group>"; };
-		7F1A0000000000000000C000 /* ParameterChannel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ParameterChannel.swift; sourceTree = "<group>"; };
 		66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int2Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int3Parameter.swift; sourceTree = "<group>"; };
 		66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Int4Parameter.swift; sourceTree = "<group>"; };
@@ -558,7 +555,6 @@
 		66D7DED82C06A24B00B5A6C8 /* MetalView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalView.swift; sourceTree = "<group>"; };
 		66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalViewController.swift; sourceTree = "<group>"; };
 		66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewRenderer.swift; sourceTree = "<group>"; };
-		7F1A0000000000000000B000 /* DisplayLinkThread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLinkThread.swift; sourceTree = "<group>"; };
 		66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewRendererDelegate.swift; sourceTree = "<group>"; };
 		66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SatinImmersiveSpace.swift; sourceTree = "<group>"; };
 		66D7DEDD2C06A24B00B5A6C8 /* SatinMetalView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SatinMetalView.swift; sourceTree = "<group>"; };
@@ -993,7 +989,6 @@
 				66D7DDE12C06A24B00B5A6C8 /* Float4x4Parameter.swift */,
 				66D7DDE22C06A24B00B5A6C8 /* FloatParameter.swift */,
 				66D7DDE32C06A24B00B5A6C8 /* GenericParameter.swift */,
-				7F1A0000000000000000C000 /* ParameterChannel.swift */,
 				66D7DDE42C06A24B00B5A6C8 /* Int2Parameter.swift */,
 				66D7DDE52C06A24B00B5A6C8 /* Int3Parameter.swift */,
 				66D7DDE62C06A24B00B5A6C8 /* Int4Parameter.swift */,
@@ -1125,7 +1120,6 @@
 				66D7DED82C06A24B00B5A6C8 /* MetalView.swift */,
 				66D7DED92C06A24B00B5A6C8 /* MetalViewController.swift */,
 				66D7DEDA2C06A24B00B5A6C8 /* ViewRenderer.swift */,
-				7F1A0000000000000000B000 /* DisplayLinkThread.swift */,
 				66D7DEDB2C06A24B00B5A6C8 /* ViewRendererDelegate.swift */,
 				F1A000022F00000100AAA001 /* Renderer.swift */,
 				66D7DEDC2C06A24B00B5A6C8 /* SatinImmersiveSpace.swift */,
@@ -1452,7 +1446,6 @@
 				E101A9572C070EA00055FABA /* MetalView.swift in Sources */,
 				E101A9582C070EA00055FABA /* MetalViewController.swift in Sources */,
 				E101A9592C070EA00055FABA /* ViewRenderer.swift in Sources */,
-				7F1A0000000000000000B001 /* DisplayLinkThread.swift in Sources */,
 				E101A95A2C070EA00055FABA /* ViewRendererDelegate.swift in Sources */,
 				F1A000012F00000100AAA001 /* Renderer.swift in Sources */,
 				E14638662C8CB4C4005E36E9 /* TextureComputeProcessor.swift in Sources */,
@@ -1658,7 +1651,6 @@
 				E101A9222C070E8E0055FABA /* Float4x4Parameter.swift in Sources */,
 				E101A9232C070E8E0055FABA /* FloatParameter.swift in Sources */,
 				E101A9242C070E8E0055FABA /* GenericParameter.swift in Sources */,
-				7F1A0000000000000000C001 /* ParameterChannel.swift in Sources */,
 				E101A9252C070E8E0055FABA /* Int2Parameter.swift in Sources */,
 				E101A9262C070E8E0055FABA /* Int3Parameter.swift in Sources */,
 				E101A9272C070E8E0055FABA /* Int4Parameter.swift in Sources */,

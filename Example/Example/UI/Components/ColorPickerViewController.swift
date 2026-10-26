@@ -39,7 +39,7 @@ public final class ColorPickerViewController: NSViewController {
         var value: simd_float4 = .one
 
         if let param = parameter as? Float4Parameter {
-            subscription = param.mainValuePublisher.sink { [weak self] value in
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
                 guard let self = self, let colorWell = self.colorWell else { return }
                 colorWell.color = NSColor(
                     deviceRed: CGFloat(value.x),
@@ -48,10 +48,10 @@ public final class ColorPickerViewController: NSViewController {
                     alpha: CGFloat(value.w)
                 )
             }
-            value = param.mainValue
+            value = param.value
         }
         else if let param = parameter as? Float3Parameter {
-            subscription = param.mainValuePublisher.sink { [weak self] value in
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
                 guard let self = self, let colorWell = self.colorWell else { return }
                 colorWell.color = NSColor(
                     deviceRed: CGFloat(value.x),
@@ -60,7 +60,7 @@ public final class ColorPickerViewController: NSViewController {
                     alpha: 1.0
                 )
             }
-            value = simd_make_float4(param.mainValue, 1.0)
+            value = simd_make_float4(param.value, 1.0)
         }
 
         let vStack = NSStackView()
@@ -120,10 +120,10 @@ public final class ColorPickerViewController: NSViewController {
             color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
             if let param = parameter as? Float4Parameter {
-                param.submit(simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha)))
+                param.value = simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha))
             }
             else if let param = parameter as? Float3Parameter {
-                param.submit(simd_make_float3(Float(red), Float(green), Float(blue)))
+                param.value = simd_make_float3(Float(red), Float(green), Float(blue))
             }
         }
     }
@@ -171,10 +171,10 @@ final class ColorPickerViewController: WidgetViewController {
             color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
             if let param = self.parameter as? Float4Parameter {
-                param.submit(simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha)))
+                param.value = simd_make_float4(Float(red), Float(green), Float(blue), Float(alpha))
             }
             else if let param = self.parameter as? Float3Parameter {
-                param.submit(simd_make_float3(Float(red), Float(green), Float(blue)))
+                param.value = simd_make_float3(Float(red), Float(green), Float(blue))
             }
 
         }), for: .valueChanged)
@@ -184,7 +184,7 @@ final class ColorPickerViewController: WidgetViewController {
 
     override func setupBinding() {
         if let param = parameter as? Float4Parameter {
-            subscription = param.mainValuePublisher.sink { [weak self] value in
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
                 guard let self = self, let colorWell = self.colorWell else { return }
                 colorWell.selectedColor = UIColor(
                     red: CGFloat(value.x),
@@ -195,7 +195,7 @@ final class ColorPickerViewController: WidgetViewController {
             }
 
             if let colorWell = colorWell {
-                let value = param.mainValue
+                let value = param.value
                 colorWell.selectedColor = UIColor(
                     red: CGFloat(value.x),
                     green: CGFloat(value.y),
@@ -205,7 +205,7 @@ final class ColorPickerViewController: WidgetViewController {
             }
         }
         else if let param = parameter as? Float3Parameter {
-            subscription = param.mainValuePublisher.sink { [weak self] value in
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
                 guard let self = self, let colorWell = self.colorWell else { return }
                 colorWell.selectedColor = UIColor(
                     red: CGFloat(value.x),
@@ -216,7 +216,7 @@ final class ColorPickerViewController: WidgetViewController {
             }
 
             if let colorWell = colorWell {
-                let value = param.mainValue
+                let value = param.value
                 colorWell.selectedColor = UIColor(
                     red: CGFloat(value.x),
                     green: CGFloat(value.y),

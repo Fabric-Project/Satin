@@ -31,30 +31,30 @@ final class NumberInputViewController: InputViewController, NSTextFieldDelegate 
 
             if parameter is FloatParameter {
                 let param = parameter as! FloatParameter
-                value = Double(param.mainValue)
+                value = Double(param.value)
                 stringValue = String(format: "%.3f", value)
 
-                subscription = param.mainValuePublisher.sink { [weak self] newValue in
+                subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                     guard let self else { return }
                     self.inputField?.stringValue = String(format: "%.5f", newValue)
                 }
             }
             else if parameter is IntParameter {
                 let param = parameter as! IntParameter
-                value = Double(param.mainValue)
-                stringValue = "\(param.mainValue)"
+                value = Double(param.value)
+                stringValue = "\(param.value)"
 
-                subscription = param.mainValuePublisher.sink { [weak self] newValue in
+                subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                     guard let self else { return }
                     self.inputField?.stringValue = String(newValue)
                 }
             }
             else if parameter is DoubleParameter {
                 let param = parameter as! DoubleParameter
-                value = param.mainValue
+                value = param.value
                 stringValue = String(format: "%.3f", value)
 
-                subscription = param.mainValuePublisher.sink { [weak self] newValue in
+                subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                     guard let self else { return }
                     self.inputField?.stringValue = String(format: "%.5f", newValue)
                 }
@@ -119,13 +119,13 @@ final class NumberInputViewController: InputViewController, NSTextFieldDelegate 
         guard let parameter else { return }
 
         if let floatParam = parameter as? FloatParameter {
-            floatParam.submit(Float(value))
+            floatParam.value = Float(value)
         }
         else if let doubleParam = parameter as? DoubleParameter {
-            doubleParam.submit(value)
+            doubleParam.value = value
         }
         else if let intParam = parameter as? IntParameter {
-            intParam.submit(Int(value))
+            intParam.value = Int(value)
         }
     }
 
@@ -212,13 +212,13 @@ class NumberInputViewController: WidgetViewController, UITextFieldDelegate {
         guard let parameter else { return }
 
         if let floatParam = parameter as? FloatParameter {
-            floatParam.submit(Float(value))
+            floatParam.value = Float(value)
         }
         else if let doubleParam = parameter as? DoubleParameter {
-            doubleParam.submit(Double(value))
+            doubleParam.value = Double(value)
         }
         else if let intParam = parameter as? IntParameter {
-            intParam.submit(Int(value))
+            intParam.value = Int(value)
         }
     }
 
@@ -246,22 +246,22 @@ class NumberInputViewController: WidgetViewController, UITextFieldDelegate {
     override func setupBinding() {
         var stringValue = ""
         if let param = parameter as? FloatParameter {
-            stringValue = String(format: "%.3f", param.mainValue)
-            subscription = param.mainValuePublisher.sink { [weak self] newValue in
+            stringValue = String(format: "%.3f", param.value)
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self, let input = self.input, !input.isFirstResponder else { return }
                 input.text = String(format: "%.3f", newValue)
             }
         }
         else if let param = parameter as? IntParameter {
-            stringValue = "\(param.mainValue)"
-            subscription = param.mainValuePublisher.sink { [weak self] newValue in
+            stringValue = "\(param.value)"
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self = self, let input = self.input, !input.isFirstResponder else { return }
                 input.text = "\(newValue)"
             }
         }
         else if let param = parameter as? DoubleParameter {
-            stringValue = String(format: "%.3f", param.mainValue)
-            subscription = param.mainValuePublisher.sink { [weak self] newValue in
+            stringValue = String(format: "%.3f", param.value)
+            subscription = param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self = self, let input = self.input, !input.isFirstResponder else { return }
                 input.text = String(format: "%.3f", newValue)
             }

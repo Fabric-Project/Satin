@@ -97,27 +97,6 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     private var translation: simd_float3 = .zero
     private var zoom: Float = 0.0
 
-    /// What the event handlers saw, for `update(frame:)` to apply where the camera is owned.
-    enum Input {
-        case begin(CameraControllerState)
-        /// Starting a rotation also stops any tween and decides which way azimuth turns.
-        case beginRotation
-        case updateAzimuthFlip
-        case rotate(simd_float2)
-        case dolly(Float)
-        case zoom(Float)
-        case pan(delta: simd_float2, viewSize: simd_float2)
-        case release
-        case halt
-        case reset
-    }
-
-    let inputQueue = CameraControllerInputQueue<Input>()
-    private var takenInputs = ContiguousArray<Input>()
-
-    /// The gesture the event handlers are following. Main thread only; `state` is the camera side.
-    private var gesture: CameraControllerState = .inactive
-
     private var previousPosition: simd_float2 = .zero
 
 #if os(macOS)
@@ -173,7 +152,6 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     // MARK: - Update
 
     public func update(frame: FrameTime) {
-        applyInput()
         guard state == .tweening else { return }
 
         var changed = false
@@ -183,47 +161,6 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         changed = changed || tweenRotation(deltaTime: frame.deltaTime)
 
         if !changed { state = .inactive }
-    }
-
-    /// Applies what the event handlers queued since the last update, in order.
-    private func applyInput() {
-        takenInputs.removeAll(keepingCapacity: true)
-        inputQueue.take(into: &takenInputs)
-        for input in takenInputs {
-            switch input {
-                case let .begin(newState):
-                    state = newState
-                case .beginRotation:
-                    halt()
-                    state = .rotating
-                    updateAzimuthRotationFlip()
-                case .updateAzimuthFlip:
-                    guard state == .rotating else { continue }
-                    updateAzimuthRotationFlip()
-                case let .rotate(delta):
-                    guard state == .rotating else { continue }
-                    rotationDelta = delta
-                    updateRotation(delta: delta)
-                case let .dolly(amount):
-                    guard state == .dollying else { continue }
-                    translation.z = amount * translationScalar
-                    updateTranslation()
-                case let .zoom(amount):
-                    guard state == .zooming else { continue }
-                    zoom = amount
-                    updateZoom()
-                case let .pan(delta, viewSize):
-                    guard state == .panning else { continue }
-                    pan(delta, viewSize: viewSize)
-                case .release:
-                    guard state != .inactive, state != .tweening else { continue }
-                    state = .tweening
-                case .halt:
-                    halt()
-                case .reset:
-                    reset()
-            }
-        }
     }
 
     // MARK: - Enable
@@ -248,9 +185,6 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         guard isEnabled else { return }
 
         disableEvents()
-        // Gestures seen before disabling never reach the camera.
-        inputQueue.discardPending()
-        gesture = .inactive
 
         halt()
 
@@ -422,7 +356,7 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         target.orientation = elevationRotation * target.orientation
     }
 
-    func updateAzimuthRotationFlip() {
+    func updateAzimuthRotationFlip(ndc: simd_float2) {
         if (camera.worldPosition.y - target.worldPosition.y) < 0 {
             azimuthRotationFlip = -1.0
         } else {
@@ -517,12 +451,13 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         return true
     }
 
-    private func pan(_ delta: simd_float2, viewSize: simd_float2) {
+    private func pan(_ delta: simd_float2) {
+        guard let view = view else { return }
+
         var pan = delta
 
-        let width = viewSize.x
-        let height = viewSize.y
-        guard width > 0, height > 0 else { return }
+        let width = Float(view.frame.width)
+        let height = Float(view.frame.height)
         let aspect = width / height
         pan.x /= width
         pan.y /= height
@@ -753,54 +688,46 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 #endif
     }
 
-    // MARK: - Gestures (main thread)
-
-    private func begin(_ newGesture: CameraControllerState) {
-        gesture = newGesture
-        inputQueue.append(.begin(newGesture))
-    }
-
-    private func release() {
-        gesture = .inactive
-        inputQueue.append(.release)
-    }
-
     // MARK: - Mouse
 
 #if os(macOS)
 
     private func mouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.gesture = .inactive
-            self?.inputQueue.append(.halt)
+            self?.halt()
         }) else { return event }
 
         if event.clickCount == 2 {
-            gesture = .inactive
-            inputQueue.append(.reset)
+            reset()
         } else {
-            previousPosition = view.convert(event.locationInWindow, from: nil).float2
-            gesture = .rotating
-            inputQueue.append(.beginRotation)
+            halt()
+
+            let currentPosition = view.convert(event.locationInWindow, from: nil).float2
+            defer { previousPosition = currentPosition }
+
+            state = .rotating
+
+            updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
         }
 
         return event
     }
 
     private func mouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .rotating else { return event }
+        guard let view = view, event.window == view.window, state == .rotating else { return event }
 
         let currentPosition = view.convert(event.locationInWindow, from: nil).float2
         defer { previousPosition = currentPosition }
 
-        inputQueue.append(.rotate(previousPosition - currentPosition))
+        rotationDelta = previousPosition - currentPosition
+        updateRotation(delta: rotationDelta)
 
         return event
     }
 
     private func mouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .rotating else { return event }
-        release()
+        guard let view = view, event.window == view.window, state == .rotating else { return event }
+        state = .tweening
         return event
     }
 
@@ -808,31 +735,32 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func rightMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.gesture = .inactive
-            self?.inputQueue.append(.halt)
+            self?.halt()
         }) else { return event }
         if event.modifierFlags.contains(NSEvent.ModifierFlags.option) {
-            begin(.dollying)
+            state = .dollying
         } else {
-            begin(.zooming)
+            state = .zooming
         }
         return event
     }
 
     private func rightMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .zooming || gesture == .dollying else { return event }
+        guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
         let dy = Float(event.deltaY) / mouseDeltaSensitivity
-        if gesture == .dollying {
-            inputQueue.append(.dolly(dy))
-        } else {
-            inputQueue.append(.zoom(-dy))
+        if state == .dollying {
+            translation.z = dy * translationScalar
+            updateTranslation()
+        } else if state == .zooming {
+            zoom = -dy
+            updateZoom()
         }
         return event
     }
 
     private func rightMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .zooming || gesture == .dollying else { return event }
-        release()
+        guard let view = view, event.window == view.window, state == .zooming || state == .dollying else { return event }
+        state = .tweening
         return event
     }
 
@@ -840,22 +768,21 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
 
     private func otherMouseDown(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerShouldBeginInteraction(event, view: view, onReject: { [weak self] in
-            self?.gesture = .inactive
-            self?.inputQueue.append(.halt)
+            self?.halt()
         }) else { return event }
-        begin(.panning)
+        state = .panning
         return event
     }
 
     private func otherMouseDragged(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .panning else { return event }
-        inputQueue.append(.pan(delta: simd_make_float2(Float(event.deltaX), Float(event.deltaY)), viewSize: view.frame.size.float2))
+        guard let view = view, event.window == view.window, state == .panning else { return event }
+        pan(simd_make_float2(Float(event.deltaX), Float(event.deltaY)))
         return event
     }
 
     private func otherMouseUp(with event: NSEvent) -> NSEvent? {
-        guard let view = view, event.window == view.window, gesture == .panning else { return event }
-        release()
+        guard let view = view, event.window == view.window, state == .panning else { return event }
+        state = .tweening
         return event
     }
 
@@ -864,15 +791,14 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
     private func scrollWheel(with event: NSEvent) -> NSEvent? {
         guard let view = view, cameraControllerEventTargetsView(event, view: view) else { return event }
 
-        if event.phase == .began { begin(.panning) }
+        if event.phase == .began { state = .panning }
 
-        guard gesture == .panning else { return event }
+        guard state == .panning else { return event }
 
         if event.phase == .changed {
-            inputQueue.append(.pan(delta: simd_make_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY)),
-                                   viewSize: view.frame.size.float2))
+            pan(simd_make_float2(Float(event.scrollingDeltaX), Float(event.scrollingDeltaY)))
         } else if event.phase == .ended {
-            release()
+            state = .tweening
         }
 
         return event
@@ -885,90 +811,93 @@ public final class OrbitPerspectiveCameraController: CameraController, Codable {
         let newMagnification = Float(gestureRecognizer.magnification)
 
         if gestureRecognizer.state == .began {
-            begin(.zooming)
+            state = .zooming
             magnification = newMagnification
         }
 
-        guard gesture == .zooming else { return }
+        guard state == .zooming else { return }
 
         if gestureRecognizer.state == .changed {
             let velocity = newMagnification - magnification
+            zoom = -velocity
             magnification = newMagnification
-            inputQueue.append(.zoom(-velocity))
+            updateZoom()
         } else if gestureRecognizer.state == .ended {
-            release()
+            state = .tweening
         }
     }
 
 #else
 
     @objc private func tapGesture(_ gestureRecognizer: UITapGestureRecognizer) {
-        if gestureRecognizer.state == .ended {
-            gesture = .inactive
-            inputQueue.append(.reset)
-        }
+        if gestureRecognizer.state == .ended { reset() }
     }
 
     @objc private func rotateGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
         guard let view = view else { return }
 
         if gestureRecognizer.state == .began {
-            gesture = .rotating
+            halt()
+            state = .rotating
             previousPosition = gestureRecognizer.location(in: view).float2
-            inputQueue.append(.beginRotation)
+            updateAzimuthRotationFlip(ndc: normalizePoint(previousPosition, view.frame.size.float2))
         }
 
-        guard gesture == .rotating else { return }
+        guard state == .rotating else { return }
 
         if gestureRecognizer.state == .changed {
             let currentPosition = gestureRecognizer.location(in: view).float2
+            updateAzimuthRotationFlip(ndc: normalizePoint(currentPosition, view.frame.size.float2))
+
             defer { previousPosition = currentPosition }
 
-            inputQueue.append(.updateAzimuthFlip)
-            inputQueue.append(.rotate(simd_make_float2(previousPosition.x - currentPosition.x, currentPosition.y - previousPosition.y)))
+            rotationDelta.y = currentPosition.y - previousPosition.y
+            rotationDelta.x = previousPosition.x - currentPosition.x
+
+            updateRotation(delta: rotationDelta)
 
         } else if gestureRecognizer.state == .ended {
-            release()
+            state = .tweening
         }
     }
 
     @objc private func panGesture(_ gestureRecognizer: UIPanGestureRecognizer) {
-        guard let view = view else { return }
         if gestureRecognizer.state == .began {
-            begin(.panning)
+            state = .panning
             let translation = gestureRecognizer.translation(in: view)
             panPreviousPoint = simd_make_float2(Float(translation.x), Float(translation.y))
         }
 
-        guard gesture == .panning else { return }
+        guard state == .panning else { return }
         if gestureRecognizer.state == .changed {
             let translation = gestureRecognizer.translation(in: view)
             panCurrentPoint = simd_make_float2(Float(translation.x), Float(translation.y))
-            inputQueue.append(.pan(delta: panCurrentPoint - panPreviousPoint, viewSize: view.frame.size.float2))
+            pan(panCurrentPoint - panPreviousPoint)
             panPreviousPoint = panCurrentPoint
 
         } else if gestureRecognizer.state == .ended {
-            release()
+            state = .tweening
         }
     }
 
     @objc private func pinchGesture(_ gestureRecognizer: UIPinchGestureRecognizer) {
         if gestureRecognizer.state == .began {
-            begin(.zooming)
+            state = .zooming
             pinchScale = Float(gestureRecognizer.scale)
         }
 
-        guard gesture == .zooming else { return }
+        guard state == .zooming else { return }
 
         if gestureRecognizer.state == .changed {
             let newScale = Float(gestureRecognizer.scale)
             let delta = pinchScale - newScale
             if abs(delta) > 0.0 {
-                inputQueue.append(.zoom(delta))
+                zoom = delta
+                updateZoom()
                 pinchScale = newScale
             }
         } else if gestureRecognizer.state == .ended {
-            release()
+            state = .tweening
         }
     }
 

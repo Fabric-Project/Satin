@@ -25,7 +25,7 @@ public final class ButtonViewController: NSViewController {
         view.translatesAutoresizingMaskIntoConstraints = false
 
         if let parameter = parameter {
-            defaultState = parameter.mainValue
+            defaultState = parameter.value
 
             let vStack = NSStackView()
             vStack.wantsLayer = true
@@ -60,13 +60,13 @@ public final class ButtonViewController: NSViewController {
             button.translatesAutoresizingMaskIntoConstraints = false
             hStack.addView(button, in: .leading)
             button.widthAnchor.constraint(equalTo: hStack.widthAnchor).isActive = true
-            button.state = (parameter.mainValue ? .on : .off)
+            button.state = (parameter.value ? .on : .off)
             button.target = self
             button.action = #selector(ButtonViewController.onButtonChange)
 
             view.heightAnchor.constraint(equalTo: button.heightAnchor, constant: 16).isActive = true
 
-            subscription = parameter.mainValuePublisher.sink { [weak self] value in
+            subscription = parameter.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] value in
                 let newState: NSControl.StateValue = (value ? .on : .off)
                 guard let self, self.button.state != newState else { return }
                 self.button.state = newState
@@ -76,12 +76,12 @@ public final class ButtonViewController: NSViewController {
 
     @objc func onButtonChange() {
         let newValue = button.state == .on
-        guard let parameter, parameter.mainValue != newValue else { return }
+        guard let parameter, parameter.value != newValue else { return }
 
-        parameter.submit(newValue)
+        parameter.value = newValue
 
-        guard defaultState != parameter.mainValue else { return }
-        parameter.submit(defaultState)
+        guard defaultState != parameter.value else { return }
+        parameter.value = defaultState
     }
 
     deinit {
@@ -127,7 +127,7 @@ final class ButtonViewController: WidgetViewController {
         button.layer.borderColor = UIColor(named: "Border", in: Bundle(for: ButtonViewController.self), compatibleWith: nil)?.cgColor
         button.addAction(UIAction(handler: { [weak self] _ in
             guard let self, let parameter = self.parameter as? BoolParameter else { return }
-            parameter.submit(!parameter.mainValue)
+            parameter.value.toggle()
         }), for: .touchUpInside)
 
         button.heightAnchor.constraint(equalToConstant: 32).isActive = true

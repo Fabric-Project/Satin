@@ -198,45 +198,45 @@ final class XYPadViewController: InputViewController {
             var stringValue = ""
 
             if let param = parameter as? Float2Parameter {
-                value = param.mainValue
-                minValue = param.mainMin
-                maxValue = param.mainMax
+                value = param.value
+                minValue = param.min
+                maxValue = param.max
                 stringValue = String(format: "(%.3f, %.3f)", value.x, value.y)
 
-                param.mainValuePublisher.sink { [weak self] newValue in
+                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                     guard let self = self, let valueField = self.valueField, let pad = self.pad else { return }
                     valueField.stringValue = String(format: "(%.3f, %.3f)", newValue.x, newValue.y)
                     pad.value = newValue
                 }.store(in: &subscriptions)
 
-                param.mainMinValuePublisher.sink { [weak self] newMinValue in
+                param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
                     guard let self = self, let pad = self.pad else { return }
                     pad.minValue = newMinValue
                 }.store(in: &subscriptions)
 
-                param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
+                param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
                     guard let self = self, let pad = self.pad else { return }
                     pad.maxValue = newMaxValue
                 }.store(in: &subscriptions)
             }
             else if let param = parameter as? Int2Parameter {
-                value = simd_make_float2(Float(param.mainValue.x), Float(param.mainValue.y))
-                minValue = simd_make_float2(Float(param.mainMin.x), Float(param.mainMin.y))
-                maxValue = simd_make_float2(Float(param.mainMax.x), Float(param.mainMax.y))
+                value = simd_make_float2(Float(param.value.x), Float(param.value.y))
+                minValue = simd_make_float2(Float(param.min.x), Float(param.min.y))
+                maxValue = simd_make_float2(Float(param.max.x), Float(param.max.y))
                 stringValue = String(format: "(%.3f, %.3f)", value.x, value.y)
 
-                param.mainValuePublisher.sink { [weak self] newValue in
+                param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                     guard let self = self, let valueField = self.valueField, let pad = self.pad else { return }
                     valueField.stringValue = String(format: "(%.3f, %.3f)", newValue.x, newValue.y)
                     pad.value = simd_make_float2(Float(newValue.x), Float(newValue.y))
                 }.store(in: &subscriptions)
 
-                param.mainMinValuePublisher.sink { [weak self] newMinValue in
+                param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
                     guard let self = self, let pad = self.pad else { return }
                     pad.minValue = simd_make_float2(Float(newMinValue.x), Float(newMinValue.y))
                 }.store(in: &subscriptions)
 
-                param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
+                param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
                     guard let self = self, let pad = self.pad else { return }
                     pad.maxValue = simd_make_float2(Float(newMaxValue.x), Float(newMaxValue.y))
                 }.store(in: &subscriptions)
@@ -263,13 +263,13 @@ final class XYPadViewController: InputViewController {
             pad.onValueChanged = { [weak self] value in
                 guard let self, let valueField = self.valueField else { return }
                 valueField.stringValue = String(format: "(%.3f, %.3f)", value.x, value.y)
-                if let param = parameter as? Float2Parameter, param.mainValue != value {
-                    param.submit(value)
+                if let param = parameter as? Float2Parameter, param.value != value {
+                    param.value = value
                 }
                 else if let param = parameter as? Int2Parameter {
                     let intValue = simd_make_int2(Int32(value.x), Int32(value.y))
-                    if param.mainValue != intValue {
-                        param.submit(intValue)
+                    if param.value != intValue {
+                        param.value = intValue
                     }
                 }
                 self.deactivate()
@@ -590,13 +590,13 @@ final class XYPadViewController: WidgetViewController {
         pad.onValueChanged = { [weak self] value in
             guard let self, let valueLabel = self.valueLabel else { return }
             valueLabel.text = String(format: "(%.3f, %.3f)", value.x, value.y)
-            if let param = parameter as? Float2Parameter, param.mainValue != value {
-                param.submit(value)
+            if let param = parameter as? Float2Parameter, param.value != value {
+                param.value = value
             }
             else if let param = parameter as? Int2Parameter {
                 let intValue = simd_make_int2(Int32(value.x), Int32(value.y))
-                if param.mainValue != intValue {
-                    param.submit(intValue)
+                if param.value != intValue {
+                    param.value = intValue
                 }
             }
         }
@@ -627,45 +627,45 @@ final class XYPadViewController: WidgetViewController {
         var stringValue = ""
 
         if let param = parameter as? Float2Parameter {
-            value = param.mainValue
-            minValue = param.mainMin
-            maxValue = param.mainMax
+            value = param.value
+            minValue = param.min
+            maxValue = param.max
             stringValue = String(format: "(%.3f, %.3f)", value.x, value.y)
 
-            param.mainValuePublisher.sink { [weak self] newValue in
+            param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self = self, let valueLabel = self.valueLabel, let pad = self.pad else { return }
                 valueLabel.text = String(format: "(%.3f, %.3f)", newValue.x, newValue.y)
                 pad.value = newValue
             }.store(in: &subscriptions)
 
-            param.mainMinValuePublisher.sink { [weak self] newMinValue in
+            param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
                 guard let self = self, let pad = self.pad else { return }
                 pad.minValue = newMinValue
             }.store(in: &subscriptions)
 
-            param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
+            param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
                 guard let self = self, let pad = self.pad else { return }
                 pad.maxValue = newMaxValue
             }.store(in: &subscriptions)
         }
         else if let param = parameter as? Int2Parameter {
-            value = simd_make_float2(Float(param.mainValue.x), Float(param.mainValue.y))
-            minValue = simd_make_float2(Float(param.mainMin.x), Float(param.mainMin.y))
-            maxValue = simd_make_float2(Float(param.mainMax.x), Float(param.mainMax.y))
+            value = simd_make_float2(Float(param.value.x), Float(param.value.y))
+            minValue = simd_make_float2(Float(param.min.x), Float(param.min.y))
+            maxValue = simd_make_float2(Float(param.max.x), Float(param.max.y))
             stringValue = String(format: "(%.3f, %.3f)", value.x, value.y)
 
-            param.mainValuePublisher.sink { [weak self] newValue in
+            param.valuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newValue in
                 guard let self = self, let valueLabel = self.valueLabel, let pad = self.pad else { return }
                 valueLabel.text = String(format: "(%.3f, %.3f)", newValue.x, newValue.y)
                 pad.value = simd_make_float2(Float(newValue.x), Float(newValue.y))
             }.store(in: &subscriptions)
 
-            param.mainMinValuePublisher.sink { [weak self] newMinValue in
+            param.minValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMinValue in
                 guard let self = self, let pad = self.pad else { return }
                 pad.minValue = simd_make_float2(Float(newMinValue.x), Float(newMinValue.y))
             }.store(in: &subscriptions)
 
-            param.mainMaxValuePublisher.sink { [weak self] newMaxValue in
+            param.maxValuePublisher.receive(on: DispatchQueue.main).sink { [weak self] newMaxValue in
                 guard let self = self, let pad = self.pad else { return }
                 pad.maxValue = simd_make_float2(Float(newMaxValue.x), Float(newMaxValue.y))
             }.store(in: &subscriptions)
@@ -690,15 +690,15 @@ final class XYPadViewController: WidgetViewController {
         if let parameter = parameter {
             if parameter is FloatParameter {
                 let floatParam = parameter as! FloatParameter
-                floatParam.submit(value)
+                floatParam.value = value
             }
             else if parameter is DoubleParameter {
                 let doubleParam = parameter as! DoubleParameter
-                doubleParam.submit(Double(value))
+                doubleParam.value = Double(value)
             }
             else if parameter is IntParameter {
                 let intParam = parameter as! IntParameter
-                intParam.submit(Int(value))
+                intParam.value = Int(value)
             }
         }
     }
