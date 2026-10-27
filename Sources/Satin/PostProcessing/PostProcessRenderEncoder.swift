@@ -38,7 +38,7 @@ open class PostProcessRenderEncoder {
     }
 
     /// Per-draw storage: the mesh's vertex uniforms in the arena, its packets in leased storage.
-    private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
+    private lazy var frameArena = FrameArena(allocator: context.gpuAllocator, label: "\(label) Frame Arena")
     private let packetStoragePool = PacketStoragePool()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true

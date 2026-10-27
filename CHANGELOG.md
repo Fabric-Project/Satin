@@ -4,6 +4,7 @@
 
 - New `GPUAllocator`: heap-backed textures and buffers in three memory classes (`gpuOnly`, `cpuWrites`, `cpuReads`). Each call returns a new object; its memory returns to the heap when its last owner releases it, so allocations may escape safely. Includes a budget with device fallback, `trim()` and per-class statistics.
 - `Context` carries a `gpuAllocator`. Contexts share heaps only when handed the same allocator; every context Satin derives internally (render contexts, post-processing, view renderer defaults) passes its parent's. The allocator is not part of a context's equality, hash or interned index.
+- Recorded shadow-map versions and frame-arena chunks come from the context's allocator. Recording shadowed lights in an Iterator no longer makes new device allocations every frame; steady frames reuse heap memory.
 
 ## Frame contract: target-wide scene occurrences
 

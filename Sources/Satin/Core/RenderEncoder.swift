@@ -357,7 +357,7 @@ open class RenderEncoder {
     private let sceneTraversal = SceneTraversal()
     /// Records each renderable's draw before executing it; reused for every draw.
     /// Per-draw storage: vertex uniforms in the arena, packets in storage leased for one draw.
-    private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
+    private lazy var frameArena = FrameArena(allocator: context.gpuAllocator, label: "\(label) Frame Arena")
     let packetStoragePool = PacketStoragePool()
     /// The state of whichever of this encoder's passes is encoding: one at a time, reused.
     private var preparedPasses: [RecordedRenderPass] = []
