@@ -135,10 +135,10 @@ open class Renderer {
         waitForAvailableFrameSlot()
 
         if let commandBuffer = commandQueue.makeCommandBuffer() {
-            registerInFlight(commandBuffer)
             return commandBuffer
         }
 
+        inFlightSemaphore.signal()
         return nil
     }
 
@@ -171,6 +171,9 @@ open class Renderer {
     open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {}
 
     open func postDraw(commandBuffer: MTLCommandBuffer) {
+        // MPS may have committed intermediate segments during draw. The frame slot protects
+        // the whole logical frame, so return it only after its final segment completes.
+        registerInFlight(commandBuffer)
         commandBuffer.commit()
     }
 

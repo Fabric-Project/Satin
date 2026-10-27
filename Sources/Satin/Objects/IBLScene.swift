@@ -25,85 +25,76 @@ open class IBLScene:  IBLEnvironment {
     private var reflectionSize: Int = 512
     private var irradianceSize: Int = 32
 
-    public func setEnvironment(texture: MTLTexture, qos: DispatchQoS.QoSClass = .userInitiated, cubemapSize: Int = 512, reflectionSize: Int = 512, irradianceSize: Int = 32) {
+    /// Prepares the environment asynchronously. Completion runs on the worker or Metal callback
+    /// thread, after GPU completion on success, or when preparation fails. No main dispatch is added.
+    public func setEnvironment(texture: MTLTexture, qos: DispatchQoS.QoSClass = .userInitiated,
+                               cubemapSize: Int = 512, reflectionSize: Int = 512, irradianceSize: Int = 32,
+                               completion: @escaping (Result<Void, Error>) -> Void) {
         environment = texture
         self.cubemapSize = cubemapSize
         self.reflectionSize = reflectionSize
         self.irradianceSize = irradianceSize
 
-        let device = texture.device
-
-        DispatchQueue.global(qos: qos).async { [unowned self] in
-            guard let commandQueue = device.makeCommandQueue(),
-                  let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-
-            self.cubemapTexture = self.setupCubemapTexture(device: device, commandBuffer: commandBuffer)
-            self.irradianceTexture = self.setupIrradianceTexture(device: device, commandBuffer: commandBuffer)
-            self.reflectionTexture = self.setupReflectionTexture(device: device, commandBuffer: commandBuffer)
-
-            if self.brdfTexture == nil {
-                self.brdfTexture = self.setupBrdfTexture(device: device, commandBuffer: commandBuffer)
-            }
-
-            commandBuffer.commit()
+        encodeEnvironment(device: texture.device, qos: qos, completion: completion) { [self] commandBuffer in
+            cubemapTexture = try setupCubemapTexture(device: texture.device, commandBuffer: commandBuffer)
+            try setupEnvironmentLighting(device: texture.device, commandBuffer: commandBuffer)
         }
-
-//        guard let device = MTLCreateSystemDefaultDevice() else { fatalError("Unable to create Metal Device") }
-//        let captureManager = MTLCaptureManager.shared()
-//        let captureDescriptor = MTLCaptureDescriptor()
-//        captureDescriptor.captureObject = device
-//        do { try captureManager.startCapture(with: captureDescriptor)
-//        } catch { fatalError("error when trying to capture: \(error)") }
-//
-//        guard let commandQueue = device.makeCommandQueue(),
-//              let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-//
-//
-//        cubemapTexture = setupCubemapTexture(device: device, commandBuffer: commandBuffer)
-//        irradianceTexture = setupIrradianceTexture(device: device, commandBuffer: commandBuffer)
-//        reflectionTexture = setupReflectionTexture(device: device, commandBuffer: commandBuffer)
-//
-//        if brdfTexture == nil {
-//            brdfTexture = setupBrdfTexture(device: device, commandBuffer: commandBuffer)
-//        }
-//
-//        commandBuffer.commit()
-//        commandBuffer.waitUntilCompleted()
-//        MTLCaptureManager.shared().stopCapture()
     }
 
-    public func setEnvironmentCubemap(texture: MTLTexture, qos: DispatchQoS.QoSClass = .userInitiated, reflectionSize: Int = 512, irradianceSize: Int = 32) {
+    /// Like setEnvironment, but the source is already a cubemap.
+    public func setEnvironmentCubemap(texture: MTLTexture, qos: DispatchQoS.QoSClass = .userInitiated,
+                                      reflectionSize: Int = 512, irradianceSize: Int = 32,
+                                      completion: @escaping (Result<Void, Error>) -> Void) {
         cubemapTexture = texture
         cubemapSize = texture.width
         self.reflectionSize = reflectionSize
         self.irradianceSize = irradianceSize
 
-        let device = texture.device
-
-        DispatchQueue.global(qos: qos).async { [unowned self] in
-            guard let commandQueue = device.makeCommandQueue(),
-                  let commandBuffer = commandQueue.makeCommandBuffer() else { return }
-
-            self.irradianceTexture = self.setupIrradianceTexture(device: device, commandBuffer: commandBuffer)
-            self.reflectionTexture = self.setupReflectionTexture(device: device, commandBuffer: commandBuffer)
-            if self.brdfTexture == nil {
-                self.brdfTexture = self.setupBrdfTexture(device: device, commandBuffer: commandBuffer)
-            }
-
-            commandBuffer.commit()
+        encodeEnvironment(device: texture.device, qos: qos, completion: completion) { [self] commandBuffer in
+            try setupEnvironmentLighting(device: texture.device, commandBuffer: commandBuffer)
         }
     }
 
-    private func setupCubemapTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func setupEnvironmentLighting(device: MTLDevice, commandBuffer: MTLCommandBuffer) throws {
+        irradianceTexture = try setupIrradianceTexture(device: device, commandBuffer: commandBuffer)
+        reflectionTexture = try setupReflectionTexture(device: device, commandBuffer: commandBuffer)
+        if brdfTexture == nil {
+            brdfTexture = try setupBrdfTexture(device: device, commandBuffer: commandBuffer)
+        }
+    }
+
+    private func encodeEnvironment(device: MTLDevice, qos: DispatchQoS.QoSClass,
+                                   completion: @escaping (Result<Void, Error>) -> Void,
+                                   work: @escaping (MTLCommandBuffer) throws -> Void) {
+        DispatchQueue.global(qos: qos).async {
+            do {
+                guard let commandQueue = device.makeCommandQueue() else { throw GPUError.commandQueueCreationFailed }
+                guard let commandBuffer = commandQueue.makeCommandBuffer() else { throw GPUError.commandBufferCreationFailed }
+                try work(commandBuffer)
+                commandBuffer.addCompletedHandler { completed in
+                    if completed.status == .completed {
+                        completion(.success(()))
+                    } else {
+                        completion(.failure(completed.error ?? GPUError.commandExecutionFailed))
+                    }
+                }
+                commandBuffer.commit()
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
+    private func setupCubemapTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         if let hdriTexture = environment,
-           let texture = createCubemapTexture(
+           let texture = try createCubemapTexture(
                device: device,
                pixelFormat: .rgba16Float,
                size: cubemapSize,
                mipmapped: true
            )
         {
-            getCubemapGenerator(device: device)
+            try getCubemapGenerator(device: device)
                 .encode(
                     commandBuffer: commandBuffer,
                     sourceTexture: hdriTexture,
@@ -114,16 +105,16 @@ open class IBLScene:  IBLEnvironment {
         return nil
     }
 
-    private func setupIrradianceTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func setupIrradianceTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         if let cubemapTexture = cubemapTexture,
-           let texture = createCubemapTexture(
+           let texture = try createCubemapTexture(
                device: device,
                pixelFormat: .rgba16Float,
                size: irradianceSize,
                mipmapped: false
            )
         {
-            getDiffuseIBLGenerator(device: device)
+            try getDiffuseIBLGenerator(device: device)
                 .encode(
                     commandBuffer: commandBuffer,
                     sourceTexture: cubemapTexture,
@@ -134,16 +125,16 @@ open class IBLScene:  IBLEnvironment {
         return nil
     }
 
-    private func setupReflectionTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func setupReflectionTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         if let cubemapTexture = cubemapTexture,
-           let texture = createCubemapTexture(
+           let texture = try createCubemapTexture(
                device: device,
                pixelFormat: .rgba16Float,
                size: reflectionSize,
                mipmapped: true
            )
         {
-            getSpecularIBLGenerator(device: device)
+            try getSpecularIBLGenerator(device: device)
                 .encode(
                     commandBuffer: commandBuffer,
                     sourceTexture: cubemapTexture,
@@ -154,8 +145,8 @@ open class IBLScene:  IBLEnvironment {
         return nil
     }
 
-    private func setupBrdfTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
-        getBrdfGenerator(device: device)
+    private func setupBrdfTexture(device: MTLDevice, commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
+        try getBrdfGenerator(device: device)
             .encode(
                 commandBuffer: commandBuffer
             )
@@ -197,7 +188,7 @@ open class IBLScene:  IBLEnvironment {
         }
     }
 
-    private func createCubemapTexture(device: MTLDevice, pixelFormat: MTLPixelFormat, size: Int, mipmapped: Bool) -> MTLTexture? {
+    private func createCubemapTexture(device: MTLDevice, pixelFormat: MTLPixelFormat, size: Int, mipmapped: Bool) throws -> MTLTexture? {
         let desc = MTLTextureDescriptor.textureCubeDescriptor(
             pixelFormat: pixelFormat,
             size: size,
@@ -208,6 +199,7 @@ open class IBLScene:  IBLEnvironment {
         desc.storageMode = .private
         desc.resourceOptions = .storageModePrivate
 
-        return device.makeTexture(descriptor: desc)
+        guard let texture = device.makeTexture(descriptor: desc) else { throw GPUError.allocationFailed }
+        return texture
     }
 }

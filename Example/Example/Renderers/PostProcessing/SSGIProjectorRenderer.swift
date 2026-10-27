@@ -126,9 +126,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
     private lazy var compositor = PostProcessEncoder(
         label: "SSGI Projector Compositor",
         context: defaultContext,
-        material: compositorMaterial,
-        depthLoadAction: .dontCare,
-        depthStoreAction: .dontCare
+        material: compositorMaterial
     )
 
     private lazy var textureLoader = MTKTextureLoader(device: device)
@@ -184,7 +182,8 @@ final class SSGIProjectorRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        sceneRenderer.draw(
+        try sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -197,10 +196,10 @@ final class SSGIProjectorRenderer: BaseRenderer {
         ssgiPostProcessEncoder.albedoTexture = sceneRenderer.albedoTexture
         ssgiPostProcessEncoder.pbrTexture = sceneRenderer.pbrTexture
         ssgiPostProcessEncoder.sceneCamera = camera
-        ssgiPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try ssgiPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         compositorMaterial.texture = ssgiPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
-        compositor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try compositor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
@@ -213,7 +212,7 @@ final class SSGIProjectorRenderer: BaseRenderer {
     private func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
             scene.environmentIntensity = appParams.get("Environment Intensity", as: FloatParameter.self)?.value ?? 0.025
         }
     }

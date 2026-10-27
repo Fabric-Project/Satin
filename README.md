@@ -59,7 +59,7 @@ Satin supports modern techniques, like deferred rendering, post processing, inst
 - [x] Buffer & Texture Compute Systems make running compute kernels a breeze.
 - [x] Generators for BRDF LUT, Image Based Lighting (HDR -> Specular & Diffuse IBL Textures)
 - [x] Fast raycasting via Bounding Volume Hierachies (very helpful to see what you clicked or tapped on).
-- [x] Hooks for custom Metal rendering via Mesh's preDraw, Material's onBind, Buffer & Texture Computes' preCompute, etc
+- [x] Hooks for custom Metal rendering: typed bindings and draws (buffers for every stage, tessellation factors, patch and mesh-threadgroup draws) recorded from a renderable's, material's or geometry's `draw(in:)`, Buffer & Texture Computes' preCompute, etc
 - [x] Hooks for custom rendering via the Renderable protocol
 - [x] FileWatcher for checking if a resource or shader file has changed.
 - [x] Platform specific examples for iOS / AR Kit integration
@@ -75,90 +75,92 @@ import Metal
 import SwiftUI
 import Satin
 
-  // Subclass Satin's ViewRenderer to get triple-buffered rendering and
-  // callbacks for setup, update, draw, resize, and input events
-  final class SimpleRenderer: ViewRenderer {
-      // A RenderEncoder handles drawing a scene either to the screen
-      // or into a texture-backed render pass
-      lazy var renderEncoder = RenderEncoder(context: defaultContext)
+// Subclass Satin's ViewRenderer to get triple-buffered rendering and
+// callbacks for setup, update, draw, resize, and input events
+final class SimpleRenderer: ViewRenderer {
+    // A RenderEncoder handles drawing a scene either to the screen
+    // or into a texture-backed render pass
+    lazy var renderEncoder = RenderEncoder(context: defaultContext)
 
-      // A PerspectiveCamera renders the scene using perspective projection
-      // Cameras inherit from Object, so they have transform properties too
-      lazy var camera: PerspectiveCamera = {
-          let camera = PerspectiveCamera(
-              context: defaultContext,
-              position: [3.0, 3.0, 3.0],
-              near: 0.01,
-              far: 100.0,
-              fov: 45.0
-          )
-          camera.lookAt(target: .zero)
-          return camera
-      }()
+    // A PerspectiveCamera renders the scene using perspective projection
+    // Cameras inherit from Object, so they have transform properties too
+    lazy var camera: PerspectiveCamera = {
+        let camera = PerspectiveCamera(
+            context: defaultContext,
+            position: [3.0, 3.0, 3.0],
+            near: 0.01,
+            far: 100.0,
+            fov: 45.0
+        )
+        camera.lookAt(target: .zero)
+        return camera
+    }()
 
-      // An Object is an empty node in Satin's scene graph
-      // It can have children, a parent, and a transform
-      lazy var scene = Object(context: defaultContext, label: "Scene", [boxMesh])
+    // An Object is an empty node in Satin's scene graph
+    // It can have children, a parent, and a transform
+    lazy var scene = Object(context: defaultContext, label: "Scene", [boxMesh])
 
-      // Meshes inherit from Object, so they also have transforms
-      // A Mesh becomes renderable by pairing Geometry with a Material
-      lazy var boxMesh = Mesh(
-          context: defaultContext,
-          label: "Box",
-          geometry: BoxGeometry(context: defaultContext, size: 1.0),
-          material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.75)
-      )
+    // Meshes inherit from Object, so they also have transforms
+    // A Mesh becomes renderable by pairing Geometry with a Material
+    lazy var boxMesh = Mesh(
+        context: defaultContext,
+        label: "Box",
+        geometry: BoxGeometry(context: defaultContext, size: 1.0),
+        material: BasicDiffuseMaterial(context: defaultContext, hardness: 0.75)
+    )
 
-      // Track time so we can animate the scene
-      var time: Float = 0.0
+    // Satin calls setup once after the renderer has a valid MetalView
+    override func setup() throws {
+        renderEncoder.setClearColor(.one)
+    }
 
-      // Satin calls setup once after the renderer has a valid MetalView
-      override func setup() {
-          renderEncoder.setClearColor(.one)
-      }
+    // Satin calls update once per frame before drawing, with that frame's time
+    override func update(frame: FrameTime) throws {
+        // Call super first: it stores the frame as frameTime, which drawing uses
+        try super.update(frame: frame)
 
-      // Satin calls update once per frame before drawing
-      override func update() {
-          // Advance time so we can animate the box orientation and color
-          time += 0.05
-          let sx = sin(time)
-          let sy = cos(time)
+        // Animate the box from the frame's time
+        let time = Float(frame.time)
+        let sx = sin(time)
+        let sy = cos(time)
 
-          // Setting a material property updates the material's uniforms
-          boxMesh.material?.set("Color", [abs(sx), abs(sy), abs(sx + sy), 1.0])
+        // Setting a material property updates the material's uniforms
+        boxMesh.material?.set("Color", [abs(sx), abs(sy), abs(sx + sy), 1.0])
 
-          // Objects can update their transform directly, or use helpers like
-          // lookAt to orient themselves toward a target point
-          boxMesh.lookAt([sx, sy, 2.0])
-      }
+        // Objects can update their transform directly, or use helpers like
+        // lookAt to orient themselves toward a target point
+        boxMesh.lookAt(target: [sx, sy, 2.0])
+    }
 
-      // Satin calls draw when a new frame is ready to be encoded
-      override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
-          // To render a scene into a render pass, call draw and pass
-          // in the render pass descriptor, command buffer, scene, and camera
-          renderEncoder.draw(
-              renderPassDescriptor: renderPassDescriptor,
-              commandBuffer: commandBuffer,
-              scene: scene,
-              camera: camera
-          )
-      }
+    // Satin calls draw when a new frame is ready to be encoded
+    override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
+        // To render a scene into a render pass, call draw with the frame being
+        // drawn, the render pass descriptor, command buffer, scene, and camera
+        try renderEncoder.draw(
+            frame: frameTime,
+            renderPassDescriptor: renderPassDescriptor,
+            commandBuffer: commandBuffer,
+            scene: scene,
+            camera: camera
+        )
+    }
 
-      // Satin calls resize whenever the drawable size changes
-      override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
-          // Update the camera aspect ratio
-          camera.aspect = size.width / size.height
+    // Satin calls resize whenever the drawable size changes
+    override func resize(size: (width: Float, height: Float), scaleFactor: Float) {
+        // Update the camera aspect ratio
+        camera.aspect = size.width / size.height
 
-          // Update the renderer's viewport and internal textures
-          renderEncoder.resize(size)
-      }
-  }
+        // Update the renderer's viewport and internal textures
+        renderEncoder.resize(size)
+    }
+}
 
-  struct ContentView: View {
-      var body: some View {
-          SatinMetalView(renderer: SimpleRenderer())
-      }
-  }
+struct ContentView: View {
+    var body: some View {
+        // A renderer draws with a Context: the device and the formats it renders to
+        SatinMetalView(renderer: SimpleRenderer(context: .makePlatformDefault()))
+    }
+}
 ```
 
 # Credits

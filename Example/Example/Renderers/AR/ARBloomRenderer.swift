@@ -140,11 +140,13 @@ final class ARBloomRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -153,7 +155,8 @@ final class ARBloomRenderer: BaseRenderer {
 
         let brpd = MTLRenderPassDescriptor()
         brpd.depthAttachment.texture = renderPassDescriptor.depthAttachment.texture
-        bloomRenderer.draw(
+        try bloomRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: brpd,
             commandBuffer: commandBuffer,
             scene: bloomedScene,
@@ -161,15 +164,16 @@ final class ARBloomRenderer: BaseRenderer {
         )
 
         if let colorTexture = bloomRenderer.colorTexture {
-            postMaterial.bloomTexture = bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture)
+            postMaterial.bloomTexture = try bloomGenerator.encode(commandBuffer: commandBuffer, sourceTexture: colorTexture)
         }
 
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
 
-        postProcessor.renderer.colorLoadAction = .load
+        postProcessor.postProcessRenderer.colorLoadAction = .load
 
-        postProcessor.draw(
+        try postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )

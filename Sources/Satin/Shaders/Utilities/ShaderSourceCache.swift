@@ -8,7 +8,17 @@
 import Foundation
 
 public final class ShaderSourceCache: Sendable {
-    private nonisolated(unsafe) static var sourceCache: [URL: String] = [:]
+    private struct CachedSource {
+        let text: String
+        let definesAlphaOrderIndependentTransparency: Bool
+
+        init(text: String) {
+            self.text = text
+            definesAlphaOrderIndependentTransparency = text.contains("#define SATIN_ALPHA_OIT_ENABLED")
+        }
+    }
+
+    private nonisolated(unsafe) static var sourceCache: [URL: CachedSource] = [:]
     private nonisolated(unsafe) static var compilerCache: [URL: MetalFileCompiler] = [:]
 
     private static let sourceQueue = DispatchQueue(label: "ShaderSourceCacheSourceQueue", attributes: .concurrent)
@@ -21,22 +31,25 @@ public final class ShaderSourceCache: Sendable {
     }
 
     public static func getSource(url: URL) throws -> String? {
-        var cachedSource: String?
+        try getCachedSource(url: url).text
+    }
 
-        sourceQueue.sync { // Read
-            cachedSource = sourceCache[url]
-        }
+    static func definesAlphaOrderIndependentTransparency(url: URL) throws -> Bool {
+        try getCachedSource(url: url).definesAlphaOrderIndependentTransparency
+    }
 
-        if let cachedSource {
+    private static func getCachedSource(url: URL) throws -> CachedSource {
+        if let cachedSource = sourceQueue.sync(execute: { sourceCache[url] }) {
             return cachedSource
         }
-
-        try sourceQueue.sync(flags: .barrier) {
-            cachedSource = try getCompiler(url: url).parse(url)
+        return try sourceQueue.sync(flags: .barrier) {
+            if let cachedSource = sourceCache[url] {
+                return cachedSource
+            }
+            let cachedSource = CachedSource(text: try getCompiler(url: url).parse(url))
             sourceCache[url] = cachedSource
+            return cachedSource
         }
-
-        return cachedSource
     }
 
     public static func getCompiler(url: URL) -> MetalFileCompiler {

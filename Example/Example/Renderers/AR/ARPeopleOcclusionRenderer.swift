@@ -92,10 +92,11 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        matteRenderer.encode(commandBuffer: commandBuffer)
+        try matteRenderer.encode(frame: frameTime, commandBuffer: commandBuffer)
 
         if let backgroundTexture = backgroundTexture {
-            backgroundRenderer.draw(
+            try backgroundRenderer.draw(
+                frame: frameTime,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: backgroundTexture
@@ -103,6 +104,7 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -115,7 +117,8 @@ final class ARPeopleOcclusionRenderer: BaseRenderer {
         compositor.alphaTexture = matteRenderer.alphaTexture
         compositor.dilatedDepthTexture = matteRenderer.dilatedDepthTexture
 
-        compositor.draw(
+        try compositor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )

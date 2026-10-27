@@ -16,13 +16,12 @@ final class CustomInstancingRenderer: BaseRenderer {
 
     // MARK: - Paths
 
-    var dataBuffer: MTLBuffer?
+    var dataBuffer: MTLBuffer? {
+        didSet { instanceMaterial.set(dataBuffer, index: VertexBufferIndex.Custom0) }
+    }
 
     lazy var instanceMaterial: InstanceMaterial = {
         lazy var material = InstanceMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
-        material.onBind = { [unowned self] renderEncoder in
-            renderEncoder.setVertexBuffer(self.dataBuffer, offset: 0, index: VertexBufferIndex.Custom0.rawValue)
-        }
         return material
     }()
 
@@ -86,6 +85,7 @@ final class CustomInstancingRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

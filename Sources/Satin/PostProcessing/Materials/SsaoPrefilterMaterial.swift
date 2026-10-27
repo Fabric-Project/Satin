@@ -17,8 +17,9 @@ public final class SsaoPrefilterMaterial: Material {
     private var inverseProjectionMatrix = matrix_identity_float4x4
     private var uniformsNeedUpdate = true
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom0) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
     public required init(context: Context) {

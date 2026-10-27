@@ -10,6 +10,9 @@ import Metal
 
 public struct Context {
     public let id: UUID
+    /// This configuration's interned index (see `RenderContextRegistry`): equal configurations on
+    /// one device share it, so they share compiled pipelines.
+    public let index: Int
     public let device: MTLDevice
     public let commandQueue:MTLCommandQueue
     public let sampleCount: Int
@@ -69,6 +72,22 @@ public struct Context {
         self.pbrPixelFormat = pbrPixelFormat
         self.velocityPixelFormat = velocityPixelFormat
         self.emissivePixelFormat = emissivePixelFormat
+        index = RenderContextRegistry.index(for: RenderContextRegistry.Configuration(
+            device: device,
+            sampleCount: sampleCount,
+            colorPixelFormat: colorPixelFormat,
+            depthPixelFormat: depthPixelFormat,
+            stencilPixelFormat: stencilPixelFormat,
+            vertexAmplificationCount: vertexAmplificationCount,
+            renderingMode: renderingMode,
+            activeOutputs: activeOutputs,
+            alphaOitEnabled: alphaOitEnabled,
+            albedoPixelFormat: albedoPixelFormat,
+            normalsPixelFormat: normalsPixelFormat,
+            pbrPixelFormat: pbrPixelFormat,
+            velocityPixelFormat: velocityPixelFormat,
+            emissivePixelFormat: emissivePixelFormat
+        ))
     }
 
     func getDefines() -> [ShaderDefine] {

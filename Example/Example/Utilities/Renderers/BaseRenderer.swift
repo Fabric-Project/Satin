@@ -24,6 +24,12 @@ class BaseRenderer: ViewRenderer {
         self.init(context: .makePlatformDefault())
     }
 
+    static func reportEnvironmentLoadingResult(_ result: Result<Void, Error>) {
+        if case let .failure(error) = result {
+            print("Environment loading failed: \(error)")
+        }
+    }
+
     // MARK: - Paths
 
     var assetsURL: URL { Bundle.main.resourceURL!.appendingPathComponent("Assets") }

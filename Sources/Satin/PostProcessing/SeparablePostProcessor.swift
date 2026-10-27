@@ -28,16 +28,12 @@ final class SeparablePostProcessEncoder {
         horizontalProcessor = PostProcessEncoder(
             label: label + " Horizontal",
             context: context,
-            material: horizontalMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: horizontalMaterial
         )
         verticalProcessor = PostProcessEncoder(
             label: label + " Vertical",
             context: context,
-            material: verticalMaterial ?? horizontalMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: verticalMaterial ?? horizontalMaterial
         )
     }
 
@@ -64,21 +60,24 @@ final class SeparablePostProcessEncoder {
     }
 
     func draw(
+        frame: FrameTime,
         commandBuffer: MTLCommandBuffer,
         inputTexture: MTLTexture,
         configurePass: (Pass, MTLTexture) -> Void
-    ) {
+    ) throws {
         guard let intermediateTexture, let outputTexture else { return }
 
         configurePass(.horizontal, inputTexture)
-        horizontalProcessor.draw(
+        try horizontalProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: intermediateTexture
         )
 
         configurePass(.vertical, intermediateTexture)
-        verticalProcessor.draw(
+        try verticalProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

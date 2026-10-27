@@ -81,25 +81,20 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         motionBlurMaterial = MotionBlurMaterial(context: blurContext)
         let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat)
         tileMaxMaterial = MotionBlurTileMaxMaterial(context: tileMaxContext)
-        tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial,
-                                            depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+        tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial)
         // One material and encoder per pass, so each keeps its own uniforms within a frame.
         let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat)
         let jumpFloodMaterials = (0 ..< Self.jumpFloodPassCount).map { _ in MotionBlurJumpFloodMaterial(context: pointerContext) }
         self.jumpFloodMaterials = jumpFloodMaterials
         jumpFloodEncoders = jumpFloodMaterials.enumerated().map { pass, material in
-            PostProcessEncoder(label: "Motion Blur Jump Flood \(pass)", context: pointerContext, material: material,
-                               depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+            PostProcessEncoder(label: "Motion Blur Jump Flood \(pass)", context: pointerContext, material: material)
         }
         neighborMaxMaterial = MotionBlurNeighborMaxMaterial(context: pointerContext)
-        neighborMaxEncoder = PostProcessEncoder(label: "Motion Blur Neighbor Max", context: pointerContext, material: neighborMaxMaterial,
-                                                depthLoadAction: .dontCare, depthStoreAction: .dontCare)
+        neighborMaxEncoder = PostProcessEncoder(label: "Motion Blur Neighbor Max", context: pointerContext, material: neighborMaxMaterial)
         super.init(
             label: "Motion Blur",
             context: blurContext,
-            material: motionBlurMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: motionBlurMaterial
         )
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device)
     }
@@ -117,16 +112,16 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     // MARK: - Draw
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         guard let outputTexture else { return }
 
         motionBlurMaterial.blueNoiseTexture = blueNoiseTexture
         let depthTexture = resolveDepthTexture(commandBuffer: commandBuffer)
         motionBlurMaterial.depthTexture = depthTexture
-        encodeVelocityDilation(depthTexture: depthTexture, commandBuffer: commandBuffer)
+        try encodeVelocityDilation(frame: frame, depthTexture: depthTexture, commandBuffer: commandBuffer)
         motionBlurMaterial.frame = frameCounter
         frameCounter = frameCounter &+ 1
-        super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: outputTexture)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: outputTexture)
     }
 
     // MARK: - Velocity Dilation
@@ -145,7 +140,7 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     /// Tile max, the jump-flood passes, then neighbor max, at tile resolution. Hands the
     /// blur its tile max and neighbor-max pointers; without a velocity texture there are none.
-    private func encodeVelocityDilation(depthTexture: MTLTexture?, commandBuffer: MTLCommandBuffer) {
+    private func encodeVelocityDilation(frame: FrameTime, depthTexture: MTLTexture?, commandBuffer: MTLCommandBuffer) throws {
         guard let velocityTexture else {
             motionBlurMaterial.tileMaxTexture = nil
             motionBlurMaterial.neighborMaxTexture = nil
@@ -169,7 +164,7 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         tileMaxMaterial.velocityTexture = velocityTexture
         tileMaxMaterial.depthTexture = depthTexture
         tileMaxMaterial.tileSize = tileSize
-        tileMaxEncoder.draw(renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: tileMaxTexture)
+        try tileMaxEncoder.draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: tileMaxTexture)
 
         let shutterFraction = motionBlurMaterial.shutterAngle / 360
         for (pass, material) in jumpFloodMaterials.enumerated() {
@@ -181,12 +176,12 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
             material.isFirstPass = pass == 0
             material.shutterFraction = shutterFraction
             material.perpendicularTolerance = perpendicularTolerance
-            jumpFloodEncoders[pass].draw(renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: output)
+            try jumpFloodEncoders[pass].draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: output)
         }
 
         neighborMaxMaterial.tileMaxTexture = tileMaxTexture
         neighborMaxMaterial.jumpFloodTexture = jumpFloodTextures[(Self.jumpFloodPassCount - 1) % 2]
-        neighborMaxEncoder.draw(renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: neighborMaxTexture)
+        try neighborMaxEncoder.draw(frame: frame, renderPassDescriptor: tilePassDescriptor, commandBuffer: commandBuffer, renderTarget: neighborMaxTexture)
 
         motionBlurMaterial.tileMaxTexture = tileMaxTexture
         motionBlurMaterial.neighborMaxTexture = neighborMaxTexture

@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 11/2/22.
 //
 
-import Combine
 import Foundation
 import simd
 
@@ -19,20 +18,47 @@ public class Light: Object {
     
     public var color: simd_float3 = .zero {
         didSet {
-            publisher.send(self)
+            if color != oldValue { lightPropertiesDidChange() }
         }
     }
 
     public var intensity: Float = 1.0  {
         didSet {
-            publisher.send(self)
+            if intensity != oldValue { lightPropertiesDidChange() }
         }
     }
     
     public var castShadow: Bool = false // { fatalError("Subclasses must overload") }
-    public var shadow: Shadow
+    public var shadow: Shadow {
+        didSet {
+            if shadow !== oldValue { viewKey = nil }
+        }
+    }
     
-    public let publisher = PassthroughSubject<Light, Never>()
+    /// Advances when a property feeding the light's data or views changes: colour, intensity,
+    /// and a subclass's own (radius, angles, projection). Its transform has `worldRevision`.
+    public private(set) var lightRevision: UInt64 = 0
+
+    func lightPropertiesDidChange() {
+        lightRevision &+= 1
+    }
+
+    /// What the shadow (and projector) cameras were last aimed for.
+    private var viewKey: (world: UInt64, light: UInt64)?
+
+    /// Re-aims the shadow (and projector) cameras when the light moved (its world revision, which
+    /// validates against its ancestors) or changed since they were aimed.
+    func updateViewIfNeeded() {
+        let key = (world: worldRevision, light: lightRevision)
+        if let viewKey, viewKey == key { return }
+        viewKey = key
+        updateView()
+    }
+
+    /// Aims the shadow's cameras at the light as it is now.
+    func updateView() {
+        shadow.update(light: self)
+    }
     
     override public init(context: Context, label: String = "Light", visible: Bool = true, _ children: [Object] = []) {
         shadow = Shadow(context: context, label: "Empty Shadow")

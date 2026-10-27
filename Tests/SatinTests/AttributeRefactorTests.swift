@@ -145,13 +145,16 @@ final class AttributeRefactorTests: XCTestCase {
         }
 
         let start = CFAbsoluteTimeGetCurrent()
-        for _ in 0 ..< frames {
+        var frameTime = FrameTime.zero
+        for frameIndex in 0 ..< frames {
+            if frameIndex > 0 { frameTime = frameTime.next(time: Double(frameIndex) / 60.0) }
             let renderPassDescriptor = MTLRenderPassDescriptor()
             guard let commandBuffer = commandQueue.makeCommandBuffer() else {
                 throw NSError(domain: "AttributeRefactorTests", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to create command buffer"])
             }
 
             try renderer.draw(
+                frame: frameTime,
                 renderPassDescriptor: renderPassDescriptor,
                 commandBuffer: commandBuffer,
                 scene: scene,

@@ -32,8 +32,7 @@ final class TessellationRenderer: BaseRenderer {
         label: "Tessellated Fill",
         geometry: tessGeometry,
         material: tessMaterial,
-        tessellator: tessellator,
-        tessellate: false
+        tessellator: tessellator
     )
 
     lazy var tessWireMesh = TessellationMesh(
@@ -41,8 +40,7 @@ final class TessellationRenderer: BaseRenderer {
         label: "Tessellated Wire",
         geometry: tessGeometry,
         material: TessellatedMaterial(context: defaultContext, pipelinesURL: pipelinesURL),
-        tessellator: tessellator,
-        tessellate: false
+        tessellator: tessellator
     )
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [tessMesh, tessWireMesh])
@@ -75,15 +73,15 @@ final class TessellationRenderer: BaseRenderer {
         let oscEdge = Float(sin(currentTime * 0.5))
         let oscInsider = Float(cos(currentTime * 1.25))
 
-        tessellator.set("Edge Tessellation Factor", abs(oscEdge) * 16.0)
-        tessellator.set("Inside Tessellation Factor", abs(oscInsider) * 16.0)
+        tessellator.set("Edge Tessellation Factor", max(1.0, abs(oscEdge) * 16.0))
+        tessellator.set("Inside Tessellation Factor", max(1.0, abs(oscInsider) * 16.0))
 
         cameraController.update(frame: frame)
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        tessellator.update(commandBuffer)
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

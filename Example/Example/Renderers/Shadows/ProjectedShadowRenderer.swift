@@ -52,10 +52,11 @@ final class ProjectedShadowRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        shadowRenderer.draw(commandBuffer: commandBuffer)
+        try shadowRenderer.draw(frame: frameTime, commandBuffer: commandBuffer)
 
         shadowMaterial.texture = shadowRenderer.texture
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

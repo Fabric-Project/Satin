@@ -4,9 +4,9 @@ import simd
 private final class DeferredLightingShader: StandardShader {
     override func getDefines() -> [ShaderDefine] {
         var results = super.getDefines()
-        if directShadowCount > 0, directShadowTextureCount > 0 {
-            results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true")))
-        }
+        // The resolve always supports shadows. Target-wide count defines decide whether the
+        // shader declares/samples them; capability must not depend on the first recorded target.
+        results.append(ShaderDefine(key: "HAS_SHADOWS", value: NSString(string: "true")))
         return results
     }
 }
@@ -15,24 +15,29 @@ public final class DeferredLightingMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
     override public var supportedOutputs: RendererOutputs { [.color] }
 
-    public unowned var albedoTexture: MTLTexture? {
-        didSet { set(albedoTexture, index: FragmentTextureIndex.Custom0) }
+    public var albedoTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom1) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var pbrTexture: MTLTexture? {
-        didSet { set(pbrTexture, index: FragmentTextureIndex.Custom2) }
+    public var pbrTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
-    public unowned var emissiveTexture: MTLTexture? {
-        didSet { set(emissiveTexture, index: FragmentTextureIndex.Custom3) }
+    public var emissiveTexture: MTLTexture? {
+        get { texture(at: .Custom3) }
+        set { set(newValue, index: FragmentTextureIndex.Custom3) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom4) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom4) }
+        set { set(newValue, index: FragmentTextureIndex.Custom4) }
     }
 
     public var reflectionTexture: MTLTexture? {
@@ -95,18 +100,20 @@ public final class DeferredLightingMaterial: Material {
         }
     }
 
-    private var maps: [PBRTextureType: MTLTexture?] = [:] {
+    /// The texture for each map, indexed by `PBRTextureType.index`.
+    private var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != maps.keys, let shader = shader as? PBRShader {
-                shader.maps = maps.filter { $0.value != nil }
+            if pbrSlotPresenceDiffers(oldValue, maps), let shader = shader as? PBRShader {
+                shader.maps = maps
             }
         }
     }
 
-    private var samplers: [PBRTextureType: MTLSamplerDescriptor?] = [:] {
+    /// The sampler for each map, indexed by `PBRTextureType.index`.
+    private var samplers = [MTLSamplerDescriptor?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != samplers.keys, let shader = shader as? PBRShader {
-                shader.samplers = samplers.filter { $0.value != nil }
+            if pbrSlotPresenceDiffers(oldValue, samplers), let shader = shader as? PBRShader {
+                shader.samplers = samplers
             }
         }
     }
@@ -161,33 +168,35 @@ public final class DeferredLightingMaterial: Material {
     override public func setupShaderRenderingConfiguration(_ shader: Shader) {
         super.setupShaderRenderingConfiguration(shader)
         guard let pbrShader = shader as? PBRShader else { return }
-        pbrShader.maps = maps.filter { $0.value != nil }
-        pbrShader.samplers = samplers.filter { $0.value != nil }
+        pbrShader.maps = maps
+        pbrShader.samplers = samplers
         pbrShader.tonemapping = tonemapping
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow, layout: layout)
-        if !shadow {
-            for (type, texture) in maps {
-                renderEncoderState.setFragmentPBRTexture(texture, type: type)
+    override public func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
+        if !context.isShadowPass {
+            for (index, texture) in maps.enumerated() where texture != nil {
+                context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
             }
         }
     }
 
     private func setEnvironmentTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+        let index = type.index
         if let texture {
-            maps[type] = texture
-            if samplers[type] == nil {
+            if maps[index] === texture { return }
+            maps[index] = texture
+            if samplers[index] == nil {
                 let sampler = MTLSamplerDescriptor()
                 sampler.minFilter = .linear
                 sampler.magFilter = .linear
                 sampler.mipFilter = .linear
-                samplers[type] = sampler
+                samplers[index] = sampler
             }
         } else {
-            maps.removeValue(forKey: type)
-            samplers.removeValue(forKey: type)
+            maps[index] = nil
+            samplers[index] = nil
         }
     }
 }

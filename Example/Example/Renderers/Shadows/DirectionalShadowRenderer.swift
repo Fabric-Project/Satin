@@ -32,7 +32,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
             scene.environmentIntensity = 0.1
         }
     }
@@ -90,6 +90,7 @@ final class DirectionalShadowRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

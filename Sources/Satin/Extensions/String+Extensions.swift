@@ -10,7 +10,7 @@ import Foundation
 // Partial Fix for https://github.com/Fabric-Project/Satin/issues/15
 var TitleCaseStringCache = [String:String ]()
 
-private let TitleCaseStringCacheQueue = DispatchQueue(label: "fabric.titleCaseStringCacheQueue")
+private let TitleCaseStringCacheLock = UnfairLock()
 
 public extension String {
     var camelCase: String {
@@ -24,7 +24,7 @@ public extension String {
 
     var titleCase: String {
         
-        return TitleCaseStringCacheQueue.asyncAndWait {
+        return TitleCaseStringCacheLock.sync {
             
             // Partial Fix for https://github.com/Fabric-Project/Satin/issues/15
             if let cached = TitleCaseStringCache[self] {

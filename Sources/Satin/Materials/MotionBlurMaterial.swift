@@ -17,30 +17,36 @@ public final class MotionBlurMaterial: Material {
     private static let uniformLayoutSize = MemoryLayout<MotionBlurUniformPayload>.size
     private static let uniformLayoutAlignment = MemoryLayout<MotionBlurUniformPayload>.alignment
 
-    public unowned var colorTexture: MTLTexture? {
-        didSet { set(colorTexture, index: FragmentTextureIndex.Custom0) }
+    public var colorTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var velocityTexture: MTLTexture? {
-        didSet { set(velocityTexture, index: FragmentTextureIndex.Custom1) }
+    public var velocityTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var blueNoiseTexture: MTLTexture? {
-        didSet { set(blueNoiseTexture, index: FragmentTextureIndex.Custom2) }
+    public var blueNoiseTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom3) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom3) }
+        set { set(newValue, index: FragmentTextureIndex.Custom3) }
     }
 
     /// Per tile, a pointer (UV) into `tileMaxTexture` at the mover whose trail covers it.
-    public unowned var neighborMaxTexture: MTLTexture? {
-        didSet { set(neighborMaxTexture, index: FragmentTextureIndex.Custom4) }
+    public var neighborMaxTexture: MTLTexture? {
+        get { texture(at: .Custom4) }
+        set { set(newValue, index: FragmentTextureIndex.Custom4) }
     }
 
     /// Longest velocity per tile, read through `neighborMaxTexture`.
-    public unowned var tileMaxTexture: MTLTexture? {
-        didSet { set(tileMaxTexture, index: FragmentTextureIndex.Custom5) }
+    public var tileMaxTexture: MTLTexture? {
+        get { texture(at: .Custom5) }
+        set { set(newValue, index: FragmentTextureIndex.Custom5) }
     }
 
     public var shutterAngle: Float {
@@ -75,9 +81,9 @@ public final class MotionBlurMaterial: Material {
     }
 
     public init(context: Context, colorTexture: MTLTexture? = nil, velocityTexture: MTLTexture? = nil) {
+        super.init(context: context)
         self.colorTexture = colorTexture
         self.velocityTexture = velocityTexture
-        super.init(context: context)
         configure()
     }
 
@@ -116,10 +122,6 @@ public final class MotionBlurMaterial: Material {
         set(depthTexture, index: FragmentTextureIndex.Custom3)
         set(neighborMaxTexture, index: FragmentTextureIndex.Custom4)
         set(tileMaxTexture, index: FragmentTextureIndex.Custom5)
-    }
-
-    override public func updateUniforms() {
-        super.updateUniforms()
     }
 
     private func resolveShutterAngle() -> Float {

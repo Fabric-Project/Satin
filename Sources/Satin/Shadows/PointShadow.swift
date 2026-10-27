@@ -23,6 +23,25 @@ public final class PointShadow: Shadow {
     private var depthTextures: [MTLTexture?] = Array(repeating: nil, count: 6)
     private var updateTextures = true
 
+    override func beginRecording(context: Context) throws {
+        prepareForDrawing(context: context)
+        if recordedVersion != nil {
+            var versions: [MTLTexture?] = []
+            for texture in depthTextures {
+                guard let texture else { throw SubmissionError.shadowAllocationFailed }
+                versions.append(try makeShadowTextureVersion(of: texture, device: context.device))
+            }
+            depthTextures = versions
+            recordedVersion = nil
+        }
+        recordingState.captureVersion()
+    }
+
+    override func adoptRecordedVersion(_ version: RecordedShadow) {
+        super.adoptRecordedVersion(version)
+        depthTextures = version.textures.map(Optional.some)
+    }
+
     private let faceDirections: [(direction: simd_float3, up: simd_float3)] = [
         (Satin.worldRightDirection, Satin.worldUpDirection),
         (-Satin.worldRightDirection, Satin.worldUpDirection),
@@ -112,48 +131,25 @@ public final class PointShadow: Shadow {
         needsUpdate = true
     }
 
-    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
-        guard enabled else { return }
+    override var passCount: Int { 6 }
 
+    override func passCamera(_ passIndex: Int) -> Camera { cameras[passIndex] }
+
+    override func passTexture(_ passIndex: Int) -> MTLTexture? { depthTextures[passIndex] }
+
+    override func prepareForDrawing(context: Context) {
         if device == nil {
             device = context.device
         }
         setupTextures()
+    }
 
-        let viewport = MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0)
-        let viewportFloat4 = simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
-
-        for (faceIndex, faceTexture) in depthTextures.enumerated() {
-            guard let faceTexture else { continue }
-
-            let renderPassDescriptor = MTLRenderPassDescriptor()
-            renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
-            renderPassDescriptor.depthAttachment.texture = faceTexture
-            renderPassDescriptor.depthAttachment.loadAction = .clear
-            renderPassDescriptor.depthAttachment.storeAction = .store
-            renderPassDescriptor.depthAttachment.clearDepth = 0.0
-            renderPassDescriptor.renderTargetWidth = resolution.width
-            renderPassDescriptor.renderTargetHeight = resolution.height
-
-            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { continue }
-
-            renderEncoder.label = "\(label) Shadow Encoder \(faceIndex)"
-            renderEncoder.setViewport(viewport)
-
-            let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-            let camera = cameras[faceIndex]
-            for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-                renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
-                renderEncoderState.cullMode = renderable.cullMode
-                renderEncoderState.windingOrder = renderable.windingOrder
-                renderEncoderState.triangleFillMode = renderable.triangleFillMode
-                renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
-            }
-
-            renderEncoder.endEncoding()
-        }
-
-        needsUpdate = false
+    /// Every face's far plane is `far` along its axis: together they bound a cube around the
+    /// light, and nothing outside it reaches any face.
+    override var reachBounds: Bounds? {
+        let lightPosition = cameras[0].worldPosition
+        let reach = simd_float3(repeating: cameras[0].far)
+        return Bounds(min: lightPosition - reach, max: lightPosition + reach)
     }
 
     private func setupTextures() {

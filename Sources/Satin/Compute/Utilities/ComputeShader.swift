@@ -16,52 +16,69 @@ protocol ComputeShaderDelegate: AnyObject {
 open class ComputeShader {
     // MARK: - Reset Pipeline
 
-    public internal(set) var resetPipeline: MTLComputePipelineState?
+    public internal(set) var resetPipeline: MTLComputePipelineState? {
+        didSet { updateBindingUsage() }
+    }
     public internal(set) var resetPipelineError: Error?
     public internal(set) var resetPipelineReflection: MTLComputePipelineReflection? {
-        didSet {
-            guard let resetPipelineReflection else { return }
-
-            for binding in resetPipelineReflection.bindings {
-                if binding.type == .buffer {
-                    if binding.index == ComputeBufferIndex.Uniforms.rawValue {
-                        resetWantsUniforms = binding.isUsed
-                    } else if let bindingIndex = ComputeBufferIndex(rawValue: binding.index) {
-                        bufferBindingIsUsed.insert(bindingIndex)
-                    }
-                } else if binding.type == .texture, let bindingIndex = ComputeTextureIndex(rawValue: binding.index) {
-                    textureBindingIsUsed.insert(bindingIndex)
-                }
-            }
-        }
+        didSet { updateBindingUsage() }
     }
 
     // MARK: - Update Pipeline
 
-    public internal(set) var updatePipeline: MTLComputePipelineState?
+    public internal(set) var updatePipeline: MTLComputePipelineState? {
+        didSet { updateBindingUsage() }
+    }
     public internal(set) var updatePipelineError: Error?
     public internal(set) var updatePipelineReflection: MTLComputePipelineReflection? {
-        didSet {
-            guard let updatePipelineReflection else { return }
-
-            for binding in updatePipelineReflection.bindings {
-                if binding.type == .buffer {
-                    if binding.index == ComputeBufferIndex.Uniforms.rawValue {
-                        updateWantsUniforms = binding.isUsed
-                    } else if let bindingIndex = ComputeBufferIndex(rawValue: binding.index) {
-                        bufferBindingIsUsed.insert(bindingIndex)
-                    }
-                } else if binding.type == .texture, let bindingIndex = ComputeTextureIndex(rawValue: binding.index) {
-                    textureBindingIsUsed.insert(bindingIndex)
-                }
-            }
-        }
+        didSet { updateBindingUsage() }
     }
 
     public internal(set) var bufferBindingIsUsed: Set<ComputeBufferIndex> = []
     public internal(set) var textureBindingIsUsed: Set<ComputeTextureIndex> = []
     public internal(set) var resetWantsUniforms: Bool = false
     public internal(set) var updateWantsUniforms: Bool = false
+    private var knownBufferMask: UInt32 = 0
+    private var writableBufferMask: UInt32 = 0
+    private var hasUnreflectedPipeline = false
+
+    /// Reset and update share bindings. A write in either stage requires original storage.
+    /// Cached masks make this a bit test, not reflection traversal or hashing per dispatch.
+    func bufferIsReadOnly(at index: ComputeBufferIndex) -> Bool {
+        let bit = UInt32(1) << index.rawValue
+        return !hasUnreflectedPipeline && knownBufferMask & bit != 0 && writableBufferMask & bit == 0
+    }
+
+    private func updateBindingUsage() {
+        bufferBindingIsUsed.removeAll(keepingCapacity: true)
+        textureBindingIsUsed.removeAll(keepingCapacity: true)
+        knownBufferMask = 0
+        writableBufferMask = 0
+        hasUnreflectedPipeline = (resetPipeline != nil && resetPipelineReflection == nil)
+            || (updatePipeline != nil && updatePipelineReflection == nil)
+        resetWantsUniforms = false
+        updateWantsUniforms = false
+        for (isReset, reflection) in [(true, resetPipelineReflection), (false, updatePipelineReflection)] {
+            guard let reflection else { continue }
+            for binding in reflection.bindings {
+                if binding.type == .buffer, let index = ComputeBufferIndex(rawValue: binding.index) {
+                    if index == .Uniforms {
+                        if isReset { resetWantsUniforms = binding.isUsed }
+                        else { updateWantsUniforms = binding.isUsed }
+                    } else {
+                        bufferBindingIsUsed.insert(index)
+                    }
+                    if binding.isUsed {
+                        let bit = UInt32(1) << index.rawValue
+                        knownBufferMask |= bit
+                        if binding.access != .readOnly { writableBufferMask |= bit }
+                    }
+                } else if binding.type == .texture, let index = ComputeTextureIndex(rawValue: binding.index) {
+                    textureBindingIsUsed.insert(index)
+                }
+            }
+        }
+    }
 
     // MARK: - Blending
 
@@ -293,11 +310,6 @@ open class ComputeShader {
     // MARK: - Update Pipelines
 
     func updatePipelines() {
-        if resetPipelineNeedsUpdate || updatePipelineNeedsUpdate {
-            bufferBindingIsUsed.removeAll()
-            textureBindingIsUsed.removeAll()
-        }
-
         updateResetPipeline()
         updateUpdatePipeline()
     }

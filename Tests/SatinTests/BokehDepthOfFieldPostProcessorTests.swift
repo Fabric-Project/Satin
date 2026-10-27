@@ -81,7 +81,7 @@ final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
         processor.resize(size: (4, 4), scaleFactor: 1.0)
 
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        processor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         XCTAssertNil(commandBuffer.error)
@@ -111,7 +111,7 @@ final class BokehDepthOfFieldPostProcessEncoderTests: XCTestCase {
         processor.resize(size: (4, 4), scaleFactor: 1.0)
 
         let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-        processor.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try processor.draw(frame: .zero, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
         XCTAssertNil(commandBuffer.error)

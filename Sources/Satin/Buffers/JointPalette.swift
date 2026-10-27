@@ -22,182 +22,90 @@ public struct SkinJoint {
 /// their joint indices. Each matrix takes a vertex from the geometry's rest pose to its
 /// posed position, in object space.
 ///
-/// Slot-rotated like `InstanceMatrixUniformBuffer`, so updating it never touches memory a
-/// frame in flight is reading.
-///
-/// Repeated encoding (the same mesh drawn several times a frame): after each
-/// iteration's update, `captureRepeatedEncoding(iteration:count:)` uploads that iteration's
-/// pose into its own slot, with the pose the same iteration had last frame as `previous`, and
-/// `selectRecentSlot(iteration:count:)` selects exactly that slot when drawing it.
+/// Drawing snapshots the pose into the draw's frame arena, once per record: every mesh sharing
+/// the palette in one record binds the same snapshot. Each snapshot carries the pose of the
+/// matching record in the frame before (by palette draw ordinal), so skinned motion reaches the
+/// velocity output, and an unchanged pose reports none.
 public final class JointPalette {
     public let jointCount: Int
-    public private(set) var buffer: MTLBuffer
-    public private(set) var offset = 0
-    public private(set) var index = 0
-    public private(set) var joints: [SkinJoint]
-
-    private let device: MTLDevice
-    private let maxBuffersInFlight: Int
-    private var totalSlotCount: Int
-    private var latestUpdatedIndex = 0
-
-    /// Repeated encoding: the slot each iteration's pose was captured into this frame, and
-    /// each iteration's current matrices, which become its previous ones next frame: flat,
-    /// iteration × jointCount, filled in place so capturing allocates nothing.
-    private var repeatedCount = 0
-    private var capturedSlots: [Int?] = []
-    private var iterationHistory: [simd_float4x4] = []
-    private var iterationHasHistory: [Bool] = []
-    /// Changes whenever the pose does: for posed bounds and raycasts to know when to rebuild,
-    /// and for a second capture of an unchanged iteration to be recognised.
+    /// The current pose, one matrix per joint.
+    public private(set) var matrices: [simd_float4x4]
+    /// Changes whenever the pose does: for posed bounds and raycasts to know when to rebuild.
     public private(set) var poseVersion = 0
-    /// Iterations captured since the palette was last drawn, with the pose version each
-    /// was captured at. Several meshes drawing one palette each capture it every iteration;
-    /// only the first capture of a pose in a frame may move its history on.
-    private var capturedSinceDraw: [Int: Int] = [:]
-    /// The latest update may have moved the pose, and whether that pose has been drawn: once it
-    /// has, and nothing updates it again, previous catches up with current (`settleMotion`).
-    private var motionNeedsSettling = false
-    private var motionDrawn = false
 
-    public init(device: MTLDevice, jointCount: Int, maxBuffersInFlight: Int = Satin.maxBuffersInFlight, encodesPerFrame: Int = 1) {
-        self.device = device
+    /// Meshes whose cached bounds depend on this pose. The mesh owns its relay and unregisters
+    /// before deinitializing; the relay's checked back reference never owns the mesh.
+    private var boundsObservers = ContiguousArray<MeshBoundsObserver>()
+
+    func addBoundsObserver(_ observer: MeshBoundsObserver) {
+        guard !boundsObservers.contains(where: { $0 === observer }) else { return }
+        boundsObservers.append(observer)
+    }
+
+    func removeBoundsObserver(_ observer: MeshBoundsObserver) {
+        if let index = boundsObservers.firstIndex(where: { $0 === observer }) {
+            boundsObservers.remove(at: index)
+        }
+    }
+
+    // Motion: poses by palette draw ordinal, the kth snapshot of a frame pairing with the kth of
+    // the frame before; flat, ordinal × jointCount.
+    private var motionHistory = MotionHistory<simd_float4x4>()
+
+    // The snapshot of the current record, reused by every mesh drawing this palette in it.
+    private var snapshotRecordToken: RecordToken?
+    private var snapshotBinding: (buffer: MTLBuffer, offset: Int)?
+
+    public init(jointCount: Int) {
         self.jointCount = max(jointCount, 1)
-        self.maxBuffersInFlight = max(1, maxBuffersInFlight)
-        totalSlotCount = Self.slotCount(maxBuffersInFlight: self.maxBuffersInFlight, encodesPerFrame: max(1, encodesPerFrame))
-        joints = Array(repeating: SkinJoint(current: matrix_identity_float4x4, previous: matrix_identity_float4x4), count: self.jointCount)
-        buffer = Self.makeBuffer(device: device, jointCount: self.jointCount, slotCount: totalSlotCount)
-        upload()
+        matrices = Array(repeating: matrix_identity_float4x4, count: self.jointCount)
     }
 
-    /// Sets a new pose. The outgoing pose becomes last frame's, for velocity.
-    public func update(matrices: [simd_float4x4]) {
-        for jointIndex in joints.indices {
-            joints[jointIndex].previous = joints[jointIndex].current
-            joints[jointIndex].current = jointIndex < matrices.count ? matrices[jointIndex] : matrix_identity_float4x4
+    /// Sets a new pose.
+    public func update(matrices newMatrices: [simd_float4x4]) {
+        for jointIndex in matrices.indices {
+            matrices[jointIndex] = jointIndex < newMatrices.count ? newMatrices[jointIndex] : matrix_identity_float4x4
         }
-        motionNeedsSettling = true
-        motionDrawn = false
-        upload()
-    }
-
-    /// Sets a pose with no motion: last frame's matrices equal this frame's.
-    public func reset(matrices: [simd_float4x4]) {
-        for jointIndex in joints.indices {
-            let matrix = jointIndex < matrices.count ? matrices[jointIndex] : matrix_identity_float4x4
-            joints[jointIndex] = SkinJoint(current: matrix, previous: matrix)
-        }
-        motionNeedsSettling = false
-        upload()
-    }
-
-    /// Records that the latest pose was bound for drawing.
-    func markDrawn() {
-        motionDrawn = true
-    }
-
-    /// Before a frame's drawing: when a moving pose has been drawn and nothing updated it
-    /// since, last frame's matrices catch up with this frame's, so a held pose draws no
-    /// velocity. The pose itself is unchanged, so `poseVersion` stays.
-    func settleMotion() {
-        guard motionNeedsSettling, motionDrawn else { return }
-        for jointIndex in joints.indices {
-            joints[jointIndex].previous = joints[jointIndex].current
-        }
-        advanceSlot()
-        write(joints)
-        motionNeedsSettling = false
-    }
-
-    // MARK: - Repeated Encoding
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    /// Makes room for `count` iterations a frame: each may upload once when its pose changes
-    /// and once when it is captured, for every frame in flight. Only grows.
-    public func prepareForRepeatedEncoding(count: Int) {
-        let sanitizedCount = max(1, count)
-        if sanitizedCount != repeatedCount {
-            repeatedCount = sanitizedCount
-            capturedSlots = Array(repeating: nil, count: sanitizedCount)
-            iterationHistory = Array(repeating: matrix_identity_float4x4, count: sanitizedCount * jointCount)
-            iterationHasHistory = Array(repeating: false, count: sanitizedCount)
-        }
-        let wantedSlotCount = Self.slotCount(maxBuffersInFlight: maxBuffersInFlight, encodesPerFrame: 2 * sanitizedCount + 1)
-        guard wantedSlotCount > totalSlotCount else { return }
-        totalSlotCount = wantedSlotCount
-        buffer = Self.makeBuffer(device: device, jointCount: jointCount, slotCount: totalSlotCount)
-        index = 0
-        upload()
-    }
-
-    /// Uploads the current pose as `iteration`'s, with the pose that iteration had last frame
-    /// as `previous`, so velocity is per iteration rather than between iterations.
-    public func captureRepeatedEncoding(iteration: Int, count: Int) {
-        if repeatedCount != max(1, count) { prepareForRepeatedEncoding(count: count) }
-        guard capturedSlots.indices.contains(iteration) else { return }
-        // Already captured this frame with this pose (by another mesh drawing this palette).
-        if capturedSinceDraw[iteration] == poseVersion, capturedSlots[iteration] != nil { return }
-        capturedSinceDraw[iteration] = poseVersion
-        advanceSlot()
-        let slot = buffer.contents().advanced(by: offset).bindMemory(to: SkinJoint.self, capacity: jointCount)
-        let historyStart = iteration * jointCount
-        let hasHistory = iterationHasHistory[iteration]
-        for jointIndex in 0 ..< jointCount {
-            let current = joints[jointIndex].current
-            slot[jointIndex] = SkinJoint(current: current, previous: hasHistory ? iterationHistory[historyStart + jointIndex] : current)
-            iterationHistory[historyStart + jointIndex] = current
-        }
-        iterationHasHistory[iteration] = true
-        capturedSlots[iteration] = index
-    }
-
-    /// The slot `iteration`'s pose was captured into, or the latest upload when it was not
-    /// captured (drawing without repeated encoding, or before the first capture).
-    public func selectRecentSlot(iteration: Int, count: Int) {
-        // Drawing ends this frame's captures.
-        capturedSinceDraw.removeAll()
-        if capturedSlots.indices.contains(iteration), let capturedSlot = capturedSlots[iteration] {
-            index = capturedSlot
-        } else {
-            index = latestUpdatedIndex
-        }
-        offset = Self.alignedSize(jointCount: jointCount) * index
-    }
-
-    // MARK: - Private
-
-    private func upload() {
         poseVersion &+= 1
-        advanceSlot()
-        write(joints)
-    }
-
-    private func advanceSlot() {
-        index = (index + 1) % totalSlotCount
-        latestUpdatedIndex = index
-        offset = Self.alignedSize(jointCount: jointCount) * index
-    }
-
-    private func write(_ values: [SkinJoint]) {
-        values.withUnsafeBytes { bytes in
-            guard let baseAddress = bytes.baseAddress else { return }
-            memcpy(buffer.contents().advanced(by: offset), baseAddress, MemoryLayout<SkinJoint>.stride * min(values.count, jointCount))
+        // Pose changes are descendant bounds changes: invalidate meshes and their ancestors now,
+        // even when a callback or GPU preparation changes the pose after Mesh.update().
+        for observer in boundsObservers {
+            observer.mesh?.updateBounds = true
         }
     }
 
-    private static func slotCount(maxBuffersInFlight: Int, encodesPerFrame: Int) -> Int {
-        maxBuffersInFlight * encodesPerFrame
+    /// Sets a pose with no motion: its next snapshots report none.
+    public func reset(matrices newMatrices: [simd_float4x4]) {
+        update(matrices: newMatrices)
+        resetMotion()
     }
 
-    private static func makeBuffer(device: MTLDevice, jointCount: Int, slotCount: Int) -> MTLBuffer {
-        guard let buffer = device.makeBuffer(length: alignedSize(jointCount: jointCount) * slotCount, options: [.cpuCacheModeWriteCombined]) else {
-            fatalError("Couldn't create Joint Palette buffer")
+    /// Forgets this palette's motion: its next snapshots draw with none.
+    public func resetMotion() {
+        motionHistory.reset()
+        snapshotRecordToken = nil
+        snapshotBinding = nil
+    }
+
+    /// The pose as it is now, with each joint's previous matrix, in `recorder`'s arena: taken once per
+    /// record, so meshes sharing this palette in one record bind one snapshot and advance its motion
+    /// once.
+    func snapshot(recorder: PacketRecorder) throws -> (buffer: MTLBuffer, offset: Int) {
+        if let snapshotBinding, snapshotRecordToken == recorder.recordToken {
+            return snapshotBinding
         }
-        buffer.label = "Joint Palette"
-        return buffer
-    }
 
-    private static func alignedSize(jointCount: Int) -> Int {
-        ((MemoryLayout<SkinJoint>.stride * jointCount + 255) / 256) * 256
+        motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: jointCount)
+        let slice = try recorder.allocate(length: MemoryLayout<SkinJoint>.stride * jointCount)
+        let joints = slice.contents.bindMemory(to: SkinJoint.self, capacity: jointCount)
+        for jointIndex in 0 ..< jointCount {
+            let current = matrices[jointIndex]
+            joints[jointIndex] = SkinJoint(current: current, previous: motionHistory.record(current))
+        }
+
+        let binding = (buffer: slice.buffer, offset: slice.offset)
+        snapshotBinding = binding
+        snapshotRecordToken = recorder.recordToken
+        return binding
     }
 }

@@ -37,7 +37,12 @@ class TextureComputeRenderer: BaseRenderer {
     }()
 
     lazy var material = DisplacementMaterial(context: defaultContext, pipelinesURL: pipelinesURL, live: true)
-    lazy var mesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 2.0, resolution: 512, orientation: .xy), material: material)
+    lazy var mesh: Mesh = {
+        let mesh = Mesh(context: defaultContext, geometry: PlaneGeometry(context: defaultContext, size: 2.0, resolution: 512, orientation: .xy), material: material)
+        // Its shader displaces the plane beyond the geometry's bounds.
+        mesh.frustumCulled = false
+        return mesh
+    }()
 
     lazy var scene = Object(context: defaultContext, label: "Scene", [mesh])
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0.0, 0.0, 4.0], near: 0.001, far: 100.0)
@@ -79,10 +84,11 @@ class TextureComputeRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        textureCompute.update(commandBuffer, iterations: 30)
+        try textureCompute.update(commandBuffer, iterations: 30)
         material.set(textureCompute.dstTexture, index: VertexTextureIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

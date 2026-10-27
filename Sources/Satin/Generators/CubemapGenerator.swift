@@ -30,7 +30,7 @@ public final class CubemapGenerator {
         compute.set("Gamma Corrected", gammaCorrected)
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer, sourceTexture: MTLTexture, destinationTexture: MTLTexture) {
+    public func encode(commandBuffer: MTLCommandBuffer, sourceTexture: MTLTexture, destinationTexture: MTLTexture) throws {
         var finalSourceTexture = sourceTexture
 
         if let blur {
@@ -53,7 +53,7 @@ public final class CubemapGenerator {
 
         compute.set(destinationTexture, index: ComputeTextureIndex.Custom0) // output
         compute.set(finalSourceTexture, index: ComputeTextureIndex.Custom1) // input
-        compute.update(commandBuffer)
+        try compute.update(commandBuffer)
 
         if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
             blitEncoder.generateMipmaps(for: destinationTexture)

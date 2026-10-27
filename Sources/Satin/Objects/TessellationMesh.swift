@@ -13,17 +13,24 @@ import simd
 
 open class TessellationMesh: Mesh {
     public var tessellator: Tessellator
+    /// While false, draws keep the factors frozen when tessellation turned off.
     public var tessellate: Bool {
         didSet {
+            if oldValue, !tessellate { factorsNeedFreezing = true }
             tessellatePublisher.send(tessellate)
         }
     }
 
     public let tessellatePublisher = PassthroughSubject<Bool, Never>()
 
+    /// Set when tessellation turns off (or starts off): the next encode writes the factors the
+    /// draws keep using, into a buffer of their own.
+    private var factorsNeedFreezing: Bool
+
     public init(context: Context, label: String, geometry: TessellationGeometry, material: Material?, tessellator: Tessellator, tessellate: Bool = true, visible: Bool = true, renderOrder: Int = 0, renderLayer: RenderLayer = .opaque) {
         self.tessellator = tessellator
         self.tessellate = tessellate
+        factorsNeedFreezing = !tessellate
         super.init(
             context: context,
             label: label,
@@ -39,39 +46,51 @@ open class TessellationMesh: Mesh {
         fatalError("init(from:) has not been implemented")
     }
 
-    override public func encode(_ commandBuffer: any MTLCommandBuffer) {
+    /// The factors the next draws bind: while tessellating, a slice of the last encode's arena, so
+    /// encoding again before those draws execute writes a new slice instead of overwriting; while
+    /// not, the frozen factors.
+    private(set) var encodedFactors: (buffer: MTLBuffer, offset: Int)?
+
+    override public func encode(in context: EncodingContext) throws {
         if tessellate {
-            tessellator.update(commandBuffer, iterations: 1)
+            // An earlier arena slice may already have retired. Never fall back to it
+            // when this preparation cannot produce factors.
+            encodedFactors = nil
+            if tessellator.factorsLength > 0 {
+                let factors = try context.allocate(length: tessellator.factorsLength)
+                if try tessellator.encodeFactors(context.commandBuffer, into: factors, iterations: 1) {
+                    encodedFactors = factors
+                }
+            }
+        } else if factorsNeedFreezing {
+            // A new buffer per freeze: draws still in flight keep reading the previous one, which
+            // their command buffers hold until they complete.
+            encodedFactors = nil
+            if tessellator.factorsLength > 0,
+               let frozenFactors = context.commandBuffer.device.makeBuffer(length: tessellator.factorsLength, options: .storageModePrivate) {
+                frozenFactors.label = "\(label) Frozen Tessellation Factors"
+                if try tessellator.encodeFactors(context.commandBuffer, into: (frozenFactors, 0), iterations: 1) {
+                    encodedFactors = (frozenFactors, 0)
+                    factorsNeedFreezing = false
+                }
+            }
         }
-        super.encode(commandBuffer)
+        try super.encode(in: context)
     }
 
     // MARK: - Draw
 
-    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        guard instanceCount > 0, let vertexUniforms = vertexUniforms[renderContext.id], let material, !geometry.vertexBuffers.isEmpty else { return }
+    override public func draw(in context: RenderableDrawContext) throws {
+        guard instanceCount > 0, let material, let encodedFactors, !geometry.vertexBuffers.isEmpty,
+              context.isShadowPass || context.materialPass.includes(material)
+        else { return }
 
-        renderEncoderState.vertexVertexUniforms = vertexUniforms
+        try context.setVertexBuffer(context.vertexUniforms.buffer, offset: context.vertexUniforms.offset, index: .VertexUniforms)
+        try material.draw(in: context.materialContext(layout: nil))
 
-        geometry.bind(
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+        // Recorded now: the draw binds the factors encoded for it, whatever is encoded later.
+        context.setTessellationFactorBuffer(encodedFactors.buffer, offset: encodedFactors.offset)
 
-        material.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
-
-        let renderEncoder = renderEncoderState.renderEncoder
-
-        renderEncoder.setTessellationFactorBuffer(
-            tessellator.factorsBuffer,
-            offset: 0,
-            instanceStride: 0
-        )
-
-        geometry.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount)
+        try geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
     }
 }

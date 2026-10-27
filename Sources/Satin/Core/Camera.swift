@@ -6,91 +6,156 @@
 //  Copyright © 2022 Reza Ali. All rights reserved.
 //
 
-import Combine
 import simd
 
+#if SWIFT_PACKAGE
+import SatinCore
+#endif
+
 open class Camera: Object {
-    private var _viewDirection = ValueCache<simd_float3>()
-    public var viewDirection: simd_float3 {
-        _viewDirection.get {
-            simd_normalize(simd_make_float3(worldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0)))
+    // MARK: - View
+
+    /// A view assigned through `viewMatrix`, kept exactly until the camera's world transform changes
+    /// after it (the assignment itself moves the camera to match).
+    private var assignedView: (matrix: matrix_float4x4, worldRevision: UInt64)?
+    private var computedView = matrix_identity_float4x4
+    private var computedViewRevision: UInt64 = .max
+    /// Advances with every view assignment, for caches derived from the view.
+    private var viewAssignmentRevision: UInt64 = 0
+
+    /// The inverse of the world matrix, or an assigned view until the camera moves after it.
+    public final var viewMatrix: matrix_float4x4 {
+        get {
+            let revision = worldRevision
+            if let assignedView, assignedView.worldRevision == revision {
+                return assignedView.matrix
+            }
+            if computedViewRevision != revision {
+                computedView = worldMatrixInverse
+                computedViewRevision = revision
+            }
+            return computedView
+        }
+        set {
+            localMatrix = newValue.inverse
+            assignedView = (newValue, worldRevision)
+            viewAssignmentRevision &+= 1
         }
     }
+
+    private var computedViewDirection = simd_float3(0, 0, -1)
+    private var computedViewDirectionRevision: UInt64 = .max
+    public var viewDirection: simd_float3 {
+        let revision = worldRevision
+        if computedViewDirectionRevision != revision {
+            computedViewDirection = simd_normalize(simd_make_float3(worldMatrix * simd_make_float4(0.0, 0.0, -1.0, 0.0)))
+            computedViewDirectionRevision = revision
+        }
+        return computedViewDirection
+    }
+
+    // MARK: - Projection
+
+    /// Advances when a projection input changes value: `near`, `far`, and a subclass's own (field
+    /// of view, aspect, lens shift, extents).
+    public private(set) var projectionInputsRevision: UInt64 = 0
+    /// Advances whenever the effective projection may change: an input, or an assignment.
+    private var projectionRevision: UInt64 = 0
+    /// A projection assigned through `projectionMatrix` (or ARKit), kept exactly until a
+    /// projection input changes after it.
+    private var assignedProjection: (matrix: matrix_float4x4, inputsRevision: UInt64)?
+    private var computedProjection = matrix_identity_float4x4
+    private var computedProjectionInputsRevision: UInt64 = .max
+
+    /// Subclasses call this when one of their projection inputs changes value. Rebuilding the
+    /// projection never calls it.
+    public final func projectionInputsDidChange() {
+        projectionInputsRevision &+= 1
+        projectionRevision &+= 1
+    }
+
+    /// The projection the inputs describe. Subclasses override.
+    open func computeProjectionMatrix() -> matrix_float4x4 {
+        matrix_identity_float4x4
+    }
+
+    /// Sets the inputs that `matrix` implies, when it is assigned. Subclasses override; inputs set
+    /// here come before the assignment, so they don't replace it.
+    open func adoptProjectionInputs(from matrix: matrix_float4x4) {}
+
+    /// The projection the inputs describe, or an assigned one until an input changes after it.
+    public final var projectionMatrix: matrix_float4x4 {
+        get {
+            if let assignedProjection, assignedProjection.inputsRevision == projectionInputsRevision {
+                return assignedProjection.matrix
+            }
+            if computedProjectionInputsRevision != projectionInputsRevision {
+                computedProjection = computeProjectionMatrix()
+                computedProjectionInputsRevision = projectionInputsRevision
+            }
+            return computedProjection
+        }
+        set {
+            adoptProjectionInputs(from: newValue)
+            assignProjection(newValue)
+        }
+    }
+
+    /// Records `matrix` as the projection, as of the current inputs.
+    func assignProjection(_ matrix: matrix_float4x4) {
+        assignedProjection = (matrix, projectionInputsRevision)
+        projectionRevision &+= 1
+    }
+
+    public var near: Float = 0.01 {
+        didSet {
+            if near != oldValue { projectionInputsDidChange() }
+        }
+    }
+
+    public var far: Float = 100.0 {
+        didSet {
+            if far != oldValue { projectionInputsDidChange() }
+        }
+    }
+
+    // MARK: - View Projection
+
+    private var computedViewProjection = matrix_identity_float4x4
+    private var computedViewProjectionKey: (projection: UInt64, world: UInt64, viewAssignment: UInt64)?
 
     public var viewProjectionMatrix: matrix_float4x4 {
-        if _updateViewProjectionMatrix {
-            _viewProjectionMatrix = simd_mul(projectionMatrix, viewMatrix)
-            _updateViewProjectionMatrix = false
+        let key = (projection: projectionRevision, world: worldRevision, viewAssignment: viewAssignmentRevision)
+        if let computedViewProjectionKey, computedViewProjectionKey == key {
+            return computedViewProjection
         }
-        return _viewProjectionMatrix
+        computedViewProjection = simd_mul(projectionMatrix, viewMatrix)
+        computedViewProjectionKey = key
+        return computedViewProjection
     }
 
-    public var viewMatrix: matrix_float4x4 {
-        get {
-            if updateViewMatrix {
-                _viewMatrix = worldMatrixInverse
-                updateViewMatrix = false
-            }
-            return _viewMatrix
+    // MARK: - Motion
+
+    /// The view-projection at the frame this camera was last drawn from, and the one before it, so
+    /// every renderable and pass in a frame reads the same previous value.
+    private var motionHistory = MotionHistory<simd_float4x4>()
+    private var motionPreviousViewProjectionMatrix = matrix_identity_float4x4
+
+    /// The view-projection this camera had in the frame before `frame`, or its current one when it
+    /// wasn't drawn from then. Advances once per frame, on the first draw of that frame.
+    public func previousViewProjectionMatrix(frame: FrameTime) -> simd_float4x4 {
+        if motionHistory.frameNumber != frame.frameNumber {
+            motionHistory.beginOccurrence(frameNumber: frame.frameNumber)
+            motionPreviousViewProjectionMatrix = motionHistory.record(viewProjectionMatrix)
         }
-        set {
-            _viewMatrix = newValue
-            localMatrix = newValue.inverse
-        }
+        return motionPreviousViewProjectionMatrix
     }
 
-    public var projectionMatrix: matrix_float4x4 {
-        get {
-            if updateProjectionMatrix {
-                updateProjectionMatrix = false
-            }
-            return _projectionMatrix
-        }
-        set {
-            _projectionMatrix = newValue
-        }
+    /// Forgets camera motion after a cut. The next use samples the current view-projection,
+    /// including when a cut happens after an earlier use in the same frame.
+    public func resetMotion() {
+        motionHistory.reset()
     }
-
-    @Published public var near: Float = 0.01 {
-        didSet {
-            updateProjectionMatrix = true
-        }
-    }
-
-    @Published public var far: Float = 100.0 {
-        didSet {
-            updateProjectionMatrix = true
-        }
-    }
-
-    var _updateViewProjectionMatrix = true
-
-    public var updateProjectionMatrix = true {
-        didSet {
-            if updateProjectionMatrix {
-                _updateViewProjectionMatrix = true
-            }
-        }
-    }
-
-    public var updateViewMatrix = true {
-        didSet {
-            if updateViewMatrix {
-                _updateViewProjectionMatrix = true
-                _viewDirection.clear()
-            }
-        }
-    }
-
-    override var updateWorldMatrix: Bool {
-        didSet {
-            updateViewMatrix = true
-        }
-    }
-
-    var _viewMatrix: matrix_float4x4 = matrix_identity_float4x4
-    var _projectionMatrix: matrix_float4x4 = matrix_identity_float4x4
-    var _viewProjectionMatrix: matrix_float4x4 = matrix_identity_float4x4
 
     public init(context: Context, label: String = "Camera") {
         super.init(context: context, label: label)
@@ -145,16 +210,17 @@ open class Camera: Object {
 
     override public func lookAt(target: simd_float3, up: simd_float3 = Satin.worldUpDirection, local: Bool = true) {
         if local {
-            let zAxis = simd_normalize(position - target)
-            let xAxis = simd_normalize(simd_cross(up, zAxis))
-            let yAxis = simd_normalize(simd_cross(zAxis, xAxis))
-            orientation = simd_quatf(simd_float3x3(xAxis, yAxis, zAxis))
+            orientation = lookAtOrientation(eye: position, target: target, up: up)
         }
         else {
-            let zAxis = simd_normalize(worldPosition - target)
-            let xAxis = simd_normalize(simd_cross(up, zAxis))
-            let yAxis = simd_normalize(simd_cross(zAxis, xAxis))
-            worldOrientation = simd_quatf(simd_float3x3(xAxis, yAxis, zAxis))
+            worldOrientation = lookAtOrientation(eye: worldPosition, target: target, up: up)
         }
+    }
+
+    /// A camera's z axis points away from what it looks at, so this is `lookAtMatrix3f` with eye and
+    /// target swapped, which also keeps looking straight along `up` finite.
+    private func lookAtOrientation(eye: simd_float3, target: simd_float3, up: simd_float3) -> simd_quatf {
+        let matrix = lookAtMatrix3f(target, eye, up)
+        return simd_quatf(simd_float3x3(simd_make_float3(matrix.columns.0), simd_make_float3(matrix.columns.1), simd_make_float3(matrix.columns.2)))
     }
 }

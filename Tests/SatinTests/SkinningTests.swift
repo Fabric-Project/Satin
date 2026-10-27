@@ -250,7 +250,7 @@ final class SkinningTests: XCTestCase {
     func testPosedViewIsBoundedByItsOwnPose() throws {
         let context = try headlessContext()
         let source = makeBarGeometry(context: context, withJoints: true)
-        let palette = JointPalette(device: context.device, jointCount: 2)
+        let palette = JointPalette(jointCount: 2)
         palette.reset(matrices: [matrix_identity_float4x4, translation(x: -1.0)])
         let view = PosedGeometry(source: source, jointPalette: palette)
         XCTAssertEqual(view.bounds.min.x, -1.2, accuracy: 1e-4)
@@ -314,7 +314,7 @@ final class SkinningTests: XCTestCase {
                             material: BasicColorMaterial(context: context))
             let material = BasicColorMaterial(context: context)
             submeshMaterial = material
-            mesh.addSubmesh(Submesh(parent: mesh, elementBuffer: ElementBuffer(type: .uint32, data: indices, count: 48, source: nil), material: material))
+            mesh.addSubmesh(Submesh(context: mesh.context, elementBuffer: ElementBuffer(type: .uint32, data: indices, count: 48, source: nil), material: material))
             // Swapped afterwards, as Fabric's Mesh node does.
             mesh.geometry = makeSkinnedBar(context: context, pose: [matrix_identity_float4x4, translation(x: 1.0)])
             mesh.cullMode = .none
@@ -341,7 +341,7 @@ final class SkinningTests: XCTestCase {
             for halfIndex in 0 ..< 2 {
                 let material = BasicColorMaterial(context: context)
                 submeshMaterials.append(material)
-                multiMaterial.addSubmesh(Submesh(parent: multiMaterial, elementBuffer: ElementBuffer(type: .uint32, data: indices.advanced(by: halfIndex * 24), count: 24, source: nil),
+                multiMaterial.addSubmesh(Submesh(context: multiMaterial.context, elementBuffer: ElementBuffer(type: .uint32, data: indices.advanced(by: halfIndex * 24), count: 24, source: nil),
                                                  material: material))
             }
             plain.cullMode = .none
@@ -398,7 +398,7 @@ final class SkinningTests: XCTestCase {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
         let source = makeBarGeometry(context: context, withJoints: false)
-        let jointPalette = JointPalette(device: device, jointCount: 2)
+        let jointPalette = JointPalette(jointCount: 2)
         let view = PosedGeometry(source: source, jointPalette: jointPalette)
         XCTAssertFalse(view.isSkinned)
 
@@ -556,7 +556,7 @@ final class SkinningTests: XCTestCase {
             let context = renderer.context
             let source = makeBarGeometry(context: context, withJoints: sourceHasJoints)
             let views = poses.map { pose in
-                let jointPalette = JointPalette(device: context.device, jointCount: pose.count)
+                let jointPalette = JointPalette(jointCount: pose.count)
                 jointPalette.reset(matrices: pose)
                 return PosedGeometry(source: source, jointPalette: jointPalette)
             }
@@ -577,7 +577,7 @@ final class SkinningTests: XCTestCase {
             let context = renderer.context
             let geometry = makeBarGeometry(context: context, withJoints: skinned)
             if let palette {
-                let jointPalette = JointPalette(device: context.device, jointCount: palette.count)
+                let jointPalette = JointPalette(jointCount: palette.count)
                 jointPalette.reset(matrices: palette)
                 geometry.jointPalette = jointPalette
             }
@@ -613,28 +613,32 @@ final class SkinningTests: XCTestCase {
     /// The bar with joints and a palette holding `pose`, with no motion.
     private func makeSkinnedBar(context: Context, pose: [simd_float4x4]) -> Geometry {
         let geometry = makeBarGeometry(context: context, withJoints: true)
-        let jointPalette = JointPalette(device: context.device, jointCount: pose.count)
+        let jointPalette = JointPalette(jointCount: pose.count)
         jointPalette.reset(matrices: pose)
         geometry.jointPalette = jointPalette
         return geometry
     }
 
-    /// The bar drawn with `VelocityMaterial`. With poses, the palette holds `previousPose` as
-    /// last frame's and `currentPose` as this frame's.
+    /// The bar drawn with `VelocityMaterial` over two frames, returning the second. With poses,
+    /// frame 0 draws `previousPose` and frame 1 `currentPose`: a palette's previous pose is the one
+    /// drawn the frame before.
     private func renderBarVelocity(previousPose: [simd_float4x4]?, currentPose: [simd_float4x4]?) throws -> [UInt16] {
-        let frames = try renderVelocityFrames(frameCount: 1) { context in
+        var jointPalette: JointPalette?
+        let frames = try renderVelocityFrames(frameCount: 2) { context in
             let geometry = makeBarGeometry(context: context, withJoints: previousPose != nil)
-            if let previousPose, let currentPose {
-                let jointPalette = JointPalette(device: context.device, jointCount: currentPose.count)
-                jointPalette.reset(matrices: previousPose)
-                jointPalette.update(matrices: currentPose)
-                geometry.jointPalette = jointPalette
+            if let previousPose {
+                let palette = JointPalette(jointCount: previousPose.count)
+                palette.reset(matrices: previousPose)
+                geometry.jointPalette = palette
+                jointPalette = palette
             }
             let mesh = Mesh(context: context, label: "Bar", geometry: geometry, material: VelocityMaterial(context: context))
             mesh.cullMode = .none
             return Object(context: context, label: "Scene", [mesh])
-        } beforeFrame: { _ in }
-        return frames[0]
+        } beforeFrame: { frame in
+            if frame == 1, let currentPose { jointPalette?.update(matrices: currentPose) }
+        }
+        return frames[1]
     }
 
     /// Renders `frameCount` frames of one scene with `VelocityMaterial`-style output into a
@@ -657,10 +661,12 @@ final class SkinningTests: XCTestCase {
         let target = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
 
         var frames: [[UInt16]] = []
+        var frameTime = FrameTime.zero
         for frame in 0 ..< frameCount {
             beforeFrame(frame)
+            if frame > 0 { frameTime = frameTime.next(time: Double(frame) / 60.0) }
             let commandBuffer = try XCTUnwrap(commandQueue.makeCommandBuffer())
-            renderer.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, scene: scene, camera: camera, renderTarget: target)
+            try renderer.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer, scene: scene, camera: camera, renderTarget: target)
             if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
                 blitEncoder.synchronize(resource: target)
                 blitEncoder.endEncoding()

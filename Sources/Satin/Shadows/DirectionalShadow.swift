@@ -97,57 +97,11 @@ public final class DirectionalShadow: Shadow {
         needsUpdate = true
     }
 
-    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
-        guard enabled else { return }
-
+    override func prepareForDrawing(context: Context) {
         setupTexture()
-
-        if self.device == nil {
-            self.device = context.device
+        if device == nil {
+            device = context.device
         }
-
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-
-        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
-        renderPassDescriptor.depthAttachment.texture = texture
-        renderPassDescriptor.depthAttachment.loadAction = .clear
-        renderPassDescriptor.depthAttachment.storeAction = .store
-        renderPassDescriptor.depthAttachment.clearDepth = 0.0
-        renderPassDescriptor.renderTargetWidth = resolution.width
-        renderPassDescriptor.renderTargetHeight = resolution.height
-
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
-        else { return }
-
-        renderEncoder.label = label + " Shadow Encoder"
-        renderEncoder.setViewport(viewport)
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-            #if DEBUG
-            renderEncoder.pushDebugGroup(renderable.label)
-            #endif
-            renderable.update(
-                renderContext: context,
-                camera: camera,
-                viewport: _viewport,
-                index: 0
-            )
-
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
-
-            renderable.draw(
-                renderContext: context,
-                renderEncoderState: renderEncoderState,
-                shadow: true
-            )
-            #if DEBUG
-            renderEncoder.popDebugGroup()
-            #endif
-        }
-        renderEncoder.endEncoding()
-        needsUpdate = false
     }
 
     private func setupTexture() {

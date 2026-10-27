@@ -25,8 +25,8 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         var spacing: Int = 8
         var initTexture: MTLTexture?
 
-        override func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) {
-            super.bindUniforms(computeEncoder)
+        override func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) throws {
+            try super.bindUniforms(computeEncoder)
             computeEncoder.setBytes(&spacing, length: MemoryLayout<Int>.size, index: ComputeBufferIndex.Custom0.rawValue)
         }
 
@@ -105,6 +105,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         guard let renderTexture else { return }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -116,7 +117,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
             computeEncoder.label = "Selection Processor Compute Encoder"
 
             jumpFloodInit.set(renderTexture, index: ComputeTextureIndex.Custom1)
-            jumpFloodInit.update(computeEncoder)
+            try jumpFloodInit.update(computeEncoder)
 
             jumpFlood.resetIndex()
 
@@ -127,7 +128,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
 
             while spacing >= 1 {
                 jumpFlood.spacing = Int(spacing)
-                jumpFlood.update(computeEncoder)
+                try jumpFlood.update(computeEncoder)
 
                 jumpFlood.initTexture = nil
                 spacing /= 2
@@ -140,6 +141,7 @@ final class JumpFloodOutlineRenderer: BaseRenderer {
         quad.material?.set(jumpFlood.dstTexture, index: FragmentTextureIndex.Custom1)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: quad,

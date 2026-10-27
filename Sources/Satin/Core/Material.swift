@@ -10,10 +10,6 @@ import Combine
 import Metal
 import simd
 
-public protocol MaterialDelegate: AnyObject {
-    func updated(material: Material)
-}
-
 public struct DepthBias: Codable, Equatable {
     var bias: Float
     var slope: Float
@@ -108,34 +104,48 @@ open class Material: Codable {
         }
     }
 
-    public var uniforms: UniformBuffer?
-
     public let parametersSetPublisher = PassthroughSubject<ParameterGroup, Never>()
-    private var parameterGroupSubscriptions = Set<AnyCancellable>()
     public private(set) var parameters: ParameterGroup = ParameterGroup() {
         didSet {
             if parameters == oldValue { return }
             parameters.label = "\(label) Uniforms"
-            setupParameterGroupSubscriptions(parameters)
-            uniformsNeedsUpdate = true
             //objectWillChange.send()
             parametersSetPublisher.send(parameters)
         }
     }
 
-    public private(set) var vertexUniformBuffers: [VertexBufferIndex: UniformBuffer] = [:]
-    public private(set) var vertexStructBuffers: [VertexBufferIndex: BindableBuffer] = [:]
-    public private(set) var vertexBuffers: [VertexBufferIndex: MTLBuffer] = [:]
-    public private(set) var vertexTextures: [VertexTextureIndex: MTLTexture] = [:]
+    // The uniforms snapshot this lease's draws bind: taken once per lease, parameter group and
+    // content revision, so a material shared by many meshes in one record copies its uniforms once,
+    // and a change between records gets a new snapshot.
+    private var uniformsSnapshotLeaseToken: UInt64 = 0
+    private var uniformsSnapshotParameters: ParameterGroup?
+    private var uniformsSnapshotRevision: UInt64 = 0
+    private var uniformsSnapshot: (buffer: MTLBuffer, offset: Int)?
 
-    public private(set) var fragmentUniformBuffers: [FragmentBufferIndex: UniformBuffer] = [:]
-    public private(set) var fragmentStructBuffers: [FragmentBufferIndex: BindableBuffer] = [:]
-    public private(set) var fragmentBuffers: [FragmentBufferIndex: MTLBuffer] = [:]
-    public private(set) var fragmentTextures: [FragmentTextureIndex: MTLTexture] = [:]
+    /// What a material binds at one buffer index; a draw binds the first that is set, in this order.
+    private struct BufferSlot {
+        var uniformBuffer: UniformBuffer?
+        var structBuffer: BindableBuffer?
+        var buffer: MTLBuffer?
+    }
+
+    /// The material's own bindings, indexed by the index enums' raw values and grown on demand, so
+    /// a draw reads them without hashing.
+    private var vertexBufferSlots: [BufferSlot] = []
+    private var vertexTextureSlots: [MTLTexture?] = []
+    private var fragmentBufferSlots: [BufferSlot] = []
+    private var fragmentTextureSlots: [MTLTexture?] = []
+
+    /// Grows `slots` so `index` is valid, filling new entries with `empty`.
+    private static func makeRoom<Slot>(in slots: inout [Slot], for index: Int, empty: Slot) {
+        if index >= slots.count {
+            slots.append(contentsOf: repeatElement(empty, count: index + 1 - slots.count))
+        }
+    }
 
     public internal(set) var isClone = false
-    public weak var delegate: MaterialDelegate?
 
+    /// Sends the material whenever its shader's parameters are replaced after the first time.
     public let updatedPublisher = PassthroughSubject<Material, Never>()
 
     public let context: Context
@@ -162,22 +172,34 @@ open class Material: Codable {
 
     public var directShadowCount: Int {
         get { renderingConfiguration.directShadowCount }
-        set { renderingConfiguration.directShadowCount = newValue }
+        set {
+            guard renderingConfiguration.directShadowCount != newValue else { return }
+            renderingConfiguration.directShadowCount = newValue
+        }
     }
 
     public var directShadowTextureCount: Int {
         get { renderingConfiguration.directShadowTextureCount }
-        set { renderingConfiguration.directShadowTextureCount = newValue }
+        set {
+            guard renderingConfiguration.directShadowTextureCount != newValue else { return }
+            renderingConfiguration.directShadowTextureCount = newValue
+        }
     }
 
     public var projectorCount: Int {
         get { renderingConfiguration.projectorCount }
-        set { renderingConfiguration.projectorCount = newValue }
+        set {
+            guard renderingConfiguration.projectorCount != newValue else { return }
+            renderingConfiguration.projectorCount = newValue
+        }
     }
 
     public var lightCount: Int {
         get { renderingConfiguration.lightCount }
-        set { renderingConfiguration.lightCount = newValue }
+        set {
+            guard renderingConfiguration.lightCount != newValue else { return }
+            renderingConfiguration.lightCount = newValue
+        }
     }
 
     public var blending: Blending {
@@ -206,12 +228,9 @@ open class Material: Codable {
         }
     }
 
-    private var uniformsNeedsUpdate = true
     private var depthNeedsUpdate = false
-    private var minimumEncodesPerFrame = 1
 
     public var depthBias: DepthBias?
-    public var onBind: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)?
     public var onUpdate: (() -> Void)?
 
     // MARK: - Rendering Path
@@ -245,7 +264,6 @@ open class Material: Codable {
 
     public required init(context: Context) {
         self.context = context
-        setupParameterGroupSubscriptions(parameters)
         parametersSetPublisher.send(parameters)
     }
 
@@ -255,8 +273,6 @@ open class Material: Codable {
         label = shader.label
         renderingConfiguration = shader.configuration.rendering
         setupShaderParametersSubscription(shader)
-        setupParameterGroupSubscriptions(parameters)
-        uniformsNeedsUpdate = true
         parametersSetPublisher.send(parameters)
     }
 
@@ -288,7 +304,6 @@ open class Material: Codable {
     public required init(from decoder: Decoder) throws {
         context = try decoder.requireSatinContext(typeName: String(describing: Self.self))
         try decode(from: decoder)
-        setupParameterGroupSubscriptions(parameters)
     }
 
     public func decode(from decoder: Decoder) throws {
@@ -340,43 +355,7 @@ open class Material: Codable {
     open func setup() {
         setupDepthStencilState()
         setupShader()
-        setupUniforms()
 //        objectWillChange.send()
-    }
-
-    private func setupParameterGroupSubscriptions(_ parameterGroup: ParameterGroup) {
-        parameterGroupSubscriptions.removeAll()
-
-        parameterGroup.parameterAddedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.parameterRemovedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.parameterUpdatedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.loadedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
-
-        parameterGroup.clearedPublisher.sink { [weak self] _ in
-            guard let self else { return }
-            self.uniformsNeedsUpdate = true
-            //self.objectWillChange.send()
-        }.store(in: &parameterGroupSubscriptions)
     }
 
     private func makeDepthStencilState(depthWriteEnabled: Bool, labelSuffix: String) -> MTLDepthStencilState? {
@@ -431,8 +410,9 @@ open class Material: Codable {
 
     open func setupShaderParametersSubscription(_ shader: Shader) {
         var receivedInitialParameters = false
-        parametersSubscription = shader.parametersPublisher.sink { [weak self] newParameters in
-            guard let self else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        parametersSubscription = shader.parametersPublisher.sink { [unowned self] newParameters in
 
             let isInitialParameters = !receivedInitialParameters
             receivedInitialParameters = true
@@ -441,56 +421,19 @@ open class Material: Codable {
 
             self.parameters.label = newParameters.label
 
-            self.uniformsNeedsUpdate = true
-
             //self.objectWillChange.send()
 
             self.parametersSetPublisher.send(self.parameters)
 
             if !isInitialParameters {
                 self.updatedPublisher.send(self)
-                self.delegate?.updated(material: self)
             }
         }
-    }
-
-    open func setupUniforms() {
-        guard parameters.size > 0, uniformsNeedsUpdate
-        else
-        {
-            uniformsNeedsUpdate = false
-            return
-        }
-
-        uniforms = UniformBuffer(
-            device: context.device,
-            parameters: parameters,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            encodesPerFrame: minimumEncodesPerFrame
-        )
-
-        uniformsNeedsUpdate = false
-    }
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    /// Ensures material uniforms have enough slots for repeated encodes before GPU completion.
-    public func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
-        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, encodesPerFrame))
-        guard parameters.size > 0 else { return }
-        let minSlots = context.maxBuffersInFlight * minimumEncodesPerFrame
-        guard minSlots > (uniforms?.totalSlotCount ?? context.maxBuffersInFlight) else { return }
-        uniforms = UniformBuffer(
-            device: context.device,
-            parameters: parameters,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            encodesPerFrame: minimumEncodesPerFrame
-        )
     }
 
     open func update() {
         updateDepth()
         updateShader()
-        updateUniforms()
         onUpdate?()
     }
 
@@ -504,118 +447,146 @@ open class Material: Codable {
         if depthNeedsUpdate { setupDepthStencilState() }
     }
 
-    open func updateUniforms() {
-        if uniformsNeedsUpdate { setupUniforms() }
-        uniforms?.update()
+    open func encode(in context: EncodingContext) throws {}
+
+    // MARK: - Draw
+
+    /// Records what drawing with this material needs for one draw: its pipeline for the pass and
+    /// layout, depth state, uniforms, buffers and textures. Subclasses add their own bindings and
+    /// call `super`, through the context's typed bindings (object, mesh and tessellation stages
+    /// included).
+    open func draw(in context: MaterialDrawContext) throws {
+        let shadow = context.isShadowPass
+        // Read once for the whole draw: a class property read is a checked access each time.
+        guard let shader else {
+            recordDepthState(in: context, shadow: shadow)
+            return
+        }
+        // Resolved first: compiling a pipeline on its first use reflects which resources it reads,
+        // a layout variant's included, and the bindings below are made from that.
+        let pipeline = shader.getPipeline(renderContext: context.renderContext, shadow: shadow, layout: context.layout)
+        let defersLighting = context.recorder.defersLightingPipelines && !shadow && lighting
+            && !(context.renderContext.renderingMode == .deferredGeometry && lightingModel == .surface && blending == .disabled)
+        let usage = defersLighting ? nil : pipeline.flatMap { shader.resourceUsage(for: $0) }
+        try recordUniforms(in: context, shader: shader, shadow: shadow, usage: usage)
+        recordDepthState(in: context, shadow: shadow)
+        try recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
+        recordTextures(in: context, shader: shader, conservative: shadow || usage == nil)
+        if let pipeline {
+            context.setPipeline(pipeline, usage: usage)
+            if defersLighting {
+                context.storage.captureLightingPipeline(RecordedLightingPipeline(shader: shader,
+                                                                                 renderContext: context.renderContext,
+                                                                                 layout: context.layout))
+            }
+        }
     }
 
-    open func encode(_ commandBuffer: MTLCommandBuffer) {}
+    private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool, usage: PipelineResourceUsage?) throws {
+        guard let uniforms = try uniformsBinding(in: context) else { return }
 
-    /// `layout`: what the mesh being drawn needs from the pipeline (see `DrawLayout`); nil uses this material's own.
-    open func bindPipeline(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        guard let pipeline = shader?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) else { return }
-        renderEncoderState.pipeline = pipeline
-    }
-
-    open func bindUniforms(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        guard let shader else { return }
-
-        if shader.vertexWantsMaterialUniforms {
-            renderEncoderState.vertexMaterialUniforms = uniforms
+        if shader.vertexWantsMaterialUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.MaterialUniforms.rawValue) ?? true) {
+            try context.setVertexBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
 
-        if !shadow, shader.fragmentWantsMaterialUniforms {
-            renderEncoderState.fragmentMaterialUniforms = uniforms
+        if (!shadow && shader.fragmentWantsMaterialUniforms) || (usage?.fragment.buffers.contains(FragmentBufferIndex.MaterialUniforms.rawValue) ?? true) {
+            try context.setFragmentBuffer(uniforms.buffer, offset: uniforms.offset, index: .MaterialUniforms)
         }
     }
 
-    open func bindDepthStates(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool = false) {
+    /// This material's uniforms as they are now, in the draw's arena: the slice its draws bind,
+    /// for a subclass that binds them to stages the context doesn't model. Nil when it has none.
+    public func uniformsBinding(in context: MaterialDrawContext) throws -> (buffer: MTLBuffer, offset: Int)? {
+        let parameters = self.parameters
+        let leaseToken = context.storage.leaseToken
+        let revision = parameters.contentRevision
+        // Checked before anything else: every draw after the first in a lease is a hit.
+        if let uniformsSnapshot,
+           uniformsSnapshotLeaseToken == leaseToken,
+           uniformsSnapshotParameters === parameters,
+           uniformsSnapshotRevision == revision
+        {
+            return uniformsSnapshot
+        }
+
+        let size = parameters.size
+        guard size > 0 else { return nil }
+
+        let slice = try context.recorder.allocate(length: size)
+        slice.contents.copyMemory(from: parameters.data, byteCount: size)
+        let snapshot = (buffer: slice.buffer, offset: slice.offset)
+        uniformsSnapshot = snapshot
+        uniformsSnapshotLeaseToken = leaseToken
+        uniformsSnapshotParameters = parameters
+        uniformsSnapshotRevision = revision
+        return snapshot
+    }
+
+    private func recordDepthState(in context: MaterialDrawContext, shadow: Bool) {
+        let renderContext = context.renderContext
         guard renderContext.depthPixelFormat != .invalid else { return }
-        renderEncoderState.depthStencilState = (!shadow && renderContext.alphaOitEnabled) ? alphaOitDepthStencilState : depthStencilState
-        renderEncoderState.depthBias = depthBias
-        renderEncoderState.depthClipMode = depthClipMode
-    }
-
-    open func bindBuffers(renderEncoderState: RenderEncoderState) {
-        guard let shader else { return }
-
-        for index in shader.vertexBufferBindingIsUsed {
-            if let uniformBuffer = vertexUniformBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    uniformBuffer.buffer,
-                    offset: uniformBuffer.offset,
-                    index: index
-                )
-            } else if let structBuffer = vertexStructBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    structBuffer.buffer,
-                    offset: structBuffer.offset,
-                    index: index
-                )
-            } else if let buffer = vertexBuffers[index] {
-                renderEncoderState.setVertexBuffer(
-                    buffer,
-                    offset: 0,
-                    index: index
-                )
-            }
-        }
-
-        for index in shader.fragmentBufferBindingIsUsed {
-            if let uniformBuffer = fragmentUniformBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    uniformBuffer.buffer,
-                    offset: uniformBuffer.offset,
-                    index: index
-                )
-            } else if let structBuffer = fragmentStructBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    structBuffer.buffer,
-                    offset: structBuffer.offset,
-                    index: index
-                )
-            } else if let buffer = fragmentBuffers[index] {
-                renderEncoderState.setFragmentBuffer(
-                    buffer,
-                    offset: 0,
-                    index: index
-                )
-            }
-        }
-    }
-
-    open func bindTextures(renderEncoderState: RenderEncoderState) {
-        guard let shader else { return }
-
-        for index in shader.vertexTextureBindingIsUsed {
-            if let texture = vertexTextures[index] {
-                renderEncoderState.setVertexTexture(texture, index: index)
-            }
-        }
-
-        for index in shader.fragmentTextureBindingIsUsed {
-            if let texture = fragmentTextures[index] {
-                renderEncoderState.setFragmentTexture(texture, index: index)
-            }
-        }
-    }
-
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        bindUniforms(renderEncoderState: renderEncoderState, shadow: shadow)
-        bindDepthStates(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
+        context.setDepthStencilState(
+            (!shadow && renderContext.alphaOitEnabled) ? alphaOitDepthStencilState : depthStencilState,
+            bias: depthBias,
+            clipMode: depthClipMode
         )
-        bindBuffers(renderEncoderState: renderEncoderState)
-        bindTextures(renderEncoderState: renderEncoderState)
-        bindPipeline(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow,
-            layout: layout
-        )
-        onBind?(renderEncoderState.renderEncoder)
+    }
+
+    private func recordBuffers(in context: MaterialDrawContext, shader: Shader, conservative: Bool) throws {
+        let vertexIndices = shader.vertexBufferBindingIsUsed
+        let vertexCount = conservative ? vertexBufferSlots.count : vertexIndices.count
+        for position in 0 ..< vertexCount {
+            guard let index = conservative ? VertexBufferIndex(rawValue: position) : vertexIndices[position] else { continue }
+            let slot = index.rawValue
+            guard slot < vertexBufferSlots.count else { continue }
+            if let uniformBuffer = vertexBufferSlots[slot].uniformBuffer {
+                // Ring slots are rewritten in place: the recording keeps its own copy.
+                try context.setVertexBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
+            } else if let structBuffer = vertexBufferSlots[slot].structBuffer {
+                try context.setVertexBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                                        copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
+            } else if let buffer = vertexBufferSlots[slot].buffer {
+                try context.setVertexBuffer(buffer, offset: 0, index: index)
+            }
+        }
+
+        let fragmentIndices = shader.fragmentBufferBindingIsUsed
+        let fragmentCount = conservative ? fragmentBufferSlots.count : fragmentIndices.count
+        for position in 0 ..< fragmentCount {
+            guard let index = conservative ? FragmentBufferIndex(rawValue: position) : fragmentIndices[position] else { continue }
+            let slot = index.rawValue
+            guard slot < fragmentBufferSlots.count else { continue }
+            if let uniformBuffer = fragmentBufferSlots[slot].uniformBuffer {
+                try context.setFragmentBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index, copyOnRecordLength: uniformBuffer.parameters.size > 0 ? uniformBuffer.parameters.size : nil)
+            } else if let structBuffer = fragmentBufferSlots[slot].structBuffer {
+                try context.setFragmentBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index,
+                                          copyOnRecordLength: structBuffer.contentLength > 0 ? structBuffer.contentLength : nil)
+            } else if let buffer = fragmentBufferSlots[slot].buffer {
+                try context.setFragmentBuffer(buffer, offset: 0, index: index)
+            }
+        }
+    }
+
+    private func recordTextures(in context: MaterialDrawContext, shader: Shader, conservative: Bool) {
+        let vertexIndices = shader.vertexTextureBindingIsUsed
+        let vertexCount = conservative ? vertexTextureSlots.count : vertexIndices.count
+        for position in 0 ..< vertexCount {
+            guard let index = conservative ? VertexTextureIndex(rawValue: position) : vertexIndices[position] else { continue }
+            let slot = index.rawValue
+            if slot < vertexTextureSlots.count, let texture = vertexTextureSlots[slot] {
+                context.setVertexTexture(texture, index: index)
+            }
+        }
+
+        let fragmentIndices = shader.fragmentTextureBindingIsUsed
+        let fragmentCount = conservative ? fragmentTextureSlots.count : fragmentIndices.count
+        for position in 0 ..< fragmentCount {
+            guard let index = conservative ? FragmentTextureIndex(rawValue: position) : fragmentIndices[position] else { continue }
+            let slot = index.rawValue
+            if slot < fragmentTextureSlots.count, let texture = fragmentTextureSlots[slot] {
+                context.setFragmentTexture(texture, index: index)
+            }
+        }
     }
 
     public func getPipeline(renderContext: Context, shadow: Bool) -> MTLRenderPipelineState? {
@@ -629,67 +600,50 @@ open class Material: Codable {
     }
 
     public func set(_ buffer: MTLBuffer?, index: VertexBufferIndex) {
-        if let buffer = buffer {
-            vertexBuffers[index] = buffer
-        } else {
-            vertexBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].buffer = buffer
     }
 
     public func set(_ uniformBuffer: UniformBuffer?, index: VertexBufferIndex) {
-        if let uniformBuffer {
-            vertexUniformBuffers[index] = uniformBuffer
-        } else {
-            vertexUniformBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].uniformBuffer = uniformBuffer
     }
 
     public func set(_ structBuffer: BindableBuffer?, index: VertexBufferIndex) {
-        if let structBuffer {
-            vertexStructBuffers[index] = structBuffer
-        } else {
-            vertexStructBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexBufferSlots, for: index.rawValue, empty: BufferSlot())
+        vertexBufferSlots[index.rawValue].structBuffer = structBuffer
     }
 
     public func set(_ texture: MTLTexture?, index: VertexTextureIndex) {
-        if let texture = texture {
-            vertexTextures[index] = texture
-        } else {
-            vertexTextures.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &vertexTextureSlots, for: index.rawValue, empty: nil)
+        vertexTextureSlots[index.rawValue] = texture
     }
 
     public func set(_ uniformBuffer: UniformBuffer?, index: FragmentBufferIndex) {
-        if let uniformBuffer {
-            fragmentUniformBuffers[index] = uniformBuffer
-        } else {
-            fragmentUniformBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].uniformBuffer = uniformBuffer
     }
 
     public func set(_ structBuffer: BindableBuffer?, index: FragmentBufferIndex) {
-        if let structBuffer {
-            fragmentStructBuffers[index] = structBuffer
-        } else {
-            fragmentStructBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].structBuffer = structBuffer
     }
 
     public func set(_ buffer: MTLBuffer?, index: FragmentBufferIndex) {
-        if let buffer = buffer {
-            fragmentBuffers[index] = buffer
-        } else {
-            fragmentBuffers.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentBufferSlots, for: index.rawValue, empty: BufferSlot())
+        fragmentBufferSlots[index.rawValue].buffer = buffer
+    }
+
+    /// Named texture properties use the binding itself as their storage, so generic slot edits
+    /// cannot leave an unowned alias pointing at a released or replaced resource.
+    func texture(at index: FragmentTextureIndex) -> MTLTexture? {
+        let slot = index.rawValue
+        return slot < fragmentTextureSlots.count ? fragmentTextureSlots[slot] : nil
     }
 
     public func set(_ texture: MTLTexture?, index: FragmentTextureIndex) {
-        if let texture = texture {
-            fragmentTextures[index] = texture
-        } else {
-            fragmentTextures.removeValue(forKey: index)
-        }
+        Self.makeRoom(in: &fragmentTextureSlots, for: index.rawValue, empty: nil)
+        fragmentTextureSlots[index.rawValue] = texture
     }
 
     public func set(_ name: String, _ value: [Float]) {
@@ -839,7 +793,6 @@ open class Material: Codable {
     }
 
     deinit {
-        delegate = nil
         shader = nil
     }
 
@@ -861,11 +814,9 @@ open class Material: Codable {
         clone.lighting = lighting
         clone.lightCount = lightCount
 
-        clone.delegate = delegate
         clone.parameters = parameters.clone()
 
         clone.onUpdate = onUpdate
-        clone.onBind = onBind
 
         clone.renderingConfiguration = renderingConfiguration
 

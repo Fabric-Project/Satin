@@ -10,32 +10,18 @@ import Combine
 import Foundation
 import Metal
 import simd
+import Synchronization
 
 #if SWIFT_PACKAGE
 import SatinCore
 #endif
 
 open class Object: Codable {
-    public let idPublisher = PassthroughSubject<String, Never>()
-    var id: String = UUID().uuidString {
-        didSet {
-            idPublisher.send(id)
-        }
-    }
+    var id: String = UUID().uuidString
 
-    public let labelPublisher = PassthroughSubject<String, Never>()
-    public var label = "Object" {
-        didSet {
-            labelPublisher.send(label)
-        }
-    }
+    public var label = "Object"
 
-    public let visiblePublisher = PassthroughSubject<Bool, Never>()
-    public var visible = true {
-        didSet {
-            visiblePublisher.send(visible)
-        }
-    }
+    public var visible = true
 
     public let context: Context
 
@@ -43,18 +29,17 @@ open class Object: Codable {
 
     public var position: simd_float3 = .zero {
         didSet {
+            guard position != oldValue else { return }
             _translationMatrix.clear()
-
-            updateLocalMatrix = true
-
-            positionPublisher.send(self)
+            localTransformDidChange()
         }
     }
 
     var _worldPosition = ValueCache<simd_float3>()
     public var worldPosition: simd_float3 {
         get {
-            _worldPosition.get {
+            validateWorld()
+            return _worldPosition.get {
                 simd_make_float3(worldMatrix.columns.3)
             }
         }
@@ -76,15 +61,14 @@ open class Object: Codable {
 
     public var orientation = simd_quatf(matrix_identity_float4x4) {
         didSet {
+            guard orientation != oldValue else { return }
             _rotationMatrix.clear()
 
             _rightDirection.clear()
             _upDirection.clear()
             _forwardDirection.clear()
 
-            updateLocalMatrix = true
-
-            orientationPublisher.send(self)
+            localTransformDidChange()
         }
     }
 
@@ -92,7 +76,8 @@ open class Object: Codable {
     public var worldOrientation: simd_quatf {
         get {
             // Keeps a mirrored world matrix's rotation a rotation; see `worldScale`.
-            _worldOrientation.get { worldMatrix.decomposed.rotation }
+            validateWorld()
+            return _worldOrientation.get { worldMatrix.decomposed.rotation }
         }
         set {
             if let parent = parent {
@@ -112,11 +97,9 @@ open class Object: Codable {
 
     public var scale: simd_float3 = .one {
         didSet {
+            guard scale != oldValue else { return }
             _scaleMatrix.clear()
-
-            updateLocalMatrix = true
-
-            scalePublisher.send(self)
+            localTransformDidChange()
         }
     }
 
@@ -124,7 +107,8 @@ open class Object: Codable {
     public var worldScale: simd_float3 {
         get {
             // A mirrored world matrix keeps its handedness as a negative x scale.
-            _worldScale.get { worldMatrix.decomposed.scale }
+            validateWorld()
+            return _worldScale.get { worldMatrix.decomposed.scale }
         }
         set {
             if let parent = parent {
@@ -152,11 +136,15 @@ open class Object: Codable {
             }
         }
         set {
-            // Keeps a mirrored matrix mirrored, as a negative x scale.
+            // Keeps a mirrored matrix mirrored, as a negative x scale. One change, not three.
             let decomposition = newValue.decomposed
+            guard decomposition.translation != position || decomposition.scale != scale || decomposition.rotation != orientation else { return }
+            isAssigningLocalMatrix = true
             position = decomposition.translation
             scale = decomposition.scale
             orientation = decomposition.rotation
+            isAssigningLocalMatrix = false
+            localTransformDidChange()
         }
     }
 
@@ -167,19 +155,92 @@ open class Object: Codable {
         }
     }
 
-    public var updateLocalMatrix = true {
-        didSet {
-            if updateLocalMatrix {
-                updateLocalBounds = true
+    // MARK: - Revisions
 
-                _localMatrix.clear()
-                _localMatrixInverse.clear()
+    /// Advances when this object's own transform (position, orientation, scale) changes value.
+    public private(set) var localRevision: UInt64 = 0
 
-                updateLocalMatrix = false
+    /// Advances whenever any object's transform or parent changes, in any scene on any thread. Only
+    /// a shortcut: an object validated at the current epoch knows nothing above it moved. Not a
+    /// revision of any object. Atomic, so scenes owned by different threads share it safely; a
+    /// change elsewhere only costs another object one ancestor walk. Relaxed is enough: each scene
+    /// still has one owner, which orders its own changes before its own reads.
+    static let transformEpoch = Atomic<UInt64>(0)
 
-                updateWorldMatrix = true
-            }
+    #if DEBUG
+    /// This object's validations that had to look at its parent: the epoch had moved.
+    private(set) var worldValidationWalkCount = 0
+    #endif
+
+    private var isAssigningLocalMatrix = false
+
+    private func localTransformDidChange() {
+        guard !isAssigningLocalMatrix else { return }
+        _localMatrix.clear()
+        _localMatrixInverse.clear()
+        localRevision &+= 1
+        Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
+        // Descendant changes still mark ancestor bounds: a parent's cached bounds can't find out
+        // about a child by looking.
+        updateLocalBounds = true
+    }
+
+    private var _worldRevision: UInt64 = 0
+    /// What the world transform was last derived from: the parent (identity and link), the
+    /// parent's world revision, and this object's local revision.
+    private var worldParentIdentity: ObjectIdentifier?
+    private var worldParentLinkRevision: UInt64 = 0
+    private var worldParentRevision: UInt64 = 0
+    private var worldLocalRevision: UInt64 = 0
+    private var worldIsDerived = false
+    private var worldValidatedEpoch: UInt64 = .max
+    /// Advances when `parent` is assigned.
+    private var parentLinkRevision: UInt64 = 0
+
+    /// Advances whenever this object's world transform may have changed: its own transform, an
+    /// ancestor's, or its parent. Reading it validates against the ancestors first, so it is
+    /// current without reading any matrix.
+    public var worldRevision: UInt64 {
+        validateWorld()
+        return _worldRevision
+    }
+
+    /// Brings the world-derived caches up to date with the ancestors: clears them, and advances
+    /// `worldRevision`, when what they were derived from changed. Returns at once while nothing
+    /// anywhere has moved since the last validation.
+    func validateWorld() {
+        let epoch = Object.transformEpoch.load(ordering: .relaxed)
+        guard worldValidatedEpoch != epoch else { return }
+        #if DEBUG
+        worldValidationWalkCount += 1
+        #endif
+        let parent = self.parent
+        let parentIdentity = parentIdentifier
+        let parentRevision = parent?.worldRevision ?? 0
+        if !worldIsDerived || parentIdentity != worldParentIdentity || parentLinkRevision != worldParentLinkRevision
+            || parentRevision != worldParentRevision || localRevision != worldLocalRevision
+        {
+            worldIsDerived = true
+            worldParentIdentity = parentIdentity
+            worldParentLinkRevision = parentLinkRevision
+            worldParentRevision = parentRevision
+            worldLocalRevision = localRevision
+            _worldRevision &+= 1
+            clearWorldCaches()
         }
+        worldValidatedEpoch = epoch
+    }
+
+    private func clearWorldCaches() {
+        _normalMatrix.clear()
+        _worldMatrix.clear()
+        _worldMatrixInverse.clear()
+        _worldPosition.clear()
+        _worldOrientation.clear()
+        _worldScale.clear()
+        _worldRightDirection.clear()
+        _worldUpDirection.clear()
+        _worldForwardDirection.clear()
     }
 
     // MARK: - World Matrix
@@ -187,7 +248,8 @@ open class Object: Codable {
     var _worldMatrix = ValueCache<matrix_float4x4>()
     public var worldMatrix: matrix_float4x4 {
         get {
-            _worldMatrix.get {
+            validateWorld()
+            return _worldMatrix.get {
                 if let parent = parent {
                     return simd_mul(parent.worldMatrix, localMatrix)
                 } else {
@@ -206,36 +268,9 @@ open class Object: Codable {
 
     var _worldMatrixInverse = ValueCache<matrix_float4x4>()
     public var worldMatrixInverse: matrix_float4x4 {
-        _worldMatrixInverse.get {
+        validateWorld()
+        return _worldMatrixInverse.get {
             worldMatrix.inverse
-        }
-    }
-
-    var updateWorldMatrix = true {
-        didSet {
-            if updateWorldMatrix {
-                updateWorldBounds = true
-
-                _normalMatrix.clear()
-                _worldMatrix.clear()
-                _worldMatrixInverse.clear()
-
-                _worldPosition.clear()
-                _worldOrientation.clear()
-                _worldScale.clear()
-
-                _worldRightDirection.clear()
-                _worldUpDirection.clear()
-                _worldForwardDirection.clear()
-
-                transformPublisher.send(self)
-
-                updateWorldMatrix = false
-
-                for child in children {
-                    child.updateWorldMatrix = true
-                }
-            }
         }
     }
 
@@ -243,7 +278,8 @@ open class Object: Codable {
 
     var _normalMatrix = ValueCache<matrix_float3x3>()
     public var normalMatrix: matrix_float3x3 {
-        _normalMatrix.get {
+        validateWorld()
+        return _normalMatrix.get {
             let n = worldMatrixInverse.transpose
             return simd_matrix(simd_make_float3(n.columns.0), simd_make_float3(n.columns.1), simd_make_float3(n.columns.2))
         }
@@ -251,14 +287,15 @@ open class Object: Codable {
 
     // MARK: - Bounds
 
+    /// Marking stops at an object already marked: its ancestors were marked with it, and no
+    /// ancestor's bounds depend on a descendant's. Its own local and world bounds are always marked.
     public var updateBounds = true {
         didSet {
-            if updateBounds {
-                _updateBounds = true
-                boundsPublisher.send(self)
-                parent?.updateBounds = true
-                updateBounds = false
-            }
+            guard updateBounds else { return }
+            updateBounds = false
+            let wasMarked = _updateBounds
+            _updateBounds = true
+            if !wasMarked { parent?.updateBounds = true }
         }
     }
 
@@ -279,14 +316,15 @@ open class Object: Codable {
 
     // MARK: - Local Bounds
 
+    /// Stops at an object already marked, like `updateBounds`. World bounds are marked on every
+    /// call, since reading world bounds doesn't clear the local mark.
     public var updateLocalBounds = true {
         didSet {
-            if updateLocalBounds {
-                _updateLocalBounds = true
-                localBoundsPublisher.send(self)
-                parent?.updateLocalBounds = true
-                updateLocalBounds = false
-            }
+            guard updateLocalBounds else { return }
+            updateLocalBounds = false
+            let wasMarked = _updateLocalBounds
+            _updateLocalBounds = true
+            if !wasMarked { parent?.updateLocalBounds = true }
         }
     }
 
@@ -309,24 +347,31 @@ open class Object: Codable {
 
     // MARK: - World Bounds
 
-     var updateWorldBounds = true {
+    /// Stops at an object already marked. Computing world bounds reads every child's world
+    /// bounds, so an object is only ever cleared with its marked descendants: a marked object's
+    /// ancestors are all marked. Without the early-out, every mark walked to the root.
+    var updateWorldBounds = true {
         didSet {
-            if updateWorldBounds {
-                _updateWorldBounds = true
-                worldBoundsPublisher.send(self)
-                parent?.updateWorldBounds = true
-                updateWorldBounds = false
-            }
+            guard updateWorldBounds else { return }
+            updateWorldBounds = false
+            guard !_updateWorldBounds else { return }
+            _updateWorldBounds = true
+            parent?.updateWorldBounds = true
         }
     }
 
     var _updateWorldBounds = true
+    /// The world revision the world bounds were computed at: an ancestor's move is seen by
+    /// revision, a descendant's change by `updateWorldBounds`.
+    private var worldBoundsRevision: UInt64 = 0
 
     var _worldBounds = createBounds()
     public var worldBounds: Bounds {
-        if _updateWorldBounds {
+        let revision = worldRevision
+        if _updateWorldBounds || revision != worldBoundsRevision {
             _worldBounds = computeWorldBounds()
             _updateWorldBounds = false
+            worldBoundsRevision = revision
         }
         return _worldBounds
     }
@@ -358,60 +403,139 @@ open class Object: Codable {
 
     var _worldForwardDirection = ValueCache<simd_float3>()
     public var worldForwardDirection: simd_float3 {
-        _worldForwardDirection.get {
+        validateWorld()
+        return _worldForwardDirection.get {
             simd_normalize(worldOrientation.act(Satin.worldForwardDirection))
         }
     }
 
     var _worldUpDirection = ValueCache<simd_float3>()
     public var worldUpDirection: simd_float3 {
-        _worldUpDirection.get {
+        validateWorld()
+        return _worldUpDirection.get {
             simd_normalize(worldOrientation.act(Satin.worldUpDirection))
         }
     }
 
     var _worldRightDirection = ValueCache<simd_float3>()
     public var worldRightDirection: simd_float3 {
-        _worldRightDirection.get {
+        validateWorld()
+        return _worldRightDirection.get {
             simd_normalize(worldOrientation.act(Satin.worldRightDirection))
         }
     }
 
     // MARK: - Parent & Children
 
-     weak var parent: Object? {
+    /// The object whose `children` hold this one. Checked `unowned`, so a parent needs no side
+    /// table: the parent clears it when it lets this object go and as it deallocates, so it never
+    /// outlives its target.
+    unowned var parent: Object? {
         didSet {
-            updateWorldMatrix = true
+            parentIdentifier = parent.map(ObjectIdentifier.init)
+            parentLinkRevision &+= 1
+            Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
+            updateWorldBounds = true
+            // An already-marked object stops its own walk; the new parent still needs marking.
+            parent?.updateWorldBounds = true
         }
     }
 
-    public var children: [Object] = [] {
-        didSet {
-            updateLocalBounds = true
+    /// The parent's identity, compared without loading the parent (as a deallocating parent must).
+    private var parentIdentifier: ObjectIdentifier?
+
+    /// The objects this one contains, in order. Assigning it, or changing it in place, updates scene
+    /// membership the same way `add` and `remove` do.
+    public var children: [Object] {
+        get { _children }
+        set {
+            let previousChildren = _children
+            _children = newValue
+
+            let previousIdentifiers = Set(previousChildren.map(ObjectIdentifier.init))
+            let newIdentifiers = Set(newValue.map(ObjectIdentifier.init))
+            for child in previousChildren where !newIdentifiers.contains(ObjectIdentifier(child)) {
+                child.removeContainer(ObjectIdentifier(self))
+                if child.parentIdentifier == ObjectIdentifier(self) {
+                    child.parent = nil
+                }
+            }
+            for child in newValue where !previousIdentifiers.contains(ObjectIdentifier(child)) {
+                registerAsContainer(of: child)
+            }
+
+            childrenDidChange()
+        }
+    }
+
+    private var _children: [Object] = []
+
+    // MARK: - Scene Structure
+
+    /// An object whose `children` contain this one. Checked `unowned`, so a container needs no side
+    /// table: a container removes its link when it lets this object go and as it deallocates.
+    private struct ContainerLink {
+        unowned let object: Object
+        let identifier: ObjectIdentifier
+    }
+
+    /// Every object whose `children` contain this one, once each: its parent, and any object it
+    /// was attached to. Structure changes travel up through these. A handful at most: a scan.
+    private var containers = ContiguousArray<ContainerLink>()
+
+    /// Advances whenever this object's subtree changes structure.
+    private(set) var structureRevision: UInt64 = 0
+
+    private var lastStructureChangeToken: UInt64 = 0
+    /// Hands out one token per structure change, unique across every scene and thread.
+    private static let structureChangeTokenCount = Atomic<UInt64>(0)
+
+    private var cachedSceneIndex: SceneIndex?
+
+    /// This object's descendants, flattened and cast, rebuilt only after its structure changes.
+    public var sceneIndex: SceneIndex {
+        if let cachedSceneIndex, cachedSceneIndex.revision == structureRevision {
+            return cachedSceneIndex
+        }
+        let sceneIndex = SceneIndex(root: self)
+        cachedSceneIndex = sceneIndex
+        return sceneIndex
+    }
+
+    private func registerAsContainer(of child: Object) {
+        let identifier = ObjectIdentifier(self)
+        for link in child.containers where link.identifier == identifier { return }
+        child.containers.append(ContainerLink(object: self, identifier: identifier))
+    }
+
+    private func removeContainer(_ identifier: ObjectIdentifier) {
+        for index in containers.indices where containers[index].identifier == identifier {
+            containers.remove(at: index)
+            return
+        }
+    }
+
+    private func childrenDidChange() {
+        updateLocalBounds = true
+        let token = Object.structureChangeTokenCount.wrappingAdd(1, ordering: .relaxed).newValue
+        structureDidChange(token: token)
+    }
+
+    /// Marks this object and every container above it as structurally changed, once per change.
+    private func structureDidChange(token: UInt64) {
+        guard lastStructureChangeToken != token else { return }
+        lastStructureChangeToken = token
+        structureRevision &+= 1
+        cachedSceneIndex = nil
+
+        for link in containers {
+            link.object.structureDidChange(token: token)
         }
     }
 
     // MARK: - OnUpdate Hook
 
     public var onUpdate: (() -> Void)?
-
-    // MARK: - Publishers
-
-    public let positionPublisher = PassthroughSubject<Object, Never>()
-    public let scalePublisher = PassthroughSubject<Object, Never>()
-    public let orientationPublisher = PassthroughSubject<Object, Never>()
-
-    public let boundsPublisher = PassthroughSubject<Object, Never>()
-    public let localBoundsPublisher = PassthroughSubject<Object, Never>()
-    public let worldBoundsPublisher = PassthroughSubject<Object, Never>()
-
-    public let transformPublisher = PassthroughSubject<Object, Never>()
-
-    public let childAddedPublisher = PassthroughSubject<Object, Never>()
-    public let childRemovedPublisher = PassthroughSubject<Object, Never>()
-
-    private var childAddedSubscriptions: [Object: AnyCancellable] = [:]
-    private var childRemovedSubscriptions: [Object: AnyCancellable] = [:]
 
     // MARK: - Init
 
@@ -427,7 +551,17 @@ open class Object: Codable {
 
     // MARK: - Deinit
 
-    deinit {}
+    /// Clears every link a child holds to this object, without loading it: nothing it contains
+    /// keeps an `unowned` link to it.
+    deinit {
+        let identifier = ObjectIdentifier(self)
+        for child in _children {
+            child.removeContainer(identifier)
+            if child.parentIdentifier == identifier {
+                child.parent = nil
+            }
+        }
+    }
 
     // MARK: - CodingKeys
 
@@ -496,6 +630,8 @@ open class Object: Codable {
         transformBounds(bounds, localMatrix)
     }
 
+    /// Overrides must merge every child's `worldBounds`: reading them is what clears marked
+    /// descendants along with this object, which `updateWorldBounds` relies on.
     open func computeWorldBounds() -> Bounds {
         children.reduce(transformBounds(bounds, worldMatrix)) { mergeBounds($0, $1.worldBounds) }
     }
@@ -504,9 +640,11 @@ open class Object: Codable {
         onUpdate?()
     }
 
-    open func encode(_ commandBuffer: MTLCommandBuffer) {}
+    /// Encodes this object's GPU work for the frame (compute, generated geometry), after `update()`
+    /// and before any pass draws it. Write outputs to slices from `try context.allocate(length:)` so
+    /// two encodes before the draws execute never overwrite each other.
+    open func encode(in context: EncodingContext) throws {}
 
-    open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {}
 
     // MARK: - Inserting, Adding, Attaching & Removing
 
@@ -515,7 +653,9 @@ open class Object: Codable {
             if setParent {
                 child.parent = self
             }
-            children.insert(child, at: at)
+            _children.insert(child, at: at)
+            registerAsContainer(of: child)
+            childrenDidChange()
         }
     }
 
@@ -527,16 +667,9 @@ open class Object: Codable {
             child.parent = self
         }
 
-        children.append(child)
-        childAddedPublisher.send(child)
-
-        childAddedSubscriptions[child] = child.childAddedPublisher.sink { [weak self] subchild in
-            self?.childAddedPublisher.send(subchild)
-        }
-
-        childRemovedSubscriptions[child] = child.childRemovedPublisher.sink { [weak self] subchild in
-            self?.childRemovedPublisher.send(subchild)
-        }
+        _children.append(child)
+        registerAsContainer(of: child)
+        childrenDidChange()
     }
 
     open func attach(_ child: Object) {
@@ -554,17 +687,15 @@ open class Object: Codable {
     open func remove(_ child: Object) {
         guard let childIndex = children.firstIndex(of: child) else { return }
 
-        childRemovedPublisher.send(child)
-
         if child.parent === self {
             child.parent = nil
         }
 
-        children.remove(at: childIndex)
-
-        _ = childAddedSubscriptions.removeValue(forKey: child)
-
-        _ = childRemovedSubscriptions.removeValue(forKey: child)
+        _children.remove(at: childIndex)
+        if !_children.contains(where: { $0 === child }) {
+            child.removeContainer(ObjectIdentifier(self))
+        }
+        childrenDidChange()
     }
 
     open func removeFromParent() {

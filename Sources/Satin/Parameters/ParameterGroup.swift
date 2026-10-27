@@ -33,6 +33,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public var label = ""
     public private(set) var params: [any Parameter] = [] {
         didSet {
+            structureRevision &+= 1
             _updateSize = true
             _updateStride = true
             _updateAlignment = true
@@ -41,7 +42,13 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
         }
     }
 
-    public var paramsMap: [String: any Parameter] = [:]
+    public var paramsMap: [String: any Parameter] = [:] {
+        didSet { structureRevision &+= 1 }
+    }
+
+    /// Advances whenever a parameter is added, removed or replaced, so a parameter found by name
+    /// can be kept and used while it is unchanged.
+    public private(set) var structureRevision: UInt64 = 0
 
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 
@@ -80,10 +87,9 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public func append(_ param: some Parameter) {
         params.append(param)
         paramsMap[param.label] = param
-        paramSubscriptions[param.label] = param.valuePublisher.sink { [weak self, /*weak param*/] _ in
-            guard let self = self
-//                  let param 
-            else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        paramSubscriptions[param.label] = param.valuePublisher.sink { [unowned self] _ in
             self._updateData = true
 //            self.objectWillChange.send()
 //            self.parameterUpdatedPublisher.send(param)
@@ -414,7 +420,16 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     private var _updateSize = true
     private var _updateStride = true
     private var _updateAlignment = true
-    private var _updateData = true
+    private var _updateData = true {
+        didSet {
+            if _updateData { contentRevision &+= 1 }
+        }
+    }
+
+    /// Advances whenever a change invalidates `data`: a value, an added or removed parameter, a
+    /// replaced set. It advances when the change happens, not when `data` is next rebuilt, so a
+    /// snapshot of `data` can be checked against it without reading `data` first.
+    public private(set) var contentRevision: UInt64 = 0
 
     private func updateSize() {
         var result = 0

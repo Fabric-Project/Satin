@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARContactShadowRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARContactShadowRenderer())
+        SatinMetalView(renderer: ARContactShadowRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Contact Shadow")
     }

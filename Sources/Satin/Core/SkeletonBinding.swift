@@ -47,11 +47,11 @@ public final class SkeletonBinding {
         self.skeletonJointIndices = skeletonJointIndices
         self.inverseBindMatrices = inverseBindMatrices
         self.geometryBindTransform = geometryBindTransform
-        palette = JointPalette(device: device, jointCount: skeletonJointIndices.count + 1)
+        palette = JointPalette(jointCount: skeletonJointIndices.count + 1)
     }
 
     /// Recomputes the palette from the skeleton's joint transforms. The first call sets a pose
-    /// with no motion; later calls keep the outgoing pose as last frame's, for velocity.
+    /// with no motion; later poses move against the palette's previous frame when drawn.
     func pose(jointTransforms: [simd_float4x4]) {
         Self.computeJointMatrices(
             &matrices,

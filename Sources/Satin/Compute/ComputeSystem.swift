@@ -185,13 +185,16 @@ open class ComputeSystem: ComputeShaderDelegate {
 
     // MARK: - Update
 
-    open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
+    open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) throws {
         update()
     }
 
-    open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
+    open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
         update()
     }
+
+    /// Copies Satin-owned inputs as they're bound; see `ComputeInputCopies`.
+    lazy var inputCopies = ComputeInputCopies(device: device, label: "Compute \(label) Inputs")
 
     // MARK: - Reset
 
@@ -243,19 +246,19 @@ open class ComputeSystem: ComputeShaderDelegate {
         uniforms?.update()
     }
 
-    open func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) {
+    open func bindUniforms(_ computeEncoder: MTLComputeCommandEncoder) throws {
         guard let uniforms, let shader, shader.resetWantsUniforms || shader.updateWantsUniforms else { return }
-        computeEncoder.setBuffer(uniforms.buffer, offset: uniforms.offset, index: ComputeBufferIndex.Uniforms.rawValue)
+        try inputCopies.bind(uniforms, at: .Uniforms, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: .Uniforms))
     }
 
-    func bindBuffers(_ computeEncoder: MTLComputeCommandEncoder) {
+    func bindBuffers(_ computeEncoder: MTLComputeCommandEncoder) throws {
         guard let shader else { return }
 
         for index in shader.bufferBindingIsUsed {
             if let uniformBuffer = computeUniformBuffers[index] {
-                computeEncoder.setBuffer(uniformBuffer.buffer, offset: uniformBuffer.offset, index: index.rawValue)
+                try inputCopies.bind(uniformBuffer, at: index, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: index))
             } else if let structBuffer = computeStructBuffers[index] {
-                computeEncoder.setBuffer(structBuffer.buffer, offset: structBuffer.offset, index: index.rawValue)
+                try inputCopies.bind(structBuffer, at: index, encoder: computeEncoder, readOnly: shader.bufferIsReadOnly(at: index))
             } else if let buffer = computeBuffers[index] {
                 computeEncoder.setBuffer(buffer, offset: 0, index: index.rawValue)
             }

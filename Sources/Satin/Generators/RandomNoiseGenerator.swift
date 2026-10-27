@@ -57,11 +57,11 @@ public final class RandomNoiseGenerator {
         )
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    public func encode(commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         commandBuffer.label = "\(compute.label) Compute Command Buffer"
         compute.set("Range", [range.lowerBound, range.upperBound])
         compute.set("Seed", seed)
-        compute.update(commandBuffer)
+        try compute.update(commandBuffer)
         let texture = compute.dstTexture
         texture?.label = "Random Noise"
         return texture

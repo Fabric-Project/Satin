@@ -9,18 +9,30 @@
 import Foundation
 import Metal
 
+/// Whether two arrays indexed by `PBRTextureType.index` hold values in different slots. Only presence
+/// changes a PBR shader's source, not which texture or sampler fills a slot.
+func pbrSlotPresenceDiffers<Value>(_ lhs: [Value?], _ rhs: [Value?]) -> Bool {
+    for index in lhs.indices where (lhs[index] == nil) != (rhs[index] == nil) {
+        return true
+    }
+    return false
+}
+
 open class PBRShader: SourceShader {
-    open var maps: [PBRTextureType: MTLTexture?] = [:] {
+    /// The material's texture for each map, indexed by `PBRTextureType.index`. Which maps are
+    /// present picks the shader's defines.
+    open var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != maps.keys {
+            if pbrSlotPresenceDiffers(oldValue, maps) {
                 definesNeedsUpdate = true
             }
         }
     }
 
-    open var samplers: [PBRTextureType: MTLSamplerDescriptor?] = [:] {
+    /// The material's sampler for each map, indexed by `PBRTextureType.index`, injected as constants.
+    open var samplers = [MTLSamplerDescriptor?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != samplers.keys {
+            if pbrSlotPresenceDiffers(oldValue, samplers) {
                 constantsNeedsUpdate = true
             }
         }
@@ -36,8 +48,8 @@ open class PBRShader: SourceShader {
 
     override open func getConstants() -> [String] {
         var results = super.getConstants()
-        for pbrTexType in PBRTextureType.allCases {
-            if let sampler = samplers[pbrTexType], let descriptor = sampler {
+        for pbrTexType in PBRTextureType.orderedCases {
+            if let descriptor = samplers[pbrTexType.index] {
                 results.append(descriptor.shaderInjection(index: pbrTexType))
             }
         }
@@ -47,9 +59,9 @@ open class PBRShader: SourceShader {
     override open func getDefines() -> [ShaderDefine] {
         var results = super.getDefines()
 
-        if !maps.isEmpty { results.append(ShaderDefine(key: "HAS_MAPS", value: NSString(string: "true"))) }
+        if maps.contains(where: { $0 != nil }) { results.append(ShaderDefine(key: "HAS_MAPS", value: NSString(string: "true"))) }
 
-        for pbrTexType in PBRTextureType.allCases where maps[pbrTexType] != nil {
+        for pbrTexType in PBRTextureType.orderedCases where maps[pbrTexType.index] != nil {
             results.append(ShaderDefine(key: pbrTexType.shaderDefine, value: NSString(string: "true")))
         }
 

@@ -3,12 +3,14 @@ import Metal
 public final class SsaoCompositeMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    public unowned var colorTexture: MTLTexture? {
-        didSet { set(colorTexture, index: FragmentTextureIndex.Custom0) }
+    public var colorTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var aoTexture: MTLTexture? {
-        didSet { set(aoTexture, index: FragmentTextureIndex.Custom1) }
+    public var aoTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
     public var intensity: Float {

@@ -98,7 +98,7 @@ open class SourceShader: Shader {
         ShaderSourceCache.removeSource(url: self.pipelineURL)
         readAlphaOrderIndependentTransparency()
 
-        for configuration in configurations.values {
+        for configuration in contextConfigurations {
             ShaderLibrarySourceCache.invalidateLibrarySource(
                 configuration: configuration.getLibraryConfiguration()
             )
@@ -112,20 +112,16 @@ open class SourceShader: Shader {
 
         invalidateLayoutVariants()
 
-        self.pipelines.removeAll()
+        self.clearContextStates()
         // The reflection describes the source being replaced, and setupPipeline
         // only assigns it while it is nil, so a reload that leaves it in place
         // keeps reporting the old source's buffer and texture bindings.
         self.pipelineReflection = nil
         self.pipelineError = nil
-        self.pipelineErrors.removeAll()
 
-        self.shadowPipelines.removeAll()
         self.shadowPipelineReflection = nil
         self.shadowPipelineError = nil
-        self.shadowPipelineErrors.removeAll()
 
-        self.configurations.removeAll()
 
         if self.castShadow {
             self.shadowPipelineNeedsUpdate = true
@@ -141,6 +137,6 @@ open class SourceShader: Shader {
 
     /// The `#define`, not the bare name, which AlphaOIT.metal's own comments mention.
     private func readAlphaOrderIndependentTransparency() {
-        definesAlphaOrderIndependentTransparency = (try? ShaderSourceCache.getSource(url: pipelineURL))?.contains("#define SATIN_ALPHA_OIT_ENABLED") ?? false
+        definesAlphaOrderIndependentTransparency = (try? ShaderSourceCache.definesAlphaOrderIndependentTransparency(url: pipelineURL)) ?? false
     }
 }

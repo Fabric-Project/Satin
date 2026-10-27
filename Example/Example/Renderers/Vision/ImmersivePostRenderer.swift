@@ -122,6 +122,7 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
         guard let renderTexture else { return }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -147,7 +148,8 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
         postRenderPassDescriptor.renderTargetWidth = refTexture.width
         postRenderPassDescriptor.renderTargetHeight = refTexture.height
 
-        postProcessor.draw(
+        try postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: postRenderPassDescriptor,
             commandBuffer: commandBuffer,
             viewports: viewports,
@@ -167,6 +169,7 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
         guard let renderTexture else { return }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -191,7 +194,8 @@ final class ImmersivePostRenderer: ImmersiveBaseRenderer {
         postMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
         postProcessor.resize(size: (Float(refTexture.width), Float(refTexture.height)), scaleFactor: 1)
 
-        postProcessor.draw(
+        try postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: postRenderPassDescriptor,
             commandBuffer: commandBuffer
         )

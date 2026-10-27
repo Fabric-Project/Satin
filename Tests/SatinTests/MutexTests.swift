@@ -13,6 +13,8 @@ import SatinCore
 import simd
 import XCTest
 
+// Each iteration runs its work directly on concurrentPerform's threads: wrapping it in Tasks
+// nothing awaits left millions of them mutating objects after the tests returned.
 final class MutexTests: XCTestCase {
     let iterationCount = 100000
 
@@ -31,22 +33,16 @@ final class MutexTests: XCTestCase {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
                 let newObject = Object(context: context)
 
-                Task {
-                    queue.sync(flags: .barrier) {
-                        object.add(newObject)
-                    }
+                queue.sync(flags: .barrier) {
+                    object.add(newObject)
                 }
 
-                Task {
-                    queue.sync(flags: .barrier) {
-                        object.remove(newObject)
-                    }
+                queue.sync(flags: .barrier) {
+                    object.remove(newObject)
                 }
 
-                Task {
-                    queue.sync(flags: .barrier) {
-                        object.removeAll()
-                    }
+                queue.sync(flags: .barrier) {
+                    object.removeAll()
                 }
             }
         }
@@ -62,23 +58,17 @@ final class MutexTests: XCTestCase {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
                 let newObject = Object(context: context)
 
-                Task {
-                    lock.lock()
-                    object.add(newObject)
-                    lock.unlock()
-                }
+                lock.lock()
+                object.add(newObject)
+                lock.unlock()
 
-                Task {
-                    lock.lock()
-                    object.remove(newObject)
-                    lock.unlock()
-                }
+                lock.lock()
+                object.remove(newObject)
+                lock.unlock()
 
-                Task {
-                    lock.lock()
-                    object.removeAll()
-                    lock.unlock()
-                }
+                lock.lock()
+                object.removeAll()
+                lock.unlock()
             }
         }
     }
@@ -93,23 +83,17 @@ final class MutexTests: XCTestCase {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
                 let newObject = Object(context: context)
 
-                Task {
-                    lock.lock()
-                    object.add(newObject)
-                    lock.unlock()
-                }
+                lock.lock()
+                object.add(newObject)
+                lock.unlock()
 
-                Task {
-                    lock.lock()
-                    object.remove(newObject)
-                    lock.unlock()
-                }
+                lock.lock()
+                object.remove(newObject)
+                lock.unlock()
 
-                Task {
-                    lock.lock()
-                    object.removeAll()
-                    lock.unlock()
-                }
+                lock.lock()
+                object.removeAll()
+                lock.unlock()
             }
         }
     }
@@ -124,23 +108,17 @@ final class MutexTests: XCTestCase {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
                 let newObject = Object(context: context)
 
-                Task {
-                    mutex.unbalancedLock()
-                    object.add(newObject)
-                    mutex.unbalancedUnlock()
-                }
+                mutex.unbalancedLock()
+                object.add(newObject)
+                mutex.unbalancedUnlock()
 
-                Task {
-                    mutex.unbalancedLock()
-                    object.remove(newObject)
-                    mutex.unbalancedUnlock()
-                }
+                mutex.unbalancedLock()
+                object.remove(newObject)
+                mutex.unbalancedUnlock()
 
-                Task {
-                    mutex.unbalancedLock()
-                    object.removeAll()
-                    mutex.unbalancedUnlock()
-                }
+                mutex.unbalancedLock()
+                object.removeAll()
+                mutex.unbalancedUnlock()
             }
         }
     }
@@ -155,23 +133,17 @@ final class MutexTests: XCTestCase {
             DispatchQueue.concurrentPerform(iterations: iterationCount) { _ in
                 let newObject = Object(context: context)
 
-                Task {
-                    unfairLock.unbalancedLock()
-                    object.add(newObject)
-                    unfairLock.unbalancedUnlock()
-                }
+                unfairLock.unbalancedLock()
+                object.add(newObject)
+                unfairLock.unbalancedUnlock()
 
-                Task {
-                    unfairLock.unbalancedLock()
-                    object.remove(newObject)
-                    unfairLock.unbalancedUnlock()
-                }
+                unfairLock.unbalancedLock()
+                object.remove(newObject)
+                unfairLock.unbalancedUnlock()
 
-                Task {
-                    unfairLock.unbalancedLock()
-                    object.removeAll()
-                    unfairLock.unbalancedUnlock()
-                }
+                unfairLock.unbalancedLock()
+                object.removeAll()
+                unfairLock.unbalancedUnlock()
             }
         }
     }

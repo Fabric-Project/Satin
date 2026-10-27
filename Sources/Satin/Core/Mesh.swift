@@ -24,13 +24,16 @@ import SatinCore
 /// the pipeline compiled first, and the one used by draws that state no layout.
 public struct DrawLayout {
     public let vertexDescriptor: MTLVertexDescriptor
+    /// `vertexDescriptor`'s interned layout, which pipeline lookups key by.
+    public let vertexLayoutID: Int
     public let skinning: Bool
     public let instancing: Bool
     public let castShadow: Bool
     public let receiveShadow: Bool
 
-    public init(vertexDescriptor: MTLVertexDescriptor, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
+    public init(vertexDescriptor: MTLVertexDescriptor, vertexLayoutID: Int, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
         self.vertexDescriptor = vertexDescriptor
+        self.vertexLayoutID = vertexLayoutID
         self.skinning = skinning
         self.instancing = instancing
         self.castShadow = castShadow
@@ -54,33 +57,32 @@ open class Mesh: Renderable {
 
     /// What this mesh's draws need from a material's pipeline; see `DrawLayout`.
     public var drawLayout: DrawLayout {
-        DrawLayout(vertexDescriptor: geometry.vertexDescriptor, skinning: geometry.isSkinned, instancing: isInstanced,
-                   castShadow: castShadow, receiveShadow: receiveShadow)
-    }
-
-    override open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard instanceCount > 0,
-              geometry.hasVertexBuffers,
-              vertexUniforms[renderContext.id] != nil
-        else { return false }
-
-        let layout = drawLayout
-        if submeshes.isEmpty,
-           let material = material,
-           materialMatchesCurrentPass(material, shadow: shadow),
-           material.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
+        let geometry: Geometry = self.geometry
+        let vertexDescriptor = geometry.vertexDescriptor
+        let jointPalette = geometry.jointPalette
+        if let cachedDrawLayout,
+           cachedDrawLayoutGeometry === geometry,
+           cachedDrawLayout.vertexDescriptor === vertexDescriptor,
+           cachedDrawLayoutJointPalette === jointPalette,
+           cachedDrawLayout.castShadow == castShadow,
+           cachedDrawLayout.receiveShadow == receiveShadow
         {
-            return true
-        } else if submeshes.contains(where: {
-            $0.visible &&
-                materialMatchesCurrentPass($0.material, shadow: shadow) &&
-                $0.material?.getPipeline(renderContext: renderContext, shadow: shadow, layout: layout) != nil
-        }) {
-            return true
-        } else {
-            return false
+            return cachedDrawLayout
         }
+
+        let drawLayout = DrawLayout(vertexDescriptor: vertexDescriptor, vertexLayoutID: geometry.vertexLayoutID, skinning: geometry.isSkinned, instancing: isInstanced,
+                                    castShadow: castShadow, receiveShadow: receiveShadow)
+        cachedDrawLayout = drawLayout
+        cachedDrawLayoutGeometry = geometry
+        cachedDrawLayoutJointPalette = jointPalette
+        return drawLayout
     }
+
+    // `drawLayout` is read for every draw; it is rebuilt only when its inputs change. A geometry replaces its vertex descriptor whenever its attributes change,
+    // so comparing the geometry, its descriptor and its palette by identity is enough.
+    private var cachedDrawLayout: DrawLayout?
+    private var cachedDrawLayoutGeometry: Geometry?
+    private var cachedDrawLayoutJointPalette: JointPalette?
 
     public let instanceCountPublisher = PassthroughSubject<Int, Never>()
     public var instanceCount = 1 {
@@ -90,11 +92,10 @@ open class Mesh: Renderable {
     }
 
 
-    open var geometry: Geometry! {
+    open var geometry: Geometry {
         didSet {
             if geometry != oldValue {
                 setupGeometry()
-                geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
                 _updateLocalBounds = true
             }
         }
@@ -109,9 +110,9 @@ open class Mesh: Renderable {
     }
 
     var geometrySubscription: AnyCancellable?
-    private weak var boundsJointPalette: JointPalette?
-    private var boundsPoseVersion = -1
-    private var minimumEncodesPerFrame = 1
+    // Strong: it is the palette in use, replaced when the geometry's changes; no side table.
+    private var boundsJointPalette: JointPalette?
+    private var boundsObserver: MeshBoundsObserver?
 
     public internal(set) var submeshes: [Submesh] = []
     {
@@ -130,20 +131,25 @@ open class Mesh: Renderable {
 
     // MARK: - Decode
 
+    /// A decoded mesh starts with an empty geometry; its setup gives it the mesh's context.
     public required init(from decoder: Decoder) throws {
+        geometry = Geometry(context: try decoder.requireSatinContext(typeName: String(describing: Self.self)))
         try super.init(from: decoder)
     }
 
     // MARK: - Deinit
 
     deinit {
+        if let boundsObserver {
+            boundsJointPalette?.removeBoundsObserver(boundsObserver)
+            boundsObserver.mesh = nil
+        }
         cleanupGeometrySubscriber()
     }
 
     // MARK: - Setup
 
     override open func setup() {
-        setupVertexUniforms()
         setupGeometry()
         setupSubmeshes()
         setupMaterial()
@@ -154,27 +160,16 @@ open class Mesh: Renderable {
         geometrySubscription = nil
     }
 
-    // MARK: - Setup Uniforms
-
-    open func setupVertexUniforms() {
-        guard vertexUniforms[context.id] == nil else { return }
-        ensureVertexUniformBuffer(context: context)
-    }
-
-    open func getVertexUniformBuffer(renderContext: Context) -> VertexUniformBuffer? {
-        vertexUniforms[renderContext.id]
-    }
-
     open func setupGeometry() {
-        if geometry == nil {
-            geometry = Geometry(context: context)
-        }
         // A geometry swapped in under an existing material (as Fabric's Mesh node does) must
         // take effect now as the materials' default vertex layout.
         // The subscription below only sees later changes.
         configureMaterials(for: geometry)
-        geometrySubscription = geometry.onUpdate.sink { [weak self] geo in
-            guard let self = self else { return }
+        observeBoundsPalette()
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        geometrySubscription = geometry.onUpdate.sink { [unowned self] geo in
+            self.observeBoundsPalette()
             self.updateBounds = true
             self.configureMaterials(for: geo)
         }
@@ -201,93 +196,32 @@ open class Mesh: Renderable {
         material.vertexDescriptor = geometry.vertexDescriptor
         material.tessellationDescriptor = geometry.tessellationDescriptor
         material.setup()
-        material.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
 
         self.updateAllMaterials()
     }
 
-    // MARK: - Repeated Encoding
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    override open func prepareForRepeatedEncoding(count: Int) {
-        super.prepareForRepeatedEncoding(count: count)
-        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
-        ensureVertexUniformBuffer(
-            context: context,
-            encodesPerFrame: max(Satin.maxSubPassesPerFrame, minimumEncodesPerFrame)
-        )
-
-        // Expand material uniform buffer to hold one slot per in-flight iteration.
-        material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-        for submesh in submeshes {
-            submesh.material?.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-        }
-
-        // Geometry records one draw state per encode and uploads changed buffers into versioned slots.
-        geometry.setMinimumEncodesPerFrame(minimumEncodesPerFrame)
-    }
-
-    override open func captureRepeatedEncodingState(iteration: Int, count: Int) {
-        super.captureRepeatedEncodingState(iteration: iteration, count: count)
-        // Submesh geometries hold only indices: no palette to capture.
-        geometry.captureRepeatedEncoding(iteration: iteration, count: count)
-    }
-
-    override open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        selectRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    override open func selectRepeatedEncodingState(iteration: Int, count: Int) {
-        super.selectRepeatedEncodingState(iteration: iteration, count: count)
-        geometry.selectRecentSlot(iteration: iteration, count: count)
-        material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
-
-        for submesh in submeshes {
-            submesh.geometry.selectRecentSlot(iteration: iteration, count: count)
-            submesh.material?.uniforms?.selectRecentSlot(iteration: iteration, count: count)
-        }
-    }
-
     // MARK: - Binding
 
-    open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        bindUniforms(renderContext: renderContext, renderEncoderState: renderEncoderState)
-        bindGeometry(renderEncoderState: renderEncoderState, shadow: shadow)
-    }
-
-    open func bindUniforms(renderContext: Context, renderEncoderState: RenderEncoderState) {
-        // Every material this mesh draws with, its own and its submeshes': a mesh whose materials
-        // are all on its submeshes still has to place them.
-        var vertexWantsVertexUniforms = false
-        var fragmentWantsVertexUniforms = false
-        for material in materials {
-            guard let shader = material.shader else { continue }
-            vertexWantsVertexUniforms = vertexWantsVertexUniforms || shader.vertexWantsVertexUniforms
-            fragmentWantsVertexUniforms = fragmentWantsVertexUniforms || shader.fragmentWantsVertexUniforms
+    /// Binds the render event's vertex uniforms to the stages `material`'s shader reads them in.
+    /// Called after the material records, so its pipeline, and with it which stages read them, is
+    /// known. Repeat bindings across submeshes are skipped when the draws encode.
+    func recordVertexUniforms(in context: RenderableDrawContext, for material: Material) throws {
+        guard let shader = material.shader else { return }
+        let vertexUniforms = context.vertexUniforms
+        let usage = context.storage.recordingPipelineUsage
+        if shader.vertexWantsVertexUniforms || (usage?.vertex.buffers.contains(VertexBufferIndex.VertexUniforms.rawValue) ?? true) {
+            try context.setVertexBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
-        if vertexWantsVertexUniforms {
-            renderEncoderState.vertexVertexUniforms = vertexUniforms[renderContext.id]
+        if shader.fragmentWantsVertexUniforms || (usage?.fragment.buffers.contains(FragmentBufferIndex.VertexUniforms.rawValue) ?? true) {
+            try context.setFragmentBuffer(vertexUniforms.buffer, offset: vertexUniforms.offset, index: .VertexUniforms)
         }
-        if fragmentWantsVertexUniforms {
-            renderEncoderState.fragmentVertexUniforms = vertexUniforms[renderContext.id]
-        }
-    }
-
-    open func bindGeometry(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        geometry.bind(renderEncoderState: renderEncoderState, shadow: shadow)
     }
 
     // MARK: - Update
 
     override open func update() {
         geometry.update()
-        // A pose change moves a skinned mesh's bounds without any geometry update.
-        if geometry.isSkinned, let jointPalette = geometry.jointPalette,
-           jointPalette !== boundsJointPalette || jointPalette.poseVersion != boundsPoseVersion {
-            boundsJointPalette = jointPalette
-            boundsPoseVersion = jointPalette.poseVersion
-            updateBounds = true
-        }
+        observeBoundsPalette()
         material?.update()
         for submesh in submeshes {
             submesh.update()
@@ -295,31 +229,31 @@ open class Mesh: Renderable {
         super.update()
     }
 
-    override open func encode(_ commandBuffer: MTLCommandBuffer) {
-        geometry.encode(commandBuffer)
-        material?.encode(commandBuffer)
-        for submesh in submeshes {
-            submesh.encode(commandBuffer)
+    /// Follow palette replacement as well as its pose changes. Ordinary meshes allocate no relay.
+    private func observeBoundsPalette() {
+        let palette = geometry.boundsPaletteDependency
+        guard palette !== boundsJointPalette else { return }
+        if let boundsObserver {
+            boundsJointPalette?.removeBoundsObserver(boundsObserver)
         }
-        super.encode(commandBuffer)
+        boundsJointPalette = palette
+        if let palette {
+            let observer = boundsObserver ?? MeshBoundsObserver(mesh: self)
+            boundsObserver = observer
+            palette.addBoundsObserver(observer)
+        }
+        updateBounds = true
     }
 
-    override open func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-        vertexUniforms[renderContext.id]?.update(
-            object: self,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
-
-        super.update(
-            renderContext: renderContext,
-            camera: camera,
-            viewport: viewport,
-            index: index
-        )
+    override open func encode(in context: EncodingContext) throws {
+        try geometry.encode(in: context)
+        try material?.encode(in: context)
+        for submesh in submeshes {
+            try submesh.encode(in: context)
+        }
+        try super.encode(in: context)
     }
-    
+
     private func updateAllMaterials()
     {
         var allMaterials = [Material]()
@@ -337,77 +271,59 @@ open class Mesh: Renderable {
 
     // MARK: - Draw
 
-    override open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        draw(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            instanceCount: instanceCount,
-            shadow: shadow
-        )
+    override open func draw(in context: RenderableDrawContext) throws {
+        try drawMesh(in: context, instanceCount: instanceCount)
     }
 
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
+    /// Records this mesh's draws with `instanceCount` instances: for each submesh drawn in this
+    /// pass, or for itself, its material, vertex uniforms, then its geometry's `draw(in:)` (over the
+    /// submesh's indices for a submesh). Nothing to draw records nothing.
+    func drawMesh(in context: RenderableDrawContext, instanceCount: Int) throws {
+        // Read once for the whole draw: a class property read is a checked access each time.
+        let geometry = self.geometry
+        guard instanceCount > 0, geometry.hasVertexBuffers else { return }
 
+        // The material may be shared with meshes of another layout: pick the pipeline for ours.
+        let layout = drawLayout
         if !submeshes.isEmpty {
-            for submesh in submeshes where submesh.visible && materialMatchesCurrentPass(submesh.material, shadow: shadow) {
-                submesh.draw(
-                    renderContext: renderContext,
-                    renderEncoderState: renderEncoderState,
-                    instanceCount: instanceCount,
-                    shadow: shadow
-                )
+            for submesh in submeshes where submesh.visible {
+                guard let submeshMaterial = submesh.material,
+                      materialMatchesCurrentPass(submeshMaterial, in: context)
+                else { continue }
+                try submeshMaterial.draw(in: context.materialContext(layout: layout))
+                try recordVertexUniforms(in: context, for: submeshMaterial)
+                try geometry.draw(in: context.geometryContext(instanceCount: instanceCount, indexBufferOffset: submesh.indexBufferOffset, elements: submesh.geometry))
             }
-        } else if materialMatchesCurrentPass(material, shadow: shadow) {
-            // The material may be shared with meshes of another layout: pick the pipeline for ours.
-            material?.bind(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                shadow: shadow,
-                layout: drawLayout
-            )
-            geometry.draw(
-                renderEncoderState: renderEncoderState,
-                instanceCount: instanceCount
-            )
+        } else if let material, materialMatchesCurrentPass(material, in: context) {
+            try material.draw(in: context.materialContext(layout: layout))
+            try recordVertexUniforms(in: context, for: material)
+            try geometry.draw(in: context.geometryContext(instanceCount: instanceCount))
         }
     }
 
-    private func materialMatchesCurrentPass(_ material: Material?, shadow: Bool) -> Bool {
-        guard let material else { return false }
-        if shadow {
-            return true
+    /// A mesh whose submeshes carry the materials asks them: any visible submesh blending in
+    /// `materialPass` orders the whole recording. Opaque submeshes in the same pass are then drawn
+    /// as two culled halves, the same pixels as one uncullled draw.
+    override func drawsTransparent(in materialPass: MaterialPass) -> Bool {
+        guard !submeshes.isEmpty else { return super.drawsTransparent(in: materialPass) }
+        for submesh in submeshes where submesh.visible {
+            if let material = submesh.material, material.blending != .disabled, materialPass.includes(material) {
+                return true
+            }
         }
+        return false
+    }
 
-        let isTransparent = material.blending != .disabled
-
-        switch materialPass {
-        case .all:
-            return true
-        case .opaque:
-            return !isTransparent
-        case .alphaTransparent:
-            return material.blending == .alpha
-        case .classicTransparent:
-            return isTransparent
-        case .surfaceOpaque:
-            return material.lightingModel == .surface && !isTransparent
-        case .unlitOpaque:
-            return material.lightingModel == .unlit && !isTransparent
-        }
+    private func materialMatchesCurrentPass(_ material: Material, in context: RenderableDrawContext) -> Bool {
+        context.isShadowPass || context.materialPass.includes(material)
     }
 
     open func addSubmesh(_ submesh: Submesh) {
         assert(submesh.context == context, "Submesh context mismatch")
-        submesh.parent = self
         submeshes.append(submesh)
         // Its material needs its depth-stencil state and shader before the first draw; nothing
         // else sets a submesh up.
-        submesh.setup()
+        submesh.setup(vertexGeometry: geometry)
     }
 
     // MARK: - Comoute Bounds
@@ -483,5 +399,15 @@ open class Mesh: Renderable {
         }
 
         return results.count > 0
+    }
+}
+
+/// A palette's bounds notification reaches a mesh without keeping it alive or adding a weak
+/// reference to it. The mesh unregisters and clears the relay before its stored properties go.
+final class MeshBoundsObserver {
+    unowned var mesh: Mesh?
+
+    init(mesh: Mesh) {
+        self.mesh = mesh
     }
 }

@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7FAD00000000000000000002 /* GPUError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAD00000000000000000001 /* GPUError.swift */; };
+		4113CF3BF9DA4D7F8ACD4DC1 /* RecordedLightingPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */; };
+		49637A7F7C9B42BB973E21F1 /* RecordedSceneOccurrences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */; };
+		CF4500000000000000000003 /* SealedSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000004 /* SealedSubmission.swift */; };
+		CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000006 /* PipelineResourceUsage.swift */; };
+		CF4500000000000000000001 /* MotionHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4500000000000000000002 /* MotionHistory.swift */; };
 		1B01F15D2FAFB8ED00C88561 /* Object+Flatten.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */; };
 		1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B35E2852F9692FB00DE68DE /* RenderLayer.swift */; };
 		1B3E0D5C3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3E0D5A3072EF1700E444F4 /* MotionBlurNeighborMaxMaterial.swift */; };
@@ -63,11 +69,9 @@
 		E101A89F2C070E8E0055FABA /* ARPlaneMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4B2C06A24B00B5A6C8 /* ARPlaneMesh.swift */; };
 		E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */; };
 		E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */; };
-		E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */; };
 		5A1E00000000000000000011 /* JointPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000001 /* JointPalette.swift */; };
 		E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */; };
 		E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */; };
-		E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */; };
 		E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD542C06A24B00B5A6C8 /* CameraController.swift */; };
 		E101A8A72C070E8E0055FABA /* OrthographicCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD552C06A24B00B5A6C8 /* OrthographicCameraController.swift */; };
 		E101A8A82C070E8E0055FABA /* PerspectiveCameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD562C06A24B00B5A6C8 /* PerspectiveCameraController.swift */; };
@@ -78,6 +82,7 @@
 		E101A8AD2C070E8E0055FABA /* ComputeShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */; };
 		E101A8AE2C070E8E0055FABA /* ComputeShaderConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */; };
 		E101A8AF2C070E8E0055FABA /* ComputeShaderLibraryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */; };
+		7F1A0000000000000000D001 /* ComputeInputCopies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000D000 /* ComputeInputCopies.swift */; };
 		E101A8B02C070E8E0055FABA /* ComputeShaderLibraryConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */; };
 		E101A8B12C070E8E0055FABA /* ComputeShaderLibrarySourceCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */; };
 		E101A8B22C070E8E0055FABA /* ComputeShaderPipelineCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */; };
@@ -106,6 +111,18 @@
 		5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000000A /* ObjectAnimation.swift */; };
 		5A1E00000000000000000019 /* TimeDriven.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000009 /* TimeDriven.swift */; };
 		7F1A00000000000000000002 /* FrameTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000001 /* FrameTime.swift */; };
+		7F1A00000000000000000004 /* SceneIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000003 /* SceneIndex.swift */; };
+		7F1A00000000000000000006 /* RenderCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000005 /* RenderCollection.swift */; };
+		7F1A0000000000000000000C /* FrameArena.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000B /* FrameArena.swift */; };
+		7F1A0000000000000000000E /* RenderDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000D /* RenderDestination.swift */; };
+		7F1A00000000000000000010 /* DrawRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000000F /* DrawRecording.swift */; };
+		7F1A00000000000000000016 /* DrawPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000015 /* DrawPacket.swift */; };
+		7F1A00000000000000000018 /* PacketRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000017 /* PacketRecorder.swift */; };
+		7F1A00000000000000000051 /* ViewFrustum.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000050 /* ViewFrustum.swift */; };
+		7F1A00000000000000000053 /* ShadowCasterRecording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000052 /* ShadowCasterRecording.swift */; };
+		7F1A0000000000000000001A /* RenderSubmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000019 /* RenderSubmission.swift */; };
+		7F1A0000000000000000001C /* EncodingContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A0000000000000000001B /* EncodingContext.swift */; };
+		7F1A00000000000000000008 /* SceneTraversal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000007 /* SceneTraversal.swift */; };
 		5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000006 /* SkeletonBinding.swift */; };
 		5A1E00000000000000000017 /* AnimationLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000007 /* AnimationLoader.swift */; };
 		E101A8C62C070E8E0055FABA /* Object.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7C2C06A24B00B5A6C8 /* Object.swift */; };
@@ -137,6 +154,7 @@
 		E101A8E02C070E8E0055FABA /* AnyBufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */; };
 		E101A8E12C070E8E0055FABA /* Attribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */; };
 		E101A8E22C070E8E0055FABA /* BufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */; };
+		7F1A00000000000000000012 /* GeometryBufferObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000011 /* GeometryBufferObserver.swift */; };
 		E101A8E32C070E8E0055FABA /* ElementBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */; };
 		E101A8E42C070E8E0055FABA /* InterleavedBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */; };
 		E101A8E52C070E8E0055FABA /* InterleavedBufferAttribute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */; };
@@ -271,6 +289,8 @@
 		E14638662C8CB4C4005E36E9 /* TextureComputeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */; };
 		E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */; };
 		E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF812CBCD89C00F54A6D /* Locks.swift */; };
+		7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000009 /* VertexLayoutRegistry.swift */; };
+		7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000013 /* RenderContextRegistry.swift */; };
 		E18ABF842CBCDC9600F54A6D /* MutexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18ABF832CBCDC9000F54A6D /* MutexTests.swift */; };
 		E194F6992D288A22009A5C25 /* Raycast.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6952D288A22009A5C25 /* Raycast.swift */; };
 		E194F69A2D288A22009A5C25 /* RaycastOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E194F6962D288A22009A5C25 /* RaycastOptions.swift */; };
@@ -301,6 +321,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		7FAD00000000000000000001 /* GPUError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUError.swift; sourceTree = "<group>"; };
+		B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedLightingPipeline.swift; sourceTree = "<group>"; };
+		2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordedSceneOccurrences.swift; sourceTree = "<group>"; };
+		CF4500000000000000000004 /* SealedSubmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SealedSubmission.swift; sourceTree = "<group>"; };
+		CF4500000000000000000006 /* PipelineResourceUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineResourceUsage.swift; sourceTree = "<group>"; };
+		CF4500000000000000000002 /* MotionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionHistory.swift; sourceTree = "<group>"; };
 		1B01F15C2FAFB8ED00C88561 /* Object+Flatten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Object+Flatten.swift"; sourceTree = "<group>"; };
 		1B35E2852F9692FB00DE68DE /* RenderLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderLayer.swift; sourceTree = "<group>"; };
 		1B3E0D583072EF1700E444F4 /* MotionBlurJumpFloodMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionBlurJumpFloodMaterial.swift; sourceTree = "<group>"; };
@@ -329,11 +355,9 @@
 		66D7DD4B2C06A24B00B5A6C8 /* ARPlaneMesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPlaneMesh.swift; sourceTree = "<group>"; };
 		66D7DD4C2C06A24B00B5A6C8 /* ARPostProcessEncoder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARPostProcessEncoder.swift; sourceTree = "<group>"; };
 		66D7DD4D2C06A24B00B5A6C8 /* ARSessionPublisher.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ARSessionPublisher.swift; sourceTree = "<group>"; };
-		66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InstanceMatrixUniformBuffer.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000001 /* JointPalette.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = JointPalette.swift; sourceTree = "<group>"; };
 		66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StructBuffer.swift; sourceTree = "<group>"; };
 		66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = UniformBuffer.swift; sourceTree = "<group>"; };
-		66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VertexUniformBuffer.swift; sourceTree = "<group>"; };
 		66D7DD542C06A24B00B5A6C8 /* CameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CameraController.swift; sourceTree = "<group>"; };
 		66D7DD552C06A24B00B5A6C8 /* OrthographicCameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OrthographicCameraController.swift; sourceTree = "<group>"; };
 		66D7DD562C06A24B00B5A6C8 /* PerspectiveCameraController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PerspectiveCameraController.swift; sourceTree = "<group>"; };
@@ -344,6 +368,7 @@
 		66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShader.swift; sourceTree = "<group>"; };
 		66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderConfiguration.swift; sourceTree = "<group>"; };
 		66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibraryCache.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000D000 /* ComputeInputCopies.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeInputCopies.swift; sourceTree = "<group>"; };
 		66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibraryConfiguration.swift; sourceTree = "<group>"; };
 		66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderLibrarySourceCache.swift; sourceTree = "<group>"; };
 		66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ComputeShaderPipelineCache.swift; sourceTree = "<group>"; };
@@ -372,6 +397,18 @@
 		5A1E0000000000000000000A /* ObjectAnimation.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ObjectAnimation.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000009 /* TimeDriven.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TimeDriven.swift; sourceTree = "<group>"; };
 		7F1A00000000000000000001 /* FrameTime.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameTime.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000003 /* SceneIndex.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneIndex.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000005 /* RenderCollection.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderCollection.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000B /* FrameArena.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FrameArena.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000D /* RenderDestination.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderDestination.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000000F /* DrawRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawRecording.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000015 /* DrawPacket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DrawPacket.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000017 /* PacketRecorder.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PacketRecorder.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000050 /* ViewFrustum.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ViewFrustum.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000052 /* ShadowCasterRecording.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ShadowCasterRecording.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000019 /* RenderSubmission.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RenderSubmission.swift; sourceTree = "<group>"; };
+		7F1A0000000000000000001B /* EncodingContext.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EncodingContext.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000007 /* SceneTraversal.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SceneTraversal.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000006 /* SkeletonBinding.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SkeletonBinding.swift; sourceTree = "<group>"; };
 		5A1E00000000000000000007 /* AnimationLoader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnimationLoader.swift; sourceTree = "<group>"; };
 		66D7DD7C2C06A24B00B5A6C8 /* Object.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Object.swift; sourceTree = "<group>"; };
@@ -404,6 +441,7 @@
 		66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AnyBufferAttribute.swift; sourceTree = "<group>"; };
 		66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Attribute.swift; sourceTree = "<group>"; };
 		66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BufferAttribute.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000011 /* GeometryBufferObserver.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GeometryBufferObserver.swift; sourceTree = "<group>"; };
 		66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ElementBuffer.swift; sourceTree = "<group>"; };
 		66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InterleavedBuffer.swift; sourceTree = "<group>"; };
 		66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = InterleavedBufferAttribute.swift; sourceTree = "<group>"; };
@@ -565,6 +603,8 @@
 		E14638652C8CB4C4005E36E9 /* TextureComputeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextureComputeProcessor.swift; sourceTree = "<group>"; };
 		E14638672C8CB4EF005E36E9 /* ComputeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputeProcessor.swift; sourceTree = "<group>"; };
 		E18ABF812CBCD89C00F54A6D /* Locks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Locks.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000009 /* VertexLayoutRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VertexLayoutRegistry.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000013 /* RenderContextRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderContextRegistry.swift; sourceTree = "<group>"; };
 		E18ABF832CBCDC9000F54A6D /* MutexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutexTests.swift; sourceTree = "<group>"; };
 		E194F6952D288A22009A5C25 /* Raycast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Raycast.swift; sourceTree = "<group>"; };
 		E194F6962D288A22009A5C25 /* RaycastOptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RaycastOptions.swift; sourceTree = "<group>"; };
@@ -664,11 +704,9 @@
 		66D7DD532C06A24B00B5A6C8 /* Buffers */ = {
 			isa = PBXGroup;
 			children = (
-				66D7DD4F2C06A24B00B5A6C8 /* InstanceMatrixUniformBuffer.swift */,
 				5A1E00000000000000000001 /* JointPalette.swift */,
 				66D7DD502C06A24B00B5A6C8 /* StructBuffer.swift */,
 				66D7DD512C06A24B00B5A6C8 /* UniformBuffer.swift */,
-				66D7DD522C06A24B00B5A6C8 /* VertexUniformBuffer.swift */,
 			);
 			path = Buffers;
 			sourceTree = "<group>";
@@ -708,6 +746,7 @@
 				66D7DD5E2C06A24B00B5A6C8 /* ComputeShader.swift */,
 				66D7DD5F2C06A24B00B5A6C8 /* ComputeShaderConfiguration.swift */,
 				66D7DD602C06A24B00B5A6C8 /* ComputeShaderLibraryCache.swift */,
+				7F1A0000000000000000D000 /* ComputeInputCopies.swift */,
 				66D7DD612C06A24B00B5A6C8 /* ComputeShaderLibraryConfiguration.swift */,
 				66D7DD622C06A24B00B5A6C8 /* ComputeShaderLibrarySourceCache.swift */,
 				66D7DD632C06A24B00B5A6C8 /* ComputeShaderPipelineCache.swift */,
@@ -777,6 +816,7 @@
 				5A1E0000000000000000000A /* ObjectAnimation.swift */,
 				5A1E00000000000000000009 /* TimeDriven.swift */,
 				7F1A00000000000000000001 /* FrameTime.swift */,
+				7F1A00000000000000000003 /* SceneIndex.swift */,
 				5A1E00000000000000000006 /* SkeletonBinding.swift */,
 				66D7DD7C2C06A24B00B5A6C8 /* Object.swift */,
 				66D7DD7D2C06A24B00B5A6C8 /* RenderEncoder.swift */,
@@ -835,6 +875,7 @@
 				66D7DD9A2C06A24B00B5A6C8 /* AnyBufferAttribute.swift */,
 				66D7DD9B2C06A24B00B5A6C8 /* Attribute.swift */,
 				66D7DD9C2C06A24B00B5A6C8 /* BufferAttribute.swift */,
+				7F1A00000000000000000011 /* GeometryBufferObserver.swift */,
 				66D7DD9D2C06A24B00B5A6C8 /* ElementBuffer.swift */,
 				66D7DD9E2C06A24B00B5A6C8 /* InterleavedBuffer.swift */,
 				66D7DD9F2C06A24B00B5A6C8 /* InterleavedBufferAttribute.swift */,
@@ -966,6 +1007,22 @@
 			children = (
 				66D7DEAC2C06A24B00B5A6C8 /* RenderEncoderState.swift */,
 				66D7DEAD2C06A24B00B5A6C8 /* RenderList.swift */,
+				7F1A00000000000000000005 /* RenderCollection.swift */,
+				7F1A0000000000000000000B /* FrameArena.swift */,
+				CF4500000000000000000002 /* MotionHistory.swift */,
+				CF4500000000000000000004 /* SealedSubmission.swift */,
+				B3C430420A94482F96D3E8CB /* RecordedLightingPipeline.swift */,
+				2394C9237C8944FDBC05D0AA /* RecordedSceneOccurrences.swift */,
+				CF4500000000000000000006 /* PipelineResourceUsage.swift */,
+				7F1A0000000000000000000D /* RenderDestination.swift */,
+				7F1A0000000000000000000F /* DrawRecording.swift */,
+				7F1A00000000000000000015 /* DrawPacket.swift */,
+				7F1A00000000000000000017 /* PacketRecorder.swift */,
+				7F1A00000000000000000050 /* ViewFrustum.swift */,
+				7F1A00000000000000000052 /* ShadowCasterRecording.swift */,
+				7F1A00000000000000000019 /* RenderSubmission.swift */,
+				7F1A0000000000000000001B /* EncodingContext.swift */,
+				7F1A00000000000000000007 /* SceneTraversal.swift */,
 			);
 			path = Renderer;
 			sourceTree = "<group>";
@@ -1038,7 +1095,10 @@
 		66D7DED62C06A24B00B5A6C8 /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				7FAD00000000000000000001 /* GPUError.swift */,
 				E18ABF812CBCD89C00F54A6D /* Locks.swift */,
+				7F1A00000000000000000009 /* VertexLayoutRegistry.swift */,
+				7F1A00000000000000000013 /* RenderContextRegistry.swift */,
 				66D7DECB2C06A24B00B5A6C8 /* FileWatcher.swift */,
 				66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */,
 				66D7DECD2C06A24B00B5A6C8 /* Loader.swift */,
@@ -1327,7 +1387,10 @@
 			files = (
 				E101A85E2C07061D0055FABA /* Types.mm in Sources */,
 				E101A8542C07061D0055FABA /* Bezier.mm in Sources */,
+				7FAD00000000000000000002 /* GPUError.swift in Sources */,
 				E18ABF822CBCD89E00F54A6D /* Locks.swift in Sources */,
+				7F1A0000000000000000000A /* VertexLayoutRegistry.swift in Sources */,
+				7F1A00000000000000000014 /* RenderContextRegistry.swift in Sources */,
 				E14638682C8CB4EF005E36E9 /* ComputeProcessor.swift in Sources */,
 				E101A8552C07061D0055FABA /* Bounds.mm in Sources */,
 				E101A8562C07061D0055FABA /* Bvh.mm in Sources */,
@@ -1408,11 +1471,9 @@
 				E101A89F2C070E8E0055FABA /* ARPlaneMesh.swift in Sources */,
 				E101A8A02C070E8E0055FABA /* ARPostProcessEncoder.swift in Sources */,
 				E101A8A12C070E8E0055FABA /* ARSessionPublisher.swift in Sources */,
-				E101A8A22C070E8E0055FABA /* InstanceMatrixUniformBuffer.swift in Sources */,
 				5A1E00000000000000000011 /* JointPalette.swift in Sources */,
 				E101A8A32C070E8E0055FABA /* StructBuffer.swift in Sources */,
 				E101A8A42C070E8E0055FABA /* UniformBuffer.swift in Sources */,
-				E101A8A52C070E8E0055FABA /* VertexUniformBuffer.swift in Sources */,
 				E101A8A62C070E8E0055FABA /* CameraController.swift in Sources */,
 				1B35E2872F9692FB00DE68DE /* RenderLayer.swift in Sources */,
 				AA000007AA000007AA000007 /* RendererOutputs.swift in Sources */,
@@ -1426,6 +1487,7 @@
 				E101A8AD2C070E8E0055FABA /* ComputeShader.swift in Sources */,
 				E101A8AE2C070E8E0055FABA /* ComputeShaderConfiguration.swift in Sources */,
 				E101A8AF2C070E8E0055FABA /* ComputeShaderLibraryCache.swift in Sources */,
+				7F1A0000000000000000D001 /* ComputeInputCopies.swift in Sources */,
 				E101A8B02C070E8E0055FABA /* ComputeShaderLibraryConfiguration.swift in Sources */,
 				E10A52D52C581CE300BB537A /* CodingUserInfoKey+Extensions.swift in Sources */,
 				E101A8B12C070E8E0055FABA /* ComputeShaderLibrarySourceCache.swift in Sources */,
@@ -1461,6 +1523,23 @@
 				5A1E0000000000000000001A /* ObjectAnimation.swift in Sources */,
 				5A1E00000000000000000019 /* TimeDriven.swift in Sources */,
 				7F1A00000000000000000002 /* FrameTime.swift in Sources */,
+				7F1A00000000000000000004 /* SceneIndex.swift in Sources */,
+				7F1A00000000000000000006 /* RenderCollection.swift in Sources */,
+				7F1A0000000000000000000C /* FrameArena.swift in Sources */,
+				CF4500000000000000000001 /* MotionHistory.swift in Sources */,
+				CF4500000000000000000003 /* SealedSubmission.swift in Sources */,
+				4113CF3BF9DA4D7F8ACD4DC1 /* RecordedLightingPipeline.swift in Sources */,
+				49637A7F7C9B42BB973E21F1 /* RecordedSceneOccurrences.swift in Sources */,
+				CF4500000000000000000005 /* PipelineResourceUsage.swift in Sources */,
+				7F1A0000000000000000000E /* RenderDestination.swift in Sources */,
+				7F1A00000000000000000010 /* DrawRecording.swift in Sources */,
+				7F1A00000000000000000016 /* DrawPacket.swift in Sources */,
+				7F1A00000000000000000018 /* PacketRecorder.swift in Sources */,
+				7F1A00000000000000000051 /* ViewFrustum.swift in Sources */,
+				7F1A00000000000000000053 /* ShadowCasterRecording.swift in Sources */,
+				7F1A0000000000000000001A /* RenderSubmission.swift in Sources */,
+				7F1A0000000000000000001C /* EncodingContext.swift in Sources */,
+				7F1A00000000000000000008 /* SceneTraversal.swift in Sources */,
 				5A1E00000000000000000016 /* SkeletonBinding.swift in Sources */,
 				5A1E00000000000000000017 /* AnimationLoader.swift in Sources */,
 				E101A8C62C070E8E0055FABA /* Object.swift in Sources */,
@@ -1495,6 +1574,7 @@
 				E101A8E02C070E8E0055FABA /* AnyBufferAttribute.swift in Sources */,
 				E101A8E12C070E8E0055FABA /* Attribute.swift in Sources */,
 				E101A8E22C070E8E0055FABA /* BufferAttribute.swift in Sources */,
+				7F1A00000000000000000012 /* GeometryBufferObserver.swift in Sources */,
 				E101A8E32C070E8E0055FABA /* ElementBuffer.swift in Sources */,
 				E101A8E42C070E8E0055FABA /* InterleavedBuffer.swift in Sources */,
 				E101A8E52C070E8E0055FABA /* InterleavedBufferAttribute.swift in Sources */,
@@ -1767,7 +1847,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Hi-Rez, Inc. All rights reserved.";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1777,7 +1857,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = mh_dylib;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				MODULEMAP_FILE = Sources/Satin/module.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
@@ -1796,7 +1876,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				USE_HEADERMAP = YES;
-				XROS_DEPLOYMENT_TARGET = 1.1;
+				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Debug;
 		};
@@ -1820,7 +1900,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Hi-Rez, Inc. All rights reserved.";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1830,7 +1910,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACH_O_TYPE = mh_dylib;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				MODULEMAP_FILE = Sources/Satin/module.modulemap;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
@@ -1849,7 +1929,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 				USE_HEADERMAP = YES;
-				XROS_DEPLOYMENT_TARGET = 1.1;
+				XROS_DEPLOYMENT_TARGET = 2.0;
 			};
 			name = Release;
 		};
@@ -1861,7 +1941,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 56B82GMHZR;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.hi-rez.SatinTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1880,7 +1960,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 56B82GMHZR;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.6;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "io.hi-rez.SatinTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -10,9 +10,16 @@ import Foundation
 import Metal
 
 public protocol Tessellator: ComputeProcessor {
-    var factorsBuffer: MTLBuffer? { get }
-    func update(_ commandBuffer: MTLCommandBuffer, iterations: Int)
-    func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int)
+    /// The bytes one dispatch writes: a factors value per patch.
+    var factorsLength: Int { get }
+    /// Where the next dispatch writes its factors, such as a slice of a frame's arena. Nothing is
+    /// dispatched without one: the tessellator owns no factors storage.
+    var factorsDestination: (buffer: MTLBuffer, offset: Int)? { get set }
+    /// Returns true only after work producing the destination's factors was encoded.
+    /// No GPU wait is performed. Custom tessellators must report a failed preparation as false.
+    func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int) throws -> Bool
+    func update(_ commandBuffer: MTLCommandBuffer, iterations: Int) throws
+    func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int) throws
 }
 
 open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
@@ -30,24 +37,27 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         return prefix
     }
 
-    var geometry: TessellationGeometry {
-        didSet {
-            if oldValue != geometry {
-                setupFactorsBuffer()
-            }
-        }
-    }
+    var geometry: TessellationGeometry
 
-    public internal(set) var factorsBuffer: MTLBuffer?
+    public var factorsDestination: (buffer: MTLBuffer, offset: Int)?
+    public var factorsLength: Int { MemoryLayout<T>.stride * geometry.patchCount }
+    private var factorsWereEncoded = false
+
+    /// Keeps existing update overrides in the dispatch path while reporting whether the
+    /// standard processor actually dispatched. Custom encoders may override this operation.
+    @discardableResult
+    open func encodeFactors(_ commandBuffer: MTLCommandBuffer, into destination: (buffer: MTLBuffer, offset: Int), iterations: Int = 1) throws -> Bool {
+        let previousDestination = factorsDestination
+        factorsDestination = destination
+        factorsWereEncoded = false
+        defer { factorsDestination = previousDestination }
+        try update(commandBuffer, iterations: iterations)
+        return factorsWereEncoded
+    }
 
     public init(device: MTLDevice, pipelineURL: URL, live: Bool, geometry: TessellationGeometry) {
         self.geometry = geometry
         super.init(device: device, pipelineURL: pipelineURL, live: live)
-    }
-
-    override public func setup() {
-        setupFactorsBuffer()
-        super.setup()
     }
 
     override open func update() {
@@ -56,15 +66,6 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
         set(geometry.indexBuffer, index: .TessellationIndices)
     }
 
-    func setupFactorsBuffer() {
-        factorsBuffer = device.makeBuffer(
-            length: MemoryLayout<T>.stride * geometry.patchCount,
-            options: [.storageModePrivate]
-        )
-
-        factorsBuffer?.label = "\(label) Factors Buffer"
-        set(factorsBuffer, index: ComputeBufferIndex.TessellationFactors)
-    }
 
     override func updateSize() {
         parameters.set("Count", geometry.patchCount)
@@ -72,30 +73,39 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
 
     // MARK: - Reset
 
-    override public func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        super.update(commandBuffer)
+    override public func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) throws {
+        try super.update(commandBuffer)
+        factorsWereEncoded = false
 
-        guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
+        guard geometry.patchCount > 0, (_reset && resetPipeline != nil) || (iterations > 0 && updatePipeline != nil) else { return }
 
-        if factorsBuffer != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+        if factorsDestination != nil, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            defer { computeEncoder.endEncoding() }
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
-            computeEncoder.endEncoding()
+            try inputCopies.withCommandBuffer(commandBuffer) {
+                try encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 
-    override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        super.update(computeEncoder)
+    override public func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try super.update(computeEncoder)
+        factorsWereEncoded = false
 
-        if factorsBuffer != nil {
-            encode(computeEncoder, iterations: iterations)
+        if geometry.patchCount > 0, factorsDestination != nil {
+            try inputCopies.withCommandBuffer(nil) {
+                try encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 
-    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        bindUniforms(computeEncoder)
-        bindBuffers(computeEncoder)
+    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try bindUniforms(computeEncoder)
+        try bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
+        if let factorsDestination {
+            computeEncoder.setBuffer(factorsDestination.buffer, offset: factorsDestination.offset, index: ComputeBufferIndex.TessellationFactors.rawValue)
+        }
 
         if _reset, let pipeline = resetPipeline {
             computeEncoder.setComputePipelineState(pipeline)
@@ -105,6 +115,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
                 pipeline: pipeline,
                 iteration: 0
             )
+            factorsWereEncoded = true
             _reset = false
         }
 
@@ -117,6 +128,7 @@ open class TessellationProcessor<T>: ComputeProcessor, Tessellator {
                     pipeline: pipeline,
                     iteration: iteration
                 )
+                factorsWereEncoded = true
             }
         }
     }

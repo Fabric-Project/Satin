@@ -22,45 +22,30 @@ open class Submesh {
 
     private var _updateIndexBuffer = true
 
-    weak var parent: Mesh?
     var material: Material?
-    var geometry: Geometry!
+    /// Its indices: an elements-only geometry drawn over the mesh's vertices.
+    let geometry: Geometry
 
+    /// A range of indices into the vertices of the mesh it is added to, drawn with its own material.
+    /// The mesh passes its vertex geometry and draw layout in, so a submesh keeps no reference to it.
     public init(
         context: Context,
         label: String = "Submesh",
-        parent: Mesh,
         elementBuffer: ElementBuffer,
         indexBufferOffset: Int = 0,
         material: Material? = nil
     ) {
         self.context = context
-        self.parent = parent
+        self.label = label
         self.indexBufferOffset = indexBufferOffset
         self.material = material
         geometry = Geometry(context: context)
         geometry.setElements(elementBuffer)
     }
 
-    public convenience init(
-        label: String = "Submesh",
-        parent: Mesh,
-        elementBuffer: ElementBuffer,
-        indexBufferOffset: Int = 0,
-        material: Material? = nil
-    ) {
-        self.init(
-            context: parent.context,
-            label: label,
-            parent: parent,
-            elementBuffer: elementBuffer,
-            indexBufferOffset: indexBufferOffset,
-            material: material
-        )
-    }
-
-    open func setup() {
-        setupMaterial()
+    /// Sets this submesh up to draw the vertices of `vertexGeometry`, its mesh's geometry.
+    open func setup(vertexGeometry: Geometry) {
+        setupMaterial(vertexGeometry: vertexGeometry)
         setupGeometry()
     }
 
@@ -69,32 +54,17 @@ open class Submesh {
         geometry.update()
     }
 
-    open func encode(_ commandBuffer: MTLCommandBuffer) {
-        material?.encode(commandBuffer)
-        geometry.encode(commandBuffer)
+    open func encode(in context: EncodingContext) throws {
+        try material?.encode(in: context)
+        try geometry.encode(in: context)
     }
 
-    open func setupMaterial() {
-        guard let material, let parent else { return }
-        material.vertexDescriptor = parent.geometry.vertexDescriptor
-        material.tessellationDescriptor = parent.geometry.tessellationDescriptor
+    open func setupMaterial(vertexGeometry: Geometry) {
+        guard let material else { return }
+        material.vertexDescriptor = vertexGeometry.vertexDescriptor
+        material.tessellationDescriptor = vertexGeometry.tessellationDescriptor
         material.setup()
     }
 
     open func setupGeometry() {}
-
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        // The material may be shared with meshes of another layout: pick the pipeline for ours.
-        material?.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow,
-            layout: parent?.drawLayout
-        )
-        geometry.draw(
-            renderEncoderState: renderEncoderState,
-            instanceCount: instanceCount,
-            indexBufferOffset: indexBufferOffset
-        )
-    }
 }

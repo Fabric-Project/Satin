@@ -35,7 +35,7 @@ public class ARBackgroundEncoder: PostProcessEncoder {
     private var backgroundMaterial: ARBackgroundMaterial
 
     public var colorTexture: MTLTexture? {
-        renderer.colorTexture
+        postProcessRenderer.colorTexture
     }
 
     public init(context: Context, session: ARSession) {
@@ -45,8 +45,8 @@ public class ARBackgroundEncoder: PostProcessEncoder {
 
         super.init(label: "AR Background RenderEncoder", context: context, material: backgroundMaterial)
 
-        renderer.setClearColor(.zero)
-        renderer.frameBufferOnly = false
+        postProcessRenderer.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        postProcessRenderer.frameBufferOnly = false
         setupTextureCache()
 
         NotificationCenter.default.addObserver(self, selector: #selector(ARBackgroundEncoder.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)

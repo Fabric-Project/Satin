@@ -118,24 +118,42 @@ final class BlendingRendererTests: XCTestCase {
     }
 
     func testOverlappingAlphaLayersMatchForwardAcrossModes() throws {
-        let forward = try renderOverlappingAlphaStack(mode: .forward)
-        let forwardPlus = try renderOverlappingAlphaStack(mode: .forwardPlus)
-        let deferred = try renderOverlappingAlphaStack(mode: .deferredGeometry)
+        let forward = try renderOverlappingAlphaStack(mode: .forward, nearPlaneRenderOrder: 2, farPlaneRenderOrder: 1)
+        let forwardPlus = try renderOverlappingAlphaStack(mode: .forwardPlus, nearPlaneRenderOrder: 2, farPlaneRenderOrder: 1)
+        let deferred = try renderOverlappingAlphaStack(mode: .deferredGeometry, nearPlaneRenderOrder: 2, farPlaneRenderOrder: 1)
 
         VisualTestHarness.assertContainsVisibleContent(forward, minimumChangedPixelRatio: 0.08, minimumMeanNormalizedDifference: 0.01)
         assertImagesMatch(forwardPlus, forward, threshold: 0.01)
         assertImagesMatch(deferred, forward, threshold: 0.01)
     }
 
-    func testAlphaOitMatchesAcrossTransparentDrawOrder() throws {
-        let forwardReference = try renderOverlappingAlphaStack(mode: .forward, drawNearPlaneFirst: false)
-        let reorderedForward = try renderOverlappingAlphaStack(mode: .forward, drawNearPlaneFirst: true)
-        let reorderedForwardPlus = try renderOverlappingAlphaStack(mode: .forwardPlus, drawNearPlaneFirst: true)
-        let reorderedDeferred = try renderOverlappingAlphaStack(mode: .deferredGeometry, drawNearPlaneFirst: true)
+    /// Within one render order, alpha OIT blends order-independently: the order the planes are
+    /// added (and so recorded) in doesn't change the image, in any rendering mode.
+    func testAlphaOitIgnoresDrawOrderWithinOneRenderOrder() throws {
+        let forwardReference = try renderOverlappingAlphaStack(mode: .forward, nearPlaneRenderOrder: 0, farPlaneRenderOrder: 0, addNearPlaneFirst: false)
+        let reorderedForward = try renderOverlappingAlphaStack(mode: .forward, nearPlaneRenderOrder: 0, farPlaneRenderOrder: 0, addNearPlaneFirst: true)
+        let reorderedForwardPlus = try renderOverlappingAlphaStack(mode: .forwardPlus, nearPlaneRenderOrder: 0, farPlaneRenderOrder: 0, addNearPlaneFirst: true)
+        let reorderedDeferred = try renderOverlappingAlphaStack(mode: .deferredGeometry, nearPlaneRenderOrder: 0, farPlaneRenderOrder: 0, addNearPlaneFirst: true)
 
+        VisualTestHarness.assertContainsVisibleContent(forwardReference, minimumChangedPixelRatio: 0.08, minimumMeanNormalizedDifference: 0.01)
         assertImagesMatch(reorderedForward, forwardReference, threshold: 0.01)
         assertImagesMatch(reorderedForwardPlus, forwardReference, threshold: 0.01)
         assertImagesMatch(reorderedDeferred, forwardReference, threshold: 0.01)
+    }
+
+    /// With `sortObjects`, each render order is its own OIT group, composited over the groups
+    /// before it: swapping the planes' render orders changes which one is on top, and every
+    /// rendering mode agrees on the result.
+    func testAlphaOitCompositesAHigherRenderOrderOverALowerOne() throws {
+        let nearOnTop = try renderOverlappingAlphaStack(mode: .forward, nearPlaneRenderOrder: 2, farPlaneRenderOrder: 1)
+        let farOnTop = try renderOverlappingAlphaStack(mode: .forward, nearPlaneRenderOrder: 1, farPlaneRenderOrder: 2)
+        let farOnTopForwardPlus = try renderOverlappingAlphaStack(mode: .forwardPlus, nearPlaneRenderOrder: 1, farPlaneRenderOrder: 2)
+        let farOnTopDeferred = try renderOverlappingAlphaStack(mode: .deferredGeometry, nearPlaneRenderOrder: 1, farPlaneRenderOrder: 2)
+
+        let swapped = VisualTestHarness.diff(rendered: farOnTop, reference: nearOnTop)
+        XCTAssertGreaterThan(swapped.meanAbsoluteDifference, 0.002, "the render order decides which plane composites over the other where they overlap")
+        assertImagesMatch(farOnTopForwardPlus, farOnTop, threshold: 0.01)
+        assertImagesMatch(farOnTopDeferred, farOnTop, threshold: 0.01)
     }
 
     func testTransparentOnlyAlphaSceneMatchesForwardAcrossModes() throws {
@@ -312,6 +330,7 @@ private func drawFrame(
     scene: Object,
     camera: Camera,
     renderTarget: MTLTexture,
+    frame: FrameTime = .zero,
     synchronizeTextures: [MTLTexture] = []
 ) throws {
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
@@ -320,6 +339,7 @@ private func drawFrame(
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
     try renderer.draw(
+        frame: frame,
         renderPassDescriptor: renderPassDescriptor,
         commandBuffer: commandBuffer,
         scene: scene,
@@ -363,7 +383,9 @@ private func makeReadableColorTexture(device: MTLDevice, size: SIMD2<Int>) throw
 
 private func renderOverlappingAlphaStack(
     mode: RenderingMode,
-    drawNearPlaneFirst: Bool = false
+    nearPlaneRenderOrder: Int,
+    farPlaneRenderOrder: Int,
+    addNearPlaneFirst: Bool = true
 ) throws -> RGBAImage {
     guard let device = MTLCreateSystemDefaultDevice(),
           let commandQueue = device.makeCommandQueue()
@@ -427,7 +449,7 @@ private func renderOverlappingAlphaStack(
         material: nearMaterial
     )
     nearPlane.position = [-0.15, 0.0, 0.2]
-    nearPlane.renderOrder = drawNearPlaneFirst ? 1 : 2
+    nearPlane.renderOrder = nearPlaneRenderOrder
 
     let farPlane = Mesh(
         context: context,
@@ -436,11 +458,16 @@ private func renderOverlappingAlphaStack(
         material: farMaterial
     )
     farPlane.position = [0.18, 0.0, -0.05]
-    farPlane.renderOrder = drawNearPlaneFirst ? 2 : 1
+    farPlane.renderOrder = farPlaneRenderOrder
 
     scene.add(background)
-    scene.add(nearPlane)
-    scene.add(farPlane)
+    if addNearPlaneFirst {
+        scene.add(nearPlane)
+        scene.add(farPlane)
+    } else {
+        scene.add(farPlane)
+        scene.add(nearPlane)
+    }
 
     let outputTexture = try makeReadableColorTexture(device: device, size: size)
     try drawFrame(renderer: renderer, commandQueue: commandQueue, scene: scene, camera: camera, renderTarget: outputTexture)

@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARPeopleOcclusionRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARPeopleOcclusionRenderer())
+        SatinMetalView(renderer: ARPeopleOcclusionRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR People Occlusion")
     }

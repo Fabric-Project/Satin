@@ -128,7 +128,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
         NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
     }
 
-    func update(_ commandBuffer: MTLCommandBuffer) {
+    func update(_ commandBuffer: MTLCommandBuffer) throws {
         if upscaleDepth,
            let capturedImageTextureY = capturedImageTextureY,
            let yTexture = CVMetalTextureGetTexture(capturedImageTextureY),
@@ -137,7 +137,7 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
            let depthTexture = sceneDepthTexture,
            let depthTexture = CVMetalTextureGetTexture(depthTexture)
         {
-            upscaledSceneDepthTexture = depthUpscaler.update(
+            upscaledSceneDepthTexture = try depthUpscaler.update(
                 commandBuffer: commandBuffer,
                 yTexture: yTexture,
                 cbcrTexture: cbcrTexture,
@@ -153,12 +153,13 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     }
 
     override public func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer
-    ) {
-        update(commandBuffer)
-
-        depthRenderer.draw(
+    ) throws {
+        try update(commandBuffer)
+        try depthRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: depthScene,
@@ -167,13 +168,14 @@ public class ARBackgroundDepthEncoder: ARBackgroundEncoder {
     }
 
     override public func draw(
+        frame: FrameTime,
         renderPassDescriptor: MTLRenderPassDescriptor,
         commandBuffer: MTLCommandBuffer,
         renderTarget: MTLTexture
-    ) {
-        update(commandBuffer)
-
-        depthRenderer.draw(
+    ) throws {
+        try update(commandBuffer)
+        try depthRenderer.draw(
+            frame: frame,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: depthScene,

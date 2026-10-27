@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 11/3/22.
 //
 
-import Combine
 import Foundation
 import Metal
 import simd
@@ -33,8 +32,6 @@ public final class DirectionalLight: Light {
             setupShadow()
         }
     }
-
-    private var transformSubscriber: AnyCancellable?
 
     private enum CodingKeys: String, CodingKey {
         case color
@@ -66,16 +63,7 @@ public final class DirectionalLight: Light {
 
     override public func setup() {
         super.setup()
-        setupTransformSubscriber()
         setupShadow()
-    }
-
-    func setupTransformSubscriber() {
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            guard let self = self else { return }
-            self.shadow.update(light: self)
-            self.publisher.send(self)
-        }
     }
 
     func setupShadow() {

@@ -128,7 +128,17 @@ simd_float4x4 lookAtMatrix3f(simd_float3 eye, simd_float3 at, simd_float3 up) {
     simd_float4x4 result = matrix_identity_float4x4;
 
     const simd_float3 zAxis = simd_normalize(at - eye);
-    const simd_float3 xAxis = simd_normalize(simd_cross(up, zAxis));
+    simd_float3 unnormalizedXAxis = simd_cross(up, zAxis);
+    if (simd_length_squared(unnormalizedXAxis) < 1e-12f) {
+        // Looking along `up` leaves no plane to orient in: use the world axis least aligned
+        // with the view direction, so the matrix stays orthonormal instead of NaN.
+        const simd_float3 alignment = simd_abs(zAxis);
+        const simd_float3 fallbackUp = alignment.x <= alignment.y && alignment.x <= alignment.z ? simd_make_float3(1.0f, 0.0f, 0.0f)
+                                     : alignment.y <= alignment.z                               ? simd_make_float3(0.0f, 1.0f, 0.0f)
+                                                                                                : simd_make_float3(0.0f, 0.0f, 1.0f);
+        unnormalizedXAxis = simd_cross(fallbackUp, zAxis);
+    }
+    const simd_float3 xAxis = simd_normalize(unnormalizedXAxis);
     const simd_float3 yAxis = simd_normalize(simd_cross(zAxis, xAxis));
 
     result.columns[0].x = xAxis.x;

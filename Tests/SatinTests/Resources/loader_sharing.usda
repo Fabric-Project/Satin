@@ -1,0 +1,270 @@
+#usda 1.0
+(
+    defaultPrim = "Root"
+    upAxis = "Y"
+    metersPerUnit = 1
+)
+
+# LoaderTests: how loading maps source materials and sidedness onto Satin meshes.
+# - A, D share M1 (textured); D sits under a mirroring scale.
+# - B uses M1 too but is double-sided: sidedness belongs to geometry in USD.
+# - C uses M2.
+# - E (double-sided) and F (single-sided) each have two face subsets, bound to M1 and M2.
+# - G and H bind two materials both named "Same", in different scopes, with different colours.
+# - I binds "Twin", identical to M2 in everything but its name and scope: it shares M2's material.
+# - J is double-sided under the mirror.
+# Every triangle is counter-clockwise seen from +Z.
+def Xform "Root"
+{
+    def Scope "Looks"
+    {
+        def Material "M1"
+        {
+            token outputs:surface.connect = </Root/Looks/M1/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect = </Root/Looks/M1/Texture.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "Texture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @loader_checker.png@
+                float2 inputs:st.connect = </Root/Looks/M1/UV.outputs:result>
+                float3 outputs:rgb
+            }
+
+            def Shader "UV"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                token inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+
+        def Material "M2"
+        {
+            token outputs:surface.connect = </Root/Looks/M2/Surface.outputs:surface>
+
+            def Shader "Surface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0, 1, 0)
+                token outputs:surface
+            }
+        }
+
+        def Scope "First"
+        {
+            def Material "Same"
+            {
+                token outputs:surface.connect = </Root/Looks/First/Same/Surface.outputs:surface>
+
+                def Shader "Surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (0, 0, 1)
+                    token outputs:surface
+                }
+            }
+        }
+
+        def Scope "Copies"
+        {
+            def Material "Twin"
+            {
+                token outputs:surface.connect = </Root/Looks/Copies/Twin/Surface.outputs:surface>
+
+                def Shader "Surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (0, 1, 0)
+                    token outputs:surface
+                }
+            }
+        }
+
+        def Scope "Second"
+        {
+            def Material "Same"
+            {
+                token outputs:surface.connect = </Root/Looks/Second/Same/Surface.outputs:surface>
+
+                def Shader "Surface"
+                {
+                    uniform token info:id = "UsdPreviewSurface"
+                    color3f inputs:diffuseColor = (1, 1, 0)
+                    token outputs:surface
+                }
+            }
+        }
+    }
+
+    def Mesh "A" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(-4, 0, 0), (-3, 0, 0), (-4, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/M1>
+    }
+
+    def Mesh "B" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 1
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(-2, 0, 0), (-1, 0, 0), (-2, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </Root/Looks/M1>
+    }
+
+    def Mesh "C" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        rel material:binding = </Root/Looks/M2>
+    }
+
+    def Xform "Mirror"
+    {
+        float3 xformOp:scale = (-1, 1, 1)
+        uniform token[] xformOpOrder = ["xformOp:scale"]
+
+        def Mesh "D" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 0
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(-3, -2, 0), (-2, -2, 0), (-3, -1, 0)]
+            texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+                interpolation = "vertex"
+            )
+            rel material:binding = </Root/Looks/M1>
+        }
+
+        def Mesh "J" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform bool doubleSided = 1
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+            point3f[] points = [(-1, -2, 0), (0, -2, 0), (-1, -1, 0)]
+            rel material:binding = </Root/Looks/M2>
+        }
+    }
+
+    def Mesh "E"
+    {
+        uniform bool doubleSided = 1
+        int[] faceVertexCounts = [3, 3]
+        int[] faceVertexIndices = [0, 1, 2, 2, 1, 3]
+        point3f[] points = [(2, 0, 0), (3, 0, 0), (2, 1, 0), (3, 1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1), (1, 1)] (
+            interpolation = "vertex"
+        )
+
+        def GeomSubset "First" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [0]
+            rel material:binding = </Root/Looks/M1>
+        }
+
+        def GeomSubset "Second" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [1]
+            rel material:binding = </Root/Looks/M2>
+        }
+    }
+
+    def Mesh "F"
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3, 3]
+        int[] faceVertexIndices = [0, 1, 2, 2, 1, 3]
+        point3f[] points = [(2, -2, 0), (3, -2, 0), (2, -1, 0), (3, -1, 0)]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1), (1, 1)] (
+            interpolation = "vertex"
+        )
+
+        def GeomSubset "First" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [0]
+            rel material:binding = </Root/Looks/M1>
+        }
+
+        def GeomSubset "Second" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [1]
+            rel material:binding = </Root/Looks/M2>
+        }
+    }
+
+    def Mesh "G" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(4, 0, 0), (5, 0, 0), (4, 1, 0)]
+        rel material:binding = </Root/Looks/First/Same>
+    }
+
+    def Mesh "H" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(6, 0, 0), (7, 0, 0), (6, 1, 0)]
+        rel material:binding = </Root/Looks/Second/Same>
+    }
+
+    def Mesh "I" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform bool doubleSided = 0
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(8, 0, 0), (9, 0, 0), (8, 1, 0)]
+        rel material:binding = </Root/Looks/Copies/Twin>
+    }
+}

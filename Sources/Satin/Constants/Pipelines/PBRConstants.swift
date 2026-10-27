@@ -86,6 +86,21 @@ public enum PBRTextureType: String, CaseIterable, Codable {
         }
     }
 
+    /// Every case in declaration order, so `orderedCases[type.index] == type`. Stored once, unlike
+    /// `allCases`, which builds a new array on each call.
+    public static let orderedCases: [PBRTextureType] = allCases
+
+    /// The number of map slots: arrays indexed by `index` have this many entries.
+    public static let count = orderedCases.count
+
+    /// The material parameter holding this map's texcoord transform, title-cased once per case
+    /// rather than on every set.
+    public var texcoordParameterName: String {
+        PBRTextureType.texcoordParameterNames[index]
+    }
+
+    private static let texcoordParameterNames: [String] = orderedCases.map { $0.texcoordName.titleCase }
+
     public var shaderDefine: String {
         description.titleCase.uppercased().replacingOccurrences(of: " ", with: "_") + "_MAP"
     }

@@ -37,7 +37,7 @@ public class ARFeatheredDepthMaskGenerator {
         blurFilter.edgeMode = .clamp
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer, realDepthTexture: MTLTexture, virtualDepthTexture: MTLTexture) -> MTLTexture? {
+    public func encode(commandBuffer: MTLCommandBuffer, realDepthTexture: MTLTexture, virtualDepthTexture: MTLTexture) throws -> MTLTexture? {
         if _updateTextures {
             texture = createTexture(
                 label: "Feathered Depth Mask Texture",
@@ -57,7 +57,7 @@ public class ARFeatheredDepthMaskGenerator {
             _updateTextures = false
         }
 
-        if let depthMaskTexture = depthMaskGenerator.encode(
+        if let depthMaskTexture = try depthMaskGenerator.encode(
             commandBuffer: commandBuffer,
             realDepthTexture: realDepthTexture,
             virtualDepthTexture: virtualDepthTexture

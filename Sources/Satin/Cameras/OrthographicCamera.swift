@@ -13,76 +13,32 @@ import SatinCore
 #endif
 
 open class OrthographicCamera: Camera {
-    override public var scale: simd_float3 {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
-        }
-    }
-
-    override public var position: simd_float3 {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
-        }
-    }
-
-    override public var orientation: simd_quatf {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
-        }
-    }
-
     public var left: Float = -1.0 {
         didSet {
-            updateProjectionMatrix = true
+            if left != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var right: Float = 1.0 {
         didSet {
-            updateProjectionMatrix = true
+            if right != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var top: Float = 1.0 {
         didSet {
-            updateProjectionMatrix = true
+            if top != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var bottom: Float = -1.0 {
         didSet {
-            updateProjectionMatrix = true
+            if bottom != oldValue { projectionInputsDidChange() }
         }
     }
 
-    override public var projectionMatrix: matrix_float4x4 {
-        get {
-            if updateProjectionMatrix {
-                _projectionMatrix = orthographicMatrixf(left, right, bottom, top, near, far)
-                updateProjectionMatrix = false
-            }
-            return _projectionMatrix
-        }
-        set {
-            _projectionMatrix = newValue
-        }
-    }
-
-    override public var viewMatrix: matrix_float4x4 {
-        get {
-            if updateViewMatrix {
-                _viewMatrix = worldMatrixInverse
-                updateViewMatrix = false
-            }
-            return _viewMatrix
-        }
-        set {
-            _viewMatrix = newValue
-            localMatrix = newValue.inverse
-        }
+    override open func computeProjectionMatrix() -> matrix_float4x4 {
+        orthographicMatrixf(left, right, bottom, top, near, far)
     }
 
     override public init(context: Context, label: String = "Orthographic Camera") {

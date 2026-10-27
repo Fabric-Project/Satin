@@ -13,7 +13,7 @@ import Metal
 import MetalKit
 import Satin
 
-final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
+final class PBREnhancedRenderer: BaseRenderer {
     typealias AnimatedPointLight = (
         light: PointLight,
         basePosition: simd_float3,
@@ -82,7 +82,6 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
 
     lazy var customMaterial: CustomMaterial = {
         lazy var mat = CustomMaterial(context: defaultContext, pipelinesURL: pipelinesURL)
-        mat.delegate = self
         mat.set("Base Color", [1.0, 0.0, 0.0, 1.0])
         mat.set("Emissive Color", [1.0, 1.0, 1.0, 0.0])
         return mat
@@ -186,7 +185,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 
@@ -208,6 +207,7 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -218,8 +218,5 @@ final class PBREnhancedRenderer: BaseRenderer, MaterialDelegate {
     override func resize(size: (width: Float, height: Float), scaleFactor _: Float) {
         camera.aspect = size.width / size.height
         renderer.resize(size)
-    }
-
-    func updated(material: Satin.Material) {
     }
 }

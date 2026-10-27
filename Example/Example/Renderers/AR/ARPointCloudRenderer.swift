@@ -80,13 +80,6 @@ final class ARPointCloudRenderer: BaseRenderer {
         metalView.preferredFramesPerSecond = 60
 
         mesh.instanceCount = 256 * 192
-        mesh.material?.onBind = { [weak self] re in
-            re.setVertexBuffer(
-                self?.pointCloud.getBuffer("Point"),
-                offset: 0,
-                index: VertexBufferIndex.Custom0.rawValue
-            )
-        }
 
         backgroundRenderer = ARBackgroundDepthEncoder(
             context: defaultContext,
@@ -102,6 +95,7 @@ final class ARPointCloudRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
@@ -116,10 +110,12 @@ final class ARPointCloudRenderer: BaseRenderer {
                     Float(currentFrame.camera.imageResolution.height)))
             }
 
-            pointCloud.update(commandBuffer)
+            try pointCloud.update(commandBuffer)
         }
+        mesh.material?.set(pointCloud.getBuffer("Point"), index: VertexBufferIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

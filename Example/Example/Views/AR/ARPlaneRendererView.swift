@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARPlanesRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARPlanesRenderer())
+        SatinMetalView(renderer: ARPlanesRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Planes")
     }

@@ -113,7 +113,7 @@ final class TextPiecesTests: XCTestCase {
         let context = try makeContext()
         let geometry = makeText(context, "AB", .character)
         let pieces = try XCTUnwrap(geometry.pieces)
-        let palette = JointPalette(device: context.device, jointCount: pieces.count)
+        let palette = JointPalette(jointCount: pieces.count)
         palette.reset(matrices: [matrix_identity_float4x4, translation(0, 10, 0)])
         let posed = PosedGeometry(source: geometry, jointPalette: palette)
 

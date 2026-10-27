@@ -256,9 +256,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         super.init(
             label: "Bokeh Depth Of Field",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
     }
 
@@ -272,7 +270,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         resizeResourcesIfNeeded(force: false)
 
         guard let colorTexture,
@@ -302,7 +300,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         generateCoCProcessor.set("Far End", resolvedSettings.farEnd)
         generateCoCProcessor.set(fullResolutionCoCTexture, index: .Custom0)
         generateCoCProcessor.set(depthTexture, index: .Custom1)
-        generateCoCProcessor.update(commandBuffer)
+        try generateCoCProcessor.update(commandBuffer)
 
         downsampleProcessor.set("Far Boost", Float(5.0))
         downsampleProcessor.set(downsampledCoCTexture, index: .Custom0)
@@ -310,28 +308,28 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         downsampleProcessor.set(colorMulFarTexture, index: .Custom2)
         downsampleProcessor.set(fullResolutionCoCTexture, index: .Custom3)
         downsampleProcessor.set(colorTexture, index: .Custom4)
-        downsampleProcessor.update(commandBuffer)
+        try downsampleProcessor.update(commandBuffer)
 
         let nearFilterRadius = nearCoCFilterRadius(for: resolvedSettings)
         nearCoCBoxHorizontalProcessor.set(nearCoCBoxIntermediateTexture, index: .Custom0)
         nearCoCBoxHorizontalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCBoxHorizontalProcessor.set(downsampledCoCTexture, index: .Custom1)
-        nearCoCBoxHorizontalProcessor.update(commandBuffer)
+        try nearCoCBoxHorizontalProcessor.update(commandBuffer)
 
         nearCoCBoxVerticalProcessor.set(nearCoCBoxTexture, index: .Custom0)
         nearCoCBoxVerticalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCBoxVerticalProcessor.set(nearCoCBoxIntermediateTexture, index: .Custom1)
-        nearCoCBoxVerticalProcessor.update(commandBuffer)
+        try nearCoCBoxVerticalProcessor.update(commandBuffer)
 
         nearCoCMaxHorizontalProcessor.set(nearCoCMaxIntermediateTexture, index: .Custom0)
         nearCoCMaxHorizontalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCMaxHorizontalProcessor.set(nearCoCBoxTexture, index: .Custom1)
-        nearCoCMaxHorizontalProcessor.update(commandBuffer)
+        try nearCoCMaxHorizontalProcessor.update(commandBuffer)
 
         nearCoCMaxVerticalProcessor.set(nearCoCTexture, index: .Custom0)
         nearCoCMaxVerticalProcessor.set("Filter Radius", nearFilterRadius)
         nearCoCMaxVerticalProcessor.set(nearCoCMaxIntermediateTexture, index: .Custom1)
-        nearCoCMaxVerticalProcessor.update(commandBuffer)
+        try nearCoCMaxVerticalProcessor.update(commandBuffer)
 
         horizontalProcessor.set("Max Radius", resolvedSettings.maxRadius)
         horizontalProcessor.set(farHorizontalTextures[0], index: .Custom0)
@@ -345,7 +343,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         horizontalProcessor.set(downsampledCoCTexture, index: .Custom8)
         horizontalProcessor.set(nearCoCTexture, index: .Custom9)
         horizontalProcessor.set(colorMulFarTexture, index: .Custom10)
-        horizontalProcessor.update(commandBuffer)
+        try horizontalProcessor.update(commandBuffer)
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.cocTexture = downsampledCoCTexture
@@ -361,7 +359,8 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
         compositeMaterial.maxBlurRadius = resolvedSettings.maxRadius
         compositeMaterial.blend = resolvedSettings.blend
 
-        super.draw(
+        try super.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

@@ -8,10 +8,6 @@
 import Foundation
 import Metal
 
-public protocol ElementBufferDelegate: AnyObject {
-    func updated(buffer: ElementBuffer)
-}
-
 public class ElementBuffer: Equatable {
     public let id: String = UUID().uuidString
 
@@ -29,7 +25,9 @@ public class ElementBuffer: Equatable {
     public private(set) var needsUpdate: Bool = true
     public private(set) var buffer: MTLBuffer?
 
-    public weak var delegate: ElementBufferDelegate?
+    /// The geometries using this buffer; see `GeometryBufferObserver`.
+    var observers = GeometryBufferObservers()
+    var observerCount: Int { observers.count }
 
     public init(type: MTLIndexType, data: UnsafeMutableRawPointer?, count: Int, source: Any?) {
         self.type = type
@@ -43,7 +41,7 @@ public class ElementBuffer: Equatable {
         self.count = count
         self.source = source
         needsUpdate = true
-        delegate?.updated(buffer: self)
+        observers.notifyIndexDataChanged()
     }
 
     func markClean() {

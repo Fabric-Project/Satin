@@ -137,7 +137,7 @@ public final class InspectorViewController: NSViewController, ParameterGroupView
     override public func viewWillAppear() {
         super.viewWillAppear()
         resize()
-        DispatchQueue.main.async { [unowned self] in
+        DispatchQueue.main.async {
             if let window = self.view.window {
                 window.makeFirstResponder(nil)
             }
@@ -151,7 +151,7 @@ public final class InspectorViewController: NSViewController, ParameterGroupView
             let totalHeight = height
             let originYOffset = windowFrame.height - totalHeight
             if windowFrame.size.height != totalHeight {
-                DispatchQueue.main.async { [unowned self] in
+                DispatchQueue.main.async {
                     if let window = self.view.window {
                         window.setFrame(NSRect(x: windowFrame.origin.x, y: windowFrame.origin.y + originYOffset, width: windowFrame.size.width, height: totalHeight), display: true, animate: false)
                     }
@@ -166,7 +166,7 @@ public final class InspectorViewController: NSViewController, ParameterGroupView
 
     override public func viewDidAppear() {
         super.viewDidAppear()
-        DispatchQueue.main.async { [unowned self] in
+        DispatchQueue.main.async {
             if let window = self.view.window {
                 window.makeFirstResponder(nil)
             }

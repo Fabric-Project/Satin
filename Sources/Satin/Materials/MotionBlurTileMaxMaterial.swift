@@ -5,12 +5,14 @@ import Metal
 public final class MotionBlurTileMaxMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    public unowned var velocityTexture: MTLTexture? {
-        didSet { set(velocityTexture, index: FragmentTextureIndex.Custom0) }
+    public var velocityTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
     /// The tile size `MotionBlurPostProcessEncoder` dilates with.

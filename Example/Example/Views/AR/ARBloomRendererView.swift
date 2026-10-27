@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARBloomRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARBloomRenderer())
+        SatinMetalView(renderer: ARBloomRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Bloom")
     }

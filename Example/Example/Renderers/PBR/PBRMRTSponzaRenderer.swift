@@ -199,12 +199,15 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override func setup() throws {
+
         loadHdri()
         setupSponzaScene()
         setupLights()
         setupOverlayScene()
 
         scene.environmentIntensity = 0.000025
+        // Made here, on main, so its event monitors are registered on main; frames update it later.
+        _ = cameraController
 
 #if os(visionOS)
         metalView.backgroundColor = .clear
@@ -233,17 +236,19 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        sceneRenderer.draw(
+        try sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
             camera: camera
         )
 
-        let beautyTexture = postProcessedBeautyTexture(commandBuffer: commandBuffer)
+        let beautyTexture = try postProcessedBeautyTexture(commandBuffer: commandBuffer)
         updatePreviewTextures(beautyTexture: beautyTexture)
 
-        overlayRenderer.draw(
+        try overlayRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: overlayScene,
@@ -367,7 +372,8 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
             return
         }
 
-        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader) else {
+        // Sponza is static: meshes sharing a material merge, for far fewer draws per pass.
+        guard let model = loadAsset(url: url, context: defaultContext, textureLoader: textureLoader, mergeStaticMeshes: true, mergeCells:16) else {
             print("Failed to load Sponza scene at \(url.path)")
             return
         }
@@ -379,6 +385,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
             if let mesh = object as? Mesh {
                 mesh.receiveShadow = true
                 mesh.castShadow = true
+                mesh.frustumCulled = true
             }
         }
         
@@ -401,7 +408,7 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
     private func loadHdri() {
         let url = texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")
         if let hdr = loadHDR(device: device, url: url) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 
@@ -483,26 +490,27 @@ final class PBRMRTSponzaRenderer: BaseRenderer {
         )
     }
 
-    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         ssaoPostProcessEncoder.colorTexture = sceneRenderer.colorTexture
         ssaoPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         ssaoPostProcessEncoder.normalTexture = sceneRenderer.normalTexture
         ssaoPostProcessEncoder.sceneCamera = camera
-        ssaoPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try ssaoPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let compositeTexture = ssaoPostProcessEncoder.outputTexture ?? sceneRenderer.colorTexture
 
         motionBlurPostProcessEncoder.colorTexture = compositeTexture
         motionBlurPostProcessEncoder.velocityTexture = sceneRenderer.velocityTexture
         motionBlurPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
-        motionBlurPostProcessEncoder.draw(renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
+        try motionBlurPostProcessEncoder.draw(frame: frameTime, renderPassDescriptor: MTLRenderPassDescriptor(), commandBuffer: commandBuffer)
 
         let motionBlurTexture = motionBlurPostProcessEncoder.outputTexture ?? compositeTexture
 
         bokehDepthOfFieldPostProcessEncoder.colorTexture = motionBlurTexture
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
-        bokehDepthOfFieldPostProcessEncoder.draw(
+        try bokehDepthOfFieldPostProcessEncoder.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )

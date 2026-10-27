@@ -75,7 +75,33 @@ open class StandardMaterial: Material {
             get("Environment Intensity", as: FloatParameter.self)!.value
         }
         set {
-            set("Environment Intensity", newValue)
+            // The renderer sets it every frame: through the parameter found once, not by name.
+            resolveFrameParameters()
+            if let environmentIntensityParameter {
+                environmentIntensityParameter.value = newValue
+            } else {
+                set("Environment Intensity", newValue)
+            }
+        }
+    }
+
+    // MARK: - Parameters Set Every Frame
+
+    // The parameters the renderer writes every frame, found by name once per parameter
+    // structure: `ParameterGroup.structureRevision` says when to find them again.
+    private var frameParameterGroup: ParameterGroup?
+    private var frameParameterStructureRevision: UInt64 = 0
+    private var environmentIntensityParameter: FloatParameter?
+    private var texcoordParameters = [Float4x4Parameter?](repeating: nil, count: PBRTextureType.count)
+
+    private func resolveFrameParameters() {
+        let parameters = self.parameters
+        guard parameters !== frameParameterGroup || parameters.structureRevision != frameParameterStructureRevision else { return }
+        frameParameterGroup = parameters
+        frameParameterStructureRevision = parameters.structureRevision
+        environmentIntensityParameter = parameters.get("Environment Intensity", as: FloatParameter.self)
+        for type in PBRTextureType.orderedCases {
+            texcoordParameters[type.index] = parameters.get(type.texcoordParameterName, as: Float4x4Parameter.self)
         }
     }
 
@@ -93,17 +119,19 @@ open class StandardMaterial: Material {
         set { set("Point Size", newValue) }
     }
 
-    private var maps: [PBRTextureType: MTLTexture?] = [:] {
+    /// The texture for each map, indexed by `PBRTextureType.index`.
+    private var maps = [MTLTexture?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != maps.keys, let shader = shader as? PBRShader {
+            if pbrSlotPresenceDiffers(oldValue, maps), let shader = shader as? PBRShader {
                 shader.maps = maps
             }
         }
     }
 
-    private var samplers: [PBRTextureType: MTLSamplerDescriptor?] = [:] {
+    /// The sampler for each map, indexed by `PBRTextureType.index`.
+    private var samplers = [MTLSamplerDescriptor?](repeating: nil, count: PBRTextureType.count) {
         didSet {
-            if oldValue.keys != samplers.keys, let shader = shader as? PBRShader {
+            if pbrSlotPresenceDiffers(oldValue, samplers), let shader = shader as? PBRShader {
                 shader.samplers = samplers
             }
         }
@@ -118,10 +146,14 @@ open class StandardMaterial: Material {
     }
 
     public func setTexture(_ texture: MTLTexture?, type: PBRTextureType) {
+        let index = type.index
         if let texture = texture {
-            maps[type] = texture
+            // Setting the texture a map already holds changes nothing; the renderer re-applies the
+            // environment maps every frame.
+            if maps[index] === texture { return }
+            maps[index] = texture
             setTextureMultiplierUniformToOne(type: type)
-            if samplers[type] == nil {
+            if samplers[index] == nil {
                 let sampler = MTLSamplerDescriptor()
                 sampler.minFilter = .linear
                 sampler.magFilter = .linear
@@ -132,21 +164,23 @@ open class StandardMaterial: Material {
                 setSampler(sampler, type: type)
             }
         } else {
-            samplers.removeValue(forKey: type)
-            maps.removeValue(forKey: type)
+            samplers[index] = nil
+            maps[index] = nil
         }
     }
 
     public func setSampler(_ sampler: MTLSamplerDescriptor?, type: PBRTextureType) {
-        if let sampler = sampler {
-            samplers[type] = sampler
-        } else {
-            samplers.removeValue(forKey: type)
-        }
+        samplers[type.index] = sampler
     }
 
     public func setTextureTransform(_ transform: simd_float4x4, type: PBRTextureType) {
-        set(type.texcoordName.titleCase, transform)
+        // The renderer sets the environment maps' every frame: through the parameter found once.
+        resolveFrameParameters()
+        if let parameter = texcoordParameters[type.index] {
+            parameter.value = transform
+        } else {
+            set(type.texcoordParameterName, transform)
+        }
     }
 
     public func setTexcoordTransform(_ transform: simd_float4x4, type: PBRTextureType) {
@@ -176,7 +210,11 @@ open class StandardMaterial: Material {
         self.specular = specular
         self.occlusion = occlusion
         self.emissiveColor = emissiveColor
-        self.maps = maps
+        var slots = [MTLTexture?](repeating: nil, count: PBRTextureType.count)
+        for (type, texture) in maps {
+            slots[type.index] = texture
+        }
+        self.maps = slots
         lighting = true
         blending = .disabled
         initalize()
@@ -188,8 +226,8 @@ open class StandardMaterial: Material {
 
     func initalizeTexcoordParameters() {
         for type in PBRTextureType.allTexcoordCases {
-            if get(type.texcoordName.titleCase) == nil {
-                set(type.texcoordName.titleCase, matrix_identity_float4x4)
+            if get(type.texcoordParameterName) == nil {
+                set(type.texcoordParameterName, matrix_identity_float4x4)
             }
         }
     }
@@ -217,8 +255,8 @@ open class StandardMaterial: Material {
     override open func setupShaderRenderingConfiguration(_ shader: Shader) {
         super.setupShaderRenderingConfiguration(shader)
         guard let pbrShader = shader as? PBRShader else { return }
-        pbrShader.maps = maps.filter { $0.value != nil }
-        pbrShader.samplers = samplers.filter { $0.value != nil }
+        pbrShader.maps = maps
+        pbrShader.samplers = samplers
         pbrShader.tonemapping = tonemapping
     }
 
@@ -226,12 +264,13 @@ open class StandardMaterial: Material {
         StandardShader(context: context, label: label, pipelineURL: getPipelinesMaterialsURL(label)!.appendingPathComponent("Shaders.metal"))
     }
 
-    override open func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool, layout: DrawLayout? = nil) {
-        super.bind(renderContext: renderContext, renderEncoderState: renderEncoderState, shadow: shadow, layout: layout)
-        if !shadow {
-            for (type, texture) in maps {
-                renderEncoderState.setFragmentPBRTexture(texture, type: type)
-            }
+    override open func draw(in context: MaterialDrawContext) throws {
+        try super.draw(in: context)
+        // The default depth-only shadow needs no maps. Unknown/custom shadow fragments keep
+        // maps available for cutouts/transmission instead of borrowing colour-stage assumptions.
+        if context.isShadowPass, context.storage.recordingPipelineUsage?.fragment.textures.isEmpty == true { return }
+        for (index, texture) in maps.enumerated() where texture != nil {
+            context.setFragmentPBRTexture(texture, type: PBRTextureType.orderedCases[index])
         }
     }
 

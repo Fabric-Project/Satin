@@ -5,197 +5,139 @@
 //  Created by Reza Ali on 4/19/22.
 //
 
-import Combine
 import Metal
 import simd
 
 open class Renderable : Object {
+    /// Which of a renderable's materials draw in one pass. `includes(_:)` is the one decision both
+    /// routing (which passes a renderable is recorded in) and drawing (which of its submeshes draw
+    /// in a pass) use, so a material draws in exactly one transparent pass.
     enum MaterialPass {
         case all
         case opaque
+        /// Alpha blending accumulated order-independently. Only recorded by encoders with OIT.
         case alphaTransparent
-        case classicTransparent
+        /// Every other transparent material: all of them when `excludesAlphaOit` is false (an
+        /// encoder without OIT), otherwise those `alphaTransparent` doesn't take.
+        case classicTransparent(excludesAlphaOit: Bool)
         case surfaceOpaque
         case unlitOpaque
+
+        /// Whether `material` draws with order-independent alpha where OIT is available.
+        static func drawsWithAlphaOit(_ material: Material) -> Bool {
+            material.blending == .alpha && material.supportsAlphaOrderIndependentTransparency
+        }
+
+        func includes(_ material: Material) -> Bool {
+            let isTransparent = material.blending != .disabled
+            switch self {
+            case .all:
+                return true
+            case .opaque:
+                return !isTransparent
+            case .alphaTransparent:
+                return Self.drawsWithAlphaOit(material)
+            case let .classicTransparent(excludesAlphaOit):
+                return isTransparent && !(excludesAlphaOit && Self.drawsWithAlphaOit(material))
+            case .surfaceOpaque:
+                return material.lightingModel == .surface && !isTransparent
+            case .unlitOpaque:
+                return material.lightingModel == .unlit && !isTransparent
+            }
+        }
     }
 
-    open var opaque: Bool { material!.blending == .disabled }
+    /// Whether its own material draws opaque; a renderable whose submeshes carry the materials,
+    /// and so has none of its own, counts as opaque.
+    open var opaque: Bool { (material?.blending ?? .disabled) == .disabled }
+
+    /// Whether any material this renderable draws in `materialPass` blends: a double-sided,
+    /// uncullled renderable that does is recorded back faces first, then front faces.
+    func drawsTransparent(in materialPass: MaterialPass) -> Bool {
+        guard let material else { return false }
+        return material.blending != .disabled && materialPass.includes(material)
+    }
     
-    final let doubleSidedPublisher = PassthroughSubject<Bool, Never>()
-    open var doubleSided: Bool = false {
-        didSet {
-            doubleSidedPublisher.send(doubleSided)
-        }
-    }
+    open var doubleSided: Bool = false
 
-    final let renderOrderPublisher = PassthroughSubject<Int, Never>()
-    open var renderOrder = 0 {
-        didSet {
-            renderOrderPublisher.send(renderOrder)
-        }
-    }
+    open var renderOrder = 0
 
-    final let renderLayerPublisher = PassthroughSubject<RenderLayer, Never>()
-    open var renderLayer: RenderLayer = .opaque {
-        didSet {
-            renderLayerPublisher.send(renderLayer)
-        }
-    }
+    open var renderLayer: RenderLayer = .opaque
     
     open var lighting: Bool { material?.lighting ?? false }
 
 
-    final let receiveShadowPublisher = PassthroughSubject<Bool, Never>()
-    open var receiveShadow = false {
-        didSet {
-            receiveShadowPublisher.send(receiveShadow)
-        }
-    }
+    open var receiveShadow = false
 
-    final let castShadowPublisher = PassthroughSubject<Bool, Never>()
-    open var castShadow = false {
-        didSet {
-            castShadowPublisher.send(castShadow)
-        }
-    }
+    open var castShadow = false
+
+    /// Whether a pass may skip this renderable when its world bounds are wholly outside the pass's
+    /// views (each colour view, each shadow camera or point-light face). Set it false when a shader
+    /// moves vertices beyond the geometry's bounds (displacement, billboards) or the bounds don't
+    /// cover what is drawn. Bounds that are empty or not finite are never culled.
+    public var frustumCulled = true
 
 
-    final let cullModePublisher = PassthroughSubject<MTLCullMode, Never>()
-    open var cullMode: MTLCullMode = .back {
-        didSet {
-            cullModePublisher.send(cullMode)
-        }
-    }
+    open var cullMode: MTLCullMode = .back
 
     open var windingOrder: MTLWinding = .counterClockwise
     
-    final let triangleFillModePublisher = PassthroughSubject<MTLTriangleFillMode, Never>()
-    open var triangleFillMode: MTLTriangleFillMode = .fill {
-        didSet {
-            triangleFillModePublisher.send(triangleFillMode)
-        }
-    }
+    open var triangleFillMode: MTLTriangleFillMode = .fill
     
-    open var vertexUniforms: [UUID: VertexUniformBuffer] = [:]
-    var materialPass: MaterialPass = .all
+    // MARK: - Occurrences and Motion
 
-    private var repeatedVertexUniformSourceStates: [VertexUniformBuffer.SourceState] = []
+    /// What one occurrence of this renderable draws with: its model and normal matrices, and the
+    /// model matrix the same occurrence had last frame, for motion. Every pass of the occurrence
+    /// (shadow lights, faces, colour) reads it; only the engine advances it.
+    struct Occurrence {
+        var modelMatrix: simd_float4x4
+        var normalMatrix: simd_float3x3
+        var previousModelMatrix: simd_float4x4
+        /// Counts this renderable's occurrences, for snapshots taken once per occurrence and shared
+        /// by its passes.
+        var serial: Int
+    }
+
+    private(set) var occurrence = Occurrence(
+        modelMatrix: matrix_identity_float4x4,
+        normalMatrix: matrix_identity_float3x3,
+        previousModelMatrix: matrix_identity_float4x4,
+        serial: 0
+    )
+
+    /// Model matrices by draw ordinal: the kth occurrence of this frame pairs with the kth of the
+    /// last frame this renderable was drawn in, if that was the frame before.
+    private var motionHistory = MotionHistory<simd_float4x4>()
+
+    /// Starts an occurrence of this renderable in `frame`, before any of its passes record. The
+    /// first occurrence of a frame moves the last frame's samples into place; an ordinal with no
+    /// sample from the frame before starts with no motion.
+    func beginOccurrence(frame: FrameTime) {
+        motionHistory.beginOccurrence(frameNumber: frame.frameNumber)
+        let modelMatrix = worldMatrix
+        let previousModelMatrix = motionHistory.record(modelMatrix)
+
+        occurrence = Occurrence(
+            modelMatrix: modelMatrix,
+            normalMatrix: normalMatrix,
+            previousModelMatrix: previousModelMatrix,
+            serial: occurrence.serial &+ 1
+        )
+    }
+
+    /// Forgets this renderable's motion: its next occurrences draw with none. For an owner whose
+    /// drawing changed in a way ordinals can't see, such as a reordered or resized set of draws.
+    open func resetMotion() {
+        motionHistory.reset()
+    }
 
     open var material: Material? = nil
     open var materials: [Material] = []
 
-    open var preDraw: ((_ renderEncoder: MTLRenderCommandEncoder) -> Void)? = nil
-
-    open func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
+    /// Records this renderable's draw for one render event: its bindings, material and geometry
+    /// draws. Recorded values are captured, so later changes don't affect
+    /// this draw. Recording no draw call means it doesn't draw in this pass.
+    open func draw(in context: RenderableDrawContext) throws {
         fatalError("Subclasses must implement this method")
-    }
-
-//    func update(renderContext: Context, camera: Camera, viewport: simd_float4, index: Int) {
-//        fatalError("Subclasses must implement this method")
-//    }
-
-    open func draw(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        fatalError("Subclasses must implement this method")
-    }
-
-    // TODO(render-packets): Repeated encoding is a stopgap. Every resource (vertex and material
-    // uniforms, instance matrices, joint palettes, geometry draw states) rotates its own slots, and
-    // each assumes the caller's order: per repetition, update then capture; then draw everything.
-    // Replace it with an engine-style render packet: per frame and per repetition, prepare a packet
-    // holding exactly what one draw needs (pipeline, uniforms, instance and joint matrices with
-    // their previous values, buffers and offsets), then submit packets. Frame identity, per-draw
-    // motion history and in-flight safety then live in one place instead of in every resource.
-    /// Prepares this renderable to be encoded `count` times in a single render pass.
-    /// Expands all ring buffers (vertex uniforms, material uniforms, geometry) so that
-    /// each encoding sees independent data. Call once before the iteration loop begins,
-    /// whenever `count` or the set of child renderables changes.
-    open func prepareForRepeatedEncoding(count: Int) {
-        prepareRepeatedVertexUniformSourceStates(count: count)
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.prepareForRepeatedEncoding(count: count)
-        }
-    }
-
-    open func captureRepeatedEncodingState(iteration: Int, count: Int) {
-        captureRepeatedVertexUniformSourceState(iteration: iteration, count: count)
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.captureRepeatedEncodingSourceState(
-                object: self,
-                iteration: iteration,
-                count: count
-            )
-        }
-    }
-
-    open func selectRepeatedEncodingState(iteration: Int, count: Int) {
-        for vertexUniformBuffer in vertexUniforms.values {
-            vertexUniformBuffer.selectRepeatedEncodingState(
-                iteration: iteration,
-                count: count
-            )
-        }
-    }
-
-    open func captureRepeatedEncodingSlot(iteration: Int, count: Int) {
-        captureRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    open func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        selectRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    @discardableResult
-    func ensureVertexUniformBuffer(
-        context: Context,
-        encodesPerFrame: Int = Satin.maxSubPassesPerFrame
-    ) -> VertexUniformBuffer {
-        let encodesPerFrame = max(1, encodesPerFrame)
-        if let existingVertexUniformBuffer = vertexUniforms[context.id],
-           existingVertexUniformBuffer.encodesPerFrame >= encodesPerFrame
-        {
-            return existingVertexUniformBuffer
-        }
-
-        let vertexUniformBuffer = VertexUniformBuffer(
-            context: context,
-            encodesPerFrame: encodesPerFrame
-        )
-
-        if !repeatedVertexUniformSourceStates.isEmpty {
-            vertexUniformBuffer.loadRepeatedEncodingSourceStates(repeatedVertexUniformSourceStates)
-        }
-
-        vertexUniforms[context.id] = vertexUniformBuffer
-        return vertexUniformBuffer
-    }
-
-    private func prepareRepeatedVertexUniformSourceStates(count: Int) {
-        let count = max(1, count)
-        if count > 1 {
-            repeatedVertexUniformSourceStates.reserveCapacity(count)
-        }
-        else {
-            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
-        }
-    }
-
-    private func captureRepeatedVertexUniformSourceState(iteration: Int, count: Int) {
-        let count = max(1, count)
-        guard count > 1 else {
-            repeatedVertexUniformSourceStates.removeAll(keepingCapacity: true)
-            return
-        }
-
-        let state = VertexUniformBuffer.SourceState(
-            modelMatrix: worldMatrix,
-            normalMatrix: normalMatrix
-        )
-
-        if repeatedVertexUniformSourceStates.count != count {
-            repeatedVertexUniformSourceStates = Array(repeating: state, count: count)
-        }
-        
-        let slot = min(max(iteration, 0), count - 1)
-        repeatedVertexUniformSourceStates[slot] = state
     }
 }

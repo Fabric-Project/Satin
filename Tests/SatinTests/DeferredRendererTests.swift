@@ -210,6 +210,7 @@ final class DeferredRendererTests: XCTestCase {
             scene: scene,
             camera: camera,
             renderTarget: outputTexture,
+            frame: FrameTime.zero.next(time: 1.0 / 60.0),
             synchronizeTextures: [
                 outputTexture,
                 renderer.albedoTexture,
@@ -296,6 +297,7 @@ private func drawFrame(
     scene: Object,
     camera: Camera,
     renderTarget: MTLTexture,
+    frame: FrameTime = .zero,
     synchronizeTextures: [MTLTexture] = []
 ) throws {
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
@@ -304,6 +306,7 @@ private func drawFrame(
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
     try renderer.draw(
+        frame: frame,
         renderPassDescriptor: renderPassDescriptor,
         commandBuffer: commandBuffer,
         scene: scene,

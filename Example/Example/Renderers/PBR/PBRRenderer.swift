@@ -179,7 +179,7 @@ final class PBRRenderer: BaseRenderer {
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 
@@ -201,6 +201,7 @@ final class PBRRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

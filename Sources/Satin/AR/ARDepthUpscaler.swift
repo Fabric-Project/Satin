@@ -83,12 +83,12 @@ class ARDepthUpscaler {
         yTexture: MTLTexture,
         cbcrTexture: MTLTexture,
         depthTexture: MTLTexture
-    ) -> MTLTexture? {
+    ) throws -> MTLTexture? {
         commandBuffer.pushDebugGroup("Depth Upscaler")
         defer { commandBuffer.popDebugGroup() }
 
         guard
-            let rgbColorTexture = colorConverter.encode(
+            let rgbColorTexture = try colorConverter.encode(
                 commandBuffer: commandBuffer,
                 yTexture: yTexture,
                 cbcrTexture: cbcrTexture

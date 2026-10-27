@@ -27,11 +27,6 @@ final class BufferComputeRenderer: BaseRenderer {
     lazy var mesh: Mesh = {
         lazy var mesh = Mesh(context: defaultContext, geometry: PointGeometry(context: defaultContext), material: spriteMaterial)
         mesh.instanceCount = particleSystem.count
-        mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
-            if let buffer = self.particleSystem.getBuffer("Particle") {
-                renderEncoder.setVertexBuffer(buffer, offset: 0, index: VertexBufferIndex.Custom0.rawValue)
-            }
-        }
         return mesh
     }()
 
@@ -88,9 +83,12 @@ final class BufferComputeRenderer: BaseRenderer {
             height: Int(metalView.drawableSize.height)
         )
 
-        particleSystem.update(commandBuffer)
+        try particleSystem.update(commandBuffer)
+        // Recorded with this frame's draw: the particle buffer ping-pongs.
+        spriteMaterial.set(particleSystem.getBuffer("Particle"), index: VertexBufferIndex.Custom0)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -100,7 +98,7 @@ final class BufferComputeRenderer: BaseRenderer {
 
         chromaMaterial.set(renderTexture, index: FragmentTextureIndex.Custom0)
 
-        chromaticProcessor.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try chromaticProcessor.draw(frame: frameTime, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
     override func resize(size: (width: Float, height: Float), scaleFactor: Float) {

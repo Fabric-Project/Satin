@@ -5,7 +5,6 @@
 //  Created by Reza Ali on 10/19/22.
 //
 
-import Combine
 import Foundation
 import Metal
 import simd
@@ -15,22 +14,6 @@ import SatinCore
 #endif
 
 public class InstancedMesh: Mesh {
-    override public func isDrawable(renderContext: Context, shadow: Bool) -> Bool {
-        guard instanceMatrixBuffer != nil, instanceMatricesUniforms.count >= instanceCount else { return false }
-
-        if let drawCount = drawCount {
-            if drawCount > 0 {
-                return super.isDrawable(renderContext: renderContext, shadow: shadow)
-            }
-            else {
-                return false
-            }
-        }
-        else {
-            return super.isDrawable(renderContext: renderContext, shadow: shadow)
-        }
-    }
-
     public var drawCount: Int? {
         didSet {
             if let drawCount = drawCount, drawCount > instanceCount {
@@ -50,7 +33,6 @@ public class InstancedMesh: Mesh {
                     instanceMatricesUniforms.append(InstanceMatrixUniforms(modelMatrix: matrix_identity_float4x4, normalMatrix: matrix_identity_float3x3))
                 }
                 updateLocalBounds = true
-                _setupInstanceMatrixBuffer = true
             }
         }
     }
@@ -58,26 +40,19 @@ public class InstancedMesh: Mesh {
     var instanceMatrices: [simd_float4x4]
     public private(set) var instanceMatricesUniforms: [InstanceMatrixUniforms]
 
-    private var transformSubscriber: AnyCancellable?
+    /// The world revision the instance uniforms were built at: a move of this mesh or an
+    /// ancestor rebuilds them.
+    private var instanceUniformsWorldRevision: UInt64 = .max
     private var _updateInstanceMatricesUniforms = true
-    private var _setupInstanceMatrixBuffer = true
-    private var _updateInstanceMatrixBuffer = true
-    /// The instances' matrices on the GPU, read-only outside.
-    public private(set) var instanceMatrixBuffer: InstanceMatrixUniformBuffer?
-    private var minimumEncodesPerFrame = 1
-    /// Drawn by repeated encoding, even once per frame: uploads then happen on change and on
-    /// capture, so the buffer needs room for both in every frame in flight.
-    private var preparedForRepeatedEncoding = false
-    /// The model matrices last uploaded, which become each instance's previous matrix.
-    private var uploadedModelMatrices: [simd_float4x4] = []
-    /// Instances moved in the last upload, so the next still frame must re-upload with
-    /// previous equal to current, or still instances would keep reporting motion.
-    private var instanceMotionNeedsSettling = false
-    /// Repeated encoding: each iteration's model matrices, which become its previous ones next
-    /// frame, so velocity is per iteration rather than between iterations. Flat, iteration ×
-    /// instance, filled in place so capturing allocates nothing.
-    private var iterationModelMatrices: [simd_float4x4] = []
-    private var iterationHasModelMatrices: [Bool] = []
+
+    // Motion: instance matrices by snapshot ordinal, the kth snapshot of a frame pairing with the
+    // kth of the frame before when the instance count is the same; flat, ordinal × count.
+    private var motionHistory = MotionHistory<simd_float4x4>()
+
+    // The current occurrence's snapshot, reused by each of its passes.
+    private var instanceSnapshotLeaseToken: UInt64 = 0
+    private var instanceSnapshotOccurrence = -1
+    private var instanceSnapshot: (buffer: MTLBuffer, offset: Int)?
 
     /// Draws with instancing, whatever else shares its material.
     override public var isInstanced: Bool { true }
@@ -91,10 +66,6 @@ public class InstancedMesh: Mesh {
         super.init(context: context, label: label, geometry: geometry, material: material)
 
         instanceCount = count
-
-        transformSubscriber = transformPublisher.sink { [weak self] _ in
-            self?._updateInstanceMatricesUniforms = true
-        }
     }
 
     public required init(from _: Decoder) throws {
@@ -109,7 +80,6 @@ public class InstancedMesh: Mesh {
         self.updateInstanceMatricesUniforms()
         updateLocalBounds = true
         
-        _updateInstanceMatrixBuffer = true
 
     }
     
@@ -126,7 +96,6 @@ public class InstancedMesh: Mesh {
         )
 
         updateLocalBounds = true
-        _updateInstanceMatrixBuffer = true
     }
 
     // MARK: - Instancing
@@ -141,115 +110,47 @@ public class InstancedMesh: Mesh {
         return instanceMatricesUniforms[index].modelMatrix
     }
 
-    override public func setup() {
-        super.setup()
-        setupInstanceBuffer()
-    }
-
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    override public func prepareForRepeatedEncoding(count: Int) {
-        super.prepareForRepeatedEncoding(count: count)
-        minimumEncodesPerFrame = max(minimumEncodesPerFrame, max(1, count))
-        preparedForRepeatedEncoding = true
-        guard instanceCount > 0 else { return }
-        setupInstanceBuffer()
-    }
-
-    /// Uploads this iteration's matrices into their own slot, with the matrices the same
-    /// iteration had last frame as previous.
-    override public func captureRepeatedEncodingState(iteration: Int, count: Int) {
-        super.captureRepeatedEncodingState(iteration: iteration, count: count)
-        let sanitizedCount = max(1, count)
-        let instances = instanceMatricesUniforms.count
-        // A new iteration count or instance count starts every iteration still.
-        if iterationHasModelMatrices.count != sanitizedCount || iterationModelMatrices.count != sanitizedCount * instances {
-            iterationModelMatrices = Array(repeating: matrix_identity_float4x4, count: sanitizedCount * instances)
-            iterationHasModelMatrices = Array(repeating: false, count: sanitizedCount)
-        }
-        guard let instanceMatrixBuffer, iterationHasModelMatrices.indices.contains(iteration) else { return }
-        // previousModelMatrix is rewritten before every upload, so it can carry this capture's.
-        let historyStart = iteration * instances
-        let hasHistory = iterationHasModelMatrices[iteration]
-        for index in instanceMatricesUniforms.indices {
-            let current = instanceMatricesUniforms[index].modelMatrix
-            instanceMatricesUniforms[index].previousModelMatrix = hasHistory ? iterationModelMatrices[historyStart + index] : current
-            iterationModelMatrices[historyStart + index] = current
-        }
-        iterationHasModelMatrices[iteration] = true
-        instanceMatrixBuffer.update(data: instanceMatricesUniforms)
-        instanceMatrixBuffer.captureLatestSlot(iteration: iteration, count: count)
-    }
-
-    override public func selectRepeatedEncodingSlot(iteration: Int, count: Int) {
-        selectRepeatedEncodingState(iteration: iteration, count: count)
-    }
-
-    override public func selectRepeatedEncodingState(iteration: Int, count: Int) {
-        super.selectRepeatedEncodingState(iteration: iteration, count: count)
-        instanceMatrixBuffer?.selectRecentSlot(iteration: iteration, count: count)
-    }
-
     override public func update() {
-        if _updateInstanceMatricesUniforms { updateInstanceMatricesUniforms() }
-        if _setupInstanceMatrixBuffer { setupInstanceBuffer() }
-        if _updateInstanceMatrixBuffer {
-            updateInstanceBuffer()
-        } else if instanceMotionNeedsSettling {
-            settleInstanceMotion()
-        }
+        if _updateInstanceMatricesUniforms || instanceUniformsWorldRevision != worldRevision { updateInstanceMatricesUniforms() }
         super.update()
     }
 
-    override public func bind(renderContext: Context, renderEncoderState: RenderEncoderState, shadow: Bool) {
-        super.bind(
-            renderContext: renderContext,
-            renderEncoderState: renderEncoderState,
-            shadow: shadow
-        )
-        renderEncoderState.vertexInstanceUniforms = instanceMatrixBuffer
+    override public func resetMotion() {
+        super.resetMotion()
+        motionHistory.reset()
+        instanceSnapshot = nil
     }
+
+
 
     // MARK: - Private Instancing
 
-    func setupInstanceBuffer() {
-        guard instanceCount > 0 else { return }
-        instanceMatrixBuffer = InstanceMatrixUniformBuffer(
-            device: context.device,
-            count: instanceCount,
-            maxBuffersInFlight: context.maxBuffersInFlight,
-            // Repeated encoding uploads up to twice per iteration: on change and on capture.
-            encodesPerFrame: preparedForRepeatedEncoding ? 2 * minimumEncodesPerFrame + 1 : 1
-        )
-        _setupInstanceMatrixBuffer = false
-        _updateInstanceMatrixBuffer = true
-    }
+    /// The instances' matrices as they are now, with each one's previous matrix, in `recorder`'s
+    /// arena: taken once per occurrence and shared by its passes.
+    private func instanceSnapshot(recorder: PacketRecorder) throws -> (buffer: MTLBuffer, offset: Int) {
+        let leaseToken = recorder.storage.leaseToken
+        let occurrenceSerial = occurrence.serial
+        if let instanceSnapshot, instanceSnapshotLeaseToken == leaseToken, instanceSnapshotOccurrence == occurrenceSerial {
+            return instanceSnapshot
+        }
 
-    func updateInstanceBuffer() {
-        // What was uploaded last becomes each instance's previous matrix; new instances start still.
-        var moved = false
-        for index in instanceMatricesUniforms.indices {
-            let current = instanceMatricesUniforms[index].modelMatrix
-            let previous = index < uploadedModelMatrices.count ? uploadedModelMatrices[index] : current
-            instanceMatricesUniforms[index].previousModelMatrix = previous
-            if previous != current { moved = true }
-            // Kept in place: becomes the previous matrix at the next upload.
-            if index < uploadedModelMatrices.count { uploadedModelMatrices[index] = current } else { uploadedModelMatrices.append(current) }
-        }
-        if uploadedModelMatrices.count > instanceMatricesUniforms.count {
-            uploadedModelMatrices.removeLast(uploadedModelMatrices.count - instanceMatricesUniforms.count)
-        }
-        instanceMatrixBuffer?.update(data: instanceMatricesUniforms)
-        instanceMotionNeedsSettling = moved
-        _updateInstanceMatrixBuffer = false
-    }
+        let count = instanceMatricesUniforms.count
+        motionHistory.beginOccurrence(frameNumber: recorder.frame.frameNumber, sampleCount: count)
 
-    /// The first frame without changes: previous catches up with current, so velocity is zero.
-    func settleInstanceMotion() {
-        for index in instanceMatricesUniforms.indices {
-            instanceMatricesUniforms[index].previousModelMatrix = instanceMatricesUniforms[index].modelMatrix
+        let slice = try recorder.allocate(length: MemoryLayout<InstanceMatrixUniforms>.stride * count)
+        let uniforms = slice.contents.bindMemory(to: InstanceMatrixUniforms.self, capacity: count)
+        for index in 0 ..< count {
+            var instance = instanceMatricesUniforms[index]
+            let current = instance.modelMatrix
+            instance.previousModelMatrix = motionHistory.record(current)
+            uniforms[index] = instance
         }
-        instanceMatrixBuffer?.update(data: instanceMatricesUniforms)
-        instanceMotionNeedsSettling = false
+
+        let snapshot = (buffer: slice.buffer, offset: slice.offset)
+        instanceSnapshot = snapshot
+        instanceSnapshotLeaseToken = leaseToken
+        instanceSnapshotOccurrence = occurrenceSerial
+        return snapshot
     }
 
     @inline(__always)
@@ -263,11 +164,11 @@ public class InstancedMesh: Mesh {
     }
     
     func updateInstanceMatricesUniforms() {
+        instanceUniformsWorldRevision = worldRevision
 
         let count = instanceCount
         guard count > 0 else {
             _updateInstanceMatricesUniforms = false
-            _updateInstanceMatrixBuffer = true
             return
         }
 
@@ -309,7 +210,6 @@ public class InstancedMesh: Mesh {
         }
 
         _updateInstanceMatricesUniforms = false
-        _updateInstanceMatrixBuffer = true
     }
 
     
@@ -338,7 +238,6 @@ public class InstancedMesh: Mesh {
 //        })
 //        
 //        _updateInstanceMatricesUniforms = false
-//        _updateInstanceMatrixBuffer = true
 //    }
 
 //    
@@ -390,27 +289,15 @@ public class InstancedMesh: Mesh {
 //        }
 //
 //        _updateInstanceMatricesUniforms = false
-//        _updateInstanceMatrixBuffer = true
 //    }
 
     
-    override public func draw(renderContext: Context, renderEncoderState: RenderEncoderState, instanceCount: Int, shadow: Bool) {
-        if let drawCount = drawCount {
-            super.draw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                instanceCount: min(drawCount, instanceCount),
-                shadow: shadow
-            )
-        }
-        else {
-            super.draw(
-                renderContext: renderContext,
-                renderEncoderState: renderEncoderState,
-                instanceCount: instanceCount,
-                shadow: shadow
-            )
-        }
+    override public func draw(in context: RenderableDrawContext) throws {
+        // Nothing to draw without matrices for every instance, or with a draw count of zero.
+        guard instanceCount > 0, instanceMatricesUniforms.count >= instanceCount else { return }
+        let instances = try instanceSnapshot(recorder: context.recorder)
+        try context.setVertexBuffer(instances.buffer, offset: instances.offset, index: .InstanceMatrixUniforms)
+        try drawMesh(in: context, instanceCount: drawCount.map { min($0, instanceCount) } ?? instanceCount)
     }
 
     // MARK: - Intersections
@@ -506,9 +393,4 @@ public class InstancedMesh: Mesh {
         return results.count > 0
     }
 
-    // MARK: - Deinit
-
-    deinit {
-        transformSubscriber?.cancel()
-    }
 }

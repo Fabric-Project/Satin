@@ -35,7 +35,6 @@ public class ARPostProcessEncoder: PostProcessEncoder {
     public init(label: String, context: Context, session: ARSession) {
         self.session = session
         super.init(label: label, context: context, material: ARPostMaterial(context: context))
-        renderer.colorLoadAction = .load
         postProcessRenderer.colorLoadAction = .load
     }
 
@@ -47,14 +46,14 @@ public class ARPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
-        super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer)
     }
 
-    override public func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) {
+    override public func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer, renderTarget: MTLTexture) throws {
         update(commandBuffer: commandBuffer, renderPassDescriptor: renderPassDescriptor)
-        super.draw(renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: renderTarget)
+        try super.draw(frame: frame, renderPassDescriptor: renderPassDescriptor, commandBuffer: commandBuffer, renderTarget: renderTarget)
     }
 }
 

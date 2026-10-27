@@ -46,22 +46,6 @@ final class FlockingRenderer: BaseRenderer {
         mesh.label = "Sprite"
         mesh.cullMode = .none
         mesh.instanceCount = particleCountParam.value
-        mesh.preDraw = { [unowned self] (renderEncoder: MTLRenderCommandEncoder) in
-            if let buffer = self.particleSystem.getBuffer("Flocking") {
-                renderEncoder.setVertexBuffer(
-                    buffer,
-                    offset: 0,
-                    index: VertexBufferIndex.Custom0.rawValue
-                )
-            }
-            if let uniforms = self.particleSystem.uniforms {
-                renderEncoder.setVertexBuffer(
-                    uniforms.buffer,
-                    offset: uniforms.offset,
-                    index: VertexBufferIndex.Custom1.rawValue
-                )
-            }
-        }
         return mesh
     }()
 
@@ -102,10 +86,14 @@ final class FlockingRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         if !pauseParam.value {
-            particleSystem.update(commandBuffer)
+            try particleSystem.update(commandBuffer)
         }
+        // Recorded with this frame's draw: the particle buffer ping-pongs and the uniforms advance.
+        spriteMaterial.set(particleSystem.getBuffer("Flocking"), index: VertexBufferIndex.Custom0)
+        spriteMaterial.set(particleSystem.uniforms, index: VertexBufferIndex.Custom1)
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,

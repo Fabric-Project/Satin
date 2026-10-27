@@ -71,9 +71,9 @@ final class GeometryPiecesTests: XCTestCase {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let geometry = makeGeometry(context: Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm))
         try geometry.setPieces(make())
-        geometry.jointPalette = JointPalette(device: device, jointCount: 4)
+        geometry.jointPalette = JointPalette(jointCount: 4)
         XCTAssertFalse(geometry.isSkinned, "Piece 4's vertices would read past a four-joint palette")
-        geometry.jointPalette = JointPalette(device: device, jointCount: 5)
+        geometry.jointPalette = JointPalette(jointCount: 5)
         XCTAssertTrue(geometry.isSkinned)
     }
 

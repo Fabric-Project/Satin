@@ -5,13 +5,15 @@ import Metal
 public final class MotionBlurJumpFloodMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    public unowned var tileMaxTexture: MTLTexture? {
-        didSet { set(tileMaxTexture, index: FragmentTextureIndex.Custom0) }
+    public var tileMaxTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
     /// The previous pass's pointers; unused on the first pass, which seeds from tile max.
-    public unowned var previousTexture: MTLTexture? {
-        didSet { set(previousTexture, index: FragmentTextureIndex.Custom1) }
+    public var previousTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
     /// Distance to the neighbors this pass checks, in tiles.

@@ -10,8 +10,15 @@ import Metal
 import simd
 
 open class BindableBuffer {
-    public internal(set) var buffer: MTLBuffer!
+    public let buffer: MTLBuffer
     public internal(set) var offset = 0
+    /// The bytes the last update wrote at `offset`: what a draw recorded now copies, so a ring
+    /// that wraps before that draw encodes can't change it. 0 before any update.
+    public internal(set) var contentLength = 0
+
+    public init(buffer: MTLBuffer) {
+        self.buffer = buffer
+    }
 }
 
 public final class StructBuffer<T>: BindableBuffer {
@@ -20,19 +27,17 @@ public final class StructBuffer<T>: BindableBuffer {
 
     public init(device: MTLDevice, count: Int, label: String = "Struct Buffer") {
         self.count = count
-        super.init()
-
-        let length = alignedSize * Satin.maxBuffersInFlight
-        guard let buffer = device.makeBuffer(length: length, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else {
+        guard let buffer = device.makeBuffer(length: Self.alignedSize(count: count) * Satin.maxBuffersInFlight, options: [MTLResourceOptions.cpuCacheModeWriteCombined]) else {
             fatalError("Couldn't not create \(label)")
         }
-        self.buffer = buffer
-        self.buffer.label = label
+        buffer.label = label
+        super.init(buffer: buffer)
     }
 
     public func update(data: [T]) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
+        contentLength = MemoryLayout<T>.size * data.count
         _ = data.withUnsafeBytes { dataPtr in
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }
@@ -41,16 +46,18 @@ public final class StructBuffer<T>: BindableBuffer {
     public func update(data: ContiguousArray<T>) {
         index = (index + 1) % maxBuffersInFlight
         offset = alignedSize * index
+        contentLength = MemoryLayout<T>.size * data.count
         _ = data.withUnsafeBytes { dataPtr in
             memcpy(buffer.contents().advanced(by: offset), dataPtr.baseAddress!, MemoryLayout<T>.size * data.count)
         }
     }
 
     private var alignedSize: Int {
-        align(size: MemoryLayout<T>.size * count)
+        Self.alignedSize(count: count)
     }
 
-    private func align(size: Int) -> Int {
-        ((size + 255) / 256) * 256
+    /// One frame's slice of `count` values, on a 256-byte boundary.
+    private static func alignedSize(count: Int) -> Int {
+        ((MemoryLayout<T>.size * count + 255) / 256) * 256
     }
 }

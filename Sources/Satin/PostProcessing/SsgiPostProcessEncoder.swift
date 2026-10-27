@@ -91,25 +91,19 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         blurProcessor = PostProcessEncoder(
             label: "SSGI Denoise",
             context: ssgiContext,
-            material: blurMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: blurMaterial
         )
 
         compositeProcessor = PostProcessEncoder(
             label: "SSGI Composite",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
 
         super.init(
             label: "SSGI",
             context: ssgiContext,
-            material: ssgiMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: ssgiMaterial
         )
 
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device)
@@ -187,7 +181,7 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         let hasInputs = colorTexture != nil &&
             depthTexture != nil &&
             normalTexture != nil &&
@@ -202,7 +196,8 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
         if hasInputs, let rawTexture, let denoisedTexture, let sceneCamera {
             ssgiMaterial.update(camera: sceneCamera, viewportHeight: Float(rawTexture.height))
 
-            super.draw(
+            try super.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: rawTexture
@@ -212,7 +207,8 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
             blurMaterial.blueNoiseTexture = blueNoiseTexture
             blurMaterial.noiseIndex = Int32(frameIndex & 3)
             blurMaterial.update(camera: sceneCamera)
-            blurProcessor.draw(
+            try blurProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
@@ -226,7 +222,8 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.ssgiTexture = compositeSsgiTexture
-        compositeProcessor.draw(
+        try compositeProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

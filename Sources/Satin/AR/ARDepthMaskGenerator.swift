@@ -48,11 +48,11 @@ public class ARDepthMaskGenerator {
         compute = ARDepthMaskComputeSystem(device: device, textureDescriptor: textureDescriptor)
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer, realDepthTexture: MTLTexture, virtualDepthTexture: MTLTexture) -> MTLTexture? {
+    public func encode(commandBuffer: MTLCommandBuffer, realDepthTexture: MTLTexture, virtualDepthTexture: MTLTexture) throws -> MTLTexture? {
         commandBuffer.label = "\(compute.label) Compute Command Buffer"
         compute.realDepthTexture = realDepthTexture
         compute.virtualDepthTexture = virtualDepthTexture
-        compute.update(commandBuffer)
+        try compute.update(commandBuffer)
         let texture = compute.dstTexture
         texture?.label = "\(compute.label) Texture"
         return texture

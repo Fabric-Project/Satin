@@ -16,9 +16,8 @@ import Metal
 /// source's. Changes to the source reach meshes drawing the view.
 ///
 /// Updating the view updates the source, so a source drawn by several views (or by its own
-/// mesh as well) is updated more than once a frame. That is harmless unless its data
-/// changes every frame while drawn with repeated encoding, where each update takes a
-/// versioned slot.
+/// mesh as well) is updated more than once a frame. That is harmless: a draw's palette and
+/// uniforms are snapshotted when it is recorded.
 open class PosedGeometry: Geometry {
     public let source: Geometry
     private var sourceSubscription: AnyCancellable?
@@ -27,12 +26,19 @@ open class PosedGeometry: Geometry {
         self.source = source
         super.init(context: source.context, primitiveType: source.primitiveType, windingOrder: source.windingOrder)
         self.jointPalette = jointPalette
-        sourceSubscription = source.onUpdate.sink { [weak self] source in
-            guard let self else { return }
+        // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
+        // capture needs no side table on an object every frame retains.
+        sourceSubscription = source.onUpdate.sink { [unowned self] source in
             self.windingOrder = source.windingOrder
             self.updateBounds = true
             self.onUpdate.send(self)
         }
+    }
+
+    /// Stops listening before `source` is released: stored properties go in declaration order, so
+    /// the subscription would otherwise outlive the start of this view's destruction.
+    deinit {
+        sourceSubscription?.cancel()
     }
 
     /// Called each frame after the source updates. Override to recompute the palette from
@@ -47,43 +53,17 @@ open class PosedGeometry: Geometry {
 
     override open func update() {
         source.update()
-        jointPalette?.settleMotion()
         updatePose()
     }
 
-    override open func encode(_ commandBuffer: MTLCommandBuffer) {
-        source.encode(commandBuffer)
+    override open func encode(in context: EncodingContext) throws {
+        try source.encode(in: context)
     }
 
-    // TODO(render-packets): repeated-encoding stopgap; see Renderable.prepareForRepeatedEncoding.
-    override open func setMinimumEncodesPerFrame(_ encodesPerFrame: Int) {
-        // Never lower what another mesh drawing the source asked for.
-        source.setMinimumEncodesPerFrame(max(encodesPerFrame, source.minimumEncodesPerFrame))
-        // This view's own palette.
-        super.setMinimumEncodesPerFrame(encodesPerFrame)
-    }
-
-    override open func captureRepeatedEncoding(iteration: Int, count: Int) {
-        source.captureRepeatedEncoding(iteration: iteration, count: count)
-        super.captureRepeatedEncoding(iteration: iteration, count: count)
-    }
-
-    override open func selectRecentSlot(iteration: Int, count: Int) {
-        source.selectRecentSlot(iteration: iteration, count: count)
-        jointPalette?.selectRecentSlot(iteration: iteration, count: count)
-    }
-
-    override open func bind(renderEncoderState: RenderEncoderState, shadow: Bool) {
-        source.bind(renderEncoderState: renderEncoderState, shadow: shadow)
-        // Replaces any palette the source bound.
-        if isSkinned, let jointPalette {
-            renderEncoderState.vertexJointPalette = jointPalette
-            jointPalette.markDrawn()
-        }
-    }
-
-    override open func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
-        source.draw(renderEncoderState: renderEncoderState, instanceCount: instanceCount, indexBufferOffset: indexBufferOffset, vertexStart: vertexStart)
+    /// Draws through the source's own `draw(in:)`, with this view's palette replacing the source's
+    /// when this view is skinned.
+    override open func draw(in context: GeometryDrawContext) throws {
+        try source.draw(in: context.replacingJointPalette(isSkinned ? jointPalette : context.jointPalette))
     }
 
     /// The source's vertices, moved by this view's palette.
@@ -100,6 +80,10 @@ open class PosedGeometry: Geometry {
     /// Posed when skinned (see `Geometry.computeBounds`), otherwise the source's.
     override open func computeBounds() -> Bounds {
         isSkinned ? super.computeBounds() : source.bounds
+    }
+
+    override var boundsPaletteDependency: JointPalette? {
+        isSkinned ? jointPalette : source.boundsPaletteDependency
     }
 
     override open func intersect(ray: Ray, intersections: inout [IntersectionResult]) {

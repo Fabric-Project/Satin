@@ -92,7 +92,7 @@ final class SkeletalAnimationTests: XCTestCase {
         let binding = skeleton.bind(device: device, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
         skeleton.setLocalTransforms([translation(0, 1, 0) * rotation(.pi / 2, axis: [0, 0, 1])])
         skeleton.commitPose()
-        let moved = binding.palette.joints[0].current * simd_float4(1, 1, 0, 1)
+        let moved = binding.palette.matrices[0] * simd_float4(1, 1, 0, 1)
         assertEqual(simd_make_float3(moved), [0, 2, 0])
     }
 
@@ -123,18 +123,21 @@ final class SkeletalAnimationTests: XCTestCase {
         let skeleton = Skeleton(jointPaths: ["Root", "Root/Elbow"], restTransforms: [matrix_identity_float4x4, translation(0, 1, 0)],
                                 bindTransforms: [matrix_identity_float4x4, translation(0, 1, 0)], animation: animation)
         let binding = skeleton.bind(device: device, jointPaths: nil, geometryBindTransform: matrix_identity_float4x4)
+        // A frame drawn at the rest pose.
+        _ = try drawnJoints(binding.palette, frame: .zero)
 
-        // One frame: code moves Root, which the animation does not drive, the animation moves
+        // The next frame: code moves Root, which the animation does not drive, the animation moves
         // Elbow, and one commit uploads both.
         skeleton.setLocalTransforms([translation(5, 0, 0)])
         skeleton.applyAnimation(at: 1)
         skeleton.commitPose()
         assertEqual(skeleton.jointTransforms[1], translation(5, 2, 0), "Elbow rides Root's coded move")
-        assertEqual(binding.palette.joints[0].current, translation(5, 0, 0))
-        assertEqual(binding.palette.joints[0].previous, matrix_identity_float4x4, "Last frame's Root is the rest pose, not a half-applied one")
-        assertEqual(binding.palette.joints[1].current, translation(5, 1, 0))
-        assertEqual(binding.palette.joints[1].previous, matrix_identity_float4x4)
-        assertEqual(binding.palette.joints[2].current, matrix_identity_float4x4, "The rest joint stays identity")
+        let joints = try drawnJoints(binding.palette, frame: FrameTime.zero.next(time: 1.0 / 60.0))
+        assertEqual(joints[0].current, translation(5, 0, 0))
+        assertEqual(joints[0].previous, matrix_identity_float4x4, "Last frame's Root is the rest pose, not a half-applied one")
+        assertEqual(joints[1].current, translation(5, 1, 0))
+        assertEqual(joints[1].previous, matrix_identity_float4x4)
+        assertEqual(joints[2].current, matrix_identity_float4x4, "The rest joint stays identity")
     }
 
     func testMirroredObjectAnimationKeepsItsHandedness() throws {
@@ -159,9 +162,9 @@ final class SkeletalAnimationTests: XCTestCase {
         skeleton.commitPose()
 
         let point = simd_float4(1, 0, 0, 1)
-        assertEqual(simd_make_float3(binding.palette.joints[0].current * point), simd_float3(1, 3, 0))
-        assertEqual(simd_make_float3(binding.palette.joints[1].current * point), simd_float3(1, 3, 0), "Unnamed joint")
-        assertEqual(simd_make_float3(binding.palette.joints[binding.restJointIndex].current * point), simd_float3(1, 3, 0), "Rest joint")
+        assertEqual(simd_make_float3(binding.palette.matrices[0] * point), simd_float3(1, 3, 0))
+        assertEqual(simd_make_float3(binding.palette.matrices[1] * point), simd_float3(1, 3, 0), "Unnamed joint")
+        assertEqual(simd_make_float3(binding.palette.matrices[binding.restJointIndex] * point), simd_float3(1, 3, 0), "Rest joint")
     }
 
     // MARK: - Loading
@@ -238,10 +241,12 @@ final class SkeletalAnimationTests: XCTestCase {
     func testLoadingStartsStillAndTimeChangesKeepTheOutgoingPose() throws {
         let (animation, mesh) = try loadBar()
         let palette = try XCTUnwrap(mesh.geometry.jointPalette)
-        for joint in palette.joints { assertEqual(joint.previous, joint.current, "Loaded without motion") }
-        let startPose = palette.joints.map(\.current)
+        let firstFrame = try drawnJoints(palette, frame: .zero)
+        for joint in firstFrame { assertEqual(joint.previous, joint.current, "Loaded without motion") }
+        let startPose = firstFrame.map(\.current)
         animation.setTime(1)
-        for (joint, start) in zip(palette.joints, startPose) {
+        let secondFrame = try drawnJoints(palette, frame: FrameTime.zero.next(time: 1.0 / 60.0))
+        for (joint, start) in zip(secondFrame, startPose) {
             assertEqual(joint.previous, start)
         }
     }
@@ -322,7 +327,7 @@ final class SkeletalAnimationTests: XCTestCase {
         // Loaded at the animation's first frame, which is not the rest pose, without motion.
         XCTAssertTrue(zip(skeleton.localTransforms, skeleton.restTransforms).contains { !isClose($0, $1) }, "Posed at the start, not at rest")
         for binding in skeleton.bindings {
-            XCTAssertTrue(binding.palette.joints.allSatisfy { isClose($0.previous, $0.current) }, "Loaded without motion")
+            XCTAssertTrue(try drawnJoints(binding.palette, frame: .zero).allSatisfy { isClose($0.previous, $0.current) }, "Loaded without motion")
         }
 
         // The idle animation moves joints between its start and middle.
@@ -340,6 +345,19 @@ final class SkeletalAnimationTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private let snapshotPool = PacketStoragePool()
+
+    /// `palette` as drawn in `frame`: its snapshot's current and previous matrices, read back.
+    private func drawnJoints(_ palette: JointPalette, frame: FrameTime) throws -> [SkinJoint] {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let storage = snapshotPool.lease()
+        defer { snapshotPool.returnStorage(storage) }
+        let recorder = PacketRecorder(storage: storage, lease: FrameArena(device: device).lease(frame: frame))
+        let snapshot = try palette.snapshot(recorder: recorder)
+        let joints = (snapshot.buffer.contents() + snapshot.offset).bindMemory(to: SkinJoint.self, capacity: palette.jointCount)
+        return Array(UnsafeBufferPointer(start: joints, count: palette.jointCount))
+    }
 
     private func makeContext() throws -> Context {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
@@ -369,7 +387,7 @@ final class SkeletalAnimationTests: XCTestCase {
             }
             var skinned = simd_float4.zero
             for influence in 0 ..< 4 {
-                let joint = palette.joints[Int(jointIndices.data[vertex][influence])].current
+                let joint = palette.matrices[Int(jointIndices.data[vertex][influence])]
                 skinned += jointWeights.data[vertex][influence] * (joint * simd_float4(rest, 1))
             }
             assertEqual(simd_make_float3(mesh.worldMatrix * skinned), posed, file: file, line: line)

@@ -4,24 +4,29 @@ import simd
 public final class SsgiMaterial: Material {
     override public var lightingModel: LightingModel { .unlit }
 
-    public unowned var colorTexture: MTLTexture? {
-        didSet { set(colorTexture, index: FragmentTextureIndex.Custom0) }
+    public var colorTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var depthTexture: MTLTexture? {
-        didSet { set(depthTexture, index: FragmentTextureIndex.Custom1) }
+    public var depthTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
-    public unowned var normalTexture: MTLTexture? {
-        didSet { set(normalTexture, index: FragmentTextureIndex.Custom2) }
+    public var normalTexture: MTLTexture? {
+        get { texture(at: .Custom2) }
+        set { set(newValue, index: FragmentTextureIndex.Custom2) }
     }
 
-    public unowned var albedoTexture: MTLTexture? {
-        didSet { set(albedoTexture, index: FragmentTextureIndex.Custom3) }
+    public var albedoTexture: MTLTexture? {
+        get { texture(at: .Custom3) }
+        set { set(newValue, index: FragmentTextureIndex.Custom3) }
     }
 
-    public unowned var pbrTexture: MTLTexture? {
-        didSet { set(pbrTexture, index: FragmentTextureIndex.Custom4) }
+    public var pbrTexture: MTLTexture? {
+        get { texture(at: .Custom4) }
+        set { set(newValue, index: FragmentTextureIndex.Custom4) }
     }
 
     public var projectionMatrix: simd_float4x4 {

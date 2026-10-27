@@ -41,11 +41,11 @@ public final class YCbCrToRGBConverter {
         compute = YCbCrToRGBComputeSystem(device: device, textureDescriptor: textureDescriptor)
     }
 
-    public func encode(commandBuffer: MTLCommandBuffer, yTexture: MTLTexture, cbcrTexture: MTLTexture) -> MTLTexture? {
+    public func encode(commandBuffer: MTLCommandBuffer, yTexture: MTLTexture, cbcrTexture: MTLTexture) throws -> MTLTexture? {
         commandBuffer.label = "\(compute.label) Compute Command Buffer"
         compute.yTexture = yTexture
         compute.cbcrTexture = cbcrTexture
-        compute.update(commandBuffer)
+        try compute.update(commandBuffer)
         let texture = compute.dstTexture
         texture?.label = "\(compute.label) Texture"
         return texture

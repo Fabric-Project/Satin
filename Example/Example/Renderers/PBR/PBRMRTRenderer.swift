@@ -236,17 +236,19 @@ final class PBRMRTRenderer: BaseRenderer {
     }
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
-        sceneRenderer.draw(
+        try sceneRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
             camera: camera
         )
 
-        let beautyTexture = postProcessedBeautyTexture(commandBuffer: commandBuffer)
+        let beautyTexture = try postProcessedBeautyTexture(commandBuffer: commandBuffer)
         updatePreviewTextures(beautyTexture: beautyTexture)
 
-        overlayRenderer.draw(
+        try overlayRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: overlayScene,
@@ -364,7 +366,7 @@ final class PBRMRTRenderer: BaseRenderer {
     private func loadHdri() {
         let url = texturesURL.appendingPathComponent("brown_photostudio_02_2k.hdr")
         if let hdr = loadHDR(device: device, url: url) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 
@@ -446,7 +448,7 @@ final class PBRMRTRenderer: BaseRenderer {
         )
     }
 
-    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func postProcessedBeautyTexture(commandBuffer: MTLCommandBuffer) throws -> MTLTexture? {
         // Temporarily bypass SSAO to isolate the DOF path during debugging.
         let compositeTexture = sceneRenderer.colorTexture
 
@@ -454,7 +456,8 @@ final class PBRMRTRenderer: BaseRenderer {
         bokehDepthOfFieldPostProcessEncoder.colorTexture = compositeTexture
         bokehDepthOfFieldPostProcessEncoder.depthTexture = sceneRenderer.depthTexture
         bokehDepthOfFieldPostProcessEncoder.sceneCamera = camera
-        bokehDepthOfFieldPostProcessEncoder.draw(
+        try bokehDepthOfFieldPostProcessEncoder.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )

@@ -21,10 +21,6 @@ open class InterleavedBufferAttribute: VertexAttribute {
     open var interleavedStride: Int { parent.stride }
 }
 
-public protocol InterleavedBufferDelegate: AnyObject {
-    func updated(buffer: InterleavedBuffer)
-}
-
 public class InterleavedBuffer: Equatable {
     public let id: String = UUID().uuidString
 
@@ -43,7 +39,9 @@ public class InterleavedBuffer: Equatable {
     public var needsUpdate: Bool = true
     public var buffer: MTLBuffer?
 
-    public weak var delegate: InterleavedBufferDelegate?
+    /// The geometries using this buffer; see `GeometryBufferObserver`.
+    var observers = GeometryBufferObservers()
+    var observerCount: Int { observers.count }
 
     public init(index: VertexBufferIndex, data: UnsafeMutableRawPointer?, stride: Int, count: Int, source: Any?, stepRate: Int = 1, stepFunction: MTLVertexStepFunction = .perVertex) {
         self.index = index
@@ -61,7 +59,7 @@ public class InterleavedBuffer: Equatable {
         self.source = source
         self.data = data
         needsUpdate = true
-        delegate?.updated(buffer: self)
+        observers.notifyVertexDataChanged()
     }
 
     public func getBuffer(device: MTLDevice) -> MTLBuffer? {

@@ -6,7 +6,6 @@
 //  Copyright © 2019 Reza Ali. All rights reserved.
 //
 
-import Combine
 import simd
 
 #if SWIFT_PACKAGE
@@ -14,100 +13,59 @@ import SatinCore
 #endif
 
 open class PerspectiveCamera: Camera {
-    @Published public var fov: Float = 45 {
+    public var fov: Float = 45 {
         didSet {
-            updateProjectionMatrix = true
+            if fov != oldValue { projectionInputsDidChange() }
         }
     }
 
-    @Published public var aspect: Float = 1 {
+    public var aspect: Float = 1 {
         didSet {
-            updateProjectionMatrix = true
+            if aspect != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var lensShiftX: Float = 0.0 {
         didSet {
-            updateProjectionMatrix = true
+            if lensShiftX != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var lensShiftY: Float = 0.0 {
         didSet {
-            updateProjectionMatrix = true
+            if lensShiftY != oldValue { projectionInputsDidChange() }
         }
     }
 
     public var enableFrustumShift: Bool = false {
         didSet {
-            updateProjectionMatrix = true
+            if enableFrustumShift != oldValue { projectionInputsDidChange() }
         }
     }
 
-    override public var scale: simd_float3 {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
+    override open func computeProjectionMatrix() -> matrix_float4x4 {
+        if enableFrustumShift {
+            return frustumShiftPerspectiveMatrixf(fov, aspect, near, far, lensShiftX, lensShiftY)
         }
+        return perspectiveMatrixf(fov, aspect, near, far)
     }
 
-    override public var position: simd_float3 {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
-        }
-    }
+    /// The field of view, aspect, depth range and lens shift an assigned perspective matrix implies.
+    override open func adoptProjectionInputs(from matrix: matrix_float4x4) {
+        let col0 = matrix.columns.0
+        let col1 = matrix.columns.1
+        let col2 = matrix.columns.2
+        let col3 = matrix.columns.3
+        fov = radToDeg(2.0 * atan(1.0 / col1.y))
+        aspect = col1.y / col0.x
+        let sz = col2.z
+        let sw = col3.z
+        far = sw / sz
+        near = sw / (1.0 + sz)
 
-    override public var orientation: simd_quatf {
-        didSet {
-            updateViewMatrix = true
-            updateWorldMatrix = true
-        }
-    }
-
-    override public var projectionMatrix: matrix_float4x4 {
-        get {
-            if updateProjectionMatrix {
-                if enableFrustumShift {
-                    _projectionMatrix = frustumShiftPerspectiveMatrixf(fov, aspect, near, far, lensShiftX, lensShiftY)
-                } else {
-                    _projectionMatrix = perspectiveMatrixf(fov, aspect, near, far)
-                }
-                updateProjectionMatrix = false
-            }
-            return _projectionMatrix
-        }
-        set {
-            _projectionMatrix = newValue
-            let col0 = newValue.columns.0
-            let col1 = newValue.columns.1
-            let col2 = newValue.columns.2
-            let col3 = newValue.columns.3
-            fov = radToDeg(2.0 * atan(1.0 / col1.y))
-            aspect = col1.y / col0.x
-            let sz = col2.z
-            let sw = col3.z
-            far = sw / sz
-            near = sw / (1.0 + sz)
-
-            if enableFrustumShift {
-                lensShiftX = col2.x
-                lensShiftY = col2.y
-            }
-        }
-    }
-
-    override public var viewMatrix: matrix_float4x4 {
-        get {
-            if updateViewMatrix {
-                _viewMatrix = worldMatrixInverse
-                updateViewMatrix = false
-            }
-            return _viewMatrix
-        }
-        set {
-            _viewMatrix = newValue
-            localMatrix = newValue.inverse
+        if enableFrustumShift {
+            lensShiftX = col2.x
+            lensShiftY = col2.y
         }
     }
 
@@ -164,22 +122,21 @@ open class PerspectiveCamera: Camera {
         }
     }
 
+    /// Takes ARKit's projection: its field of view and aspect, with this camera's depth range and no
+    /// principal-point offset. Kept until a projection input changes after it.
     public func setProjectionMatrixFromARKit(_ newValue: matrix_float4x4) {
-        _projectionMatrix = newValue
-
         let col0 = newValue.columns.0
         let col1 = newValue.columns.1
         fov = radToDeg(2.0 * atan(1.0 / col1.y))
         aspect = col1.y / col0.x
 
         let farMinusNear = far - near
-        let sz = near / farMinusNear
-        let sw = (far * near) / farMinusNear
-
-        _projectionMatrix.columns.2.x = 0.0
-        _projectionMatrix.columns.2.y = 0.0
-        _projectionMatrix.columns.2.z = sz
-        _projectionMatrix.columns.3.z = sw
+        var projection = newValue
+        projection.columns.2.x = 0.0
+        projection.columns.2.y = 0.0
+        projection.columns.2.z = near / farMinusNear
+        projection.columns.3.z = (far * near) / farMinusNear
+        assignProjection(projection)
     }
 
     // MARK: - Frustum Shift

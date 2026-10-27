@@ -83,32 +83,36 @@ open class BufferComputeSystem: ComputeSystem {
         super.update()
     }
 
-    override open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) {
-        super.update(commandBuffer)
+    override open func update(_ commandBuffer: MTLCommandBuffer, iterations: Int = 1) throws {
+        try super.update(commandBuffer)
 
         guard (_reset && resetPipeline != nil) || updatePipeline != nil else { return }
 
         if count > 0, bufferMap.count > 0, let computeEncoder = commandBuffer.makeComputeCommandEncoder() {
+            defer { computeEncoder.endEncoding() }
             computeEncoder.label = label
-            encode(computeEncoder, iterations: iterations)
-            computeEncoder.endEncoding()
+            try inputCopies.withCommandBuffer(commandBuffer) {
+                try encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 
-    override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        super.update(computeEncoder)
+    override open func update(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try super.update(computeEncoder)
         if count > 0, bufferMap.count > 0 {
-            encode(computeEncoder, iterations: iterations)
+            try inputCopies.withCommandBuffer(nil) {
+                try encode(computeEncoder, iterations: iterations)
+            }
         }
     }
 
     open func bind(_ computeEncoder: MTLComputeCommandEncoder) -> Int {
-        bindBuffers(computeEncoder, ComputeBufferIndex.Custom0.rawValue)
+        try bindBuffers(computeEncoder, ComputeBufferIndex.Custom0.rawValue)
     }
 
-    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) {
-        bindUniforms(computeEncoder)
-        bindBuffers(computeEncoder)
+    private func encode(_ computeEncoder: MTLComputeCommandEncoder, iterations: Int = 1) throws {
+        try bindUniforms(computeEncoder)
+        try bindBuffers(computeEncoder)
         bindTextures(computeEncoder)
 
         if _reset, let pipeline = resetPipeline {

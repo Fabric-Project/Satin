@@ -12,7 +12,7 @@ import SwiftUI
 
 struct ARPointCloudRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARPointCloudRenderer())
+        SatinMetalView(renderer: ARPointCloudRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR Point Cloud")
     }

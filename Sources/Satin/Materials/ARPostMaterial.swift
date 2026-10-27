@@ -10,16 +10,14 @@ import simd
 
 public class ARPostMaterial: Material {
     override open var lightingModel: LightingModel { .unlit }
-    public unowned var contentTexture: MTLTexture? {
-        didSet {
-            set(contentTexture, index: FragmentTextureIndex.Custom0)
-        }
+    public var contentTexture: MTLTexture? {
+        get { texture(at: .Custom0) }
+        set { set(newValue, index: FragmentTextureIndex.Custom0) }
     }
 
-    public unowned var cameraGrainTexture: MTLTexture? {
-        didSet {
-            set(cameraGrainTexture, index: FragmentTextureIndex.Custom1)
-        }
+    public var cameraGrainTexture: MTLTexture? {
+        get { texture(at: .Custom1) }
+        set { set(newValue, index: FragmentTextureIndex.Custom1) }
     }
 
     public var contentTextureTransform: simd_float4x4 {
@@ -35,9 +33,9 @@ public class ARPostMaterial: Material {
     public var time: TimeInterval = 0
 
     init(context: Context, contentTexture: MTLTexture? = nil, cameraGrainTexture: MTLTexture? = nil) {
+        super.init(context: context)
         self.contentTexture = contentTexture
         self.cameraGrainTexture = cameraGrainTexture
-        super.init(context: context)
         configure()
     }
 

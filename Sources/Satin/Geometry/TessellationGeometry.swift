@@ -81,30 +81,14 @@ public final class TessellationGeometry: Geometry {
         )
     }
 
-    override public func draw(renderEncoderState: RenderEncoderState, instanceCount: Int, indexBufferOffset: Int = 0, vertexStart: Int = 0) {
-        let renderEncoder = renderEncoderState.renderEncoder
+    /// Records its bindings, then its patches.
+    override public func draw(in context: GeometryDrawContext) throws {
+        try recordBindings(in: context)
         if let indexBuffer {
-            renderEncoder.drawIndexedPatches(
-                numberOfPatchControlPoints: controlPointsPerPatch,
-                patchStart: 0,
-                patchCount: patchCount,
-                patchIndexBuffer: nil,
-                patchIndexBufferOffset: 0,
-                controlPointIndexBuffer: indexBuffer,
-                controlPointIndexBufferOffset: 0,
-                instanceCount: instanceCount,
-                baseInstance: 0
-            )
+            context.drawIndexedPatches(controlPointCount: controlPointsPerPatch, patchCount: patchCount,
+                                       controlPointIndexBuffer: indexBuffer, instanceCount: context.instanceCount)
         } else {
-            renderEncoder.drawPatches(
-                numberOfPatchControlPoints: controlPointsPerPatch,
-                patchStart: 0,
-                patchCount: patchCount,
-                patchIndexBuffer: nil,
-                patchIndexBufferOffset: 0,
-                instanceCount: instanceCount,
-                baseInstance: 0
-            )
+            context.drawPatches(controlPointCount: controlPointsPerPatch, patchCount: patchCount, instanceCount: context.instanceCount)
         }
     }
 }

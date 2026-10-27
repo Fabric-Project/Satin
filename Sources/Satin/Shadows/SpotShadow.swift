@@ -74,14 +74,6 @@ public final class SpotShadow: Shadow {
         camera = PerspectiveCamera(context: context, label: "\(label) Camera", position: .zero, near: 0.01, far: 100.0, fov: 90.0)
     }
 
-    private var viewport: MTLViewport {
-        MTLViewport(originX: 0, originY: 0, width: Double(resolution.width), height: Double(resolution.height), znear: 0.0, zfar: 1.0)
-    }
-
-    private var viewportFloat4: simd_float4 {
-        simd_make_float4(0.0, 0.0, Float(resolution.width), Float(resolution.height))
-    }
-
     override public func update(light: Object) {
         guard let light = light as? SpotLight, let camera = camera as? PerspectiveCamera else {
             needsUpdate = true
@@ -98,39 +90,11 @@ public final class SpotShadow: Shadow {
         needsUpdate = true
     }
 
-    override public func draw(context: Context, commandBuffer: MTLCommandBuffer, renderables: [Renderable]) {
-        guard enabled else { return }
-
+    override func prepareForDrawing(context: Context) {
         if device == nil {
             device = context.device
         }
         setupTexture()
-
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-        renderPassDescriptor.defaultRasterSampleCount = context.sampleCount
-        renderPassDescriptor.depthAttachment.texture = texture
-        renderPassDescriptor.depthAttachment.loadAction = .clear
-        renderPassDescriptor.depthAttachment.storeAction = .store
-        renderPassDescriptor.depthAttachment.clearDepth = 0.0
-        renderPassDescriptor.renderTargetWidth = resolution.width
-        renderPassDescriptor.renderTargetHeight = resolution.height
-
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else { return }
-
-        renderEncoder.label = label + " Shadow Encoder"
-        renderEncoder.setViewport(viewport)
-
-        let renderEncoderState = RenderEncoderState(renderEncoder: renderEncoder)
-        for renderable in renderables where renderable.isDrawable(renderContext: context, shadow: true) && renderable.castShadow {
-            renderable.update(renderContext: context, camera: camera, viewport: viewportFloat4, index: 0)
-            renderEncoderState.cullMode = renderable.cullMode
-            renderEncoderState.windingOrder = renderable.windingOrder
-            renderEncoderState.triangleFillMode = renderable.triangleFillMode
-            renderable.draw(renderContext: context, renderEncoderState: renderEncoderState, shadow: true)
-        }
-
-        renderEncoder.endEncoding()
-        needsUpdate = false
     }
 
     private func setupTexture() {

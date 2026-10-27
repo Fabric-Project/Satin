@@ -29,13 +29,13 @@ final class PBRCustomizationRenderer: BaseRenderer {
     override func setup() throws {
         camera.lookAt(target: .zero)
         loadHdri()
-        generateNoiseTexture()
+        try generateNoiseTexture()
     }
 
     func loadHdri() {
         let filename = "brown_photostudio_02_2k.hdr"
         if let hdr = loadHDR(device: device, url: texturesURL.appendingPathComponent(filename)) {
-            scene.setEnvironment(texture: hdr)
+            scene.setEnvironment(texture: hdr, completion: Self.reportEnvironmentLoadingResult)
         }
     }
 
@@ -52,6 +52,7 @@ final class PBRCustomizationRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -64,10 +65,10 @@ final class PBRCustomizationRenderer: BaseRenderer {
         renderer.resize(size)
     }
 
-    func generateNoiseTexture() {
+    func generateNoiseTexture() throws {
         let randomNoiseGenerator = RandomNoiseGenerator(device: device, size: (64, 64), range: 0.0 ... 0.5)
         if let commandBuffer = commandQueue.makeCommandBuffer() {
-            let noiseTexture = randomNoiseGenerator.encode(commandBuffer: commandBuffer)
+            let noiseTexture = try randomNoiseGenerator.encode(commandBuffer: commandBuffer)
             commandBuffer.addCompletedHandler { _ in
                 self.material.metallic = 1.0
                 self.material.setTexture(noiseTexture, type: .roughness)

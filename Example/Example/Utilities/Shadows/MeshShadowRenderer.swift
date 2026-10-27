@@ -6,7 +6,6 @@
 //  Copyright © 2023 Hi-Rez. All rights reserved.
 //
 
-import Combine
 import Foundation
 import Metal
 import MetalPerformanceShaders
@@ -19,7 +18,9 @@ final class MeshShadowRenderer {
 
     public var _update = true
 
-    private var subscription: AnyCancellable?
+    private let mesh: Mesh
+    /// The mesh's world revision the shadow was last drawn for.
+    private var drawnWorldRevision: UInt64?
     private var device: MTLDevice
     private var renderer: RenderEncoder
     private var camera: OrthographicCamera
@@ -34,6 +35,7 @@ final class MeshShadowRenderer {
 
     init(device: MTLDevice, mesh: Mesh, size: (width: Float, height: Float)) {
         self.device = device
+        self.mesh = mesh
         context = Context(device: device, sampleCount: 1, colorPixelFormat: .bgra8Unorm)
 
         let mat = BasicColorMaterial(context: context, color: [0, 0, 0, 0.75], blending: .alpha)
@@ -68,16 +70,18 @@ final class MeshShadowRenderer {
         blurFilter.edgeMode = .clamp
 
         _texture = createTexture(device: device, width: width, height: height, pixelFormat: .bgra8Unorm)
-
-        subscription = mesh.transformPublisher.sink { [weak self] object in
-            self?._update = true
-            self?.shadowMesh.worldMatrix = object.worldMatrix
-            let alpha = remap(object.worldPosition.y, 0, 3.0, 1.0, 0.0)
-            self?.shadowMesh.material?.set("Color", [0.0, 0.0, 0.0, alpha])
-        }
     }
 
-    func draw(commandBuffer: MTLCommandBuffer) {
+    func draw(frame: FrameTime, commandBuffer: MTLCommandBuffer) throws {
+        // Follows the mesh when it (or an ancestor) moved since the last draw.
+        let worldRevision = mesh.worldRevision
+        if worldRevision != drawnWorldRevision {
+            drawnWorldRevision = worldRevision
+            shadowMesh.worldMatrix = mesh.worldMatrix
+            let alpha = remap(mesh.worldPosition.y, 0, 3.0, 1.0, 0.0)
+            shadowMesh.material?.set("Color", [0.0, 0.0, 0.0, alpha])
+            _update = true
+        }
         guard _update, var _texture = _texture else { return }
 
         let rpd = MTLRenderPassDescriptor()
@@ -85,7 +89,8 @@ final class MeshShadowRenderer {
         rpd.renderTargetWidth = width
         rpd.renderTargetHeight = height
 
-        renderer.draw(
+        try renderer.draw(
+            frame: frame,
             renderPassDescriptor: rpd,
             commandBuffer: commandBuffer,
             scene: scene,

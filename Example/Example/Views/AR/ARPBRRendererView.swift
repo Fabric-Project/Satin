@@ -13,7 +13,7 @@ import SwiftUI
 
 struct ARPBRRendererView: View {
     var body: some View {
-        SatinMetalView(renderer: ARPBRRenderer())
+        SatinMetalView(renderer: ARPBRRenderer(context: .makePlatformDefault()))
             .ignoresSafeArea()
             .navigationTitle("AR PBR")
     }

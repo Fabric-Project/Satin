@@ -148,33 +148,25 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         prefilterProcessor = PostProcessEncoder(
             label: "SSAO Prefilter",
             context: depthContext,
-            material: prefilterMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: prefilterMaterial
         )
 
         denoiseProcessor = PostProcessEncoder(
             label: "SSAO Denoise",
             context: aoContext,
-            material: denoiseMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: denoiseMaterial
         )
 
         compositeProcessor = PostProcessEncoder(
             label: "SSAO Composite",
             context: compositeContext,
-            material: compositeMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: compositeMaterial
         )
 
         super.init(
             label: "SSAO",
             context: aoContext,
-            material: ssaoMaterial,
-            depthLoadAction: .dontCare,
-            depthStoreAction: .dontCare
+            material: ssaoMaterial
         )
 
         blueNoiseTexture = loadBlueNoiseTexture(device: context.device) ?? makeFallbackBlueNoiseTexture(device: context.device)
@@ -270,7 +262,7 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
         }
     }
 
-    override open func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) {
+    override open func draw(frame: FrameTime, renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         syncMaterialParameters()
 
         let hasAOInputs = depthTexture != nil &&
@@ -294,20 +286,23 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
             denoiseMaterial.depthTexture = linearDepthTexture
             denoiseMaterial.update(camera: sceneCamera)
 
-            prefilterProcessor.draw(
+            try prefilterProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: linearDepthTexture
             )
 
-            super.draw(
+            try super.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: rawTexture
             )
 
             denoiseMaterial.aoTexture = rawTexture
-            denoiseProcessor.draw(
+            try denoiseProcessor.draw(
+                frame: frame,
                 renderPassDescriptor: MTLRenderPassDescriptor(),
                 commandBuffer: commandBuffer,
                 renderTarget: denoisedTexture
@@ -319,7 +314,8 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
 
         compositeMaterial.colorTexture = colorTexture
         compositeMaterial.aoTexture = compositeAOTexture
-        compositeProcessor.draw(
+        try compositeProcessor.draw(
+            frame: frame,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             renderTarget: outputTexture

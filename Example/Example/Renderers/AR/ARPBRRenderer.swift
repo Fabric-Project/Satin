@@ -9,6 +9,7 @@
 #if os(iOS)
 
 import ARKit
+import Combine
 import Metal
 import MetalKit
 import MetalPerformanceShaders
@@ -40,7 +41,11 @@ fileprivate final class ARScene:  IBLEnvironment {
         super.init(context:context, label: label, children)
         Task(priority: .background) {
             if let device = MTLCreateSystemDefaultDevice() {
-                self.generateBRDFLUT(device: device)
+                do {
+                    try self.generateBRDFLUT(device: device)
+                } catch {
+                    print("BRDF generation failed: \(error)")
+                }
             }
         }
     }
@@ -49,11 +54,11 @@ fileprivate final class ARScene:  IBLEnvironment {
         fatalError("init(from:) has not been implemented")
     }
 
-    func generateBRDFLUT(device: MTLDevice) {
+    func generateBRDFLUT(device: MTLDevice) throws {
         guard let commandQueue = device.makeCommandQueue(),
               let commandBuffer = commandQueue.makeCommandBuffer() else { return }
 
-        let _brdfTexture = BrdfGenerator(device: device, size: 512).encode(commandBuffer: commandBuffer)
+        let _brdfTexture = try BrdfGenerator(device: device, size: 512).encode(commandBuffer: commandBuffer)
 
         commandBuffer.addCompletedHandler { [weak self] _ in
             self?.brdfTexture = _brdfTexture
@@ -76,7 +81,9 @@ fileprivate final class ARScene:  IBLEnvironment {
         return closest
     }
 
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
+    // Reads ARKit state: CPU work, done in the update.
+    override func update() {
+        super.update()
         guard let currentFrame = session.currentFrame else { return }
 
         if let lightEstimate = currentFrame.lightEstimate {
@@ -133,14 +140,15 @@ fileprivate final class ARObject: Object {
         fatalError("init(from:) has not been implemented")
     }
 
-    override func encode(_ commandBuffer: MTLCommandBuffer) {
+    // Reads ARKit state: CPU work, done in the update.
+    override func update() {
         if let anchor = anchor,
            let currentFrame = session.currentFrame,
            let index = currentFrame.anchors.firstIndex(of: anchor)
         {
             worldMatrix = currentFrame.anchors[index].transform
         }
-        super.encode(commandBuffer)
+        super.update()
     }
 }
 
@@ -239,7 +247,9 @@ final class Model: Object {
     }
 }
 
-final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
+final class ARPBRRenderer: BaseRenderer {
+    private var materialUpdateSubscription: AnyCancellable?
+
     class PostMaterial: SourceMaterial {
         public var grainIntensity: Float = 0.0 {
             didSet {
@@ -357,7 +367,9 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
     override func setup() throws {
         metalView.preferredFramesPerSecond = 60
 
-        model.material.delegate = self
+        materialUpdateSubscription = model.material.updatedPublisher.sink { material in
+            print("Material Updated: \(material.label)")
+        }
 
         renderer.setClearColor(.zero)
         renderer.depthStoreAction = .store
@@ -391,15 +403,17 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         backgroundRenderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer
         )
 
         if modelContainer.visible {
-            shadowRenderer.update(commandBuffer: commandBuffer)
+            try shadowRenderer.update(frame: frameTime, commandBuffer: commandBuffer)
         }
 
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: MTLRenderPassDescriptor(),
             commandBuffer: commandBuffer,
             scene: scene,
@@ -412,7 +426,7 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         if let realDepthTexture = backgroundRenderer.depthTexture,
            let virtualDepthTexture = renderer.depthTexture
         {
-            featheredDepthMaskTexture = featheredDepthMaskGenerator.encode(
+            featheredDepthMaskTexture = try featheredDepthMaskGenerator.encode(
                 commandBuffer: commandBuffer,
                 realDepthTexture: realDepthTexture,
                 virtualDepthTexture: virtualDepthTexture
@@ -426,7 +440,8 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
         postMaterial.grainTexture = session.currentFrame?.cameraGrainTexture
         postMaterial.grainIntensity = session.currentFrame?.cameraGrainIntensity ?? 0
 
-        postProcessor.draw(
+        try postProcessor.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer
         )
@@ -469,10 +484,6 @@ final class ARPBRRenderer: BaseRenderer, MaterialDelegate {
 #else
         return 2.0 * simd_make_float2(Float(point.x / size.width), 1.0 - Float(point.y / size.height)) - 1.0
 #endif
-    }
-
-    func updated(material: Material) {
-        print("Material Updated: \(material.label)")
     }
 
     func createTexture(_ label: String, _ pixelFormat: MTLPixelFormat, _ textureScale: Int) -> MTLTexture? {
