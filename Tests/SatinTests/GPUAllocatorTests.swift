@@ -107,6 +107,15 @@ final class GPUAllocatorTests: XCTestCase {
         XCTAssertNotNil(survivor.heap)
     }
 
+    func testTrimCanReleaseEveryEmptyHeap() throws {
+        let allocator = allocator(growth: 1 << 20)
+        var textures = try (0 ..< 12).map { _ in try allocator.makeTexture(descriptor()) }
+        XCTAssertGreaterThan(allocator.statistics(for: .gpuOnly).heapCount, 1)
+        textures.removeAll()
+        allocator.trim(retainingEmptyHeaps: 0)
+        XCTAssertEqual(allocator.statistics(for: .gpuOnly).heapCount, 0)
+    }
+
     func testPrivateTexturesIgnoreTheirRequestedCacheMode() throws {
         let allocator = allocator()
         let texture = try allocator.makeTexture(descriptor(storage: .private, cache: .writeCombined))

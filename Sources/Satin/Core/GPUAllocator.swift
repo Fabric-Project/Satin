@@ -166,16 +166,18 @@ public final class GPUAllocator {
 
     // MARK: - Maintenance
 
-    /// Releases heaps holding no live allocations, keeping `retainedEmptyHeaps` per class. Call on
-    /// memory pressure or when a document closes. Heaps still holding objects are never released.
-    public func trim() {
+    /// Releases heaps holding no live allocations, keeping `retainingEmptyHeaps` per class (by
+    /// default the configuration's `retainedEmptyHeaps`). Call on memory pressure, or with 0 when the
+    /// allocator's owner shuts down. Heaps still holding objects are never released.
+    public func trim(retainingEmptyHeaps: Int? = nil) {
+        let retained = retainingEmptyHeaps ?? configuration.retainedEmptyHeaps
         lock.sync {
             for index in heaps.indices {
                 var keptEmptyHeaps = 0
                 heaps[index].removeAll { heap in
                     guard heap.usedSize == 0 else { return false }
                     keptEmptyHeaps += 1
-                    return keptEmptyHeaps > configuration.retainedEmptyHeaps
+                    return keptEmptyHeaps > retained
                 }
             }
         }
