@@ -749,10 +749,14 @@ open class RenderEncoder {
                 }
 
                 if inColorResolveTexture == nil {
-                    setupColorTexture(arrayLength: arrayLength)
-                    renderPassDescriptor.colorAttachments[0].resolveTexture = colorTexture
-                    renderPassDescriptor.renderTargetWidth = colorTexture!.width
-                    renderPassDescriptor.renderTargetHeight = colorTexture!.height
+                    if let target = Self.resolveTarget(inColorTexture, for: renderPassDescriptor.colorAttachments[0].texture) {
+                        renderPassDescriptor.colorAttachments[0].resolveTexture = target
+                    } else {
+                        setupColorTexture(arrayLength: arrayLength)
+                        renderPassDescriptor.colorAttachments[0].resolveTexture = colorTexture
+                        renderPassDescriptor.renderTargetWidth = colorTexture!.width
+                        renderPassDescriptor.renderTargetHeight = colorTexture!.height
+                    }
                 }
 
             } else if inColorTexture == nil {
@@ -774,8 +778,12 @@ open class RenderEncoder {
                 }
 
                 if inDepthResolveTexture == nil {
-                    setupDepthTexture(arrayLength: arrayLength)
-                    renderPassDescriptor.depthAttachment.resolveTexture = depthTexture
+                    if let target = Self.resolveTarget(inDepthTexture, for: renderPassDescriptor.depthAttachment.texture) {
+                        renderPassDescriptor.depthAttachment.resolveTexture = target
+                    } else {
+                        setupDepthTexture(arrayLength: arrayLength)
+                        renderPassDescriptor.depthAttachment.resolveTexture = depthTexture
+                    }
                 }
 
             } else if inDepthTexture == nil {
@@ -2428,6 +2436,16 @@ open class RenderEncoder {
             if let captured = light as? RecordedLightOccurrence { return captured.projectorTexture }
             return (light as? SpotLight)?.projectionTexture
         }
+    }
+
+    /// Under MSAA a caller's single-sample attachment is where it expects the image, so it takes the
+    /// resolve. Only when it matches the multisample target; otherwise the encoder resolves into its own.
+    private static func resolveTarget(_ target: MTLTexture?, for multisample: MTLTexture?) -> MTLTexture? {
+        guard let target, let multisample, target.sampleCount == 1, multisample.sampleCount > 1,
+              target.width == multisample.width, target.height == multisample.height,
+              target.pixelFormat == multisample.pixelFormat, target.arrayLength == multisample.arrayLength
+        else { return nil }
+        return target
     }
 
     // MARK: - Output Textures
