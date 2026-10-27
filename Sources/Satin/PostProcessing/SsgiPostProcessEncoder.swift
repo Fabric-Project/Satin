@@ -73,11 +73,11 @@ open class SsgiPostProcessEncoder: PostProcessEncoder {
     }
 
     private static func makeSsgiContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .rgba16Float, gpuAllocator: context.gpuAllocator)
     }
 
     private static func makeCompositeContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, gpuAllocator: context.gpuAllocator)
     }
 
     public required init(context: Context) {

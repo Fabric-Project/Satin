@@ -332,7 +332,7 @@ open class RenderEncoder {
     /// The context for each rendering mode, pass type and output set, made on first use, at
     /// `(mode × pass types + phase) × output sets + outputs`; nil until then. The formats are fixed
     /// for the encoder's life, so nothing ever invalidates one.
-    private var renderContexts: [Context?] = []
+    private(set) var renderContexts: [Context?] = []
     /// Every combination of the six `RendererOutputs` flags.
     private static let renderContextOutputSets = 64
     private static let renderContextPassTypes = 5
@@ -1163,7 +1163,8 @@ open class RenderEncoder {
             normalsPixelFormat: context.normalsPixelFormat,
             pbrPixelFormat: context.pbrPixelFormat,
             velocityPixelFormat: context.velocityPixelFormat,
-            emissivePixelFormat: context.emissivePixelFormat
+            emissivePixelFormat: context.emissivePixelFormat,
+            gpuAllocator: context.gpuAllocator
         )
 
         if slot >= renderContexts.count {

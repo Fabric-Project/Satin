@@ -55,7 +55,8 @@ open class SpatialRenderer: Renderer, CompositorLayerConfiguration {
             sampleCount: sampleCount,
             colorPixelFormat: colorPixelFormat,
             depthPixelFormat: depthPixelFormat,
-            vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1
+            vertexAmplificationCount: layerRenderer.configuration.layout == .layered ? 2 : 1,
+            gpuAllocator: context.gpuAllocator
         )
     }
 

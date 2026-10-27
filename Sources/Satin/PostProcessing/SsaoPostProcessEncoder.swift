@@ -124,15 +124,15 @@ open class SsaoPostProcessEncoder: PostProcessEncoder {
     }
 
     private static func makeDepthContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r16Float)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r16Float, gpuAllocator: context.gpuAllocator)
     }
 
     private static func makeAoContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r8Unorm)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: .r8Unorm, gpuAllocator: context.gpuAllocator)
     }
 
     private static func makeCompositeContext(context: Context) -> Context {
-        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
+        Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, gpuAllocator: context.gpuAllocator)
     }
 
     public required init(context: Context) {

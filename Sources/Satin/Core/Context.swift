@@ -37,6 +37,11 @@ public struct Context {
     public let velocityPixelFormat: MTLPixelFormat
     public let emissivePixelFormat: MTLPixelFormat
 
+    /// Where this context's renderers allocate textures and buffers that may outlive a frame.
+    /// Contexts share memory only when handed the same allocator, so a context derived from another
+    /// passes its parent's. Not part of the configuration: excluded from equality and hashing.
+    public let gpuAllocator: GPUAllocator
+
     public init(
         id: UUID = UUID(),
         device: MTLDevice,
@@ -53,7 +58,8 @@ public struct Context {
         normalsPixelFormat: MTLPixelFormat = .rgba16Float,
         pbrPixelFormat: MTLPixelFormat = .rgba8Unorm,
         velocityPixelFormat: MTLPixelFormat = .rg16Float,
-        emissivePixelFormat: MTLPixelFormat = .rgba16Float
+        emissivePixelFormat: MTLPixelFormat = .rgba16Float,
+        gpuAllocator: GPUAllocator? = nil
     ) {
         self.id = id
         self.device = device
@@ -72,6 +78,7 @@ public struct Context {
         self.pbrPixelFormat = pbrPixelFormat
         self.velocityPixelFormat = velocityPixelFormat
         self.emissivePixelFormat = emissivePixelFormat
+        self.gpuAllocator = gpuAllocator ?? GPUAllocator(device: device)
         index = RenderContextRegistry.index(for: RenderContextRegistry.Configuration(
             device: device,
             sampleCount: sampleCount,

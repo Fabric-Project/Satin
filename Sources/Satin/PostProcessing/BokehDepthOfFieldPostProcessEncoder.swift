@@ -175,7 +175,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
 
     public private(set) var outputTexture: MTLTexture?
 
-    private let compositeMaterial: BokehDepthOfFieldCompositeMaterial
+    let compositeMaterial: BokehDepthOfFieldCompositeMaterial
     private let generateCoCProcessor: NamedComputeProcessor
     private let downsampleProcessor: NamedComputeProcessor
     private let nearCoCBoxHorizontalProcessor: NamedComputeProcessor
@@ -206,7 +206,7 @@ open class BokehDepthOfFieldPostProcessEncoder: PostProcessEncoder {
     }
 
     public required init(context: Context) {
-        let compositeContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
+        let compositeContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, gpuAllocator: context.gpuAllocator)
         compositeMaterial = BokehDepthOfFieldCompositeMaterial(context: compositeContext)
 
         let pipelineURL = getPipelinesComputeURL("BokehDepthOfField")!.appendingPathComponent("Shaders.metal")

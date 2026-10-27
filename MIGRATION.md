@@ -15,6 +15,14 @@ Satin encodes into the caller's command buffer on the thread that calls it. Raw 
 - **External resource lifetime** (a `CVMetalTexture`, a pooled `CVPixelBuffer` or `IOSurface`): keep the owner alive until the GPU is done with `commandBuffer.addCompletedHandler { _ in withExtendedLifetime(owner) {} }`.
 - **Post-processing:** `PostProcessEncoder.draw(…)` throws, as `RenderEncoder.draw(…)` does, and stays `open`. Overrides are `throws` and call `try super.draw(…)`.
 
+## GPU allocator on Context
+
+`Context.init` takes an optional `gpuAllocator:`. Omitting it gives the context its own `GPUAllocator`, so existing code compiles and behaves as before. Contexts share memory only when handed the same allocator:
+
+- **Contexts derived from another** (a different pixel format, sample count or rendering mode for the same renderer) should pass `gpuAllocator: context.gpuAllocator`, or they get separate heaps.
+- **Hosts with several renderers** that should share memory create one `GPUAllocator(device:)` and pass it to each root context.
+- `gpuAllocator` is not part of a context's equality or hash.
+
 ## Renderer subclasses
 
 Drawing now takes the frame being drawn, so your renderer needs its `frameTime` current. **An `update(frame:)` override must call `super` first**: it stores the frame as `frameTime`, and without it every draw sees frame 0 and motion never advances.

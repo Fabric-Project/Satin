@@ -90,7 +90,8 @@ open class Renderer {
             sampleCount: sampleCount,
             colorPixelFormat: colorPixelFormat,
             depthPixelFormat: depthPixelFormat,
-            stencilPixelFormat: stencilPixelFormat
+            stencilPixelFormat: stencilPixelFormat,
+            gpuAllocator: context.gpuAllocator
         )
     }
 

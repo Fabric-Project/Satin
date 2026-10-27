@@ -59,11 +59,11 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
         return Float(reachInTiles * tileSize)
     }
 
-    private let tileMaxMaterial: MotionBlurTileMaxMaterial
+    let tileMaxMaterial: MotionBlurTileMaxMaterial
     private let tileMaxEncoder: PostProcessEncoder
     private let jumpFloodMaterials: [MotionBlurJumpFloodMaterial]
     private let jumpFloodEncoders: [PostProcessEncoder]
-    private let neighborMaxMaterial: MotionBlurNeighborMaxMaterial
+    let neighborMaxMaterial: MotionBlurNeighborMaxMaterial
     private let neighborMaxEncoder: PostProcessEncoder
     /// Reused by every tile-resolution pass: each draw sets its target and encodes at once.
     private let tilePassDescriptor = MTLRenderPassDescriptor()
@@ -76,14 +76,14 @@ open class MotionBlurPostProcessEncoder: PostProcessEncoder {
 
     public required init(context: Context) {
         // Pipeline must not expect a depth attachment — use a depth-free context.
-        let blurContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat)
+        let blurContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: context.colorPixelFormat, gpuAllocator: context.gpuAllocator)
         colorPixelFormat = context.colorPixelFormat
         motionBlurMaterial = MotionBlurMaterial(context: blurContext)
-        let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat)
+        let tileMaxContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.tileMaxPixelFormat, gpuAllocator: context.gpuAllocator)
         tileMaxMaterial = MotionBlurTileMaxMaterial(context: tileMaxContext)
         tileMaxEncoder = PostProcessEncoder(label: "Motion Blur Tile Max", context: tileMaxContext, material: tileMaxMaterial)
         // One material and encoder per pass, so each keeps its own uniforms within a frame.
-        let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat)
+        let pointerContext = Context(device: context.device, sampleCount: 1, colorPixelFormat: Self.pointerPixelFormat, gpuAllocator: context.gpuAllocator)
         let jumpFloodMaterials = (0 ..< Self.jumpFloodPassCount).map { _ in MotionBlurJumpFloodMaterial(context: pointerContext) }
         self.jumpFloodMaterials = jumpFloodMaterials
         jumpFloodEncoders = jumpFloodMaterials.enumerated().map { pass, material in
