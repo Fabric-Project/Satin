@@ -12,14 +12,20 @@ final class FrameArena {
         let buffer: MTLBuffer
         let offset: Int
         let length: Int
-        var contents: UnsafeMutableRawPointer { buffer.contents() + offset }
+        /// Resolved when the slice is made: `MTLBuffer.contents()` is an Objective-C call.
+        let contents: UnsafeMutableRawPointer
     }
 
     fileprivate final class Chunk {
         let buffer: MTLBuffer
+        /// Shared storage, so the address is stable for the buffer's lifetime.
+        let contents: UnsafeMutableRawPointer
         var used = 0
         var length: Int { buffer.length }
-        init(buffer: MTLBuffer) { self.buffer = buffer }
+        init(buffer: MTLBuffer) {
+            self.buffer = buffer
+            contents = buffer.contents()
+        }
     }
 
     /// The only shared mutable allocation state. Leases do not retain the arena, so dropping an
@@ -122,13 +128,13 @@ final class FrameArena {
                     let offset = (chunk.used + alignment - 1) & ~(alignment - 1)
                     if offset <= chunk.length, length <= chunk.length - offset {
                         chunk.used = offset + length
-                        return Slice(buffer: chunk.buffer, offset: offset, length: length)
+                        return Slice(buffer: chunk.buffer, offset: offset, length: length, contents: chunk.contents + offset)
                     }
                 }
                 let chunk = try pool.take(minimumLength: length)
                 chunks.append(chunk)
                 chunk.used = length
-                return Slice(buffer: chunk.buffer, offset: 0, length: length)
+                return Slice(buffer: chunk.buffer, offset: 0, length: length, contents: chunk.contents)
             }
         }
     }

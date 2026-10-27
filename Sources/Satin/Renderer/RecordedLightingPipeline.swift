@@ -8,7 +8,7 @@ struct RecordedLightingPipeline {
 
     init(shader: Shader, renderContext: Context, layout: DrawLayout?) {
         if let state = shader.recordedLightingPipelines.first(where: {
-            $0.matches(configuration: shader.configuration, renderContext: renderContext, layout: layout)
+            $0.matches(shader: shader, renderContext: renderContext, layout: layout)
         }) {
             self.state = state
         } else {
@@ -63,7 +63,11 @@ final class RecordedLightingPipelineState {
         }
     }
 
-    func matches(configuration: ShaderConfiguration, renderContext: Context, layout: DrawLayout?) -> Bool {
+    /// The shader revision this state last matched: an unchanged shader matches again without
+    /// comparing (and copying) its whole configuration on every draw.
+    private var matchedConfigurationRevision: UInt64?
+
+    func matches(shader: Shader, renderContext: Context, layout: DrawLayout?) -> Bool {
         guard self.renderContext.index == renderContext.index else { return false }
         switch (self.layout, layout) {
         case (nil, nil): break
@@ -74,7 +78,10 @@ final class RecordedLightingPipelineState {
             else { return false }
         default: return false
         }
-        return self.configuration == configuration
+        if matchedConfigurationRevision == shader.configurationRevision { return true }
+        guard self.configuration == shader.configuration else { return false }
+        matchedConfigurationRevision = shader.configurationRevision
+        return true
     }
 
     func resolve(counts: Counts) -> MTLRenderPipelineState? {

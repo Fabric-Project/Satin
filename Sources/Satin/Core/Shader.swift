@@ -216,7 +216,12 @@ open class Shader {
         }
     }
 
-    public internal(set) var configuration: ShaderConfiguration
+    public internal(set) var configuration: ShaderConfiguration {
+        didSet { configurationRevision &+= 1 }
+    }
+
+    /// Advances on every change to `configuration`, so per-draw lookups can skip comparing it.
+    private(set) var configurationRevision: UInt64 = 0
 
     var libraryURL: URL? {
         get {
