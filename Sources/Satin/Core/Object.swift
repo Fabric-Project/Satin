@@ -287,13 +287,15 @@ open class Object: Codable {
 
     // MARK: - Bounds
 
+    /// Marking stops at an object already marked: its ancestors were marked with it, and no
+    /// ancestor's bounds depend on a descendant's. Its own local and world bounds are always marked.
     public var updateBounds = true {
         didSet {
-            if updateBounds {
-                _updateBounds = true
-                parent?.updateBounds = true
-                updateBounds = false
-            }
+            guard updateBounds else { return }
+            updateBounds = false
+            let wasMarked = _updateBounds
+            _updateBounds = true
+            if !wasMarked { parent?.updateBounds = true }
         }
     }
 
@@ -314,13 +316,15 @@ open class Object: Codable {
 
     // MARK: - Local Bounds
 
+    /// Stops at an object already marked, like `updateBounds`. World bounds are marked on every
+    /// call, since reading world bounds doesn't clear the local mark.
     public var updateLocalBounds = true {
         didSet {
-            if updateLocalBounds {
-                _updateLocalBounds = true
-                parent?.updateLocalBounds = true
-                updateLocalBounds = false
-            }
+            guard updateLocalBounds else { return }
+            updateLocalBounds = false
+            let wasMarked = _updateLocalBounds
+            _updateLocalBounds = true
+            if !wasMarked { parent?.updateLocalBounds = true }
         }
     }
 
@@ -343,13 +347,16 @@ open class Object: Codable {
 
     // MARK: - World Bounds
 
-     var updateWorldBounds = true {
+    /// Stops at an object already marked. Computing world bounds reads every child's world
+    /// bounds, so an object is only ever cleared with its marked descendants: a marked object's
+    /// ancestors are all marked. Without the early-out, every mark walked to the root.
+    var updateWorldBounds = true {
         didSet {
-            if updateWorldBounds {
-                _updateWorldBounds = true
-                parent?.updateWorldBounds = true
-                updateWorldBounds = false
-            }
+            guard updateWorldBounds else { return }
+            updateWorldBounds = false
+            guard !_updateWorldBounds else { return }
+            _updateWorldBounds = true
+            parent?.updateWorldBounds = true
         }
     }
 
@@ -429,6 +436,8 @@ open class Object: Codable {
             parentLinkRevision &+= 1
             Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
             updateWorldBounds = true
+            // An already-marked object stops its own walk; the new parent still needs marking.
+            parent?.updateWorldBounds = true
         }
     }
 
@@ -621,6 +630,8 @@ open class Object: Codable {
         transformBounds(bounds, localMatrix)
     }
 
+    /// Overrides must merge every child's `worldBounds`: reading them is what clears marked
+    /// descendants along with this object, which `updateWorldBounds` relies on.
     open func computeWorldBounds() -> Bounds {
         children.reduce(transformBounds(bounds, worldMatrix)) { mergeBounds($0, $1.worldBounds) }
     }
