@@ -39,24 +39,58 @@ public final class GPUAllocator {
         }
     }
 
+    /// How big one memory class's heaps are. A new heap is sized from the request that creates it:
+    /// room for `Configuration.requestsPerHeap` of that request, and at least double the class's
+    /// previous heap, within `minimumSize ... maximumSize`. A request larger than `maximumSize`
+    /// still gets a heap, sized to fit it.
+    public struct HeapSizing {
+        /// The class's first heap, when the workload is known up front (a 4K or 8K renderer, say);
+        /// nil sizes it from its first request like any other heap.
+        public var initialSize: Int?
+        public var minimumSize: Int
+        public var maximumSize: Int
+
+        public init(initialSize: Int? = nil, minimumSize: Int, maximumSize: Int) {
+            self.initialSize = initialSize
+            self.minimumSize = minimumSize
+            self.maximumSize = maximumSize
+        }
+    }
+
     public struct Configuration {
-        /// Bytes per new heap; a request larger than half of this gets a heap twice its size.
-        public var heapGrowthSize = 64 << 20
-        /// Requests above this size get their own device allocation instead of heap space.
-        public var dedicatedThreshold = 32 << 20
+        /// Images, render targets and shadow maps: 16 MiB at least, so a 4K bgra8 image (32.4 MiB)
+        /// first gets a heap of about 260 MiB that holds eight.
+        public var gpuOnly = HeapSizing(minimumSize: 16 << 20, maximumSize: 1 << 30)
+        /// Frame-arena chunks and streamed data: small requests, so small heaps.
+        public var cpuWrites = HeapSizing(minimumSize: 4 << 20, maximumSize: 64 << 20)
+        /// Readbacks.
+        public var cpuReads = HeapSizing(minimumSize: 4 << 20, maximumSize: 64 << 20)
+        /// How many of the request that creates a heap it should hold, so the next ones fit beside it.
+        public var requestsPerHeap = 8
+        /// Requests above this size get their own device allocation instead of heap space. Off by
+        /// default: an image allocated every frame is far cheaper from a heap than from the device.
+        public var dedicatedThreshold: Int?
         /// Soft cap on heap bytes across all classes. Past it, requests fall back to the device.
         public var heapBudget: Int?
         /// Empty heaps `trim()` keeps per class, so the next allocation needn't create one.
         public var retainedEmptyHeaps = 1
 
         public init() {}
+
+        public func sizing(for memoryClass: MemoryClass) -> HeapSizing {
+            switch memoryClass {
+            case .gpuOnly: return gpuOnly
+            case .cpuWrites: return cpuWrites
+            case .cpuReads: return cpuReads
+            }
+        }
     }
 
     public struct Statistics: Equatable {
         public let heapCount: Int
         public let heapBytes: Int
         public let usedBytes: Int
-        /// Device allocations made because a request was larger than `dedicatedThreshold`.
+        /// Device allocations made because a request was larger than `dedicatedThreshold`, when set.
         public let dedicatedCount: Int
         /// Device allocations made because the heaps couldn't serve a request (budget, mode, failure).
         public let fallbackCount: Int
@@ -70,6 +104,9 @@ public final class GPUAllocator {
     private var dedicatedCounts = [Int](repeating: 0, count: MemoryClass.allCases.count)
     private var fallbackCounts = [Int](repeating: 0, count: MemoryClass.allCases.count)
     private var createdHeapCount = 0
+    /// The size of each class's most recent heap, which the next one at least doubles; 0 when the
+    /// class has no heaps.
+    private var lastHeapSizes = [Int](repeating: 0, count: MemoryClass.allCases.count)
 
     public init(device: MTLDevice, configuration: Configuration = .init()) {
         self.device = device
@@ -94,7 +131,7 @@ public final class GPUAllocator {
         }
         let texture: MTLTexture? = lock.sync {
             let sizeAndAlign = device.heapTextureSizeAndAlign(descriptor: descriptor)
-            if sizeAndAlign.size > configuration.dedicatedThreshold {
+            if let threshold = configuration.dedicatedThreshold, sizeAndAlign.size > threshold {
                 dedicatedCounts[memoryClass.rawValue] += 1
                 return device.makeTexture(descriptor: descriptor)
             }
@@ -114,7 +151,7 @@ public final class GPUAllocator {
         let options = memoryClass.resourceOptions
         let buffer: MTLBuffer? = lock.sync {
             let sizeAndAlign = device.heapBufferSizeAndAlign(length: length, options: options)
-            if sizeAndAlign.size > configuration.dedicatedThreshold {
+            if let threshold = configuration.dedicatedThreshold, sizeAndAlign.size > threshold {
                 dedicatedCounts[memoryClass.rawValue] += 1
                 return device.makeBuffer(length: length, options: options)
             }
@@ -136,7 +173,7 @@ public final class GPUAllocator {
         for heap in heaps[memoryClass.rawValue] where heap.maxAvailableSize(alignment: alignment) >= size {
             return heap
         }
-        let heapSize = Self.alignUp(max(configuration.heapGrowthSize, size * 2), to: max(alignment, 1))
+        let heapSize = Self.alignUp(newHeapSize(for: memoryClass, request: size), to: max(alignment, 1))
         if let budget = configuration.heapBudget, totalHeapBytes() + heapSize > budget { return nil }
 
         let descriptor = MTLHeapDescriptor()
@@ -149,7 +186,19 @@ public final class GPUAllocator {
         createdHeapCount += 1
         heap.label = "Satin GPUAllocator \(memoryClass) Heap \(createdHeapCount)"
         heaps[memoryClass.rawValue].append(heap)
+        lastHeapSizes[memoryClass.rawValue] = heapSize
         return heap
+    }
+
+    /// The size of the next heap of `memoryClass`, created for a request of `request` bytes.
+    private func newHeapSize(for memoryClass: MemoryClass, request: Int) -> Int {
+        let sizing = configuration.sizing(for: memoryClass)
+        let previous = lastHeapSizes[memoryClass.rawValue]
+        if previous == 0, let initialSize = sizing.initialSize {
+            return max(initialSize, request)
+        }
+        let wanted = max(sizing.minimumSize, previous * 2, configuration.requestsPerHeap * request)
+        return max(min(wanted, sizing.maximumSize), request)
     }
 
     private func totalHeapBytes() -> Int {
@@ -179,6 +228,8 @@ public final class GPUAllocator {
                     keptEmptyHeaps += 1
                     return keptEmptyHeaps > retained
                 }
+                // A class with no heaps left starts over from its first-heap size.
+                if heaps[index].isEmpty { lastHeapSizes[index] = 0 }
             }
         }
     }

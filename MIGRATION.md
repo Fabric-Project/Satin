@@ -22,6 +22,7 @@ Satin encodes into the caller's command buffer on the thread that calls it. Raw 
 - **Contexts derived from another** (a different pixel format, sample count or rendering mode for the same renderer) should pass `gpuAllocator: context.gpuAllocator`, or they get separate heaps.
 - **Hosts with several renderers** that should share memory create one `GPUAllocator(device:)` and pass it to each root context.
 - `gpuAllocator` is not part of a context's equality or hash.
+- **Sizing heaps:** `GPUAllocator.Configuration` sizes each memory class with a `HeapSizing` (`gpuOnly`, `cpuWrites`, `cpuReads`). A host that knows it renders 4K or 8K can set `configuration.gpuOnly.initialSize` so the first frame creates one heap for its working set. `dedicatedThreshold` is optional and off by default.
 
 ## Renderer subclasses
 

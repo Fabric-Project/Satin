@@ -3,6 +3,7 @@
 ## GPU allocator
 
 - New `GPUAllocator`: heap-backed textures and buffers in three memory classes (`gpuOnly`, `cpuWrites`, `cpuReads`). Each call returns a new object; its memory returns to the heap when its last owner releases it, so allocations may escape safely. Includes a budget with device fallback, `trim()` and per-class statistics.
+- Heaps are sized from the requests that create them: each new heap holds `requestsPerHeap` (8) of its first request and at least doubles the class's previous heap, within per-class `HeapSizing` bounds (`gpuOnly` 16 MiB – 1 GiB, `cpuWrites` and `cpuReads` 4 – 64 MiB). A 4K bgra8 image gets a heap of about 260 MiB on first use; a small renderer's first heap is 16 MiB. `HeapSizing.initialSize` sets a class's first heap when the workload is known. The dedicated-allocation threshold is off by default, so full-resolution images come from heaps.
 - `Context` carries a `gpuAllocator`. Contexts share heaps only when handed the same allocator; every context Satin derives internally (render contexts, post-processing, view renderer defaults) passes its parent's. The allocator is not part of a context's equality, hash or interned index.
 - Recorded shadow-map versions and frame-arena chunks come from the context's allocator. Recording shadowed lights in an Iterator no longer makes new device allocations every frame; steady frames reuse heap memory.
 
