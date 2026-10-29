@@ -38,7 +38,7 @@ open class PostProcessRenderEncoder {
     }
 
     /// Per-draw storage: the mesh's vertex uniforms in the arena, its packets in leased storage.
-    private lazy var frameArena = FrameArena(device: context.device, label: "\(label) Frame Arena")
+    private lazy var frameArena = FrameArena(allocator: context.gpuAllocator, label: "\(label) Frame Arena")
     private let packetStoragePool = PacketStoragePool()
     private var updateColorTexture = true
     private var updateColorMultisampleTexture = true
@@ -286,7 +286,7 @@ open class PostProcessRenderEncoder {
     }
 
     /// The forward context for this encoder's formats, which never change.
-    private lazy var forwardRenderContext = Context(
+    lazy var forwardRenderContext = Context(
         device: context.device,
         sampleCount: context.sampleCount,
         colorPixelFormat: colorPixelFormat,
@@ -301,7 +301,8 @@ open class PostProcessRenderEncoder {
         normalsPixelFormat: context.normalsPixelFormat,
         pbrPixelFormat: context.pbrPixelFormat,
         velocityPixelFormat: context.velocityPixelFormat,
-        emissivePixelFormat: context.emissivePixelFormat
+        emissivePixelFormat: context.emissivePixelFormat,
+        gpuAllocator: context.gpuAllocator
     )
 
     private func fastRenderContext() -> Context {

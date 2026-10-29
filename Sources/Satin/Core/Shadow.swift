@@ -98,7 +98,7 @@ public class Shadow {
     func beginRecording(context: Context) throws {
         prepareForDrawing(context: context)
         if recordedVersion != nil, let texture {
-            self.texture = try makeShadowTextureVersion(of: texture, device: context.device)
+            self.texture = try makeShadowTextureVersion(of: texture, allocator: context.gpuAllocator)
         }
         recordedVersion = nil
         recordingState.captureVersion()

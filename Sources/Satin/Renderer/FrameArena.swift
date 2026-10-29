@@ -31,7 +31,7 @@ final class FrameArena {
     /// The only shared mutable allocation state. Leases do not retain the arena, so dropping an
     /// arena while work is in flight cannot form a retain cycle.
     fileprivate final class Pool {
-        private let device: MTLDevice
+        private let allocator: GPUAllocator
         private let maximumChunkLength: Int
         private let label: String
         private let lock = UnfairLock()
@@ -40,8 +40,8 @@ final class FrameArena {
         private var createdChunkCount = 0
         var chunkCount: Int { lock.sync { createdChunkCount } }
 
-        init(device: MTLDevice, initialChunkLength: Int, maximumChunkLength: Int, label: String) {
-            self.device = device
+        init(allocator: GPUAllocator, initialChunkLength: Int, maximumChunkLength: Int, label: String) {
+            self.allocator = allocator
             nextChunkLength = initialChunkLength
             self.maximumChunkLength = max(initialChunkLength, maximumChunkLength)
             self.label = label
@@ -53,12 +53,11 @@ final class FrameArena {
                     return freeChunks.remove(at: index)
                 }
                 let length = max(minimumLength, nextChunkLength)
-                guard length <= device.maxBufferLength,
-                      let buffer = device.makeBuffer(length: length, options: [.storageModeShared, .cpuCacheModeWriteCombined]) else {
-                    throw GPUError.allocationFailed
-                }
+                guard length <= allocator.device.maxBufferLength else { throw GPUError.allocationFailed }
+                // CPU-written, GPU-read: the allocator's write-combined class, counted with the rest.
+                let buffer = try allocator.makeBuffer(length: length, memoryClass: .cpuWrites,
+                                                      label: "\(label) Chunk \(createdChunkCount)")
                 nextChunkLength = min(nextChunkLength * 2, maximumChunkLength)
-                buffer.label = "\(label) Chunk \(createdChunkCount)"
                 createdChunkCount += 1
                 return Chunk(buffer: buffer)
             }
@@ -142,8 +141,14 @@ final class FrameArena {
     private let pool: Pool
     var chunkCount: Int { pool.chunkCount }
 
-    init(device: MTLDevice, initialChunkLength: Int = 256 * 1024, maximumChunkLength: Int = 4 * 1024 * 1024, label: String = "Satin Frame Arena") {
-        pool = Pool(device: device, initialChunkLength: initialChunkLength, maximumChunkLength: maximumChunkLength, label: label)
+    init(allocator: GPUAllocator, initialChunkLength: Int = 256 * 1024, maximumChunkLength: Int = 4 * 1024 * 1024, label: String = "Satin Frame Arena") {
+        pool = Pool(allocator: allocator, initialChunkLength: initialChunkLength, maximumChunkLength: maximumChunkLength, label: label)
+    }
+
+    /// A standalone arena with its own allocator, for callers that have only a device.
+    convenience init(device: MTLDevice, initialChunkLength: Int = 256 * 1024, maximumChunkLength: Int = 4 * 1024 * 1024, label: String = "Satin Frame Arena") {
+        self.init(allocator: GPUAllocator(device: device), initialChunkLength: initialChunkLength,
+                  maximumChunkLength: maximumChunkLength, label: label)
     }
 
     func lease(frame: FrameTime) -> Lease {

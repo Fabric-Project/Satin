@@ -100,7 +100,7 @@ final class RecordedShadow: Shadow {
             cameras.append(camera)
             guard let texture = source.passTexture(index) else { throw SubmissionError.shadowAllocationFailed }
             if source.shouldRender {
-                textures.append(try makeShadowTextureVersion(of: texture, device: context.device))
+                textures.append(try makeShadowTextureVersion(of: texture, allocator: context.gpuAllocator))
             } else {
                 textures.append(source.recordedVersion?.passTexture(index) ?? texture)
             }
@@ -141,7 +141,9 @@ final class RecordedShadow: Shadow {
     }
 }
 
-func makeShadowTextureVersion(of texture: MTLTexture, device: MTLDevice) throws -> MTLTexture {
+/// A new map for one recorded occurrence, from the context's allocator: occurrences are recorded every
+/// frame, so versions come from shared heaps instead of new device allocations.
+func makeShadowTextureVersion(of texture: MTLTexture, allocator: GPUAllocator) throws -> MTLTexture {
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: texture.pixelFormat,
                                                               width: texture.width, height: texture.height,
                                                               mipmapped: false)
@@ -149,7 +151,8 @@ func makeShadowTextureVersion(of texture: MTLTexture, device: MTLDevice) throws 
     descriptor.storageMode = .private
     descriptor.sampleCount = texture.sampleCount
     descriptor.textureType = texture.textureType
-    guard let version = device.makeTexture(descriptor: descriptor) else { throw SubmissionError.shadowAllocationFailed }
-    version.label = texture.label ?? "Recorded Shadow"
+    guard let version = try? allocator.makeTexture(descriptor, label: texture.label ?? "Recorded Shadow") else {
+        throw SubmissionError.shadowAllocationFailed
+    }
     return version
 }

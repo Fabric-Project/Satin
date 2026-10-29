@@ -29,7 +29,7 @@ public final class PointShadow: Shadow {
             var versions: [MTLTexture?] = []
             for texture in depthTextures {
                 guard let texture else { throw SubmissionError.shadowAllocationFailed }
-                versions.append(try makeShadowTextureVersion(of: texture, device: context.device))
+                versions.append(try makeShadowTextureVersion(of: texture, allocator: context.gpuAllocator))
             }
             depthTextures = versions
             recordedVersion = nil
