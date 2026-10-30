@@ -102,6 +102,7 @@
 		E101A8C02C070E8E0055FABA /* YCbCrToRGBConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD752C06A24B00B5A6C8 /* YCbCrToRGBConverter.swift */; };
 		E101A8C12C070E8E0055FABA /* Camera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD772C06A24B00B5A6C8 /* Camera.swift */; };
 		E101A8C22C070E8E0055FABA /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD782C06A24B00B5A6C8 /* Context.swift */; };
+		7F1A00000000000000000031 /* GPUAllocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000030 /* GPUAllocator.swift */; };
 		E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD792C06A24B00B5A6C8 /* Geometry.swift */; };
 		E101A8C42C070E8E0055FABA /* Material.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7A2C06A24B00B5A6C8 /* Material.swift */; };
 		E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */; };
@@ -166,6 +167,8 @@
 		E101A8EA2C070E8E0055FABA /* CircleGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */; };
 		E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */; };
 		E101A8EC2C070E8E0055FABA /* CylinderGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */; };
+		5A1E00000000000000000018 /* PolylineGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E00000000000000000008 /* PolylineGeometry.swift */; };
+		5A1E0000000000000000B002 /* BezierPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000B001 /* BezierPath.swift */; };
 		E101A8ED2C070E8E0055FABA /* ExtrudedRoundedRectGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */; };
 		E101A8EE2C070E8E0055FABA /* ExtrudedTextGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */; };
 		E101A8EF2C070E8E0055FABA /* IcoSphereGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */; };
@@ -260,6 +263,7 @@
 		E101A94C2C070EA00055FABA /* Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */; };
 		E101A94D2C070EA00055FABA /* Loader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DECD2C06A24B00B5A6C8 /* Loader.swift */; };
 		E101A94E2C070EA00055FABA /* MetalFileCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DECE2C06A24B00B5A6C8 /* MetalFileCompiler.swift */; };
+		5A1E0000000000000000B004 /* PolylineSimplify.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A1E0000000000000000B003 /* PolylineSimplify.swift */; };
 		E101A94F2C070EA00055FABA /* MetalSourceCompiler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DECF2C06A24B00B5A6C8 /* MetalSourceCompiler.swift */; };
 		E101A9502C070EA00055FABA /* Paths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED02C06A24B00B5A6C8 /* Paths.swift */; };
 		E101A9532C070EA00055FABA /* Textures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DED32C06A24B00B5A6C8 /* Textures.swift */; };
@@ -388,6 +392,7 @@
 		66D7DD752C06A24B00B5A6C8 /* YCbCrToRGBConverter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = YCbCrToRGBConverter.swift; sourceTree = "<group>"; };
 		66D7DD772C06A24B00B5A6C8 /* Camera.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Camera.swift; sourceTree = "<group>"; };
 		66D7DD782C06A24B00B5A6C8 /* Context.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Context.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000030 /* GPUAllocator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GPUAllocator.swift; sourceTree = "<group>"; };
 		66D7DD792C06A24B00B5A6C8 /* Geometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		66D7DD7A2C06A24B00B5A6C8 /* Material.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Material.swift; sourceTree = "<group>"; };
 		66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Mesh.swift; sourceTree = "<group>"; };
@@ -453,6 +458,8 @@
 		66D7DDA52C06A24B00B5A6C8 /* CircleGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CircleGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConeGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CylinderGeometry.swift; sourceTree = "<group>"; };
+		5A1E00000000000000000008 /* PolylineGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PolylineGeometry.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000B001 /* BezierPath.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BezierPath.swift; sourceTree = "<group>"; };
 		66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedRoundedRectGeometry.swift; sourceTree = "<group>"; };
 		66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ExtrudedTextGeometry.swift; sourceTree = "<group>"; };
 		66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = IcoSphereGeometry.swift; sourceTree = "<group>"; };
@@ -547,6 +554,7 @@
 		66D7DECC2C06A24B00B5A6C8 /* Helpers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Helpers.swift; sourceTree = "<group>"; };
 		66D7DECD2C06A24B00B5A6C8 /* Loader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Loader.swift; sourceTree = "<group>"; };
 		66D7DECE2C06A24B00B5A6C8 /* MetalFileCompiler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalFileCompiler.swift; sourceTree = "<group>"; };
+		5A1E0000000000000000B003 /* PolylineSimplify.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PolylineSimplify.swift; sourceTree = "<group>"; };
 		66D7DECF2C06A24B00B5A6C8 /* MetalSourceCompiler.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MetalSourceCompiler.swift; sourceTree = "<group>"; };
 		66D7DED02C06A24B00B5A6C8 /* Paths.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Paths.swift; sourceTree = "<group>"; };
 		66D7DED32C06A24B00B5A6C8 /* Textures.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Textures.swift; sourceTree = "<group>"; };
@@ -807,6 +815,7 @@
 			children = (
 				66D7DD772C06A24B00B5A6C8 /* Camera.swift */,
 				66D7DD782C06A24B00B5A6C8 /* Context.swift */,
+				7F1A00000000000000000030 /* GPUAllocator.swift */,
 				66D7DD792C06A24B00B5A6C8 /* Geometry.swift */,
 				66D7DD7A2C06A24B00B5A6C8 /* Material.swift */,
 				66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */,
@@ -898,6 +907,8 @@
 				66D7DDA62C06A24B00B5A6C8 /* ConeGeometry.swift */,
 				66D7DDA72C06A24B00B5A6C8 /* CylinderGeometry.swift */,
 				F2A0D0002FF0010000C0FFEE /* CycloramaGeometry.swift */,
+				5A1E00000000000000000008 /* PolylineGeometry.swift */,
+				5A1E0000000000000000B001 /* BezierPath.swift */,
 				66D7DDA82C06A24B00B5A6C8 /* ExtrudedRoundedRectGeometry.swift */,
 				66D7DDA92C06A24B00B5A6C8 /* ExtrudedTextGeometry.swift */,
 				66D7DDAA2C06A24B00B5A6C8 /* IcoSphereGeometry.swift */,
@@ -1104,6 +1115,7 @@
 				66D7DECD2C06A24B00B5A6C8 /* Loader.swift */,
 				5A1E00000000000000000007 /* AnimationLoader.swift */,
 				66D7DECE2C06A24B00B5A6C8 /* MetalFileCompiler.swift */,
+				5A1E0000000000000000B003 /* PolylineSimplify.swift */,
 				66D7DECF2C06A24B00B5A6C8 /* MetalSourceCompiler.swift */,
 				66D7DED02C06A24B00B5A6C8 /* Paths.swift */,
 				66D7DED32C06A24B00B5A6C8 /* Textures.swift */,
@@ -1437,6 +1449,7 @@
 				E101A94C2C070EA00055FABA /* Helpers.swift in Sources */,
 				E101A94D2C070EA00055FABA /* Loader.swift in Sources */,
 				E101A94E2C070EA00055FABA /* MetalFileCompiler.swift in Sources */,
+				5A1E0000000000000000B004 /* PolylineSimplify.swift in Sources */,
 				E1CB8C082CEFB45800781C79 /* Satin.swift in Sources */,
 				E101A94F2C070EA00055FABA /* MetalSourceCompiler.swift in Sources */,
 				E101A9502C070EA00055FABA /* Paths.swift in Sources */,
@@ -1514,6 +1527,7 @@
 				E101A8C02C070E8E0055FABA /* YCbCrToRGBConverter.swift in Sources */,
 				E101A8C12C070E8E0055FABA /* Camera.swift in Sources */,
 				E101A8C22C070E8E0055FABA /* Context.swift in Sources */,
+				7F1A00000000000000000031 /* GPUAllocator.swift in Sources */,
 				E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */,
 				E101A8C42C070E8E0055FABA /* Material.swift in Sources */,
 				E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */,
@@ -1587,6 +1601,8 @@
 				E101A8EB2C070E8E0055FABA /* ConeGeometry.swift in Sources */,
 				E101A8EC2C070E8E0055FABA /* CylinderGeometry.swift in Sources */,
 				F2A0D0012FF0010000C0FFEE /* CycloramaGeometry.swift in Sources */,
+				5A1E00000000000000000018 /* PolylineGeometry.swift in Sources */,
+				5A1E0000000000000000B002 /* BezierPath.swift in Sources */,
 				E101A8ED2C070E8E0055FABA /* ExtrudedRoundedRectGeometry.swift in Sources */,
 				E101A8EE2C070E8E0055FABA /* ExtrudedTextGeometry.swift in Sources */,
 				E101A8EF2C070E8E0055FABA /* IcoSphereGeometry.swift in Sources */,
