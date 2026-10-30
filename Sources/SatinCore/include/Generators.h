@@ -131,8 +131,8 @@ GeometryData generateTubeGeometryData(
 GeometryData
 generateRoundedBoxGeometryData(float width, float height, float depth, float radius, int res);
 
-// joinStyle: 0 = miter, 1 = bevel, 2 = round. capStyle: 0 = butt, 1 = square, 2 = round
-// (capStyle is ignored when closed). pointWidthScales (multiples of width) and
+// joinStyle: 0 = miter, 1 = bevel, 2 = round; others draw a bevel. capStyle: 0 = butt,
+// 1 = square, 2 = round; others draw round (capStyle is ignored when closed). pointWidthScales (multiples of width) and
 // pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
 // indexed against the caller's original, pre-dedupe point array, carried along when
 // consecutive duplicate points are collapsed, and its last value pads out any points

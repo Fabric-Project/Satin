@@ -101,6 +101,22 @@ final class PolylineGeometryTests: XCTestCase {
         }
     }
 
+    func testAPathDrawsLikeItsPointsAndClosesWithIt() throws {
+        var path = BezierPath(start: [0, 0, 0], isClosed: true)
+        path.addCubic(control1: [1, 2, 0], control2: [3, 2, 0], to: [4, 0, 0])
+        path.addLine(to: [2, -1, 0])
+        let style = PolylineStyle(width: 0.2, join: .round, cap: .round)
+        for isClosed in [true, false] {
+            path.isClosed = isClosed
+            let fromPath = try makeGeometry()
+            fromPath.update(path: path, style: style, simplifyTolerance: 0.01)
+            let fromPoints = try makeGeometry()
+            fromPoints.update(points: simplifyPolyline(path.sampledPoints(), tolerance: 0.01, closed: isClosed), closed: isClosed, style: style)
+            XCTAssertEqual(fromPath.vertexCount, fromPoints.vertexCount, "closed: \(isClosed)")
+            XCTAssertEqual(try vertices(of: fromPath).map(\.position), try vertices(of: fromPoints).map(\.position), "closed: \(isClosed)")
+        }
+    }
+
     func testAReversalCoversBeyondItsTipOnceAndFacesForward() throws {
         // Out to (1, 0) and straight back, 0.2 wide: the round join is a semicircle past x = 1.
         let geometry = try makeGeometry()

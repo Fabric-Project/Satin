@@ -2714,13 +2714,36 @@ struct PolylineJointResult {
     PolylineRailPair startRail;
 };
 
-// joinStyle: 0 = miter, 1 = bevel, 2 = round. capStyle: 0 = butt, 1 = square, 2 = round.
-// The join/cap/miter-limit/turn-direction-winding math is a faithful port of a
-// since-removed Fabric-side Swift prototype (validated against it via a differential
-// test before that Swift file was retired — see git history on
-// Fabric/Fabric/Nodes/Geometry/PolylineTessellator.swift for the original reference).
-// Per-point width scales (multiples of `width`) and colors are optional: see
-// polylineDedupeConsecutive for how they pad and default.
+// generatePolylineGeometryData's working arrays, kept on PolylineGeometryData between updates so
+// a polyline rebuilt every frame allocates only when it grows.
+struct PolylineScratch {
+    std::vector<simd_float3> points;
+    std::vector<float> widthScales;
+    std::vector<simd_float4> colors;
+    std::vector<simd_float3> tangents;
+    std::vector<simd_float3> sides;
+    std::vector<float> cumulativeLength;
+    std::vector<PolylineJointResult> joints;
+};
+
+PolylineGeometryData createPolylineGeometryData() {
+    return (PolylineGeometryData) {
+        .vertexCount = 0, .vertexData = NULL, .indexCount = 0, .indexData = NULL,
+        .vertexCapacity = 0, .indexCapacity = 0, .scratch = NULL
+    };
+}
+
+// By pointer, not count: reused storage outlives an empty polyline.
+void freePolylineGeometryData(PolylineGeometryData *data) {
+    free(data->vertexData);
+    free(data->indexData);
+    delete static_cast<PolylineScratch *>(data->scratch);
+    *data = createPolylineGeometryData();
+}
+
+// joinStyle: 0 = miter, 1 = bevel, 2 = round; any other value draws a bevel. capStyle: 0 = butt,
+// 1 = square, 2 = round; any other value draws a round cap. Per-point width scales (multiples of
+// `width`) and colors are optional: see polylineDedupeConsecutive for how they pad and default.
 void generatePolylineGeometryData(
     PolylineGeometryData *result,
     const simd_float3 *rawPoints,
@@ -2741,9 +2764,13 @@ void generatePolylineGeometryData(
     data.vertexCount = 0;
     data.indexCount = 0;
 
-    std::vector<simd_float3> points;
-    std::vector<float> widthScales;
-    std::vector<simd_float4> colors;
+    if (data.scratch == NULL) {
+        data.scratch = new PolylineScratch();
+    }
+    PolylineScratch &scratch = *static_cast<PolylineScratch *>(data.scratch);
+    std::vector<simd_float3> &points = scratch.points;
+    std::vector<float> &widthScales = scratch.widthScales;
+    std::vector<simd_float4> &colors = scratch.colors;
     polylineDedupeConsecutive(rawPoints, rawPointCount, rawPointWidthScales, rawPointWidthScaleCount,
                               rawPointColors, rawPointColorCount, closed, points, widthScales, colors);
     const int n = (int)points.size();
@@ -2760,9 +2787,12 @@ void generatePolylineGeometryData(
 
     // One side vector per segment; segment s runs from points[s] to points[(s+1)%n].
     const int segmentCount = closed ? n : n - 1;
-    std::vector<simd_float3> tangents(segmentCount);
-    std::vector<simd_float3> sides(segmentCount);
-    std::vector<float> cumulativeLength(n, 0.0f);
+    std::vector<simd_float3> &tangents = scratch.tangents;
+    std::vector<simd_float3> &sides = scratch.sides;
+    std::vector<float> &cumulativeLength = scratch.cumulativeLength;
+    tangents.resize(segmentCount);
+    sides.resize(segmentCount);
+    cumulativeLength.assign(n, 0.0f);
 
     for (int s = 0; s < segmentCount; s++) {
         const simd_float3 a = points[s];
@@ -2799,10 +2829,12 @@ void generatePolylineGeometryData(
     // cap 2 and none. Plus two triangles per segment and a closed seam's two vertices. The
     // storage is kept between updates and grows only when this needs more; its old contents are
     // overwritten, so it is replaced rather than reallocated, which would copy them.
+    // Any cap style but butt or square draws round, so sizing and drawing share this test.
+    const bool roundCap = capStyle != 0 && capStyle != 1;
     const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 5;
     const int joinTriangles = joinStyle == 2 ? 2 * resolution : 2;
-    const int capVertices = capStyle == 2 ? resolution + 2 : 2;
-    const int capTriangles = capStyle == 2 ? resolution : 0;
+    const int capVertices = roundCap ? resolution + 2 : 2;
+    const int capTriangles = roundCap ? resolution : 0;
     const int vertexCapacity = n * std::max(joinVertices, capVertices) + 2;
     const int triangleCapacity = n * std::max(joinTriangles, capTriangles) + segmentCount * 2;
     if (data.vertexCapacity < vertexCapacity) {
@@ -2895,7 +2927,7 @@ void generatePolylineGeometryData(
             const simd_float3 tangent = tangents[segment];
             const simd_float3 normal = simd_normalize(simd_cross(tangent, side));
 
-            if (capStyle == 0 || capStyle == 1) { // butt, or square: the rails pushed out by half the width
+            if (!roundCap) { // butt, or square: the rails pushed out by half the width
                 const bool square = capStyle == 1;
                 const simd_float3 core = square ? p + direction * halfWidthAtI * tangent : p;
                 const simd_float3 coreNeighbor = square ? p : neighbor;
@@ -3075,7 +3107,8 @@ void generatePolylineGeometryData(
         return result;
     };
 
-    std::vector<PolylineJointResult> joints;
+    std::vector<PolylineJointResult> &joints = scratch.joints;
+    joints.clear();
     joints.reserve(n);
     for (int i = 0; i < n; i++) {
         joints.push_back(buildJoint(i));

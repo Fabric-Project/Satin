@@ -103,7 +103,8 @@ typedef struct PolylineVertex {
 } PolylineVertex;
 
 // Reused across updates: generatePolylineGeometryData overwrites it, growing the storage only
-// when a polyline needs more than the capacity it has.
+// when a polyline needs more than the capacity it has. `scratch` is the tessellator's working
+// storage, kept here for the same reason; only generatePolylineGeometryData reads it.
 typedef struct PolylineGeometryData {
     int vertexCount;
     PolylineVertex *vertexData;
@@ -111,6 +112,7 @@ typedef struct PolylineGeometryData {
     TriangleIndices *indexData;
     int vertexCapacity;
     int indexCapacity;
+    void *scratch;
 } PolylineGeometryData;
 
 typedef struct BVHNode {
