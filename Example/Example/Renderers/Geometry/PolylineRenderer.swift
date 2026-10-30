@@ -31,7 +31,6 @@ final class PolylineRenderer: BaseRenderer {
     /// Oldest point thinnest: one width scale per trail point, from 0.1 up to 1.
     lazy var trailWidthScales = ContiguousArray((0 ..< trailLength).map { 0.1 + 0.9 * Float($0) / Float(trailLength - 1) })
     let trailStyle = PolylineStyle(width: 0.3, join: .round, cap: .round)
-    lazy var startTime = getTime()
 
     // The editable path: a closed smooth spline through `anchors`. Segment i runs from anchor i
     // to anchor i + 1, leaving along `outHandles[i]` and arriving along `inHandles[i + 1]`.
@@ -73,12 +72,13 @@ final class PolylineRenderer: BaseRenderer {
             scene.add(mesh)
         }
 
+        pathMesh.label = "Bezier path"
         pathMesh.cullMode = .none
         scene.add(pathMesh)
         let anchorMaterial = BasicColorMaterial(context: defaultContext, color: [1, 1, 1, 1])
         let handleMaterial = BasicColorMaterial(context: defaultContext, color: [0.6, 0.6, 0.6, 1])
-        // Lines and spheres have different vertex layouts, so they cannot share a material on this
-        // branch: a material compiles one pipeline, for the layout of the mesh set up last.
+        // Lines and spheres have different vertex layouts, so they cannot share a material: a
+        // material compiles one pipeline, for the layout of the mesh set up last.
         let handleLineMaterial = BasicColorMaterial(context: defaultContext, color: [0.6, 0.6, 0.6, 1])
         for anchorIndex in anchors.indices {
             let line = PolylineGeometry(context: defaultContext)
@@ -105,9 +105,11 @@ final class PolylineRenderer: BaseRenderer {
         camera.lookAt(target: .zero)
     }
 
-    override func update() throws {
+    override func update(frame: FrameTime) throws {
+        try super.update(frame: frame)
+
         // One new point a frame on a Lissajous curve, oldest dropped.
-        let time = Float(getTime() - startTime)
+        let time = Float(frame.time)
         trailPoints.append([4 * sin(1.3 * time), -3.8 + 0.9 * sin(2.1 * time), 0])
         if trailPoints.count > trailLength { trailPoints.removeFirst(trailPoints.count - trailLength) }
         // While the trail is still filling, its points take the newest (widest) scales.
@@ -117,6 +119,7 @@ final class PolylineRenderer: BaseRenderer {
 
     override func draw(renderPassDescriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer) throws {
         try renderer.draw(
+            frame: frameTime,
             renderPassDescriptor: renderPassDescriptor,
             commandBuffer: commandBuffer,
             scene: scene,
@@ -136,9 +139,7 @@ final class PolylineRenderer: BaseRenderer {
         }
         // Adaptive sampling puts points where the path turns; Ramer-Douglas-Peucker then drops
         // the ones that change its shape by less than the tolerance.
-        let pathPoints = simplifyPolyline(path.sampledPoints(angleLimit: .pi / 90), tolerance: 0.005, closed: true)
-        pathGeometry.update(points: pathPoints, closed: true, style: pathStyle)
-        pathMesh.label = "Bezier path, \(pathPoints.count) points"
+        pathGeometry.update(path: path, style: pathStyle, angleLimit: .pi / 90, simplifyTolerance: 0.005)
 
         for (mesh, handle) in handleMeshes {
             mesh.position = position(of: handle) + handleLift

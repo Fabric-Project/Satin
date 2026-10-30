@@ -84,20 +84,6 @@ void freeGeometryData(GeometryData *data) {
     }
 }
 
-PolylineGeometryData createPolylineGeometryData() {
-    return (PolylineGeometryData) {
-        .vertexCount = 0, .vertexData = NULL, .indexCount = 0, .indexData = NULL,
-        .vertexCapacity = 0, .indexCapacity = 0
-    };
-}
-
-// By pointer, not count: reused storage outlives an empty polyline.
-void freePolylineGeometryData(PolylineGeometryData *data) {
-    free(data->vertexData);
-    free(data->indexData);
-    *data = createPolylineGeometryData();
-}
-
 void combineVertexGeometryData(GeometryData *dest, GeometryData *src) {
     if (src->vertexCount > 0) {
         if (dest->vertexCount > 0) {

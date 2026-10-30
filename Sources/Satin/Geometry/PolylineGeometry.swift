@@ -123,4 +123,12 @@ public final class PolylineGeometry: Geometry {
                                       count: Int(geometryData.vertexCount), source: nil)
         ribbonIndexBuffer.updateData(data: UnsafeMutableRawPointer(geometryData.indexData), count: Int(geometryData.indexCount) * 3, source: nil)
     }
+
+    /// Rebuilds the ribbon along `path`, closed when the path is. The path is sampled with
+    /// `angleLimit` (see `BezierPath.sampledPoints(angleLimit:)`), then thinned with
+    /// `simplifyPolyline(_:tolerance:closed:)` when `simplifyTolerance` is above 0.
+    public func update(path: BezierPath, style: PolylineStyle, angleLimit: Float = .pi / 36, simplifyTolerance: Float = 0) {
+        let points = simplifyPolyline(path.sampledPoints(angleLimit: angleLimit), tolerance: simplifyTolerance, closed: path.isClosed)
+        update(points: points, closed: path.isClosed, style: style)
+    }
 }

@@ -102,6 +102,7 @@
 		E101A8C02C070E8E0055FABA /* YCbCrToRGBConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD752C06A24B00B5A6C8 /* YCbCrToRGBConverter.swift */; };
 		E101A8C12C070E8E0055FABA /* Camera.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD772C06A24B00B5A6C8 /* Camera.swift */; };
 		E101A8C22C070E8E0055FABA /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD782C06A24B00B5A6C8 /* Context.swift */; };
+		7F1A00000000000000000031 /* GPUAllocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1A00000000000000000030 /* GPUAllocator.swift */; };
 		E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD792C06A24B00B5A6C8 /* Geometry.swift */; };
 		E101A8C42C070E8E0055FABA /* Material.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7A2C06A24B00B5A6C8 /* Material.swift */; };
 		E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */; };
@@ -391,6 +392,7 @@
 		66D7DD752C06A24B00B5A6C8 /* YCbCrToRGBConverter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = YCbCrToRGBConverter.swift; sourceTree = "<group>"; };
 		66D7DD772C06A24B00B5A6C8 /* Camera.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Camera.swift; sourceTree = "<group>"; };
 		66D7DD782C06A24B00B5A6C8 /* Context.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Context.swift; sourceTree = "<group>"; };
+		7F1A00000000000000000030 /* GPUAllocator.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GPUAllocator.swift; sourceTree = "<group>"; };
 		66D7DD792C06A24B00B5A6C8 /* Geometry.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Geometry.swift; sourceTree = "<group>"; };
 		66D7DD7A2C06A24B00B5A6C8 /* Material.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Material.swift; sourceTree = "<group>"; };
 		66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Mesh.swift; sourceTree = "<group>"; };
@@ -813,6 +815,7 @@
 			children = (
 				66D7DD772C06A24B00B5A6C8 /* Camera.swift */,
 				66D7DD782C06A24B00B5A6C8 /* Context.swift */,
+				7F1A00000000000000000030 /* GPUAllocator.swift */,
 				66D7DD792C06A24B00B5A6C8 /* Geometry.swift */,
 				66D7DD7A2C06A24B00B5A6C8 /* Material.swift */,
 				66D7DD7B2C06A24B00B5A6C8 /* Mesh.swift */,
@@ -1524,6 +1527,7 @@
 				E101A8C02C070E8E0055FABA /* YCbCrToRGBConverter.swift in Sources */,
 				E101A8C12C070E8E0055FABA /* Camera.swift in Sources */,
 				E101A8C22C070E8E0055FABA /* Context.swift in Sources */,
+				7F1A00000000000000000031 /* GPUAllocator.swift in Sources */,
 				E101A8C32C070E8E0055FABA /* Geometry.swift in Sources */,
 				E101A8C42C070E8E0055FABA /* Material.swift in Sources */,
 				E101A8C52C070E8E0055FABA /* Mesh.swift in Sources */,

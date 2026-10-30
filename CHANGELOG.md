@@ -1,5 +1,13 @@
 # Satin 2.0 Changelog
 
+## Polylines
+
+- New `PolylineGeometry`: a ribbon through 3D points, tessellated in SatinCore (`generatePolylineGeometryData`) into storage the geometry keeps and reuses, so a polyline rebuilt every frame allocates only when it grows. `PolylineStyle` sets the width, `PolylineJoinStyle` (miter, bevel, round), `PolylineCapStyle` (butt, square, round), miter limit, up vector and round resolution; per-point width scales and colors are optional. Each vertex carries its side, width scale, corner type, core point and neighbor point (`.Custom0`–`.Custom2`) so a shader can rebuild a camera-facing offset.
+- New `BezierPath`: lines, quadratics and cubics in 3D, open or closed, sampled adaptively by turn angle with `sampledPoints(angleLimit:)`. `PolylineGeometry.update(path:style:angleLimit:simplifyTolerance:)` draws one, closed when the path is.
+- New `simplifyPolyline(_:tolerance:closed:)`: Ramer-Douglas-Peucker thinning that keeps a closed loop's shape.
+- `InterleavedBuffer.updateData(data:stride:count:source:)` accepts a nil pointer, as `ElementBuffer.updateData` does.
+- Example: Polylines, with every join and cap, an editable bezier path and a moving trail.
+
 ## Fewer copies per draw
 
 - `Context` is a final class instead of a struct. All its properties were already `let`; equality and hashing still compare the configuration. A draw now retains one object where it copied a device, a command queue, an allocator and the formats three times.
