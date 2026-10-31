@@ -2633,7 +2633,7 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
     return geoData;
 }
 
-// MARK: - Polyline
+// MARK: - Stroke
 
 // A perpendicular to `tangent` (unit length), oriented by `up`. Falls back to a
 // secondary reference axis when the segment runs parallel to `up` (the fixed-`up`
@@ -2642,7 +2642,7 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
 // `static` (rather than an anonymous namespace) keeps this internal without
 // tripping "C-linkage function returning a C++-only type" under this file's
 // wrapping extern "C" block.
-static simd_float3 polylineSideVector(simd_float3 tangent, simd_float3 up) {
+static simd_float3 strokeSideVector(simd_float3 tangent, simd_float3 up) {
     simd_float3 reference = up;
     if (fabsf(simd_dot(tangent, up)) > 0.999f) {
         reference = fabsf(tangent.x) < 0.9f ? simd_make_float3(1.0f, 0.0f, 0.0f)
@@ -2657,7 +2657,7 @@ static simd_float3 polylineSideVector(simd_float3 tangent, simd_float3 up) {
 // wraparound already connects back to it. Width scales and colors ride along in
 // lockstep: each may be shorter than pointCount (its last value pads the
 // remainder) or null/empty (every point defaults to 1 and opaque white).
-static void polylineDedupeConsecutive(
+static void strokeDedupeConsecutive(
     const simd_float3 *points, int pointCount,
     const float *pointWidthScales, int pointWidthScaleCount,
     const simd_float4 *pointColors, int pointColorCount,
@@ -2703,49 +2703,110 @@ static void polylineDedupeConsecutive(
     }
 }
 
-struct PolylineRailPair {
+struct StrokeRailPair {
     uint32_t left = 0;
     uint32_t right = 0;
     bool valid = false;
 };
 
-struct PolylineJointResult {
-    PolylineRailPair endRail;
-    PolylineRailPair startRail;
+struct StrokeJointResult {
+    StrokeRailPair endRail;
+    StrokeRailPair startRail;
 };
 
-// generatePolylineGeometryData's working arrays, kept on PolylineGeometryData between updates so
-// a polyline rebuilt every frame allocates only when it grows.
-struct PolylineScratch {
+// appendStrokeGeometryData's working arrays, kept on StrokeGeometryData between updates so
+// strokes rebuilt every frame allocate only when they grow. Each stroke overwrites them.
+struct StrokeScratch {
     std::vector<simd_float3> points;
     std::vector<float> widthScales;
     std::vector<simd_float4> colors;
     std::vector<simd_float3> tangents;
     std::vector<simd_float3> sides;
     std::vector<float> cumulativeLength;
-    std::vector<PolylineJointResult> joints;
+    std::vector<StrokeJointResult> joints;
+    std::vector<simd_float3> innerPoints;
+    std::vector<simd_float3> innerOriginals;
+    std::vector<float> innerSigns;
+    std::vector<int> innerGroups;
+    std::vector<int> innerGroupCounts;
+    std::vector<simd_float3> innerGroupSums;
 };
 
-PolylineGeometryData createPolylineGeometryData() {
-    return (PolylineGeometryData) {
+StrokeGeometryData createStrokeGeometryData() {
+    return (StrokeGeometryData) {
         .vertexCount = 0, .vertexData = NULL, .indexCount = 0, .indexData = NULL,
         .vertexCapacity = 0, .indexCapacity = 0, .scratch = NULL
     };
 }
 
-// By pointer, not count: reused storage outlives an empty polyline.
-void freePolylineGeometryData(PolylineGeometryData *data) {
+// By pointer, not count: reused storage outlives an empty stroke.
+void freeStrokeGeometryData(StrokeGeometryData *data) {
     free(data->vertexData);
     free(data->indexData);
-    delete static_cast<PolylineScratch *>(data->scratch);
-    *data = createPolylineGeometryData();
+    delete static_cast<StrokeScratch *>(data->scratch);
+    *data = createStrokeGeometryData();
+}
+
+void resetStrokeGeometryData(StrokeGeometryData *data) {
+    data->vertexCount = 0;
+    data->indexCount = 0;
+}
+
+// Grows the storage to hold these totals, at least doubling and keeping the strokes already
+// appended, so appending many strokes stays linear.
+static void strokeReserve(StrokeGeometryData &data, int vertexCapacity, int triangleCapacity) {
+    if (data.vertexCapacity < vertexCapacity) {
+        data.vertexCapacity = std::max(vertexCapacity, data.vertexCapacity * 2);
+        data.vertexData = (StrokeVertex *)realloc(data.vertexData, sizeof(StrokeVertex) * data.vertexCapacity);
+    }
+    if (data.indexCapacity < triangleCapacity) {
+        data.indexCapacity = std::max(triangleCapacity, data.indexCapacity * 2);
+        data.indexData = (TriangleIndices *)realloc(data.indexData, sizeof(TriangleIndices) * data.indexCapacity);
+    }
+}
+
+// A stroke of one point with a round cap: a disc around it, facing `up`, its two half circles
+// matching the round cap's resolution.
+static void strokeAppendDot(StrokeGeometryData &data, simd_float3 point, float halfWidth, float widthScale,
+                            simd_float4 color, simd_float3 up, int resolution) {
+    const int rimCount = 2 * resolution;
+    strokeReserve(data, data.vertexCount + rimCount + 1, data.indexCount + rimCount);
+
+    const simd_float3 side = strokeSideVector(simd_make_float3(1.0f, 0.0f, 0.0f), up);
+    const simd_float3 forward = simd_cross(up, side);
+    const uint32_t hub = (uint32_t)data.vertexCount;
+    auto addVertex = [&](simd_float3 position, simd_float2 uv, simd_float3 neighbor) {
+        StrokeVertex vertex;
+        vertex.position = position;
+        vertex.normal = up;
+        vertex.uv = uv;
+        vertex.custom0 = simd_make_float4(0.0f, widthScale, 3.0f, 0.0f);
+        vertex.custom1 = point;
+        vertex.custom2 = neighbor;
+        vertex.color = color;
+        data.vertexData[data.vertexCount++] = vertex;
+    };
+
+    // The texture lies flat across the disc, with v across `side` as it runs across a line's width.
+    addVertex(point, simd_make_float2(0.5f, 0.5f), point);
+    for (int step = 0; step < rimCount; step++) {
+        const float t = (float)step / (float)rimCount;
+        const float angle = 2.0f * (float)M_PI * t;
+        const simd_float3 dir = side * cosf(angle) + forward * sinf(angle);
+        addVertex(point + halfWidth * widthScale * dir, simd_make_float2(0.5f + 0.5f * sinf(angle), 0.5f + 0.5f * cosf(angle)), point + dir);
+        TriangleIndices tri;
+        tri.i0 = hub;
+        tri.i1 = hub + 1 + (uint32_t)step;
+        tri.i2 = hub + 1 + (uint32_t)((step + 1) % rimCount);
+        data.indexData[data.indexCount++] = tri;
+    }
 }
 
 // joinStyle: 0 = miter, 1 = bevel, 2 = round; any other value draws a bevel. capStyle: 0 = butt,
 // 1 = square, 2 = round; any other value draws a round cap. Per-point width scales (multiples of
-// `width`) and colors are optional: see polylineDedupeConsecutive for how they pad and default.
-void generatePolylineGeometryData(
-    PolylineGeometryData *result,
+// `width`) and colors are optional: see strokeDedupeConsecutive for how they pad and default.
+void appendStrokeGeometryData(
+    StrokeGeometryData *result,
     const simd_float3 *rawPoints,
     int rawPointCount,
     bool closed,
@@ -2760,22 +2821,20 @@ void generatePolylineGeometryData(
     const simd_float4 *rawPointColors,
     int rawPointColorCount) {
 
-    PolylineGeometryData &data = *result;
-    data.vertexCount = 0;
-    data.indexCount = 0;
+    StrokeGeometryData &data = *result;
 
     if (data.scratch == NULL) {
-        data.scratch = new PolylineScratch();
+        data.scratch = new StrokeScratch();
     }
-    PolylineScratch &scratch = *static_cast<PolylineScratch *>(data.scratch);
+    StrokeScratch &scratch = *static_cast<StrokeScratch *>(data.scratch);
     std::vector<simd_float3> &points = scratch.points;
     std::vector<float> &widthScales = scratch.widthScales;
     std::vector<simd_float4> &colors = scratch.colors;
-    polylineDedupeConsecutive(rawPoints, rawPointCount, rawPointWidthScales, rawPointWidthScaleCount,
+    strokeDedupeConsecutive(rawPoints, rawPointCount, rawPointWidthScales, rawPointWidthScaleCount,
                               rawPointColors, rawPointColorCount, closed, points, widthScales, colors);
     const int n = (int)points.size();
 
-    if (n < 2 || width <= 0.0f) {
+    if (n == 0 || width <= 0.0f) {
         return;
     }
 
@@ -2784,6 +2843,15 @@ void generatePolylineGeometryData(
     const simd_float3 safeUp =
         simd_length(up) > 1e-6f ? simd_normalize(up) : simd_make_float3(0.0f, 1.0f, 0.0f);
     const float safeMiterLimit = std::max(1.0f, miterLimit);
+    // Any cap style but butt or square draws round, so sizing and drawing share this test.
+    const bool roundCap = capStyle != 0 && capStyle != 1;
+
+    if (n == 1) {
+        if (roundCap) {
+            strokeAppendDot(data, points[0], halfWidth, widthScales[0], colors[0], safeUp, resolution);
+        }
+        return;
+    }
 
     // One side vector per segment; segment s runs from points[s] to points[(s+1)%n].
     const int segmentCount = closed ? n : n - 1;
@@ -2802,7 +2870,7 @@ void generatePolylineGeometryData(
         const simd_float3 tangent =
             segmentLength > 1e-9f ? delta / segmentLength : simd_make_float3(1.0f, 0.0f, 0.0f);
         tangents[s] = tangent;
-        sides[s] = polylineSideVector(tangent, safeUp);
+        sides[s] = strokeSideVector(tangent, safeUp);
 
         const int nextIndex = s + 1;
         if (nextIndex < n) {
@@ -2811,7 +2879,12 @@ void generatePolylineGeometryData(
     }
     // A closed polyline's length includes its closing segment, so u reaches 1 back at the start.
     const float closingLength = closed ? simd_distance(points[n - 1], points[0]) : 0.0f;
-    const float totalLength = std::max(cumulativeLength.back() + closingLength, 1e-6f);
+    // u runs from one tip of the stroke to the other, so a cap that reaches past its point gets its
+    // own share of the texture rather than repeating the texture's edge.
+    const float capReachScale = capStyle == 0 || closed ? 0.0f : halfWidth;
+    const float startCapReach = capReachScale * widthScales[0];
+    const float endCapReach = capReachScale * widthScales[n - 1];
+    const float totalLength = std::max(startCapReach + cumulativeLength.back() + closingLength + endCapReach, 1e-6f);
 
     // Segment s always starts at point s, so "does point i have a next segment"
     // reduces to "does segment i exist" — true for every i when closed
@@ -2823,35 +2896,120 @@ void generatePolylineGeometryData(
         return pointIndex - 1;
     };
 
+    // Where a turn's two segments meet on its inner side: the point where their inner edges cross,
+    // set back along each segment by halfWidth * tan(turn / 2). innerSigns[i] is +1 when that side is
+    // left and -1 when it is right. 0 means the joint has no single inner corner: it is straight, an
+    // end, a reversal, or a turn too tight for a neighbor that does not turn the same way.
+    std::vector<simd_float3> &innerPoints = scratch.innerPoints;
+    std::vector<simd_float3> &innerOriginals = scratch.innerOriginals;
+    std::vector<float> &innerSigns = scratch.innerSigns;
+    std::vector<int> &innerGroups = scratch.innerGroups;
+    std::vector<int> &innerGroupCounts = scratch.innerGroupCounts;
+    std::vector<simd_float3> &innerGroupSums = scratch.innerGroupSums;
+    innerOriginals.assign(n, simd_make_float3(0.0f, 0.0f, 0.0f));
+    innerSigns.assign(n, 0.0f);
+    innerGroups.resize(n);
+    innerGroupCounts.assign(n, 1);
+    innerGroupSums.resize(n);
+
+    auto innerSetBackAt = [&](int i) -> float {
+        const float cosHalfTurn = simd_dot(simd_normalize(sides[prevSegment(i)] + sides[nextSegment(i)]), sides[nextSegment(i)]);
+        const float sinHalfTurn = sqrtf(std::max(0.0f, 1.0f - cosHalfTurn * cosHalfTurn));
+        return halfWidth * widthScales[i] * sinHalfTurn / cosHalfTurn;
+    };
+
+    for (int i = 0; i < n; i++) {
+        innerGroups[i] = i;
+        const int prevSeg = prevSegment(i);
+        const int nextSeg = nextSegment(i);
+        if (prevSeg < 0 || nextSeg < 0) continue;
+        const simd_float3 sidePrev = sides[prevSeg];
+        const simd_float3 sideNext = sides[nextSeg];
+        const simd_float3 bisectorRaw = sidePrev + sideNext;
+        if (simd_length(sideNext - sidePrev) < 1e-4f || simd_length_squared(bisectorRaw) <= 1e-8f) continue;
+        const simd_float3 bisector = simd_normalize(bisectorRaw);
+        const float cosHalfTurn = simd_dot(bisector, sideNext);
+        if (cosHalfTurn <= 1e-4f) continue;
+        // Turning toward +side makes +side (L) the inner one.
+        const float innerSign = simd_dot(tangents[nextSeg], sidePrev) > 0.0f ? 1.0f : -1.0f;
+        innerSigns[i] = innerSign;
+        innerOriginals[i] = points[i] + innerSign * (halfWidth * widthScales[i] / cosHalfTurn) * bisector;
+    }
+
+    // A set-back longer than a segment needs the joint at that segment's far end to turn the same
+    // way, so the two can share one corner. Otherwise the joint falls back to overlapping rails.
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (int i = 0; i < n; i++) {
+            if (innerSigns[i] == 0.0f) continue;
+            const int before = i == 0 ? n - 1 : i - 1;
+            const int after = (i + 1) % n;
+            const float setBack = innerSetBackAt(i);
+            if ((setBack > simd_distance(points[i], points[before]) && innerSigns[before] != innerSigns[i]) ||
+                (setBack > simd_distance(points[i], points[after]) && innerSigns[after] != innerSigns[i])) {
+                innerSigns[i] = 0.0f;
+                changed = true;
+            }
+        }
+    }
+
+    // Where a line bends tighter than its half width, the inner corners run backwards along their
+    // segment and those segments fold over each other. Merging each such run into one point, its
+    // corners' mean, leaves that side one layer. It can take a few passes: a merged point can make
+    // the next segment run backwards too.
+    auto innerGroupOf = [&](int i) -> int {
+        while (innerGroups[i] != i) {
+            innerGroups[i] = innerGroups[innerGroups[i]];
+            i = innerGroups[i];
+        }
+        return i;
+    };
+    innerPoints = innerOriginals;
+    for (int pass = 0; pass < 8; pass++) {
+        bool merged = false;
+        for (int s = 0; s < segmentCount; s++) {
+            const int a = s;
+            const int b = (s + 1) % n;
+            if (innerSigns[a] == 0.0f || innerSigns[a] != innerSigns[b]) continue;
+            const int groupA = innerGroupOf(a);
+            const int groupB = innerGroupOf(b);
+            if (groupA != groupB && simd_dot(innerPoints[b] - innerPoints[a], tangents[s]) < 0.0f) {
+                innerGroups[groupB] = groupA;
+                merged = true;
+            }
+        }
+        if (!merged) break;
+        std::fill(innerGroupCounts.begin(), innerGroupCounts.end(), 0);
+        std::fill(innerGroupSums.begin(), innerGroupSums.end(), simd_make_float3(0.0f, 0.0f, 0.0f));
+        for (int i = 0; i < n; i++) {
+            const int group = innerGroupOf(i);
+            innerGroupCounts[group]++;
+            innerGroupSums[group] += innerOriginals[i];
+        }
+        for (int i = 0; i < n; i++) {
+            const int group = innerGroupOf(i);
+            innerPoints[i] = innerGroupSums[group] / (float)innerGroupCounts[group];
+        }
+    }
+    auto innerIsMerged = [&](int i) -> bool { return innerSigns[i] != 0.0f && innerGroupCounts[innerGroupOf(i)] > 1; };
+
     // Written straight into the result, sized for the most any point can emit with these
     // styles: a round join's fallback emits 2 * resolution + 3 vertices and 2 * resolution
     // triangles, a bevel's 5 and 2, a round cap resolution + 2 and resolution, a butt or square
     // cap 2 and none. Plus two triangles per segment and a closed seam's two vertices. The
-    // storage is kept between updates and grows only when this needs more; its old contents are
-    // overwritten, so it is replaced rather than reallocated, which would copy them.
-    // Any cap style but butt or square draws round, so sizing and drawing share this test.
-    const bool roundCap = capStyle != 0 && capStyle != 1;
+    // storage is kept between updates and grows only when this needs more.
     const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 5;
     const int joinTriangles = joinStyle == 2 ? 2 * resolution : 2;
     const int capVertices = roundCap ? resolution + 2 : 2;
     const int capTriangles = roundCap ? resolution : 0;
-    const int vertexCapacity = n * std::max(joinVertices, capVertices) + 2;
-    const int triangleCapacity = n * std::max(joinTriangles, capTriangles) + segmentCount * 2;
-    if (data.vertexCapacity < vertexCapacity) {
-        free(data.vertexData);
-        data.vertexData = (PolylineVertex *)malloc(sizeof(PolylineVertex) * vertexCapacity);
-        data.vertexCapacity = vertexCapacity;
-    }
-    if (data.indexCapacity < triangleCapacity) {
-        free(data.indexData);
-        data.indexData = (TriangleIndices *)malloc(sizeof(TriangleIndices) * triangleCapacity);
-        data.indexCapacity = triangleCapacity;
-    }
+    const int vertexCapacity = data.vertexCount + n * std::max(joinVertices, capVertices) + 2;
+    const int triangleCapacity = data.indexCount + n * std::max(joinTriangles, capTriangles) + segmentCount * 2;
+    strokeReserve(data, vertexCapacity, triangleCapacity);
 
     auto addVertex = [&](simd_float3 position, simd_float3 normal, float u, float v, float side,
                           float widthScale, float cornerType, simd_float3 core,
                           simd_float3 neighbor, simd_float4 color) -> uint32_t {
-        PolylineVertex vertex;
+        StrokeVertex vertex;
         vertex.position = position;
         vertex.normal = normal;
         vertex.uv = simd_make_float2(u, v);
@@ -2875,9 +3033,10 @@ void generatePolylineGeometryData(
 
     // Round join fans. The rim sweeps from `from` to `to` by angle; opposite vectors (a reversal)
     // span no plane, so it sweeps through `forward` instead. The winding follows the sweep, so
-    // each fan faces `hubNormal` whichever way the polyline turns.
+    // each fan faces `hubNormal` whichever way the polyline turns. The whole rim lies on one edge
+    // of the line, so it keeps that edge's `rimV`.
     auto addFan = [&](uint32_t hub, simd_float3 from, simd_float3 to, simd_float3 forward, simd_float3 hubNormal,
-                       simd_float3 center, float u, float vSign, float radius, float widthScale,
+                       simd_float3 center, float u, float rimV, float radius, float widthScale,
                        simd_float4 color, uint32_t startBoundary, uint32_t endBoundary) {
         const float cosAngle = simd_clamp(simd_dot(from, to), -1.0f, 1.0f);
         const float angle = acosf(cosAngle);
@@ -2889,7 +3048,7 @@ void generatePolylineGeometryData(
             const float t = (float)step / (float)resolution;
             const simd_float3 dir = from * cosf(angle * t) + perpendicular * sinf(angle * t);
             const uint32_t rim = addVertex(
-                center + radius * dir, hubNormal, u, 0.5f + 0.5f * vSign * t, 0.0f, widthScale, 2.0f,
+                center + radius * dir, hubNormal, u, rimV, 0.0f, widthScale, 2.0f,
                 center, center + dir, color);
             if (reversed) {
                 addTriangle(hub, rim, previous);
@@ -2907,12 +3066,12 @@ void generatePolylineGeometryData(
 
     // Returns the rail pair that finishes the segment ending at point i, and
     // the rail pair that starts the segment beginning at point i.
-    auto buildJoint = [&](int i) -> PolylineJointResult {
-        PolylineJointResult result;
+    auto buildJoint = [&](int i) -> StrokeJointResult {
+        StrokeJointResult result;
         const simd_float3 p = points[i];
         const int prevSeg = prevSegment(i);
         const int nextSeg = nextSegment(i);
-        const float u = cumulativeLength[i] / totalLength;
+        const float u = (startCapReach + cumulativeLength[i]) / totalLength;
         // This point's own half-width; widthScale in each addVertex call below stays
         // relative to the *base* halfWidth, so a shader can rebuild the offset from a width of its own.
         const float halfWidthAtI = halfWidth * widthScales[i];
@@ -2922,7 +3081,7 @@ void generatePolylineGeometryData(
         // Open polyline cap at either end. `direction` is -1 at the start (the cap reaches
         // back, against the first segment's tangent) and +1 at the end (forward, along the
         // last segment's). `segment` is the one segment touching this point.
-        auto addCap = [&](int segment, simd_float3 neighbor, float direction) -> PolylineRailPair {
+        auto addCap = [&](int segment, simd_float3 neighbor, float direction) -> StrokeRailPair {
             const simd_float3 side = sides[segment];
             const simd_float3 tangent = tangents[segment];
             const simd_float3 normal = simd_normalize(simd_cross(tangent, side));
@@ -2931,14 +3090,16 @@ void generatePolylineGeometryData(
                 const bool square = capStyle == 1;
                 const simd_float3 core = square ? p + direction * halfWidthAtI * tangent : p;
                 const simd_float3 coreNeighbor = square ? p : neighbor;
+                const float coreU = square ? simd_clamp(u + direction * halfWidthAtI / totalLength, 0.0f, 1.0f) : u;
                 const uint32_t l = addVertex(
-                    core + halfWidthAtI * side, normal, u, 1.0f, 1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                    core + halfWidthAtI * side, normal, coreU, 1.0f, 1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
                 const uint32_t r = addVertex(
-                    core - halfWidthAtI * side, normal, u, 0.0f, -1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                    core - halfWidthAtI * side, normal, coreU, 0.0f, -1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
                 return { l, r, true };
             }
 
             // Round: a half-disc fan from the left rail to the right, swept along `direction`.
+            // v follows each rim point's place across the line's width, 1 on the left rail and 0 on the right.
             const uint32_t hub = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 3.0f, p, p, colorAtI);
             uint32_t previousRim = 0;
             uint32_t firstRim = 0;
@@ -2946,8 +3107,9 @@ void generatePolylineGeometryData(
                 const float t = (float)step / (float)resolution;
                 const float angle = (float)M_PI * t;
                 const simd_float3 dir = side * cosf(angle) + direction * tangent * sinf(angle);
+                const float rimU = simd_clamp(u + direction * sinf(angle) * halfWidthAtI / totalLength, 0.0f, 1.0f);
                 const uint32_t rim = addVertex(
-                    p + halfWidthAtI * dir, normal, u, t, 0.0f, widthScaleAtI, 3.0f, p, p + dir, colorAtI);
+                    p + halfWidthAtI * dir, normal, rimU, 0.5f + 0.5f * cosf(angle), 0.0f, widthScaleAtI, 3.0f, p, p + dir, colorAtI);
                 // Sweeping forward reverses the fan's winding relative to `normal`: flip to stay front-facing.
                 if (step > 0) {
                     if (direction > 0.0f) {
@@ -3003,12 +3165,17 @@ void generatePolylineGeometryData(
                             simd_cross(tangents[nextSeg], sideNext) +
                             simd_cross(tangents[prevSeg], sidePrev));
                         // Relative to the *base* halfWidth, like every widthScale here.
+                        // A merged inner corner is its own core, with no width to rebuild.
                         const float widthScale = widthScaleAtI / cosHalfAngle;
+                        const bool mergedLeft = innerIsMerged(i) && innerSigns[i] > 0.0f;
+                        const bool mergedRight = innerIsMerged(i) && innerSigns[i] < 0.0f;
                         const uint32_t l = addVertex(
-                            p + miterLength * miterDir, normal, u, 1.0f, 1.0f, widthScale, 1.0f, p,
+                            mergedLeft ? innerPoints[i] : p + miterLength * miterDir, normal, u, 1.0f, 1.0f,
+                            mergedLeft ? 0.0f : widthScale, 1.0f, mergedLeft ? innerPoints[i] : p,
                             neighborNext, colorAtI);
                         const uint32_t r = addVertex(
-                            p - miterLength * miterDir, normal, u, 0.0f, -1.0f, widthScale, 1.0f, p,
+                            mergedRight ? innerPoints[i] : p - miterLength * miterDir, normal, u, 0.0f, -1.0f,
+                            mergedRight ? 0.0f : widthScale, 1.0f, mergedRight ? innerPoints[i] : p,
                             neighborPrev, colorAtI);
                         result.endRail = { l, r, true };
                         result.startRail = { l, r, true };
@@ -3030,50 +3197,42 @@ void generatePolylineGeometryData(
         // "forward" winding below is front- or back-facing.
         const bool turnReversed = simd_dot(simd_cross(sidePrev, sideNext), hubNormal) < 0.0f;
 
-        // Usually both segments end at the point where their inner edges cross, and only the
-        // outer side needs filler, so nothing is covered twice. That crossing lies back along
-        // each segment by halfWidth * tan(turn / 2); when a segment is shorter than that (a turn
-        // too tight for its width) or the path reverses, the joint falls back to overlapping rails.
-        const simd_float3 bisectorRaw = sidePrev + sideNext;
-        if (simd_length_squared(bisectorRaw) > 1e-8f) {
-            const simd_float3 bisector = simd_normalize(bisectorRaw);
-            const float cosHalfTurn = simd_dot(bisector, sideNext);
-            const float sinHalfTurn = sqrtf(std::max(0.0f, 1.0f - cosHalfTurn * cosHalfTurn));
-            const float innerSetBack = cosHalfTurn > 1e-4f ? halfWidthAtI * sinHalfTurn / cosHalfTurn : INFINITY;
-            const float shorterSegment = std::min(simd_distance(p, neighborPrev), simd_distance(p, neighborNext));
-            if (innerSetBack <= shorterSegment) {
-                // Turning toward +side makes +side (L) the inner one.
-                const float outerSign = simd_dot(tangents[nextSeg], sidePrev) > 0.0f ? -1.0f : 1.0f;
-                const float innerSign = -outerSign;
-                const float outerV = outerSign > 0.0f ? 1.0f : 0.0f;
-                const uint32_t inner = addVertex(
-                    p + innerSign * (halfWidthAtI / cosHalfTurn) * bisector, hubNormal, u, 1.0f - outerV, innerSign,
-                    widthScaleAtI / cosHalfTurn, 2.0f, p, neighborNext, colorAtI);
-                const uint32_t endOuter = addVertex(
-                    p + outerSign * halfWidthAtI * sidePrev, normalPrev, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
-                    neighborPrev, colorAtI);
-                const uint32_t startOuter = addVertex(
-                    p + outerSign * halfWidthAtI * sideNext, normalNext, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
-                    neighborNext, colorAtI);
+        // Usually both segments end at the shared inner corner, and only the outer side needs
+        // filler, so nothing is covered twice. A joint without one falls back to overlapping rails.
+        if (innerSigns[i] != 0.0f) {
+            const float cosHalfTurn = simd_dot(simd_normalize(sidePrev + sideNext), sideNext);
+            const float innerSign = innerSigns[i];
+            const float outerSign = -innerSign;
+            const float outerV = outerSign > 0.0f ? 1.0f : 0.0f;
+            // A merged corner is its own core, with no width to rebuild.
+            const bool merged = innerIsMerged(i);
+            const uint32_t inner = addVertex(
+                innerPoints[i], hubNormal, u, 1.0f - outerV, innerSign,
+                merged ? 0.0f : widthScaleAtI / cosHalfTurn, 2.0f, merged ? innerPoints[i] : p, neighborNext, colorAtI);
+            const uint32_t endOuter = addVertex(
+                p + outerSign * halfWidthAtI * sidePrev, normalPrev, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
+                neighborPrev, colorAtI);
+            const uint32_t startOuter = addVertex(
+                p + outerSign * halfWidthAtI * sideNext, normalNext, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
+                neighborNext, colorAtI);
 
-                if (joinStyle == 2) { // round: a fan from the inner corner around the outer side
-                    addFan(inner, outerSign * sidePrev, outerSign * sideNext, tangents[prevSeg], hubNormal, p, u,
-                           outerSign, halfWidthAtI, widthScaleAtI, colorAtI, endOuter, startOuter);
-                } else if (turnReversed) {
-                    addTriangle(inner, startOuter, endOuter);
-                } else {
-                    addTriangle(inner, endOuter, startOuter);
-                }
-
-                if (outerSign > 0.0f) {
-                    result.endRail = { endOuter, inner, true };
-                    result.startRail = { startOuter, inner, true };
-                } else {
-                    result.endRail = { inner, endOuter, true };
-                    result.startRail = { inner, startOuter, true };
-                }
-                return result;
+            if (joinStyle == 2) { // round: a fan from the inner corner around the outer side
+                addFan(inner, outerSign * sidePrev, outerSign * sideNext, tangents[prevSeg], hubNormal, p, u,
+                       outerV, halfWidthAtI, widthScaleAtI, colorAtI, endOuter, startOuter);
+            } else if (turnReversed) {
+                addTriangle(inner, startOuter, endOuter);
+            } else {
+                addTriangle(inner, endOuter, startOuter);
             }
+
+            if (outerSign > 0.0f) {
+                result.endRail = { endOuter, inner, true };
+                result.startRail = { startOuter, inner, true };
+            } else {
+                result.endRail = { inner, endOuter, true };
+                result.startRail = { inner, startOuter, true };
+            }
+            return result;
         }
 
         const uint32_t endL = addVertex(
@@ -3092,7 +3251,7 @@ void generatePolylineGeometryData(
             // An exact reversal: the L fan above already sweeps the whole semicircle beyond the
             // tip, through `forward`, from the L rail to the R rail. An R fan would draw it again.
             if (simd_length_squared(sidePrev + sideNext) > 1e-8f) {
-                addFan(hub, -sidePrev, -sideNext, tangents[prevSeg], hubNormal, p, u, -1.0f, halfWidthAtI, widthScaleAtI, colorAtI, endR, startR);
+                addFan(hub, -sidePrev, -sideNext, tangents[prevSeg], hubNormal, p, u, 0.0f, halfWidthAtI, widthScaleAtI, colorAtI, endR, startR);
             }
         } else if (turnReversed) {
             addTriangle(hub, startL, endL);
@@ -3107,7 +3266,7 @@ void generatePolylineGeometryData(
         return result;
     };
 
-    std::vector<PolylineJointResult> &joints = scratch.joints;
+    std::vector<StrokeJointResult> &joints = scratch.joints;
     joints.clear();
     joints.reserve(n);
     for (int i = 0; i < n; i++) {
@@ -3117,13 +3276,13 @@ void generatePolylineGeometryData(
     // A closed polyline's last segment returns to point 0, whose vertices start the first
     // segment at u = 0: it ends at copies of them at u = 1, so u never runs backwards.
     auto copyWithEndU = [&](uint32_t index) -> uint32_t {
-        PolylineVertex vertex = data.vertexData[index];
+        StrokeVertex vertex = data.vertexData[index];
         vertex.uv.x = 1.0f;
         assert(data.vertexCount < vertexCapacity);
         data.vertexData[data.vertexCount] = vertex;
         return (uint32_t)data.vertexCount++;
     };
-    PolylineRailPair seamEndRail = joints[0].endRail;
+    StrokeRailPair seamEndRail = joints[0].endRail;
     if (closed && seamEndRail.valid) {
         seamEndRail = { copyWithEndU(seamEndRail.left), copyWithEndU(seamEndRail.right), true };
     }
@@ -3131,8 +3290,8 @@ void generatePolylineGeometryData(
     for (int s = 0; s < segmentCount; s++) {
         const int iA = s;
         const int iB = (s + 1) % n;
-        const PolylineRailPair &aStart = joints[iA].startRail;
-        const PolylineRailPair &bEnd = iB == 0 ? seamEndRail : joints[iB].endRail;
+        const StrokeRailPair &aStart = joints[iA].startRail;
+        const StrokeRailPair &bEnd = iB == 0 ? seamEndRail : joints[iB].endRail;
         if (!aStart.valid || !bEnd.valid) continue;
 
         addTriangle(aStart.left, aStart.right, bEnd.right);

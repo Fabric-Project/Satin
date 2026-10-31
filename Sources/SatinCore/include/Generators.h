@@ -136,10 +136,12 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
 // pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
 // indexed against the caller's original, pre-dedupe point array, carried along when
 // consecutive duplicate points are collapsed, and its last value pads out any points
-// beyond its count. Writes into `result`, reusing its storage and growing it only when needed;
-// the caller owns it and releases it with freePolylineGeometryData.
-void generatePolylineGeometryData(
-    PolylineGeometryData *result,
+// beyond its count. Appends one stroke to `result`, after any it already holds, reusing its storage
+// and growing it only when needed. A stroke of one distinct point adds a disc when its cap is
+// round and nothing otherwise; a stroke with no points or no width adds nothing. The caller owns `result`, empties it with resetStrokeGeometryData and releases it with
+// freeStrokeGeometryData.
+void appendStrokeGeometryData(
+    StrokeGeometryData *result,
     const simd_float3 *points,
     int pointCount,
     bool closed,

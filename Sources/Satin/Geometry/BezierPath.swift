@@ -10,8 +10,9 @@ import SatinCore
 import simd
 
 /// One continuous path of straight and curved segments in 3D, open or closed; a 2D path
-/// keeps z at 0. Sample it into points for `PolylineGeometry`, optionally thinned with
-/// `simplifyPolyline(_:tolerance:closed:)`. A shape of several separate paths is an array.
+/// keeps z at 0. Draw it with `Stroke(path:)`, which samples it into points, optionally thinned
+/// with `simplifyPolyline(_:tolerance:closed:)`. A shape of several separate paths is an array
+/// of strokes in one `StrokeGeometry`.
 public struct BezierPath: Equatable {
     public enum Segment: Equatable {
         case line(to: simd_float3)

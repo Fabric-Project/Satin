@@ -86,13 +86,13 @@ typedef struct GeometryData {
     TriangleIndices *indexData;
 } GeometryData;
 
-// Extends SatinVertex with the extra per-vertex channels a polyline ribbon's
+// Extends SatinVertex with the extra per-vertex channels a stroke's
 // vertex shader needs to recompute a camera-facing/resolution-independent
 // offset: custom0 = (side, widthScale, cornerType, reserved), custom1 = core
-// point, custom2 = neighbor point (see generatePolylineGeometryData). `color`
+// point, custom2 = neighbor point (see appendStrokeGeometryData). `color`
 // is the per-point vertex color (defaults to opaque white when the caller
 // supplies none), independent of that billboard bookkeeping.
-typedef struct PolylineVertex {
+typedef struct StrokeVertex {
     simd_float3 position;
     simd_float3 normal;
     simd_float2 uv;
@@ -100,20 +100,20 @@ typedef struct PolylineVertex {
     simd_float3 custom1;
     simd_float3 custom2;
     simd_float4 color;
-} PolylineVertex;
+} StrokeVertex;
 
-// Reused across updates: generatePolylineGeometryData overwrites it, growing the storage only
-// when a polyline needs more than the capacity it has. `scratch` is the tessellator's working
-// storage, kept here for the same reason; only generatePolylineGeometryData reads it.
-typedef struct PolylineGeometryData {
+// Reused across updates: resetStrokeGeometryData empties it and appendStrokeGeometryData adds to
+// it, growing the storage only when strokes need more than the capacity it has. `scratch` is the
+// tessellator's working storage, kept here for the same reason; only appendStrokeGeometryData reads it.
+typedef struct StrokeGeometryData {
     int vertexCount;
-    PolylineVertex *vertexData;
+    StrokeVertex *vertexData;
     int indexCount;
     TriangleIndices *indexData;
     int vertexCapacity;
     int indexCapacity;
     void *scratch;
-} PolylineGeometryData;
+} StrokeGeometryData;
 
 typedef struct BVHNode {
     Bounds aabb;
@@ -162,8 +162,9 @@ void freeTriangleData(TriangleData *data);
 GeometryData createGeometryData(void);
 void freeGeometryData(GeometryData *data);
 
-PolylineGeometryData createPolylineGeometryData(void);
-void freePolylineGeometryData(PolylineGeometryData *data);
+StrokeGeometryData createStrokeGeometryData(void);
+void freeStrokeGeometryData(StrokeGeometryData *data);
+void resetStrokeGeometryData(StrokeGeometryData *data);
 
 void copyVertexDataToGeometryData(SatinVertex *vertices, int count, GeometryData *destData);
 void copyTriangleDataToGeometryData(TriangleData *triData, GeometryData *destData);

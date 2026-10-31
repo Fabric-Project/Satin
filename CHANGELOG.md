@@ -1,12 +1,13 @@
 # Satin 2.0 Changelog
 
-## Polylines
+## Strokes
 
-- New `PolylineGeometry`: a ribbon through 3D points, tessellated in SatinCore (`generatePolylineGeometryData`) into storage the geometry keeps and reuses, so a polyline rebuilt every frame allocates only when it grows. `PolylineStyle` sets the width, `PolylineJoinStyle` (miter, bevel, round), `PolylineCapStyle` (butt, square, round), miter limit, up vector and round resolution; per-point width scales and colors are optional. Each vertex carries its side, width scale, corner type, core point and neighbor point (`.Custom0`–`.Custom2`) so a shader can rebuild a camera-facing offset.
-- New `BezierPath`: lines, quadratics and cubics in 3D, open or closed, sampled adaptively by turn angle with `sampledPoints(angleLimit:)`. `PolylineGeometry.update(path:style:angleLimit:simplifyTolerance:)` draws one, closed when the path is.
+- New `StrokeGeometry`: ribbons through 3D points, tessellated in SatinCore (`appendStrokeGeometryData`) into storage the geometry keeps and reuses, so strokes rebuilt every frame allocate only when they grow. `update(points:)` draws one line with one color or per-point colors; `update(strokes:)` draws separate `Stroke`s in one geometry, with gaps between them. A stroke of one point with a round cap draws a dot. `Stroke.dashed(length:gap:offset:)` cuts a stroke into dashes along its length, each with real caps and joins. `Stroke.trimmed(start:end:)` keeps the part between two fractions of its length, for revealing a line, and `Stroke.totalLength` gives that length. Both cuts take `revealingTexture`, which keeps the texture where it was on the whole line instead of fitting it to the piece, through `Stroke.textureRange`. `update(strokes:pieces:)` can make one piece per stroke, or group strokes under parent pieces, for animating with a joint palette. `Stroke.Style` sets each stroke's width, `Stroke.Join` (miter, bevel, round), `Stroke.Cap` (butt, square, round), miter limit, up vector and round resolution; per-point width scales and colors are optional. Texture u runs along a stroke from tip to tip, caps included, and v across its width, 1 on the left and 0 on the right, and a dot's texture lies flat across it. Where a line bends tighter than its half width, the inner corners merge into one point, so that side does not fold over itself. Each vertex carries its side, width scale, corner type, core point and neighbor point (`.Custom0`–`.Custom2`) so a shader can rebuild a camera-facing offset.
+- New `BezierPath`: lines, quadratics and cubics in 3D, open or closed, sampled adaptively by turn angle with `sampledPoints(angleLimit:)`. `Stroke(path:color:style:angleLimit:simplifyTolerance:)` draws one, closed when the path is.
 - New `simplifyPolyline(_:tolerance:closed:)`: Ramer-Douglas-Peucker thinning that keeps a closed loop's shape.
 - `InterleavedBuffer.updateData(data:stride:count:source:)` accepts a nil pointer, as `ElementBuffer.updateData` does.
-- Example: Polylines, with every join and cap, an editable bezier path and a moving trail.
+- `BasicColorMaterial`, `BasicTextureMaterial`, `BasicDiffuseMaterial` and `MatCapMaterial` multiply by a geometry's vertex colors, alpha included, when it has them.
+- Example: Strokes, with every join and cap, separate strokes in one geometry, an editable bezier path and a moving trail.
 
 ## Fewer copies per draw
 

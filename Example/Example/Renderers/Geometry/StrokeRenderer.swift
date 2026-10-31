@@ -1,5 +1,5 @@
 //
-//  PolylineRenderer.swift
+//  StrokeRenderer.swift
 //  Example
 //
 
@@ -7,38 +7,38 @@ import Metal
 import MetalKit
 import Satin
 
-/// `PolylineGeometry` laid flat in the view plane (`up` is +z, toward the camera): three
-/// zigzags showing each join with a different cap, an editable bezier path sampled and
+/// `StrokeGeometry` laid flat in the view plane (`up` is +z, toward the camera): three
+/// zigzags showing each join with a different cap, separate strokes with gaps in one geometry, an editable bezier path sampled and
 /// simplified into a ribbon, and a moving trail rebuilt every frame that narrows toward its
 /// oldest point. On macOS, drag the path's anchors and handles: an anchor carries its handles,
 /// and a handle turns its partner too, so the path stays smooth.
-final class PolylineRenderer: BaseRenderer {
+final class StrokeRenderer: BaseRenderer {
     lazy var renderer = RenderEncoder(context: defaultContext)
     lazy var camera = PerspectiveCamera(context: defaultContext, position: [0, 0, 12], near: 0.1, far: 100.0, fov: 45)
     lazy var scene = Object(context: defaultContext, label: "Scene")
 
     /// Sharp and shallow turns, so each join shows its miter, bevel or fan.
     let zigzag: ContiguousArray<simd_float3> = [[-4, 0, 0], [-2.5, 0.8, 0], [-1, -0.6, 0], [0.2, 0.7, 0], [0.6, -0.5, 0], [2.4, 0.2, 0], [4, 0, 0]]
-    let rows: [(join: PolylineJoinStyle, cap: PolylineCapStyle, y: Float, color: simd_float4)] = [
+    let rows: [(join: Stroke.Join, cap: Stroke.Cap, y: Float, color: simd_float4)] = [
         (.miter, .butt, 3.6, [0.95, 0.45, 0.3, 1]),
         (.bevel, .square, 2.0, [0.35, 0.8, 0.45, 1]),
         (.round, .round, 0.4, [0.35, 0.6, 0.95, 1])
     ]
 
-    lazy var trail = PolylineGeometry(context: defaultContext)
+    lazy var trail = StrokeGeometry(context: defaultContext)
     var trailPoints: ContiguousArray<simd_float3> = []
     let trailLength = 90
     /// Oldest point thinnest: one width scale per trail point, from 0.1 up to 1.
     lazy var trailWidthScales = ContiguousArray((0 ..< trailLength).map { 0.1 + 0.9 * Float($0) / Float(trailLength - 1) })
-    let trailStyle = PolylineStyle(width: 0.3, join: .round, cap: .round)
+    let trailStyle = Stroke.Style(width: 0.3, join: .round, cap: .round)
 
     // The editable path: a closed smooth spline through `anchors`. Segment i runs from anchor i
     // to anchor i + 1, leaving along `outHandles[i]` and arriving along `inHandles[i + 1]`.
     var anchors: [simd_float3] = [[4, -1.6, 0], [0, -0.6, 0], [-4, -1.6, 0], [0, -2.6, 0]]
     var outHandles: [simd_float3] = [[4, -1.1, 0], [-2.2, -0.6, 0], [-4, -2.1, 0], [2.2, -2.6, 0]]
     var inHandles: [simd_float3] = [[4, -2.1, 0], [2.2, -0.6, 0], [-4, -1.1, 0], [-2.2, -2.6, 0]]
-    let pathStyle = PolylineStyle(width: 0.12, join: .round)
-    lazy var pathGeometry = PolylineGeometry(context: defaultContext)
+    let pathStyle = Stroke.Style(width: 0.12, join: .round)
+    lazy var pathGeometry = StrokeGeometry(context: defaultContext)
     lazy var pathMesh = Mesh(context: defaultContext, geometry: pathGeometry, material: BasicColorMaterial(context: defaultContext, color: [0.85, 0.5, 0.95, 1]))
 
     enum PathHandle {
@@ -48,7 +48,7 @@ final class PolylineRenderer: BaseRenderer {
     }
     /// One sphere per anchor and handle, and one line per anchor through its two handles.
     var handleMeshes: [(mesh: Mesh, handle: PathHandle)] = []
-    var handleLines: [PolylineGeometry] = []
+    var handleLines: [StrokeGeometry] = []
     var draggedHandle: PathHandle?
     /// Handles sit just in front of the ribbons so they draw over them and are hit first.
     let handleLift: simd_float3 = [0, 0, 0.05]
@@ -63,14 +63,27 @@ final class PolylineRenderer: BaseRenderer {
 
     override func setup() throws {
         for row in rows {
-            let geometry = PolylineGeometry(context: defaultContext)
+            let geometry = StrokeGeometry(context: defaultContext)
             geometry.update(points: ContiguousArray(zigzag.map { $0 + [0, row.y, 0] }), closed: false,
-                            style: PolylineStyle(width: 0.35, join: row.join, cap: row.cap, roundResolution: 12))
+                            style: Stroke.Style(width: 0.35, join: row.join, cap: row.cap, roundResolution: 12))
             let mesh = Mesh(context: defaultContext, geometry: geometry, material: BasicColorMaterial(context: defaultContext, color: row.color))
             mesh.label = "\(row.join) join, \(row.cap) cap"
             mesh.cullMode = .none
             scene.add(mesh)
         }
+
+        var arc = BezierPath(start: [1.5, 4.5, 0])
+        arc.addCubic(control1: [2.2, 5, 0], control2: [3.3, 5, 0], to: [4, 4.5, 0])
+        let separateStrokes = StrokeGeometry(context: defaultContext)
+        separateStrokes.update(strokes: [
+            Stroke(points: [[-4, 4.5, 0], [-3.2, 4.8, 0], [-2.4, 4.5, 0], [-1.6, 4.8, 0]], style: Stroke.Style(width: 0.08, join: .round, cap: .round)),
+            Stroke(points: [[-0.5, 4.5, 0], [0.5, 4.5, 0], [0, 4.85, 0]], closed: true, style: Stroke.Style(width: 0.05, join: .miter)),
+            Stroke(path: arc, style: Stroke.Style(width: 0.12, join: .round, cap: .square)),
+        ])
+        let separateStrokesMesh = Mesh(context: defaultContext, geometry: separateStrokes, material: BasicColorMaterial(context: defaultContext, color: [0.9, 0.9, 0.9, 1]))
+        separateStrokesMesh.label = "Separate strokes"
+        separateStrokesMesh.cullMode = .none
+        scene.add(separateStrokesMesh)
 
         pathMesh.label = "Bezier path"
         pathMesh.cullMode = .none
@@ -81,7 +94,7 @@ final class PolylineRenderer: BaseRenderer {
         // material compiles one pipeline, for the layout of the mesh set up last.
         let handleLineMaterial = BasicColorMaterial(context: defaultContext, color: [0.6, 0.6, 0.6, 1])
         for anchorIndex in anchors.indices {
-            let line = PolylineGeometry(context: defaultContext)
+            let line = StrokeGeometry(context: defaultContext)
             let lineMesh = Mesh(context: defaultContext, geometry: line, material: handleLineMaterial)
             lineMesh.cullMode = .none
             scene.add(lineMesh)
@@ -139,14 +152,14 @@ final class PolylineRenderer: BaseRenderer {
         }
         // Adaptive sampling puts points where the path turns; Ramer-Douglas-Peucker then drops
         // the ones that change its shape by less than the tolerance.
-        pathGeometry.update(path: path, style: pathStyle, angleLimit: .pi / 90, simplifyTolerance: 0.005)
+        pathGeometry.update(strokes: [Stroke(path: path, style: pathStyle, angleLimit: .pi / 90, simplifyTolerance: 0.005)])
 
         for (mesh, handle) in handleMeshes {
             mesh.position = position(of: handle) + handleLift
         }
         for (anchorIndex, line) in handleLines.enumerated() {
             line.update(points: [inHandles[anchorIndex], anchors[anchorIndex], outHandles[anchorIndex]], closed: false,
-                        style: PolylineStyle(width: 0.025))
+                        style: Stroke.Style(width: 0.025))
         }
     }
 
