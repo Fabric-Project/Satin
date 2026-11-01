@@ -189,12 +189,13 @@ final class StrokeGeometryTests: XCTestCase {
         }
     }
 
-    func testAJoinCoversItsCornerOnce() throws {
-        // A 90° left turn at the origin, 0.2 wide: the inner corner is near (-0.1, 0.1).
+    func testAJoinCoversItsOuterSideOnce() throws {
+        // A 90° left turn at the origin, 0.2 wide: the outer side is x > 0, y < 0, and the two
+        // segments overlap on the inner side.
         let geometry = try makeGeometry()
         let points: ContiguousArray<simd_float3> = [[-1, 0, 0], [0, 0, 0], [0, 1, 0]]
-        // Off every shared edge: the miter's diagonal x + y = 0 and the bevel's two inner-corner edges.
-        let probes: [simd_float2] = [[-0.03, 0.04], [0.02, -0.03], [-0.06, 0.07]]
+        // Off every shared edge: the line itself and the miter's diagonal x + y = 0.
+        let probes: [simd_float2] = [[0.02, -0.03], [0.03, -0.01], [0.012, -0.05]]
         for join in [Stroke.Join.miter, .bevel, .round] {
             geometry.update(points: points, closed: false, style: Stroke.Style(width: 0.2, join: join))
             let positions = try vertices(of: geometry).map { simd_make_float2($0.position) }

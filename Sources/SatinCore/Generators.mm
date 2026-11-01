@@ -2705,6 +2705,8 @@ static void strokeDedupeConsecutive(
 
 struct StrokeRailPair {
     uint32_t left = 0;
+    // On the line itself, so each side's texture v runs across its own half of the width.
+    uint32_t core = 0;
     uint32_t right = 0;
     bool valid = false;
 };
@@ -2724,12 +2726,8 @@ struct StrokeScratch {
     std::vector<simd_float3> sides;
     std::vector<float> cumulativeLength;
     std::vector<StrokeJointResult> joints;
-    std::vector<simd_float3> innerPoints;
-    std::vector<simd_float3> innerOriginals;
-    std::vector<float> innerSigns;
-    std::vector<int> innerGroups;
-    std::vector<int> innerGroupCounts;
-    std::vector<simd_float3> innerGroupSums;
+    std::vector<int> jointTriangleStarts;
+    std::vector<TriangleIndices> orderedTriangles;
 };
 
 StrokeGeometryData createStrokeGeometryData() {
@@ -2896,114 +2894,17 @@ void appendStrokeGeometryData(
         return pointIndex - 1;
     };
 
-    // Where a turn's two segments meet on its inner side: the point where their inner edges cross,
-    // set back along each segment by halfWidth * tan(turn / 2). innerSigns[i] is +1 when that side is
-    // left and -1 when it is right. 0 means the joint has no single inner corner: it is straight, an
-    // end, a reversal, or a turn too tight for a neighbor that does not turn the same way.
-    std::vector<simd_float3> &innerPoints = scratch.innerPoints;
-    std::vector<simd_float3> &innerOriginals = scratch.innerOriginals;
-    std::vector<float> &innerSigns = scratch.innerSigns;
-    std::vector<int> &innerGroups = scratch.innerGroups;
-    std::vector<int> &innerGroupCounts = scratch.innerGroupCounts;
-    std::vector<simd_float3> &innerGroupSums = scratch.innerGroupSums;
-    innerOriginals.assign(n, simd_make_float3(0.0f, 0.0f, 0.0f));
-    innerSigns.assign(n, 0.0f);
-    innerGroups.resize(n);
-    innerGroupCounts.assign(n, 1);
-    innerGroupSums.resize(n);
-
-    auto innerSetBackAt = [&](int i) -> float {
-        const float cosHalfTurn = simd_dot(simd_normalize(sides[prevSegment(i)] + sides[nextSegment(i)]), sides[nextSegment(i)]);
-        const float sinHalfTurn = sqrtf(std::max(0.0f, 1.0f - cosHalfTurn * cosHalfTurn));
-        return halfWidth * widthScales[i] * sinHalfTurn / cosHalfTurn;
-    };
-
-    for (int i = 0; i < n; i++) {
-        innerGroups[i] = i;
-        const int prevSeg = prevSegment(i);
-        const int nextSeg = nextSegment(i);
-        if (prevSeg < 0 || nextSeg < 0) continue;
-        const simd_float3 sidePrev = sides[prevSeg];
-        const simd_float3 sideNext = sides[nextSeg];
-        const simd_float3 bisectorRaw = sidePrev + sideNext;
-        if (simd_length(sideNext - sidePrev) < 1e-4f || simd_length_squared(bisectorRaw) <= 1e-8f) continue;
-        const simd_float3 bisector = simd_normalize(bisectorRaw);
-        const float cosHalfTurn = simd_dot(bisector, sideNext);
-        if (cosHalfTurn <= 1e-4f) continue;
-        // Turning toward +side makes +side (L) the inner one.
-        const float innerSign = simd_dot(tangents[nextSeg], sidePrev) > 0.0f ? 1.0f : -1.0f;
-        innerSigns[i] = innerSign;
-        innerOriginals[i] = points[i] + innerSign * (halfWidth * widthScales[i] / cosHalfTurn) * bisector;
-    }
-
-    // A set-back longer than a segment needs the joint at that segment's far end to turn the same
-    // way, so the two can share one corner. Otherwise the joint falls back to overlapping rails.
-    for (bool changed = true; changed;) {
-        changed = false;
-        for (int i = 0; i < n; i++) {
-            if (innerSigns[i] == 0.0f) continue;
-            const int before = i == 0 ? n - 1 : i - 1;
-            const int after = (i + 1) % n;
-            const float setBack = innerSetBackAt(i);
-            if ((setBack > simd_distance(points[i], points[before]) && innerSigns[before] != innerSigns[i]) ||
-                (setBack > simd_distance(points[i], points[after]) && innerSigns[after] != innerSigns[i])) {
-                innerSigns[i] = 0.0f;
-                changed = true;
-            }
-        }
-    }
-
-    // Where a line bends tighter than its half width, the inner corners run backwards along their
-    // segment and those segments fold over each other. Merging each such run into one point, its
-    // corners' mean, leaves that side one layer. It can take a few passes: a merged point can make
-    // the next segment run backwards too.
-    auto innerGroupOf = [&](int i) -> int {
-        while (innerGroups[i] != i) {
-            innerGroups[i] = innerGroups[innerGroups[i]];
-            i = innerGroups[i];
-        }
-        return i;
-    };
-    innerPoints = innerOriginals;
-    for (int pass = 0; pass < 8; pass++) {
-        bool merged = false;
-        for (int s = 0; s < segmentCount; s++) {
-            const int a = s;
-            const int b = (s + 1) % n;
-            if (innerSigns[a] == 0.0f || innerSigns[a] != innerSigns[b]) continue;
-            const int groupA = innerGroupOf(a);
-            const int groupB = innerGroupOf(b);
-            if (groupA != groupB && simd_dot(innerPoints[b] - innerPoints[a], tangents[s]) < 0.0f) {
-                innerGroups[groupB] = groupA;
-                merged = true;
-            }
-        }
-        if (!merged) break;
-        std::fill(innerGroupCounts.begin(), innerGroupCounts.end(), 0);
-        std::fill(innerGroupSums.begin(), innerGroupSums.end(), simd_make_float3(0.0f, 0.0f, 0.0f));
-        for (int i = 0; i < n; i++) {
-            const int group = innerGroupOf(i);
-            innerGroupCounts[group]++;
-            innerGroupSums[group] += innerOriginals[i];
-        }
-        for (int i = 0; i < n; i++) {
-            const int group = innerGroupOf(i);
-            innerPoints[i] = innerGroupSums[group] / (float)innerGroupCounts[group];
-        }
-    }
-    auto innerIsMerged = [&](int i) -> bool { return innerSigns[i] != 0.0f && innerGroupCounts[innerGroupOf(i)] > 1; };
-
     // Written straight into the result, sized for the most any point can emit with these
     // styles: a round join's fallback emits 2 * resolution + 3 vertices and 2 * resolution
-    // triangles, a bevel's 5 and 2, a round cap resolution + 2 and resolution, a butt or square
-    // cap 2 and none. Plus two triangles per segment and a closed seam's two vertices. The
+    // triangles, a miter's 6 and 2, a round cap resolution + 2 and resolution, a butt or square
+    // cap 3 and none. Plus four triangles per segment and a closed seam's three vertices. The
     // storage is kept between updates and grows only when this needs more.
-    const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 5;
+    const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 6;
     const int joinTriangles = joinStyle == 2 ? 2 * resolution : 2;
-    const int capVertices = roundCap ? resolution + 2 : 2;
+    const int capVertices = roundCap ? resolution + 2 : 3;
     const int capTriangles = roundCap ? resolution : 0;
-    const int vertexCapacity = data.vertexCount + n * std::max(joinVertices, capVertices) + 2;
-    const int triangleCapacity = data.indexCount + n * std::max(joinTriangles, capTriangles) + segmentCount * 2;
+    const int vertexCapacity = data.vertexCount + n * std::max(joinVertices, capVertices) + 3;
+    const int triangleCapacity = data.indexCount + n * std::max(joinTriangles, capTriangles) + segmentCount * 4;
     strokeReserve(data, vertexCapacity, triangleCapacity);
 
     auto addVertex = [&](simd_float3 position, simd_float3 normal, float u, float v, float side,
@@ -3093,9 +2994,10 @@ void appendStrokeGeometryData(
                 const float coreU = square ? simd_clamp(u + direction * halfWidthAtI / totalLength, 0.0f, 1.0f) : u;
                 const uint32_t l = addVertex(
                     core + halfWidthAtI * side, normal, coreU, 1.0f, 1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                const uint32_t c = addVertex(core, normal, coreU, 0.5f, 0.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
                 const uint32_t r = addVertex(
                     core - halfWidthAtI * side, normal, coreU, 0.0f, -1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
-                return { l, r, true };
+                return { l, c, r, true };
             }
 
             // Round: a half-disc fan from the left rail to the right, swept along `direction`.
@@ -3122,7 +3024,7 @@ void appendStrokeGeometryData(
                 }
                 previousRim = rim;
             }
-            return { firstRim, previousRim, true };
+            return { firstRim, hub, previousRim, true };
         };
 
         if (prevSeg < 0) {
@@ -3140,100 +3042,37 @@ void appendStrokeGeometryData(
         const simd_float3 neighborPrev = points[i == 0 ? n - 1 : i - 1];
         const simd_float3 neighborNext = points[(i + 1) % n];
 
-        // Straight-through fast path — avoid extra geometry when collinear.
-        if (simd_length(sideNext - sidePrev) < 1e-4f) {
-            const simd_float3 normal = simd_normalize(simd_cross(tangents[nextSeg], sideNext));
+        // A slight turn, as along a sampled curve: both segments share one rib along the bisector, so
+        // the texture runs on through it with no join. This is 2 * sin(turn / 2) for a turn of 15°.
+        // Where a curve is tighter than the half width, the inner side of its strip twists over.
+        if (simd_length(sideNext - sidePrev) < 0.26f) {
+            const simd_float3 normal = simd_normalize(
+                simd_cross(tangents[nextSeg], sideNext) + simd_cross(tangents[prevSeg], sidePrev));
+            const simd_float3 bisector = simd_normalize(sidePrev + sideNext);
+            // Keeps the width along each segment, and is relative to the *base* halfWidth like every widthScale here.
+            const float ribScale = 1.0f / simd_dot(bisector, sideNext);
             const uint32_t l = addVertex(
-                p + halfWidthAtI * sideNext, normal, u, 1.0f, 1.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
+                p + halfWidthAtI * ribScale * bisector, normal, u, 1.0f, 1.0f, widthScaleAtI * ribScale, 0.0f, p, neighborNext, colorAtI);
+            const uint32_t c = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
             const uint32_t r = addVertex(
-                p - halfWidthAtI * sideNext, normal, u, 0.0f, -1.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
-            result.endRail = { l, r, true };
-            result.startRail = { l, r, true };
+                p - halfWidthAtI * ribScale * bisector, normal, u, 0.0f, -1.0f, widthScaleAtI * ribScale, 0.0f, p, neighborNext, colorAtI);
+            result.endRail = { l, c, r, true };
+            result.startRail = { l, c, r, true };
             return result;
         }
 
-        if (joinStyle == 0) { // miter
-            const simd_float3 miterDirRaw = sidePrev + sideNext;
-            const float miterLengthSquared = simd_dot(miterDirRaw, miterDirRaw);
-            if (miterLengthSquared > 1e-8f) {
-                const simd_float3 miterDir = miterDirRaw / sqrtf(miterLengthSquared);
-                const float cosHalfAngle = simd_dot(miterDir, sideNext);
-                if (cosHalfAngle > 1e-4f) {
-                    const float miterLength = halfWidthAtI / cosHalfAngle;
-                    if (miterLength / halfWidthAtI <= safeMiterLimit) {
-                        const simd_float3 normal = simd_normalize(
-                            simd_cross(tangents[nextSeg], sideNext) +
-                            simd_cross(tangents[prevSeg], sidePrev));
-                        // Relative to the *base* halfWidth, like every widthScale here.
-                        // A merged inner corner is its own core, with no width to rebuild.
-                        const float widthScale = widthScaleAtI / cosHalfAngle;
-                        const bool mergedLeft = innerIsMerged(i) && innerSigns[i] > 0.0f;
-                        const bool mergedRight = innerIsMerged(i) && innerSigns[i] < 0.0f;
-                        const uint32_t l = addVertex(
-                            mergedLeft ? innerPoints[i] : p + miterLength * miterDir, normal, u, 1.0f, 1.0f,
-                            mergedLeft ? 0.0f : widthScale, 1.0f, mergedLeft ? innerPoints[i] : p,
-                            neighborNext, colorAtI);
-                        const uint32_t r = addVertex(
-                            mergedRight ? innerPoints[i] : p - miterLength * miterDir, normal, u, 0.0f, -1.0f,
-                            mergedRight ? 0.0f : widthScale, 1.0f, mergedRight ? innerPoints[i] : p,
-                            neighborPrev, colorAtI);
-                        result.endRail = { l, r, true };
-                        result.startRail = { l, r, true };
-                        return result;
-                    }
-                }
-            }
-            // Miter limit exceeded or degenerate miter direction (near-180° turn) — fall back to bevel below.
-        }
-
-        // Bevel (or miter fallback, or round).
+        // A sharper turn pivots: each segment keeps its own rails, square across it, and every vertex
+        // but a miter's tip stays half a width from the line. On the outer side a join fills the gap
+        // between the rails. On the inner side the rails simply overlap, pivoting on the point itself,
+        // as the width there has no room to run along both segments.
         const simd_float3 normalPrev = simd_normalize(simd_cross(tangents[prevSeg], sidePrev));
         const simd_float3 normalNext = simd_normalize(simd_cross(tangents[nextSeg], sideNext));
         const simd_float3 hubNormal = simd_normalize(normalPrev + normalNext);
-        // cross(sidePrev, sideNext) has the same sign on both the L and R filler
-        // regardless of which way the polyline turns (L uses sidePrev/sideNext
-        // directly, R uses their negations, and cross(-a,-b) == cross(a,b)) — so
-        // a single turn-direction test, not a per-side one, tells us whether the
-        // "forward" winding below is front- or back-facing.
         const bool turnReversed = simd_dot(simd_cross(sidePrev, sideNext), hubNormal) < 0.0f;
-
-        // Usually both segments end at the shared inner corner, and only the outer side needs
-        // filler, so nothing is covered twice. A joint without one falls back to overlapping rails.
-        if (innerSigns[i] != 0.0f) {
-            const float cosHalfTurn = simd_dot(simd_normalize(sidePrev + sideNext), sideNext);
-            const float innerSign = innerSigns[i];
-            const float outerSign = -innerSign;
-            const float outerV = outerSign > 0.0f ? 1.0f : 0.0f;
-            // A merged corner is its own core, with no width to rebuild.
-            const bool merged = innerIsMerged(i);
-            const uint32_t inner = addVertex(
-                innerPoints[i], hubNormal, u, 1.0f - outerV, innerSign,
-                merged ? 0.0f : widthScaleAtI / cosHalfTurn, 2.0f, merged ? innerPoints[i] : p, neighborNext, colorAtI);
-            const uint32_t endOuter = addVertex(
-                p + outerSign * halfWidthAtI * sidePrev, normalPrev, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
-                neighborPrev, colorAtI);
-            const uint32_t startOuter = addVertex(
-                p + outerSign * halfWidthAtI * sideNext, normalNext, u, outerV, outerSign, widthScaleAtI, 2.0f, p,
-                neighborNext, colorAtI);
-
-            if (joinStyle == 2) { // round: a fan from the inner corner around the outer side
-                addFan(inner, outerSign * sidePrev, outerSign * sideNext, tangents[prevSeg], hubNormal, p, u,
-                       outerV, halfWidthAtI, widthScaleAtI, colorAtI, endOuter, startOuter);
-            } else if (turnReversed) {
-                addTriangle(inner, startOuter, endOuter);
-            } else {
-                addTriangle(inner, endOuter, startOuter);
-            }
-
-            if (outerSign > 0.0f) {
-                result.endRail = { endOuter, inner, true };
-                result.startRail = { startOuter, inner, true };
-            } else {
-                result.endRail = { inner, endOuter, true };
-                result.startRail = { inner, startOuter, true };
-            }
-            return result;
-        }
+        // Turning toward +side makes -side (R) the outer one. An exact reversal has the L side
+        // sweep the whole semicircle beyond the tip.
+        const float outerSign = simd_dot(tangents[nextSeg], sidePrev) > 0.0f ? -1.0f : 1.0f;
+        const float outerV = outerSign > 0.0f ? 1.0f : 0.0f;
 
         const uint32_t endL = addVertex(
             p + halfWidthAtI * sidePrev, normalPrev, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborPrev, colorAtI);
@@ -3243,35 +3082,55 @@ void appendStrokeGeometryData(
             p + halfWidthAtI * sideNext, normalNext, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
         const uint32_t startR = addVertex(
             p - halfWidthAtI * sideNext, normalNext, u, 0.0f, -1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
-
         const uint32_t hub = addVertex(p, hubNormal, u, 0.5f, 0.0f, widthScaleAtI, 2.0f, p, p, colorAtI);
+        const uint32_t endOuter = outerSign > 0.0f ? endL : endR;
+        const uint32_t startOuter = outerSign > 0.0f ? startL : startR;
+
+        auto addFiller = [&](uint32_t from, uint32_t to) {
+            if (turnReversed) {
+                addTriangle(hub, to, from);
+            } else {
+                addTriangle(hub, from, to);
+            }
+        };
+
+        // A miter past its limit, or with no direction at a reversal, draws as a bevel.
+        const simd_float3 miterDirRaw = sidePrev + sideNext;
+        const float miterLengthSquared = simd_dot(miterDirRaw, miterDirRaw);
+        const simd_float3 miterDir = miterLengthSquared > 1e-8f ? miterDirRaw / sqrtf(miterLengthSquared) : sideNext;
+        const float cosHalfAngle = simd_dot(miterDir, sideNext);
+        const bool drawsMiter = joinStyle == 0 && miterLengthSquared > 1e-8f && cosHalfAngle > 1e-4f && 1.0f / cosHalfAngle <= safeMiterLimit;
 
         if (joinStyle == 2) { // round
-            addFan(hub, sidePrev, sideNext, tangents[prevSeg], hubNormal, p, u, 1.0f, halfWidthAtI, widthScaleAtI, colorAtI, endL, startL);
-            // An exact reversal: the L fan above already sweeps the whole semicircle beyond the
-            // tip, through `forward`, from the L rail to the R rail. An R fan would draw it again.
-            if (simd_length_squared(sidePrev + sideNext) > 1e-8f) {
-                addFan(hub, -sidePrev, -sideNext, tangents[prevSeg], hubNormal, p, u, 0.0f, halfWidthAtI, widthScaleAtI, colorAtI, endR, startR);
-            }
-        } else if (turnReversed) {
-            addTriangle(hub, startL, endL);
-            addTriangle(hub, startR, endR);
+            addFan(hub, outerSign * sidePrev, outerSign * sideNext, tangents[prevSeg], hubNormal, p, u, outerV,
+                   halfWidthAtI, widthScaleAtI, colorAtI, endOuter, startOuter);
+        } else if (drawsMiter) {
+            // Relative to the *base* halfWidth, like every widthScale here.
+            const uint32_t tip = addVertex(
+                p + outerSign * (halfWidthAtI / cosHalfAngle) * miterDir, hubNormal, u, outerV, outerSign,
+                widthScaleAtI / cosHalfAngle, 1.0f, p, neighborNext, colorAtI);
+            addFiller(endOuter, tip);
+            addFiller(tip, startOuter);
         } else {
-            addTriangle(hub, endL, startL);
-            addTriangle(hub, endR, startR);
+            addFiller(endOuter, startOuter);
         }
 
-        result.endRail = { endL, endR, true };
-        result.startRail = { startL, startR, true };
+        result.endRail = { endL, hub, endR, true };
+        result.startRail = { startL, hub, startR, true };
         return result;
     };
 
     std::vector<StrokeJointResult> &joints = scratch.joints;
     joints.clear();
     joints.reserve(n);
+    std::vector<int> &jointTriangleStarts = scratch.jointTriangleStarts;
+    jointTriangleStarts.clear();
+    jointTriangleStarts.reserve(n + 1);
     for (int i = 0; i < n; i++) {
+        jointTriangleStarts.push_back(data.indexCount);
         joints.push_back(buildJoint(i));
     }
+    jointTriangleStarts.push_back(data.indexCount);
 
     // A closed polyline's last segment returns to point 0, whose vertices start the first
     // segment at u = 0: it ends at copies of them at u = 1, so u never runs backwards.
@@ -3284,19 +3143,40 @@ void appendStrokeGeometryData(
     };
     StrokeRailPair seamEndRail = joints[0].endRail;
     if (closed && seamEndRail.valid) {
-        seamEndRail = { copyWithEndU(seamEndRail.left), copyWithEndU(seamEndRail.right), true };
+        seamEndRail = { copyWithEndU(seamEndRail.left), copyWithEndU(seamEndRail.core), copyWithEndU(seamEndRail.right), true };
     }
 
-    for (int s = 0; s < segmentCount; s++) {
-        const int iA = s;
-        const int iB = (s + 1) % n;
-        const StrokeRailPair &aStart = joints[iA].startRail;
+    // Triangles in the order the line is drawn: each joint, then the segment leaving it. Where a line
+    // crosses itself, the later part then covers the earlier part all the way across, instead of
+    // every segment covering every joint.
+    std::vector<TriangleIndices> &orderedTriangles = scratch.orderedTriangles;
+    orderedTriangles.clear();
+    orderedTriangles.reserve(jointTriangleStarts[n] - jointTriangleStarts[0] + segmentCount * 4);
+    for (int i = 0; i < n; i++) {
+        orderedTriangles.insert(orderedTriangles.end(), data.indexData + jointTriangleStarts[i], data.indexData + jointTriangleStarts[i + 1]);
+        if (i >= segmentCount) continue;
+        const int iB = (i + 1) % n;
+        const StrokeRailPair &aStart = joints[i].startRail;
         const StrokeRailPair &bEnd = iB == 0 ? seamEndRail : joints[iB].endRail;
         if (!aStart.valid || !bEnd.valid) continue;
 
-        addTriangle(aStart.left, aStart.right, bEnd.right);
-        addTriangle(aStart.left, bEnd.right, bEnd.left);
+        const uint32_t halves[4][3] = {
+            { aStart.left, aStart.core, bEnd.core },
+            { aStart.left, bEnd.core, bEnd.left },
+            { aStart.core, aStart.right, bEnd.right },
+            { aStart.core, bEnd.right, bEnd.core },
+        };
+        for (const auto &half : halves) {
+            TriangleIndices triangle;
+            triangle.i0 = half[0];
+            triangle.i1 = half[1];
+            triangle.i2 = half[2];
+            orderedTriangles.push_back(triangle);
+        }
     }
+    assert(jointTriangleStarts[0] + (int)orderedTriangles.size() <= triangleCapacity);
+    std::copy(orderedTriangles.begin(), orderedTriangles.end(), data.indexData + jointTriangleStarts[0]);
+    data.indexCount = jointTriangleStarts[0] + (int)orderedTriangles.size();
 }
 
 #if defined(__cplusplus)

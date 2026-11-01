@@ -119,27 +119,90 @@ final class StrokeTessellationTests: XCTestCase {
         }
     }
 
-    func testABendTighterThanTheHalfWidthDoesNotFold() {
-        // Half width 0.1, radius 0.05: the inner edge would run backwards on every segment.
-        var data = tessellate(arc(radius: 0.05, count: 32), capStyle: 2)
+    func testSlightTurnsShareOneRibWithNoJoin() {
+        // 32 segments of about 5.6°, with butt caps: only each segment's four triangles, and one rib per point.
+        var data = tessellate(arc(radius: 1, count: 32), capStyle: 0)
         defer { freeStrokeGeometryData(&data) }
+        XCTAssertEqual(data.indexCount, 32 * 4)
+        XCTAssertEqual(data.vertexCount, 33 * 3)
+    }
+
+    func testASharpTurnStillPivots() {
+        // A 90° turn: the segments keep separate rails, with a fan between them on the outer side.
+        var data = tessellate([[0, 0, 0], [1, 0, 0], [1, 1, 0]], capStyle: 0)
+        defer { freeStrokeGeometryData(&data) }
+        XCTAssertGreaterThan(data.indexCount, 2 * 4)
         XCTAssertTrue(everyTriangleFacesUp(data))
     }
 
-    func testAGentleBendKeepsItsInnerCorners() {
-        // Radius 1 against half width 0.1: no segment runs backwards, so nothing merges.
+    func testAGentleBendFacesUpWithEveryVertexKeepingItsWidth() {
         var data = tessellate(arc(radius: 1, count: 32), capStyle: 2)
         defer { freeStrokeGeometryData(&data) }
         XCTAssertTrue(everyTriangleFacesUp(data))
         XCTAssertTrue((0 ..< Int(data.vertexCount)).allSatisfy { data.vertexData[$0].custom0.y != 0 })
     }
 
-    func testAMergedInnerCornerHasNoWidthToRebuild() {
-        var data = tessellate(arc(radius: 0.05, count: 32), capStyle: 2)
+    /// Two legs converging at 30° through a 150° bend of radius 0.05 around the origin.
+    private func hairpin() -> [simd_float3] {
+        let legAngle = Float.pi / 12
+        let arcPoints = (0 ... 30).map { step -> simd_float3 in
+            let angle = (75 - Float(step) * 5) * Float.pi / 180
+            return simd_float3(0.05 * cos(angle), 0.05 * sin(angle), 0)
+        }
+        let start = arcPoints[0] - 2 * simd_float3(cos(legAngle), -sin(legAngle), 0)
+        let end = arcPoints[30] - 2 * simd_float3(cos(legAngle), sin(legAngle), 0)
+        return [start] + arcPoints + [end]
+    }
+
+    func testEveryRibStaysNearTheLineThroughATightBend() {
+        // Half width 0.1 around a bend of radius 0.05, for every join. The inner side twists over here.
+        let points = hairpin()
+        for joinStyle in [Int32(0), 1, 2] {
+            var data = createStrokeGeometryData()
+            defer { freeStrokeGeometryData(&data) }
+            points.withUnsafeBufferPointer { buffer in
+                appendStrokeGeometryData(&data, buffer.baseAddress, Int32(buffer.count), false, 0.2, joinStyle, 2, 4, [0, 0, 1], 8, nil, 0, nil, 0)
+            }
+            for vertexIndex in 0 ..< Int(data.vertexCount) {
+                let vertex = data.vertexData[vertexIndex]
+                // A rib along a bisector reaches just past the half width, and a miter's tip up to its limit of 4.
+                let reach: Float = vertex.custom0.y > 1 ? 0.4 : 0.1
+                XCTAssertLessThanOrEqual(simd_distance(vertex.position, vertex.custom1), reach + 1e-4, "join \(joinStyle)")
+            }
+        }
+    }
+
+    func testANearReversalStaysNearTheLine() {
+        // As a very small Curve makes: almost straight back on itself, over a tiny step.
+        var data = tessellate([[-1, 0, 0], [0, 0, 0], [-0.002, 0.00005, 0], [-1, 0.5, 0]], capStyle: 2)
         defer { freeStrokeGeometryData(&data) }
-        let merged = (0 ..< Int(data.vertexCount)).map { data.vertexData[$0] }.filter { $0.custom0.y == 0 }
-        XCTAssertFalse(merged.isEmpty)
-        XCTAssertTrue(merged.allSatisfy { $0.position == $0.custom1 })
+        for vertexIndex in 0 ..< Int(data.vertexCount) {
+            let position = data.vertexData[vertexIndex].position
+            XCTAssertLessThan(abs(position.x), 1.5, "at \(position)")
+            XCTAssertLessThan(abs(position.y), 1, "at \(position)")
+        }
+    }
+
+    func testEveryPointHasAVertexOnTheLineAtTheMiddleOfTheTexture() {
+        let points = hairpin()
+        var data = tessellate(points, capStyle: 0)
+        defer { freeStrokeGeometryData(&data) }
+        let onLine = (0 ..< Int(data.vertexCount)).map { data.vertexData[$0] }.filter { $0.uv.y == 0.5 }
+        for point in points {
+            XCTAssertTrue(onLine.contains { $0.position == point }, "at \(point)")
+        }
+    }
+
+    func testTrianglesFollowTheLine() {
+        var data = tessellate([[0, 0, 0], [1, 0.5, 0], [2, 0, 0], [3, 0.5, 0], [4, 0, 0]], capStyle: 2)
+        defer { freeStrokeGeometryData(&data) }
+        var furthest = -Float.infinity
+        for triangleIndex in 0 ..< Int(data.indexCount) {
+            let triangle = data.indexData[triangleIndex]
+            let centerX = (data.vertexData[Int(triangle.i0)].position.x + data.vertexData[Int(triangle.i1)].position.x + data.vertexData[Int(triangle.i2)].position.x) / 3
+            XCTAssertGreaterThan(centerX, furthest - 0.5, "A segment drawn after the joints ahead of it comes back too far")
+            furthest = max(furthest, centerX)
+        }
     }
 
     func testGrowingWhileAppendingKeepsTheStrokesAlreadyAppended() {
