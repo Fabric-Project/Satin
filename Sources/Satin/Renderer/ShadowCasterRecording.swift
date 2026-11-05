@@ -67,6 +67,15 @@ final class ShadowCasterRecording {
 
     private func prepareBatch(context: Context, renderables: ContiguousArray<Renderable>, occurrences: [RecordedShadowOccurrence],
                               recorder: PacketRecorder, result: inout [RecordedRenderPass]) throws {
+        // The batch works on locals, so the caster × pass loops make no checked access to self. The
+        // buffers go back on every exit, empty where they held references, to keep their capacity.
+        var passes = self.passes, views = self.views, frusta = self.frusta, casters = self.casters
+        self.passes = []; self.views = []; self.frusta = []; self.casters = []
+        defer {
+            casters.removeAll(keepingCapacity: true)
+            passes.removeAll(keepingCapacity: true)
+            self.passes = passes; self.views = views; self.frusta = frusta; self.casters = casters
+        }
         passes.removeAll(keepingCapacity: true)
         views.removeAll(keepingCapacity: true)
         frusta.removeAll(keepingCapacity: true)
@@ -149,8 +158,5 @@ final class ShadowCasterRecording {
         for shadow in batch {
             shadow.needsUpdate = false
         }
-
-        casters.removeAll(keepingCapacity: true)
-        passes.removeAll(keepingCapacity: true)
     }
 }
