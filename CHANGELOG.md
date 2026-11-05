@@ -1,5 +1,15 @@
 # Satin 2.0 Changelog
 
+## Parameter relay without Combine
+
+- `GenericParameter` tells its groups directly when its value, `min` or `max` changes, instead of each
+  group subscribing to `valuePublisher`. Decoded groups are now invalidated by their parameters too.
+- `observeValueChanges(by:_:)` and `stopObservingValueChanges(by:)` let an owner, such as Fabric's
+  `ParameterPort`, mirror a parameter synchronously without a Combine subscription.
+- `notifyValueChanged()` is public: it notifies groups, owners and `valuePublisher` with an unchanged
+  value, in place of sending on `valuePublisher` by hand.
+- `valuePublisher` is unchanged: it still sends every change, synchronously, after groups and owners.
+
 ## Fewer copies per draw
 
 - `Context` is a final class instead of a struct. All its properties were already `let`; equality and hashing still compare the configuration. A draw now retains one object where it copied a device, a command queue, an allocator and the formats three times.
