@@ -575,12 +575,20 @@ struct PacketTables {
         renderEncoder.pushDebugGroup(debugLabels[Int(packet.debugLabelIndex)])
         defer { renderEncoder.popDebugGroup() }
 #endif
+        // Spans borrow the tables: an element passed on is not retained and released per command,
+        // and reads skip the arrays' uniqueness and exclusivity checks. The tables hold every
+        // object until the draw is encoded.
+        let commands = self.commands.span
+        let buffers = self.buffers.span
+        let textures = self.textures.span
+        let samplers = self.samplers.span
+
         state.cullMode = packet.cullMode
         state.windingOrder = packet.windingOrder
         state.triangleFillMode = packet.triangleFillMode
-        state.pipeline = pipelines[Int(packet.pipelineIndex)]
+        state.pipeline = pipelines.span[Int(packet.pipelineIndex)]
         if packet.setsDepthState {
-            state.depthStencilState = packet.depthStencilStateIndex >= 0 ? depthStencilStates[Int(packet.depthStencilStateIndex)] : nil
+            state.depthStencilState = packet.depthStencilStateIndex >= 0 ? depthStencilStates.span[Int(packet.depthStencilStateIndex)] : nil
             state.depthBias = packet.depthBias
             state.depthClipMode = packet.depthClipMode
         }
@@ -597,11 +605,11 @@ struct PacketTables {
             case let .perViewFragmentBuffer(bufferIndex, offset, slot):
                 state.setFragmentBuffer(buffers[Int(bufferIndex)], offset: offset + viewOffset, index: slot)
             case let .vertexTexture(textureIndex, slot):
-                state.setVertexTexture(texture(at: textureIndex), index: slot)
+                state.setVertexTexture(textureIndex >= 0 ? textures[Int(textureIndex)] : nil, index: slot)
             case let .fragmentTexture(textureIndex, slot):
-                state.setFragmentTexture(texture(at: textureIndex), index: slot)
+                state.setFragmentTexture(textureIndex >= 0 ? textures[Int(textureIndex)] : nil, index: slot)
             case let .fragmentPBRTexture(textureIndex, type):
-                state.setFragmentPBRTexture(texture(at: textureIndex), type: type)
+                state.setFragmentPBRTexture(textureIndex >= 0 ? textures[Int(textureIndex)] : nil, type: type)
             case let .fragmentSampler(samplerIndex, slot):
                 renderEncoder.setFragmentSamplerState(samplers[Int(samplerIndex)], index: slot.rawValue)
             case let .objectBuffer(bufferIndex, offset, slot):
@@ -641,10 +649,6 @@ struct PacketTables {
             renderEncoder.drawMeshThreadgroups(threadgroups, threadsPerObjectThreadgroup: threadsPerObjectThreadgroup,
                                                threadsPerMeshThreadgroup: threadsPerMeshThreadgroup)
         }
-    }
-
-    private mutating func texture(at index: Int32) -> MTLTexture? {
-        index >= 0 ? textures[Int(index)] : nil
     }
 }
 

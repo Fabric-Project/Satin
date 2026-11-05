@@ -270,4 +270,29 @@ final class PipelineBindingUsageTests: XCTestCase {
         XCTAssertEqual(depths[1], 0.5, accuracy: 0.001, "opaque texels must still write shadow depth")
         XCTAssertGreaterThanOrEqual(shader.shadowBuilds, 2)
     }
+
+    func testALayoutVariantHitReturnsItsCompiledPipelineAndUsageUntilInvalidated() throws {
+        let material = PhysicalMaterial(context: context)
+        let mesh = Mesh(context: context, geometry: geometry(), material: material)
+        mesh.update()
+        let shader = try XCTUnwrap(material.shader)
+        let own = mesh.drawLayout
+        // Instancing the material isn't configured for: a layout variant, not the shader's own pipeline.
+        let variantLayout = DrawLayout(vertexDescriptor: own.vertexDescriptor, vertexLayoutID: own.vertexLayoutID,
+                                       skinning: own.skinning, instancing: !shader.renderingConfiguration.instancing,
+                                       castShadow: own.castShadow, receiveShadow: own.receiveShadow)
+        let ownPipeline = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: own))
+
+        let compiled = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: variantLayout))
+        XCTAssertFalse(compiled === ownPipeline)
+        XCTAssertNotNil(shader.resourceUsage(for: compiled))
+
+        let hit = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: variantLayout))
+        XCTAssertTrue(hit === compiled, "a second lookup reuses the variant")
+        XCTAssertNotNil(shader.resourceUsage(for: hit), "the hit keeps its usage")
+
+        shader.invalidateLayoutVariants()
+        let rebuilt = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: variantLayout))
+        XCTAssertNotNil(shader.resourceUsage(for: rebuilt), "a variant rebuilt after invalidation is reflected again")
+    }
 }

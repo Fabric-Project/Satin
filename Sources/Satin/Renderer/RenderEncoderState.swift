@@ -140,13 +140,16 @@ public final class RenderEncoderState {
 /// Everything a `RenderEncoderState` knows of its pass, mutated in place: inside its methods every
 /// field access is static.
 private struct KnownState {
+    // Bindings are known by identity, not held: checking or recording one retains nothing. Whatever
+    // a pass binds stays alive until the pass ends without this state: the draw's packet storage or
+    // the pass's owner holds it, and the encoder retains it.
     struct BufferBinding {
-        let buffer: MTLBuffer
+        let buffer: ObjectIdentifier
         let offset: Int
     }
 
     struct TextureBinding {
-        let texture: MTLTexture?
+        let texture: ObjectIdentifier?
     }
 
     /// Slots Satin binds; a table grows if a higher slot is used.
@@ -312,27 +315,31 @@ private struct KnownState {
     // MARK: Bindings
 
     mutating func setVertexBuffer(_ buffer: MTLBuffer, offset: Int, slot: Int) {
-        if let binding = Self.binding(vertexBufferBindings, at: slot), binding.buffer === buffer, binding.offset == offset { return }
+        let identifier = ObjectIdentifier(buffer)
+        if let binding = Self.binding(vertexBufferBindings, at: slot), binding.buffer == identifier, binding.offset == offset { return }
         encoder.setVertexBuffer(buffer, offset: offset, index: slot)
-        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &vertexBufferBindings, at: slot)
+        Self.store(BufferBinding(buffer: identifier, offset: offset), in: &vertexBufferBindings, at: slot)
     }
 
     mutating func setFragmentBuffer(_ buffer: MTLBuffer, offset: Int, slot: Int) {
-        if let binding = Self.binding(fragmentBufferBindings, at: slot), binding.buffer === buffer, binding.offset == offset { return }
+        let identifier = ObjectIdentifier(buffer)
+        if let binding = Self.binding(fragmentBufferBindings, at: slot), binding.buffer == identifier, binding.offset == offset { return }
         encoder.setFragmentBuffer(buffer, offset: offset, index: slot)
-        Self.store(BufferBinding(buffer: buffer, offset: offset), in: &fragmentBufferBindings, at: slot)
+        Self.store(BufferBinding(buffer: identifier, offset: offset), in: &fragmentBufferBindings, at: slot)
     }
 
     mutating func setVertexTexture(_ texture: MTLTexture?, slot: Int) {
-        if let binding = Self.binding(vertexTextureBindings, at: slot), binding.texture === texture { return }
+        let identifier = texture.map { ObjectIdentifier($0) }
+        if let binding = Self.binding(vertexTextureBindings, at: slot), binding.texture == identifier { return }
         encoder.setVertexTexture(texture, index: slot)
-        Self.store(TextureBinding(texture: texture), in: &vertexTextureBindings, at: slot)
+        Self.store(TextureBinding(texture: identifier), in: &vertexTextureBindings, at: slot)
     }
 
     mutating func setFragmentTexture(_ texture: MTLTexture?, slot: Int) {
-        if let binding = Self.binding(fragmentTextureBindings, at: slot), binding.texture === texture { return }
+        let identifier = texture.map { ObjectIdentifier($0) }
+        if let binding = Self.binding(fragmentTextureBindings, at: slot), binding.texture == identifier { return }
         encoder.setFragmentTexture(texture, index: slot)
-        Self.store(TextureBinding(texture: texture), in: &fragmentTextureBindings, at: slot)
+        Self.store(TextureBinding(texture: identifier), in: &fragmentTextureBindings, at: slot)
     }
 
     func hasKnownFragmentTexture(at slot: Int) -> Bool {
