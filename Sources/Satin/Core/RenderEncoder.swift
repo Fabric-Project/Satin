@@ -2329,7 +2329,7 @@ open class RenderEncoder {
             return .object(ObjectIdentifier(lights[index]))
         }
 
-        // Locals for the per-light loops, stored back once.
+        // Locals for the per-light loops, stored back on every exit once taken.
         var uploadedLights = self.uploadedLights
         var changed = lights.count != uploadedLights.count
         if !changed {
@@ -2348,6 +2348,7 @@ open class RenderEncoder {
 
         var uploadedLightData = self.uploadedLightData
         self.uploadedLights = []; self.uploadedLightData = []
+        defer { self.uploadedLights = uploadedLights; self.uploadedLightData = uploadedLightData }
         uploadedLights.removeAll(keepingCapacity: true)
         uploadedLightData.removeAll(keepingCapacity: true)
         for (index, light) in lights.enumerated() {
@@ -2360,16 +2361,15 @@ open class RenderEncoder {
             ))
             uploadedLightData.append(light.data)
         }
-        self.uploadedLights = uploadedLights
-        self.uploadedLightData = uploadedLightData
         lightDataUploadCount += 1
     }
 
     private func updateDirectLightingState(recorder: PacketRecorder) throws {
-        // Locals for the per-light loop, stored back once after it; the texture arrays are rebuilt
+        // Locals for the per-light loop, stored back on every exit; the texture arrays are rebuilt
         // empty below, so only the light arrays carry their capacity.
         var directShadowLights = self.directShadowLights, projectorLights = self.projectorLights
         self.directShadowLights = []; self.projectorLights = []
+        defer { self.directShadowLights = directShadowLights; self.projectorLights = projectorLights }
         directShadowLights.removeAll(keepingCapacity: true)
         projectorLights.removeAll(keepingCapacity: true)
 
@@ -2444,8 +2444,6 @@ open class RenderEncoder {
             directShadowMatrixIndex += shadowMatrices.count
         }
 
-        self.directShadowLights = directShadowLights
-        self.projectorLights = projectorLights
         directShadowTextures = Array(repeating: nil, count: directShadowTextureIndex)
         projectorTextures = Array(repeating: nil, count: projectorLights.count)
 
