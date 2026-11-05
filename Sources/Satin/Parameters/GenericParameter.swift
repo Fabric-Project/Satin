@@ -57,6 +57,9 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         /// synchronously, on every change, before `valuePublisher` sends, without Combine.
         var valueObservers: ContiguousArray<ParameterValueObserver> = []
 
+        /// Tells registrations apart, so one an owner replaced or removed mid-notify is skipped.
+        var nextObserverRegistration: UInt64 = 0
+
         /// Groups packing this value, told directly so a change costs no Combine send per group.
         var groupLinks: ContiguousArray<ParameterGroupLink> = []
     }
@@ -69,11 +72,16 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
         notify(value)
     }
 
-    /// A copy of the listeners, so a handler that stops observing doesn't change the loop under it.
+    /// Loops over a copy of the listeners, so a handler that stops observing doesn't change the loop
+    /// under it. A handler can still stop another observer, whose owner may then be gone: each observer
+    /// is called only while its registration is still current, as a Combine cancellation would be.
     private func notify(_ value: ValueType) {
         let listeners = self.listeners
         for link in listeners.groupLinks { link.group.memberValueDidChange() }
-        for observer in listeners.valueObservers { observer.handler() }
+        for observer in listeners.valueObservers {
+            guard self.listeners.valueObservers.contains(where: { $0.registration == observer.registration }) else { continue }
+            observer.handler()
+        }
         valuePublisher.send(value)
     }
 
@@ -81,7 +89,10 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     /// observing again replaces it. Every other observer (UI, clients) uses `valuePublisher`.
     public func observeValueChanges(by owner: AnyObject, _ handler: @escaping () -> Void) {
         stopObservingValueChanges(by: owner)
-        listeners.valueObservers.append(ParameterValueObserver(owner: ObjectIdentifier(owner), handler: handler))
+        listeners.nextObserverRegistration &+= 1
+        listeners.valueObservers.append(ParameterValueObserver(owner: ObjectIdentifier(owner),
+                                                               registration: listeners.nextObserverRegistration,
+                                                               handler: handler))
     }
 
     /// Safe from the owner's deinit.
@@ -250,6 +261,7 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
 
 private struct ParameterValueObserver {
     let owner: ObjectIdentifier
+    let registration: UInt64
     let handler: () -> Void
 }
 

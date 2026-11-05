@@ -53,6 +53,60 @@ final class ParameterRelayTests: XCTestCase {
         XCTAssertEqual(amount.value, 1)
     }
 
+    func testAnObserverStoppedByAnEarlierOneIsNotCalled() {
+        let amount = FloatParameter("Amount", 0)
+        let first = NSObject()
+        let second = NSObject()
+        var calls: [String] = []
+        amount.observeValueChanges(by: first) {
+            calls.append("first")
+            amount.stopObservingValueChanges(by: second)
+        }
+        amount.observeValueChanges(by: second) { calls.append("second") }
+        amount.value = 1
+        XCTAssertEqual(calls, ["first"])
+    }
+
+    /// As a ParameterPort's handler does: `[unowned self]`, so calling it after its owner is gone traps.
+    func testAnObserverReleasedByAnEarlierOneIsNotCalled() {
+        final class Owner {
+            var calls = 0
+            func observe(_ parameter: FloatParameter) {
+                parameter.observeValueChanges(by: self) { [unowned self] in self.calls += 1 }
+            }
+        }
+        let amount = FloatParameter("Amount", 0)
+        let first = NSObject()
+        var second: Owner? = Owner()
+        amount.observeValueChanges(by: first) {
+            guard let owner = second else { return }
+            amount.stopObservingValueChanges(by: owner)
+            second = nil
+        }
+        second?.observe(amount)
+        amount.value = 1
+        XCTAssertNil(second)
+    }
+
+    func testAnObserverReplacedByAnEarlierOneIsNotCalledWithItsOldHandler() {
+        let amount = FloatParameter("Amount", 0)
+        let first = NSObject()
+        let second = NSObject()
+        var calls: [String] = []
+        var replaced = false
+        amount.observeValueChanges(by: first) {
+            calls.append("first")
+            guard !replaced else { return }
+            replaced = true
+            amount.observeValueChanges(by: second) { calls.append("second, replaced") }
+        }
+        amount.observeValueChanges(by: second) { calls.append("second, original") }
+        amount.value = 1
+        XCTAssertEqual(calls, ["first"])
+        amount.value = 2
+        XCTAssertEqual(calls, ["first", "first", "second, replaced"])
+    }
+
     func testOwnersAreCalledBeforeThePublisherAndStopWhenAsked() {
         let amount = FloatParameter("Amount", 0)
         let first = NSObject()
