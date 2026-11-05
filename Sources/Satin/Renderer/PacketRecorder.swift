@@ -98,7 +98,7 @@ public final class PacketRecorder {
     /// Contexts normally allocate nothing. An integer local to this recorder lets each context
     /// retain preparation storage only when it first allocates, without a per-context wrapper.
     func beginPreparation() -> Int {
-        preparationSerial += 1
+        preparationSerial &+= 1
         return preparationSerial
     }
 
