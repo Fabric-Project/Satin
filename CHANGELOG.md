@@ -1,5 +1,10 @@
 # Satin 2.0 Changelog
 
+## Fewer copies per draw
+
+- `Context` is a final class instead of a struct. All its properties were already `let`; equality and hashing still compare the configuration. A draw now retains one object where it copied a device, a command queue, an allocator and the formats three times.
+- A shader's layout-variant lookup reads only the variant's pipeline, usage and failure flag, instead of copying its whole configuration on every draw.
+
 ## GPU allocator
 
 - New `GPUAllocator`: heap-backed textures and buffers in three memory classes (`gpuOnly`, `cpuWrites`, `cpuReads`). Each call returns a new object; its memory returns to the heap when its last owner releases it, so allocations may escape safely. Includes a budget with device fallback, `trim()` and per-class statistics.

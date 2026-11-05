@@ -27,8 +27,8 @@ open class Shader {
 
             if let pipelineReflection { addBindings(from: pipelineReflection) }
             // Variant pipelines may use resources the base one does not; bind for them too.
-            for variant in layoutVariants {
-                if let reflection = variant.reflection { addBindings(from: reflection) }
+            for build in layoutVariantBuilds {
+                if let reflection = build.reflection { addBindings(from: reflection) }
             }
         }
     }
@@ -172,15 +172,20 @@ open class Shader {
     }
 
     /// Pipelines for meshes drawn with a vertex layout, skinning, instancing or shadow settings
-    /// other than the material's own; see `DrawLayout`. Parallel to `layoutVariantKeys`.
-    private struct LayoutVariant {
-        /// What it is compiled from, so a live reload can drop its cached libraries.
-        let configuration: ShaderConfiguration
+    /// other than the material's own; see `DrawLayout`. What a draw reads, kept apart from what it
+    /// was built from so a lookup copies two references and a flag, not a configuration.
+    private struct LayoutVariantResult {
         var pipeline: MTLRenderPipelineState?
-        var reflection: MTLRenderPipelineReflection?
         var usage: PipelineResourceUsage?
         /// Compiling it failed; it isn't tried again until the variants are cleared.
         var failed = false
+    }
+
+    /// What a layout variant was built from: read by binding updates and live reload, not by draws.
+    private struct LayoutVariantBuild {
+        /// What it is compiled from, so a live reload can drop its cached libraries.
+        let configuration: ShaderConfiguration
+        var reflection: MTLRenderPipelineReflection?
     }
 
     /// The interned layout of `renderingConfiguration.vertexDescriptor`.
@@ -189,8 +194,10 @@ open class Shader {
     var recordedLightingPipelines: [RecordedLightingPipelineState] = []
     /// One per distinct context, pass and layout this shader is drawn with: a handful, so every draw
     /// finds its variant by comparing a few values in turn rather than hashing a key.
-    private var layoutVariants: [LayoutVariant] = []
-    private var layoutVariantKeys: [LayoutVariantKey] = []
+    /// Parallel arrays, one entry per variant, appended and cleared together.
+    private var layoutVariantKeys: ContiguousArray<LayoutVariantKey> = []
+    private var layoutVariantResults: ContiguousArray<LayoutVariantResult> = []
+    private var layoutVariantBuilds: ContiguousArray<LayoutVariantBuild> = []
     public internal(set) var shadowPipelineReflection: MTLRenderPipelineReflection?
 
     public internal(set) var vertexBufferBindingIsUsed: [VertexBufferIndex] = []
@@ -690,8 +697,9 @@ open class Shader {
             break
         }
         if let existingVariantIndex {
-            if let pipeline = layoutVariants[existingVariantIndex].pipeline { return resolved(pipeline, usage: layoutVariants[existingVariantIndex].usage) }
-            if layoutVariants[existingVariantIndex].failed { return nil }
+            let result = layoutVariantResults[existingVariantIndex]
+            if let pipeline = result.pipeline { return resolved(pipeline, usage: result.usage) }
+            if result.failed { return nil }
         }
 
         var variantConfiguration = getConfiguration(renderContext: renderContext)
@@ -708,9 +716,10 @@ open class Shader {
         if let existingVariantIndex {
             variantIndex = existingVariantIndex
         } else {
-            variantIndex = layoutVariants.count
-            layoutVariants.append(LayoutVariant(configuration: variantConfiguration))
+            variantIndex = layoutVariantKeys.count
             layoutVariantKeys.append(key)
+            layoutVariantResults.append(LayoutVariantResult())
+            layoutVariantBuilds.append(LayoutVariantBuild(configuration: variantConfiguration))
         }
 
         do {
@@ -723,23 +732,23 @@ open class Shader {
             }
             guard let pipeline else { return nil }
             // A configuration change while compiling clears the variants; the result is then not kept.
-            guard variantIndex < layoutVariants.count else { return pipeline }
+            guard variantIndex < layoutVariantKeys.count else { return pipeline }
             // Unbounded, as ShaderPipelineCache is: variants grow only with the distinct layouts this
             // shader is drawn with, not with geometries.
-            layoutVariants[variantIndex].pipeline = pipeline
+            layoutVariantResults[variantIndex].pipeline = pipeline
             let usage = shadow
                 ? ShaderPipelineCache.shadowUsage(configuration: variantConfiguration, pipeline: pipeline)
                 : reflection.map(PipelineResourceUsage.init)
-            layoutVariants[variantIndex].usage = usage
+            layoutVariantResults[variantIndex].usage = usage
             if let reflection {
-                layoutVariants[variantIndex].reflection = reflection
+                layoutVariantBuilds[variantIndex].reflection = reflection
                 addBindings(from: reflection)
             }
             return resolved(pipeline, usage: usage)
         } catch {
             print("\(label) Shader Pipeline (layout variant): \(error.localizedDescription)")
-            if variantIndex < layoutVariants.count {
-                layoutVariants[variantIndex].failed = true
+            if variantIndex < layoutVariantKeys.count {
+                layoutVariantResults[variantIndex].failed = true
             }
             return nil
         }
@@ -750,17 +759,18 @@ open class Shader {
     func invalidateLayoutVariants() {
         for state in recordedLightingPipelines { state.invalidateCachedSources() }
         recordedLightingPipelines.removeAll(keepingCapacity: true)
-        for variant in layoutVariants {
-            ShaderLibrarySourceCache.invalidateLibrarySource(configuration: variant.configuration.getLibraryConfiguration())
-            ShaderLibraryCache.invalidateLibrary(configuration: variant.configuration.getLibraryConfiguration())
-            ShaderPipelineCache.invalidate(configuration: variant.configuration)
+        for build in layoutVariantBuilds {
+            ShaderLibrarySourceCache.invalidateLibrarySource(configuration: build.configuration.getLibraryConfiguration())
+            ShaderLibraryCache.invalidateLibrary(configuration: build.configuration.getLibraryConfiguration())
+            ShaderPipelineCache.invalidate(configuration: build.configuration)
         }
         clearLayoutVariants()
     }
 
     private func clearLayoutVariants() {
-        layoutVariants.removeAll()
         layoutVariantKeys.removeAll()
+        layoutVariantResults.removeAll()
+        layoutVariantBuilds.removeAll()
     }
 
     func updatePipeline() {
