@@ -50,6 +50,8 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     /// can be kept and used while it is unchanged.
     public private(set) var structureRevision: UInt64 = 0
 
+    /// Combine subscriptions for parameter types other than GenericParameter, which notifies its
+    /// groups directly.
     private var paramSubscriptions: [String: AnyCancellable] = [:]
 
     public let parameterAddedPublisher = PassthroughSubject<any Parameter, Never>()
@@ -61,7 +63,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public let clearedPublisher = PassthroughSubject<ParameterGroup, Never>()
 
     deinit {
-        
+        for param in params { detach(param) }
         params = []
         paramsMap = [:]
 
@@ -87,24 +89,43 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     public func append(_ param: some Parameter) {
         params.append(param)
         paramsMap[param.label] = param
+        attach(param)
+
+        parameterAddedPublisher.send(param)
+    }
+
+    /// A member's value changed; `data` must be rebuilt.
+    func memberValueDidChange() {
+        _updateData = true
+    }
+
+    private func attach(_ param: some Parameter) {
+        if let generic = param as? any GroupNotifyingParameter {
+            generic.attach(to: self)
+            return
+        }
         // Unowned: the subscription is this object's own, cancelled before it goes, and an unowned
         // capture needs no side table on an object every frame retains.
         paramSubscriptions[param.label] = param.valuePublisher.sink { [unowned self] _ in
             self._updateData = true
-//            self.objectWillChange.send()
-//            self.parameterUpdatedPublisher.send(param)
         }
+    }
 
-        parameterAddedPublisher.send(param)
+    private func detach(_ param: any Parameter) {
+        if let generic = param as? any GroupNotifyingParameter {
+            generic.detach(from: ObjectIdentifier(self))
+        } else {
+            paramSubscriptions.removeValue(forKey: param.label)?.cancel()
+        }
     }
 
     public func remove(_ param: any Parameter) {
         let key = param.label
         paramsMap.removeValue(forKey: key)
-        paramSubscriptions.removeValue(forKey: key)
 
         for (i, p) in params.enumerated() {
             if p.label == key {
+                detach(p)
                 params.remove(at: i)
                 break
             }
@@ -114,6 +135,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
     }
 
     public func clear() {
+        for param in params { detach(param) }
         params = []
         paramsMap = [:]
         paramSubscriptions = [:]
@@ -249,6 +271,7 @@ public final class ParameterGroup: Codable, CustomStringConvertible, CustomDebug
             let param = baseParam.base
             params.append(param)
             paramsMap[param.label] = param
+            attach(param)
         }
     }
 
@@ -658,3 +681,11 @@ extension ParameterGroup: Equatable {
         return lhs.id == rhs.id
     }
 }
+
+/// GenericParameter's direct group notification, in place of a Combine subscription per group.
+protocol GroupNotifyingParameter: AnyObject {
+    func attach(to group: ParameterGroup)
+    func detach(from groupIdentifier: ObjectIdentifier)
+}
+
+extension GenericParameter: GroupNotifyingParameter {}
