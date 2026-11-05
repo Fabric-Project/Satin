@@ -30,18 +30,18 @@ open class Object: Codable {
     public var position: simd_float3 = .zero {
         didSet {
             guard position != oldValue else { return }
-            _translationMatrix.clear()
+            localTransformCache.translationMatrix = nil
             localTransformDidChange()
         }
     }
 
-    var _worldPosition = ValueCache<simd_float3>()
     public var worldPosition: simd_float3 {
         get {
             validateWorld()
-            return _worldPosition.get {
-                simd_make_float3(worldMatrix.columns.3)
-            }
+            if let cached = worldTransformCache.position { return cached }
+            let position = simd_make_float3(worldMatrix.columns.3)
+            worldTransformCache.position = position
+            return position
         }
         set {
             if let parent = parent {
@@ -52,9 +52,11 @@ open class Object: Codable {
         }
     }
 
-    var _translationMatrix = ValueCache<matrix_float4x4>()
     public var translationMatrix: matrix_float4x4 {
-        _translationMatrix.get { translationMatrix3f(position) }
+        if let cached = localTransformCache.translationMatrix { return cached }
+        let matrix = translationMatrix3f(position)
+        localTransformCache.translationMatrix = matrix
+        return matrix
     }
 
     // MARK: - Orientation
@@ -62,22 +64,19 @@ open class Object: Codable {
     public var orientation = simd_quatf(matrix_identity_float4x4) {
         didSet {
             guard orientation != oldValue else { return }
-            _rotationMatrix.clear()
-
-            _rightDirection.clear()
-            _upDirection.clear()
-            _forwardDirection.clear()
-
+            localTransformCache.clearRotation()
             localTransformDidChange()
         }
     }
 
-    var _worldOrientation = ValueCache<simd_quatf>()
     public var worldOrientation: simd_quatf {
         get {
             // Keeps a mirrored world matrix's rotation a rotation; see `worldScale`.
             validateWorld()
-            return _worldOrientation.get { worldMatrix.decomposed.rotation }
+            if let cached = worldTransformCache.orientation { return cached }
+            let orientation = worldMatrix.decomposed.rotation
+            worldTransformCache.orientation = orientation
+            return orientation
         }
         set {
             if let parent = parent {
@@ -88,9 +87,11 @@ open class Object: Codable {
         }
     }
 
-    var _rotationMatrix = ValueCache<matrix_float4x4>()
     public var rotationMatrix: matrix_float4x4 {
-        _rotationMatrix.get { matrix_float4x4(orientation) }
+        if let cached = localTransformCache.rotationMatrix { return cached }
+        let matrix = matrix_float4x4(orientation)
+        localTransformCache.rotationMatrix = matrix
+        return matrix
     }
 
     // MARK: - Scale
@@ -98,17 +99,19 @@ open class Object: Codable {
     public var scale: simd_float3 = .one {
         didSet {
             guard scale != oldValue else { return }
-            _scaleMatrix.clear()
+            localTransformCache.scaleMatrix = nil
             localTransformDidChange()
         }
     }
 
-    var _worldScale = ValueCache<simd_float3>()
     public var worldScale: simd_float3 {
         get {
             // A mirrored world matrix keeps its handedness as a negative x scale.
             validateWorld()
-            return _worldScale.get { worldMatrix.decomposed.scale }
+            if let cached = worldTransformCache.scale { return cached }
+            let scale = worldMatrix.decomposed.scale
+            worldTransformCache.scale = scale
+            return scale
         }
         set {
             if let parent = parent {
@@ -119,21 +122,21 @@ open class Object: Codable {
         }
     }
 
-    var _scaleMatrix = ValueCache<matrix_float4x4>()
     public var scaleMatrix: matrix_float4x4 {
-        _scaleMatrix.get {
-            scaleMatrix3f(scale)
-        }
+        if let cached = localTransformCache.scaleMatrix { return cached }
+        let matrix = scaleMatrix3f(scale)
+        localTransformCache.scaleMatrix = matrix
+        return matrix
     }
 
     // MARK: - Local Matrix
 
-    var _localMatrix = ValueCache<matrix_float4x4>()
     public var localMatrix: matrix_float4x4 {
         get {
-            _localMatrix.get {
-                simd_mul(simd_mul(translationMatrix, rotationMatrix), scaleMatrix)
-            }
+            if let cached = localTransformCache.matrix { return cached }
+            let matrix = simd_mul(simd_mul(translationMatrix, rotationMatrix), scaleMatrix)
+            localTransformCache.matrix = matrix
+            return matrix
         }
         set {
             // Keeps a mirrored matrix mirrored, as a negative x scale. One change, not three.
@@ -148,12 +151,40 @@ open class Object: Codable {
         }
     }
 
-    var _localMatrixInverse = ValueCache<matrix_float4x4>()
     public var localMatrixInverse: matrix_float4x4 {
-        _localMatrixInverse.get {
-            localMatrix.inverse
+        if let cached = localTransformCache.matrixInverse { return cached }
+        let inverse = localMatrix.inverse
+        localTransformCache.matrixInverse = inverse
+        return inverse
+    }
+
+    /// Values derived from this object's own transform. One stored struct, so a setter clears what
+    /// it invalidates in one exclusivity check. A getter checks, computes outside the access and
+    /// stores, because a computation reads other local values.
+    private struct LocalTransformCache {
+        var translationMatrix: matrix_float4x4?
+        var rotationMatrix: matrix_float4x4?
+        var scaleMatrix: matrix_float4x4?
+        var matrix: matrix_float4x4?
+        var matrixInverse: matrix_float4x4?
+        var forwardDirection: simd_float3?
+        var upDirection: simd_float3?
+        var rightDirection: simd_float3?
+
+        mutating func clearRotation() {
+            rotationMatrix = nil
+            forwardDirection = nil
+            upDirection = nil
+            rightDirection = nil
+        }
+
+        mutating func clearMatrix() {
+            matrix = nil
+            matrixInverse = nil
         }
     }
+
+    private var localTransformCache = LocalTransformCache()
 
     // MARK: - Revisions
 
@@ -176,8 +207,7 @@ open class Object: Codable {
 
     private func localTransformDidChange() {
         guard !isAssigningLocalMatrix else { return }
-        _localMatrix.clear()
-        _localMatrixInverse.clear()
+        localTransformCache.clearMatrix()
         localRevision &+= 1
         Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
         // Descendant changes still mark ancestor bounds: a parent's cached bounds can't find out
@@ -185,24 +215,27 @@ open class Object: Codable {
         updateLocalBounds = true
     }
 
-    private var _worldRevision: UInt64 = 0
     /// What the world transform was last derived from: the parent (identity and link), the
-    /// parent's world revision, and this object's local revision.
-    private var worldParentIdentity: ObjectIdentifier?
-    private var worldParentLinkRevision: UInt64 = 0
-    private var worldParentRevision: UInt64 = 0
-    private var worldLocalRevision: UInt64 = 0
-    private var worldIsDerived = false
-    private var worldValidatedEpoch: UInt64 = .max
-    /// Advances when `parent` is assigned.
-    private var parentLinkRevision: UInt64 = 0
+    /// parent's world revision, and this object's local revision. One stored struct, read once
+    /// and written once per validation, so it costs one or two exclusivity checks, not a dozen.
+    private struct WorldValidation {
+        var revision: UInt64 = 0
+        var parentIdentity: ObjectIdentifier?
+        var parentLinkRevision: UInt64 = 0
+        var parentRevision: UInt64 = 0
+        var localRevision: UInt64 = 0
+        var isDerived = false
+        var validatedEpoch: UInt64 = .max
+    }
+
+    private var worldValidation = WorldValidation()
 
     /// Advances whenever this object's world transform may have changed: its own transform, an
     /// ancestor's, or its parent. Reading it validates against the ancestors first, so it is
     /// current without reading any matrix.
     public var worldRevision: UInt64 {
         validateWorld()
-        return _worldRevision
+        return worldValidation.revision
     }
 
     /// Brings the world-derived caches up to date with the ancestors: clears them, and advances
@@ -210,52 +243,69 @@ open class Object: Codable {
     /// anywhere has moved since the last validation.
     func validateWorld() {
         let epoch = Object.transformEpoch.load(ordering: .relaxed)
-        guard worldValidatedEpoch != epoch else { return }
+        guard worldValidation.validatedEpoch != epoch else { return }
         #if DEBUG
         worldValidationWalkCount += 1
         #endif
         let parent = self.parent
-        let parentIdentity = parentIdentifier
+        let link = parentLink
+        let parentIdentity = link.identifier
         let parentRevision = parent?.worldRevision ?? 0
-        if !worldIsDerived || parentIdentity != worldParentIdentity || parentLinkRevision != worldParentLinkRevision
-            || parentRevision != worldParentRevision || localRevision != worldLocalRevision
+        let parentLinkRevision = link.revision
+        let localRevision = self.localRevision
+        var validation = worldValidation
+        let changed = !validation.isDerived || parentIdentity != validation.parentIdentity
+            || parentLinkRevision != validation.parentLinkRevision
+            || parentRevision != validation.parentRevision || localRevision != validation.localRevision
+        if changed
         {
-            worldIsDerived = true
-            worldParentIdentity = parentIdentity
-            worldParentLinkRevision = parentLinkRevision
-            worldParentRevision = parentRevision
-            worldLocalRevision = localRevision
-            _worldRevision &+= 1
-            clearWorldCaches()
+            validation.isDerived = true
+            validation.parentIdentity = parentIdentity
+            validation.parentLinkRevision = parentLinkRevision
+            validation.parentRevision = parentRevision
+            validation.localRevision = localRevision
+            validation.revision &+= 1
         }
-        worldValidatedEpoch = epoch
+        validation.validatedEpoch = epoch
+        worldValidation = validation
+        if changed { clearWorldTransformCache() }
     }
 
-    private func clearWorldCaches() {
-        _normalMatrix.clear()
-        _worldMatrix.clear()
-        _worldMatrixInverse.clear()
-        _worldPosition.clear()
-        _worldOrientation.clear()
-        _worldScale.clear()
-        _worldRightDirection.clear()
-        _worldUpDirection.clear()
-        _worldForwardDirection.clear()
+    private func clearWorldTransformCache() {
+        worldTransformCache = WorldTransformCache()
     }
+
+    /// Values derived from the world transform, valid until `validateWorld()` sees it change.
+    /// One stored struct, so clearing them all is one exclusivity check, not nine. A getter checks,
+    /// computes outside the access and stores, because a computation reads other world values.
+    private struct WorldTransformCache {
+        var position: simd_float3?
+        var orientation: simd_quatf?
+        var scale: simd_float3?
+        var matrix: matrix_float4x4?
+        var matrixInverse: matrix_float4x4?
+        var normalMatrix: matrix_float3x3?
+        var forwardDirection: simd_float3?
+        var upDirection: simd_float3?
+        var rightDirection: simd_float3?
+    }
+
+    private var worldTransformCache = WorldTransformCache()
 
     // MARK: - World Matrix
 
-    var _worldMatrix = ValueCache<matrix_float4x4>()
     public var worldMatrix: matrix_float4x4 {
         get {
             validateWorld()
-            return _worldMatrix.get {
-                if let parent = parent {
-                    return simd_mul(parent.worldMatrix, localMatrix)
-                } else {
-                    return localMatrix
-                }
+            if let cached = worldTransformCache.matrix { return cached }
+            let matrix: matrix_float4x4
+            if let parent = parent {
+                matrix = simd_mul(parent.worldMatrix, localMatrix)
+            } else {
+                matrix = localMatrix
             }
+            worldTransformCache.matrix = matrix
+            return matrix
         }
         set {
             if let parent = parent {
@@ -266,23 +316,23 @@ open class Object: Codable {
         }
     }
 
-    var _worldMatrixInverse = ValueCache<matrix_float4x4>()
     public var worldMatrixInverse: matrix_float4x4 {
         validateWorld()
-        return _worldMatrixInverse.get {
-            worldMatrix.inverse
-        }
+        if let cached = worldTransformCache.matrixInverse { return cached }
+        let inverse = worldMatrix.inverse
+        worldTransformCache.matrixInverse = inverse
+        return inverse
     }
 
     // MARK: - Normal Bounds
 
-    var _normalMatrix = ValueCache<matrix_float3x3>()
     public var normalMatrix: matrix_float3x3 {
         validateWorld()
-        return _normalMatrix.get {
-            let n = worldMatrixInverse.transpose
-            return simd_matrix(simd_make_float3(n.columns.0), simd_make_float3(n.columns.1), simd_make_float3(n.columns.2))
-        }
+        if let cached = worldTransformCache.normalMatrix { return cached }
+        let n = worldMatrixInverse.transpose
+        let normalMatrix = simd_matrix(simd_make_float3(n.columns.0), simd_make_float3(n.columns.1), simd_make_float3(n.columns.2))
+        worldTransformCache.normalMatrix = normalMatrix
+        return normalMatrix
     }
 
     // MARK: - Bounds
@@ -378,51 +428,51 @@ open class Object: Codable {
 
     // MARK: - Directions
 
-    var _forwardDirection = ValueCache<simd_float3>()
     public var forwardDirection: simd_float3 {
-        _forwardDirection.get {
-            simd_normalize(orientation.act(Satin.worldForwardDirection))
-        }
+        if let cached = localTransformCache.forwardDirection { return cached }
+        let direction = simd_normalize(orientation.act(Satin.worldForwardDirection))
+        localTransformCache.forwardDirection = direction
+        return direction
     }
 
-    var _upDirection = ValueCache<simd_float3>()
     public var upDirection: simd_float3 {
-        _upDirection.get {
-            simd_normalize(orientation.act(Satin.worldUpDirection))
-        }
+        if let cached = localTransformCache.upDirection { return cached }
+        let direction = simd_normalize(orientation.act(Satin.worldUpDirection))
+        localTransformCache.upDirection = direction
+        return direction
     }
 
-    var _rightDirection = ValueCache<simd_float3>()
     public var rightDirection: simd_float3 {
-        _rightDirection.get {
-            simd_normalize(orientation.act(Satin.worldRightDirection))
-        }
+        if let cached = localTransformCache.rightDirection { return cached }
+        let direction = simd_normalize(orientation.act(Satin.worldRightDirection))
+        localTransformCache.rightDirection = direction
+        return direction
     }
 
     // MARK: - World Directions
 
-    var _worldForwardDirection = ValueCache<simd_float3>()
     public var worldForwardDirection: simd_float3 {
         validateWorld()
-        return _worldForwardDirection.get {
-            simd_normalize(worldOrientation.act(Satin.worldForwardDirection))
-        }
+        if let cached = worldTransformCache.forwardDirection { return cached }
+        let direction = simd_normalize(worldOrientation.act(Satin.worldForwardDirection))
+        worldTransformCache.forwardDirection = direction
+        return direction
     }
 
-    var _worldUpDirection = ValueCache<simd_float3>()
     public var worldUpDirection: simd_float3 {
         validateWorld()
-        return _worldUpDirection.get {
-            simd_normalize(worldOrientation.act(Satin.worldUpDirection))
-        }
+        if let cached = worldTransformCache.upDirection { return cached }
+        let direction = simd_normalize(worldOrientation.act(Satin.worldUpDirection))
+        worldTransformCache.upDirection = direction
+        return direction
     }
 
-    var _worldRightDirection = ValueCache<simd_float3>()
     public var worldRightDirection: simd_float3 {
         validateWorld()
-        return _worldRightDirection.get {
-            simd_normalize(worldOrientation.act(Satin.worldRightDirection))
-        }
+        if let cached = worldTransformCache.rightDirection { return cached }
+        let direction = simd_normalize(worldOrientation.act(Satin.worldRightDirection))
+        worldTransformCache.rightDirection = direction
+        return direction
     }
 
     // MARK: - Parent & Children
@@ -432,8 +482,7 @@ open class Object: Codable {
     /// outlives its target.
     unowned var parent: Object? {
         didSet {
-            parentIdentifier = parent.map(ObjectIdentifier.init)
-            parentLinkRevision &+= 1
+            parentLink = ParentLink(identifier: parent.map(ObjectIdentifier.init), revision: parentLink.revision &+ 1)
             Object.transformEpoch.wrappingAdd(1, ordering: .relaxed)
             updateWorldBounds = true
             // An already-marked object stops its own walk; the new parent still needs marking.
@@ -441,8 +490,14 @@ open class Object: Codable {
         }
     }
 
-    /// The parent's identity, compared without loading the parent (as a deallocating parent must).
-    private var parentIdentifier: ObjectIdentifier?
+    /// The parent's identity, compared without loading the parent (as a deallocating parent must),
+    /// and a revision that advances when `parent` is assigned. Written together, read together.
+    private struct ParentLink {
+        var identifier: ObjectIdentifier?
+        var revision: UInt64 = 0
+    }
+
+    private var parentLink = ParentLink()
 
     /// The objects this one contains, in order. Assigning it, or changing it in place, updates scene
     /// membership the same way `add` and `remove` do.
@@ -456,7 +511,7 @@ open class Object: Codable {
             let newIdentifiers = Set(newValue.map(ObjectIdentifier.init))
             for child in previousChildren where !newIdentifiers.contains(ObjectIdentifier(child)) {
                 child.removeContainer(ObjectIdentifier(self))
-                if child.parentIdentifier == ObjectIdentifier(self) {
+                if child.parentLink.identifier == ObjectIdentifier(self) {
                     child.parent = nil
                 }
             }
@@ -557,7 +612,7 @@ open class Object: Codable {
         let identifier = ObjectIdentifier(self)
         for child in _children {
             child.removeContainer(identifier)
-            if child.parentIdentifier == identifier {
+            if child.parentLink.identifier == identifier {
                 child.parent = nil
             }
         }

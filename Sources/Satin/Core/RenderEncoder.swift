@@ -402,12 +402,18 @@ open class RenderEncoder {
     private var projectorLights = [Light]()
     private var projectorTextures = [MTLTexture?]()
 
-    private var activeEnvironmentIntensity: Float = 1.0
-    private var activeReflectionTexture: MTLTexture?
-    private var activeIrradianceTexture: MTLTexture?
-    private var activeBrdfTexture: MTLTexture?
-    private var activeReflectionTexcoordTransform = matrix_identity_float3x3
-    private var activeIrradianceTexcoordTransform = matrix_identity_float3x3
+    /// The image-based lighting the last scene update applied, read again by deferred lighting.
+    /// Built in a local during the update and stored once, so the per-material loop reads locals.
+    private struct ActiveEnvironment {
+        var intensity: Float = 1.0
+        var reflectionTexture: MTLTexture?
+        var irradianceTexture: MTLTexture?
+        var brdfTexture: MTLTexture?
+        var reflectionTexcoordTransform = matrix_identity_float3x3
+        var irradianceTexcoordTransform = matrix_identity_float3x3
+    }
+
+    private var activeEnvironment = ActiveEnvironment()
 
     private lazy var deferredLightingMaterial = DeferredLightingMaterial(context: context)
     private lazy var deferredLightingMesh: Mesh = {
@@ -713,6 +719,13 @@ open class RenderEncoder {
         // Every shadow drawn this frame records each caster once, for all their passes.
         if (!renderCollection.shadowCasters.isEmpty || !submission.shadowOccurrences.isEmpty),
            (!renderCollection.shadowReceivers.isEmpty || submission.hasRecordedShadowReceivers) {
+            // A local for the per-light loop; the buffer goes back empty on every exit.
+            var shadowsToDraw = self.shadowsToDraw
+            self.shadowsToDraw = []
+            defer {
+                shadowsToDraw.removeAll(keepingCapacity: true)
+                self.shadowsToDraw = shadowsToDraw
+            }
             shadowsToDraw.removeAll(keepingCapacity: true)
             for light in renderCollection.lights where light.castShadow && light.shadow.shouldRender {
                 shadowsToDraw.append(light.shadow)
@@ -720,7 +733,6 @@ open class RenderEncoder {
             preparedPasses.append(contentsOf: try shadowCasterRecording.prepare(shadowsToDraw, context: context,
                                                                            renderables: renderCollection.shadowCasters,
                                                                            occurrences: submission.shadowOccurrences, recorder: recorder))
-            shadowsToDraw.removeAll(keepingCapacity: true)
         }
 
         updateDirectShadowTextures()
@@ -1042,6 +1054,14 @@ open class RenderEncoder {
         }
         submission.hasRecordedShadowReceivers = submission.hasRecordedShadowReceivers || !renderCollection.shadowReceivers.isEmpty
         submission.hasRecordedLightReceivers = submission.hasRecordedLightReceivers || !renderCollection.lightReceivers.isEmpty
+        // A local for the loop, so each renderable makes no checked access to self. The buffer goes
+        // back empty on every exit, keeping its capacity without holding the renderables.
+        var recordedRenderables = self.recordedRenderables
+        self.recordedRenderables = []
+        defer {
+            recordedRenderables.removeAll(keepingCapacity: true)
+            self.recordedRenderables = recordedRenderables
+        }
         recordedRenderables.removeAll(keepingCapacity: true)
         for object in renderCollection.objects {
             if let renderable = object.renderable { recordedRenderables.append(renderable) }
@@ -1067,14 +1087,19 @@ open class RenderEncoder {
             }
             try recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)
         }
-        recordedRenderables.removeAll(keepingCapacity: true)
     }
 
     /// Fills each route's buckets from the draw's runs, per layer: the scene's own packets, then the
     /// records', in recorded order, and the route's entries from them.
+    /// Works on locals, stored back once, so the per-run loops make no checked access to self.
     private func buildRouteEntries(storage: PacketStorage) {
+        let runs = storage.runs
+        var passLayers = self.passLayers, packetBuckets = self.packetBuckets, routeEntries = self.routeEntries
+        self.passLayers = []; self.packetBuckets = []; self.routeEntries = []
+        defer { self.passLayers = passLayers; self.packetBuckets = packetBuckets; self.routeEntries = routeEntries }
+
         passLayers.removeAll(keepingCapacity: true)
-        for run in storage.runs where !passLayers.contains(run.renderLayer) {
+        for run in runs where !passLayers.contains(run.renderLayer) {
             let insertionIndex = passLayers.firstIndex { $0 > run.renderLayer } ?? passLayers.count
             passLayers.insert(run.renderLayer, at: insertionIndex)
         }
@@ -1088,14 +1113,15 @@ open class RenderEncoder {
             }
         }
 
-        for run in storage.runs where !run.isRecorded {
-            appendRunToBucket(run)
-        }
-        for run in storage.runs where run.isRecorded {
-            appendRunToBucket(run)
+        // The scene's own runs, then the records'.
+        for appendsRecorded in [false, true] {
+            for run in runs where run.isRecorded == appendsRecorded {
+                guard let pass = passLayers.firstIndex(of: run.renderLayer) else { continue }
+                packetBuckets[run.routeIndex][pass].append(contentsOf: run.packets)
+            }
         }
 
-        let ordersRecordedScenes = sortObjects && storage.runs.contains(where: \.isRecorded)
+        let ordersRecordedScenes = sortObjects && runs.contains(where: \.isRecorded)
         for routeIndex in routeEntries.indices {
             for pass in passLayers.indices where !packetBuckets[routeIndex][pass].isEmpty {
                 if ordersRecordedScenes {
@@ -1106,11 +1132,6 @@ open class RenderEncoder {
                 routeEntries[routeIndex].append(RenderRouteEntry(pass: pass, packets: packetBuckets[routeIndex][pass][...]))
             }
         }
-    }
-
-    private func appendRunToBucket(_ run: PacketTables.PacketRun) {
-        guard let pass = passLayers.firstIndex(of: run.renderLayer) else { return }
-        packetBuckets[run.routeIndex][pass].append(contentsOf: run.packets)
     }
 
     /// Entries hold slices of the buckets: cleared first, so the buckets are cleared in place.
@@ -1288,16 +1309,17 @@ open class RenderEncoder {
         deferredLightingMaterial.directShadowCount = directShadowLights.count
         deferredLightingMaterial.directShadowTextureCount = directShadowTextures.count
 
-        deferredLightingMaterial.environmentIntensity = activeEnvironmentIntensity
+        let environment = activeEnvironment
+        deferredLightingMaterial.environmentIntensity = environment.intensity
         deferredLightingMaterial.reflectionTexcoordTransform = simd_float4x4(
-            textureTransform: activeReflectionTexcoordTransform
+            textureTransform: environment.reflectionTexcoordTransform
         )
         deferredLightingMaterial.irradianceTexcoordTransform = simd_float4x4(
-            textureTransform: activeIrradianceTexcoordTransform
+            textureTransform: environment.irradianceTexcoordTransform
         )
-        deferredLightingMaterial.reflectionTexture = activeReflectionTexture
-        deferredLightingMaterial.irradianceTexture = activeIrradianceTexture
-        deferredLightingMaterial.brdfTexture = activeBrdfTexture
+        deferredLightingMaterial.reflectionTexture = environment.reflectionTexture
+        deferredLightingMaterial.irradianceTexture = environment.irradianceTexture
+        deferredLightingMaterial.brdfTexture = environment.brdfTexture
         deferredLightingMaterial.inverseProjectionMatrix = view.projectionMatrix.inverse
         deferredLightingMaterial.inverseViewMatrix = view.viewMatrix.inverse
         deferredLightingMaterial.worldCameraPosition = simd_float4(view.worldPosition, 1)
@@ -1987,32 +2009,31 @@ open class RenderEncoder {
         let projectorCount = projectorLights.count
 
         var cubemapTexture: MTLTexture?
-        activeEnvironmentIntensity = 1.0
-        activeReflectionTexture = nil
-        activeIrradianceTexture = nil
-        activeBrdfTexture = nil
-        activeReflectionTexcoordTransform = matrix_identity_float3x3
-        activeIrradianceTexcoordTransform = matrix_identity_float3x3
+        // Locals for the whole loop: each read of a stored property here would be an exclusivity
+        // check per material. Stored once at the end for deferred lighting.
+        var active = ActiveEnvironment()
+        let rendersDeferredGeometry = renderingMode == .deferredGeometry
+        defer { activeEnvironment = active }
 
         for collectedObject in renderCollection.objects {
             let object = collectedObject.object
 
             if let environment = collectedObject.environment {
-                activeEnvironmentIntensity = environment.environmentIntensity
+                active.intensity = environment.environmentIntensity
                 cubemapTexture = environment.cubemapTexture
 
-                activeReflectionTexture = environment.reflectionTexture
-                activeReflectionTexcoordTransform = environment.reflectionTexcoordTransform
+                active.reflectionTexture = environment.reflectionTexture
+                active.reflectionTexcoordTransform = environment.reflectionTexcoordTransform
 
-                activeIrradianceTexture = environment.irradianceTexture
-                activeIrradianceTexcoordTransform = environment.irradianceTexcoordTransform
+                active.irradianceTexture = environment.irradianceTexture
+                active.irradianceTexcoordTransform = environment.irradianceTexcoordTransform
 
-                activeBrdfTexture = environment.brdfTexture
+                active.brdfTexture = environment.brdfTexture
             }
 
             if let renderable = collectedObject.renderable {
                 for material in renderable.materials {
-                    let usesDeferredResolve = renderingMode == .deferredGeometry
+                    let usesDeferredResolve = rendersDeferredGeometry
                         && material.lightingModel == .surface
                         && material.blending == .disabled
 
@@ -2035,24 +2056,24 @@ open class RenderEncoder {
                     }
 
                     if let pbrMaterial = material as? StandardMaterial {
-                        pbrMaterial.environmentIntensity = activeEnvironmentIntensity
-                        if let reflectionTexture = activeReflectionTexture {
+                        pbrMaterial.environmentIntensity = active.intensity
+                        if let reflectionTexture = active.reflectionTexture {
                             pbrMaterial.setTexture(reflectionTexture, type: .reflection)
-                            pbrMaterial.setTexcoordTransform(activeReflectionTexcoordTransform, type: .reflection)
+                            pbrMaterial.setTexcoordTransform(active.reflectionTexcoordTransform, type: .reflection)
                         }
-                        if let irradianceTexture = activeIrradianceTexture {
+                        if let irradianceTexture = active.irradianceTexture {
                             pbrMaterial.setTexture(irradianceTexture, type: .irradiance)
-                            pbrMaterial.setTexcoordTransform(activeIrradianceTexcoordTransform, type: .irradiance)
+                            pbrMaterial.setTexcoordTransform(active.irradianceTexcoordTransform, type: .irradiance)
                         }
-                        if let brdfTexture = activeBrdfTexture {
+                        if let brdfTexture = active.brdfTexture {
                             pbrMaterial.setTexture(brdfTexture, type: .brdf)
                         }
                     }
 
                     if let cubemapTexture = cubemapTexture, let skyboxMaterial = material as? SkyboxMaterial {
                         skyboxMaterial.texture = cubemapTexture
-                        skyboxMaterial.texcoordTransform = simd_float4x4(textureTransform: activeReflectionTexcoordTransform)
-                        skyboxMaterial.environmentIntensity = activeEnvironmentIntensity
+                        skyboxMaterial.texcoordTransform = simd_float4x4(textureTransform: active.reflectionTexcoordTransform)
+                        skyboxMaterial.environmentIntensity = active.intensity
                     }
 
                     if runsMaterialUpdates {
@@ -2308,6 +2329,8 @@ open class RenderEncoder {
             return .object(ObjectIdentifier(lights[index]))
         }
 
+        // Locals for the per-light loops, stored back once.
+        var uploadedLights = self.uploadedLights
         var changed = lights.count != uploadedLights.count
         if !changed {
             for (index, light) in lights.enumerated() {
@@ -2323,6 +2346,8 @@ open class RenderEncoder {
         }
         guard changed else { return }
 
+        var uploadedLightData = self.uploadedLightData
+        self.uploadedLights = []; self.uploadedLightData = []
         uploadedLights.removeAll(keepingCapacity: true)
         uploadedLightData.removeAll(keepingCapacity: true)
         for (index, light) in lights.enumerated() {
@@ -2335,14 +2360,18 @@ open class RenderEncoder {
             ))
             uploadedLightData.append(light.data)
         }
+        self.uploadedLights = uploadedLights
+        self.uploadedLightData = uploadedLightData
         lightDataUploadCount += 1
     }
 
     private func updateDirectLightingState(recorder: PacketRecorder) throws {
+        // Locals for the per-light loop, stored back once after it; the texture arrays are rebuilt
+        // empty below, so only the light arrays carry their capacity.
+        var directShadowLights = self.directShadowLights, projectorLights = self.projectorLights
+        self.directShadowLights = []; self.projectorLights = []
         directShadowLights.removeAll(keepingCapacity: true)
-        directShadowTextures.removeAll(keepingCapacity: true)
         projectorLights.removeAll(keepingCapacity: true)
-        projectorTextures.removeAll(keepingCapacity: true)
 
         var directShadowData = [ShadowData]()
         var directShadowMatrices = [simd_float4x4]()
@@ -2363,21 +2392,19 @@ open class RenderEncoder {
             light.projectorIndex = -1
 
             if let captured = light as? RecordedLightOccurrence,
-               let texture = captured.projectorTexture, let matrix = captured.projectorMatrix,
+               captured.projectorTexture != nil, let matrix = captured.projectorMatrix,
                let transform = captured.projectorTransform, projectorIndex < maxProjectors {
                 light.projectorIndex = projectorIndex
                 projectorLights.append(light)
-                projectorTextures.append(texture)
                 projectorMatrices.append(matrix)
                 projectorTransforms.append(transform)
                 projectorIndex += 1
             } else if let spotLight = light as? SpotLight,
-               let projectionTexture = spotLight.projectionTexture,
+               spotLight.projectionTexture != nil,
                projectorIndex < maxProjectors
             {
                 light.projectorIndex = projectorIndex
                 projectorLights.append(spotLight)
-                projectorTextures.append(projectionTexture)
                 projectorMatrices.append(spotLight.projectorMatrix)
                 projectorTransforms.append(simd_float4x4(textureTransform: spotLight.projectionTransform))
                 projectorIndex += 1
@@ -2417,6 +2444,8 @@ open class RenderEncoder {
             directShadowMatrixIndex += shadowMatrices.count
         }
 
+        self.directShadowLights = directShadowLights
+        self.projectorLights = projectorLights
         directShadowTextures = Array(repeating: nil, count: directShadowTextureIndex)
         projectorTextures = Array(repeating: nil, count: projectorLights.count)
 

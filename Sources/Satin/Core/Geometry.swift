@@ -169,8 +169,14 @@ open class Geometry {
         }
     }
 
-    private var _vertexDescriptor = ValueCache<MTLVertexDescriptor>()
-    open var vertexDescriptor: MTLVertexDescriptor { _vertexDescriptor.get { generateVertexDescriptor() } }
+    private var cachedVertexDescriptor: MTLVertexDescriptor?
+    /// Check, build outside, store: building never runs inside an access to the cache.
+    open var vertexDescriptor: MTLVertexDescriptor {
+        if let cached = cachedVertexDescriptor { return cached }
+        let descriptor = generateVertexDescriptor()
+        cachedVertexDescriptor = descriptor
+        return descriptor
+    }
 
     private var internedVertexLayout = InternedVertexLayout()
     /// `vertexDescriptor`'s layout as a small integer, equal for geometries with equal layouts, so
@@ -182,7 +188,7 @@ open class Geometry {
         didSet {
             positionAttribute = vertexAttributes[.Position]
             // Clear first: setting the flag tells meshes, which read the new layout at once.
-            _vertexDescriptor.clear()
+            cachedVertexDescriptor = nil
             _updateVertexBuffers = true
         }
     }

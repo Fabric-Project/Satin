@@ -243,7 +243,8 @@ public final class PacketRecorder {
     private func viewRange(for views: [RenderView]) -> Range<Int> {
         if let lastViewRange, lastViewRange.count == views.count {
             var matches = true
-            for index in views.indices where !Self.isSameView(storage.viewTable[lastViewRange.lowerBound + index], views[index]) {
+            let viewTable = storage.viewTable // one checked read, not one per view
+            for index in views.indices where !Self.isSameView(viewTable[lastViewRange.lowerBound + index], views[index]) {
                 matches = false
                 break
             }
