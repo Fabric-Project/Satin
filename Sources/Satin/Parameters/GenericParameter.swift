@@ -13,8 +13,10 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 
     public typealias ValueType = T
 
-    // Delegate
-    public let valuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Every value change, for UI and clients. Read-only: changes go through `value` or
+    /// `notifyValueChanged()`, so groups and owners hear every one.
+    public var valuePublisher: AnyPublisher<ValueType, Never> { valueSubject.eraseToAnyPublisher() }
+    private let valueSubject = PassthroughSubject<ValueType, Never>()
 
     // Getable Properties
     public var type: ParameterType { .generic }
@@ -82,7 +84,7 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
             guard self.listeners.valueObservers.contains(where: { $0.registration == observer.registration }) else { continue }
             observer.handler()
         }
-        valuePublisher.send(value)
+        valueSubject.send(value)
     }
 
     /// Calls `handler` on every value change until `owner` stops observing. One handler per owner:
@@ -208,20 +210,24 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParameter<T> {
     public typealias ValueType = T
 
-    public let minValuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Read-only: changes go through `min`.
+    public var minValuePublisher: AnyPublisher<ValueType, Never> { minValueSubject.eraseToAnyPublisher() }
+    private let minValueSubject = PassthroughSubject<ValueType, Never>()
 
     public var min: ValueType {
         didSet {
-            minValuePublisher.send(min)
+            minValueSubject.send(min)
             notifyValueChanged()
         }
     }
 
-    public let maxValuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Read-only: changes go through `max`.
+    public var maxValuePublisher: AnyPublisher<ValueType, Never> { maxValueSubject.eraseToAnyPublisher() }
+    private let maxValueSubject = PassthroughSubject<ValueType, Never>()
 
     public var max: ValueType {
         didSet {
-            maxValuePublisher.send(max)
+            maxValueSubject.send(max)
             notifyValueChanged()
         }
     }

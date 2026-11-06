@@ -28,7 +28,9 @@ public protocol Parameter: AnyObject, Codable, CustomStringConvertible, CustomDe
     var description: String { set get }
     var debugDescription: String { get }
 
-    var valuePublisher: PassthroughSubject<ValueType, Never> { get }
+    /// Every value change, for UI and clients. Read-only: changes go through `value` or
+    /// `notifyValueChanged()`, so groups and owners hear every one.
+    var valuePublisher: AnyPublisher<ValueType, Never> { get }
     var valueDidChange:Bool { get }
     
     func alignData(pointer: UnsafeMutableRawPointer, offset: inout Int) -> UnsafeMutableRawPointer
