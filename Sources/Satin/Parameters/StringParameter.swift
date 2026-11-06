@@ -12,12 +12,14 @@ import Foundation
 public final class StringParameter: GenericParameter<String> {
     override public var type: ParameterType { .string }
 
-    public let optionsPublisher = PassthroughSubject<[ValueType], Never>()
+    /// Read-only: changes go through `options`.
+    public var optionsPublisher: AnyPublisher<[ValueType], Never> { optionsSubject.eraseToAnyPublisher() }
+    private let optionsSubject = PassthroughSubject<[ValueType], Never>()
 
     @Published public var options: [String] = [] {
         didSet {
             if oldValue != options {
-                optionsPublisher.send(options)
+                optionsSubject.send(options)
             }
         }
     }

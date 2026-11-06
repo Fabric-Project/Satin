@@ -53,6 +53,42 @@ final class ParameterRelayTests: XCTestCase {
         XCTAssertEqual(amount.value, 1)
     }
 
+    func testAParameterNobodySubscribesToStillTellsItsGroupAndOwners() {
+        let amount = FloatParameter("Amount", 0)
+        let group = ParameterGroup("Group", [amount])
+        let owner = NSObject()
+        var calls = 0
+        amount.observeValueChanges(by: owner) { calls += 1 }
+        let revision = group.contentRevision
+        amount.value = 1
+        XCTAssertEqual(calls, 1)
+        XCTAssertGreaterThan(group.contentRevision, revision)
+    }
+
+    func testALateSubscriberHearsLaterChanges() {
+        let amount = FloatParameter("Amount", 0)
+        amount.value = 1
+        var published: [Float] = []
+        let subscription = amount.valuePublisher.sink { published.append($0) }
+        amount.value = 2
+        amount.notifyValueChanged()
+        XCTAssertEqual(published, [2, 2])
+        subscription.cancel()
+    }
+
+    func testEveryReaderOfThePublisherSharesOneSubject() {
+        let amount = FloatParameter("Amount", 0)
+        var first: [Float] = []
+        var second: [Float] = []
+        let firstSubscription = amount.valuePublisher.sink { first.append($0) }
+        let secondSubscription = amount.valuePublisher.sink { second.append($0) }
+        amount.value = 1
+        XCTAssertEqual(first, [1])
+        XCTAssertEqual(second, [1])
+        firstSubscription.cancel()
+        secondSubscription.cancel()
+    }
+
     func testAnObserverStoppedByAnEarlierOneIsNotCalled() {
         let amount = FloatParameter("Amount", 0)
         let first = NSObject()
