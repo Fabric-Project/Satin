@@ -11,35 +11,51 @@ import Foundation
 /// keeps its storage. The sorted order is made on the first sorted read of a pass and reused for the
 /// rest of it; unsorted reads keep the order renderables were appended in.
 final class RenderList {
-    public var isEmpty: Bool {
-        renderables.isEmpty
+    /// One stored struct, so an append is one exclusivity check, not two.
+    private struct State {
+        // Contiguous: never bridged, so reads skip the NSArray checks.
+        var renderables = ContiguousArray<Renderable>()
+        var sortedRenderables = ContiguousArray<Renderable>()
+        var sortedRenderablesAreCurrent = false
+
+        mutating func append(_ renderable: Renderable) {
+            renderables.append(renderable)
+            sortedRenderablesAreCurrent = false
+        }
+
+        mutating func removeAll(keepingCapacity: Bool) {
+            renderables.removeAll(keepingCapacity: keepingCapacity)
+            sortedRenderables.removeAll(keepingCapacity: keepingCapacity)
+            sortedRenderablesAreCurrent = false
+        }
+
+        mutating func sorted() -> ContiguousArray<Renderable> {
+            if !sortedRenderablesAreCurrent {
+                sortedRenderables.removeAll(keepingCapacity: true)
+                sortedRenderables.append(contentsOf: renderables)
+                sortedRenderables.sort { $0.renderOrder < $1.renderOrder }
+                sortedRenderablesAreCurrent = true
+            }
+            return sortedRenderables
+        }
     }
 
-    // Contiguous: never bridged, so reads skip the NSArray checks.
-    private var renderables = ContiguousArray<Renderable>()
-    private var sortedRenderables = ContiguousArray<Renderable>()
-    private var sortedRenderablesAreCurrent = false
+    private var state = State()
+
+    public var isEmpty: Bool {
+        state.renderables.isEmpty
+    }
 
     public func append(_ renderable: Renderable) {
-        renderables.append(renderable)
-        sortedRenderablesAreCurrent = false
+        state.append(renderable)
     }
 
     public func removeAll(keepingCapacity: Bool = true) {
-        renderables.removeAll(keepingCapacity: keepingCapacity)
-        sortedRenderables.removeAll(keepingCapacity: keepingCapacity)
-        sortedRenderablesAreCurrent = false
+        state.removeAll(keepingCapacity: keepingCapacity)
     }
 
     public func getRenderables(sorted: Bool) -> ContiguousArray<Renderable> {
-        guard sorted else { return renderables }
-
-        if !sortedRenderablesAreCurrent {
-            sortedRenderables.removeAll(keepingCapacity: true)
-            sortedRenderables.append(contentsOf: renderables)
-            sortedRenderables.sort { $0.renderOrder < $1.renderOrder }
-            sortedRenderablesAreCurrent = true
-        }
-        return sortedRenderables
+        guard sorted else { return state.renderables }
+        return state.sorted()
     }
 }
