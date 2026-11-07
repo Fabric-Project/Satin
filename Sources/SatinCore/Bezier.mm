@@ -5,6 +5,7 @@
 //  Created by Reza Ali on 6/28/20.
 //
 
+#include <algorithm>
 #include <malloc/_malloc.h>
 #include <string.h>
 
@@ -353,8 +354,9 @@ void _adaptiveCubicBezierCurve3(
     Polyline3D *line) {
     if (depth > 8) { return; }
 
-    const float startMiddleAngle = acos(simd_dot(aVel, bVel));
-    const float middleEndAngle = acos(simd_dot(bVel, cVel));
+    // Clamped: rounding can push a dot product of unit vectors past 1, and acos of that is NaN.
+    const float startMiddleAngle = acos(simd_clamp(simd_dot(aVel, bVel), -1.0f, 1.0f));
+    const float middleEndAngle = acos(simd_clamp(simd_dot(bVel, cVel), -1.0f, 1.0f));
 
     if ((startMiddleAngle + middleEndAngle) > angleLimit) {
         // Split curve into two curves (start, end)
@@ -377,6 +379,25 @@ void _adaptiveCubicBezierCurve3(
         const simd_float3 eVel = simd_normalize(cubicBezierVelocity3(abcd, bcd, cd, d, 0.5));
         _adaptiveCubicBezierCurve3(abcd, bcd, cd, d, bVel, eVel, cVel, angleLimit, depth + 1, line);
     }
+}
+
+// The direction a cubic leaves `a`: toward its first control point or, when that point sits on
+// `a` (a collapsed handle, zero velocity), toward the next one that does not. The direction it
+// arrives at `d` mirrors this. Normalizing a zero velocity instead gives NaN, which stops the
+// adaptive split and draws the curve as a straight line. A handle counts as collapsed when it is
+// shorter than a millionth of the curve's own extent, so the test does not depend on its units.
+// Only the 3D sampler (BezierPath) does this: text samples glyphs with the 2D ones, whose
+// triangulation depends on their existing output.
+static simd_float3 cubicStartDirection3(simd_float3 a, simd_float3 b, simd_float3 c, simd_float3 d, float collapsedSquared) {
+    if (simd_distance_squared(a, b) > collapsedSquared) { return simd_normalize(b - a); }
+    if (simd_distance_squared(a, c) > collapsedSquared) { return simd_normalize(c - a); }
+    return simd_normalize(d - a);
+}
+
+static simd_float3 cubicEndDirection3(simd_float3 a, simd_float3 b, simd_float3 c, simd_float3 d, float collapsedSquared) {
+    if (simd_distance_squared(c, d) > collapsedSquared) { return simd_normalize(d - c); }
+    if (simd_distance_squared(b, d) > collapsedSquared) { return simd_normalize(d - b); }
+    return simd_normalize(d - a);
 }
 
 Polyline2D getAdaptiveCubicBezierPath2(
@@ -434,13 +455,18 @@ getCubicBezierPath3(simd_float3 a, simd_float3 b, simd_float3 c, simd_float3 d, 
 
 Polyline3D getAdaptiveCubicBezierPath3(
     simd_float3 a, simd_float3 b, simd_float3 c, simd_float3 d, float angleLimit) {
-    const simd_float3 aVel = simd_normalize(cubicBezierVelocity3(a, b, c, d, 0.0));
-    const simd_float3 bVel = simd_normalize(cubicBezierVelocity3(a, b, c, d, 0.5));
-    const simd_float3 cVel = simd_normalize(cubicBezierVelocity3(a, b, c, d, 1.0));
-
     Polyline3D line = createEmptyPolyline3D();
     addPointToPolyline3D(a, &line);
-    _adaptiveCubicBezierCurve3(a, b, c, d, aVel, bVel, cVel, angleLimit, 0, &line);
+    // The curve's extent: how far its control points spread from `a`.
+    const float extentSquared = std::max({ simd_distance_squared(a, b), simd_distance_squared(a, c), simd_distance_squared(a, d) });
+    // All four points coincide: a point, with no direction to measure turns by.
+    if (extentSquared > 0.0f) {
+        const float collapsedSquared = extentSquared * 1e-12f;
+        const simd_float3 aVel = cubicStartDirection3(a, b, c, d, collapsedSquared);
+        const simd_float3 bVel = simd_normalize(cubicBezierVelocity3(a, b, c, d, 0.5));
+        const simd_float3 cVel = cubicEndDirection3(a, b, c, d, collapsedSquared);
+        _adaptiveCubicBezierCurve3(a, b, c, d, aVel, bVel, cVel, angleLimit, 0, &line);
+    }
     addPointToPolyline3D(d, &line);
 
     return line;

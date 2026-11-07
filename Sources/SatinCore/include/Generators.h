@@ -131,6 +131,31 @@ GeometryData generateTubeGeometryData(
 GeometryData
 generateRoundedBoxGeometryData(float width, float height, float depth, float radius, int res);
 
+// joinStyle: 0 = miter, 1 = bevel, 2 = round; others draw a bevel. capStyle: 0 = butt,
+// 1 = square, 2 = round; others draw round (capStyle is ignored when closed). pointWidthScales (multiples of width) and
+// pointColors are optional per point (pass NULL/0 for 1 and opaque white); each is
+// indexed against the caller's original, pre-dedupe point array, carried along when
+// consecutive duplicate points are collapsed, and its last value pads out any points
+// beyond its count. Appends one stroke to `result`, after any it already holds, reusing its storage
+// and growing it only when needed. A stroke of one distinct point adds a disc when its cap is
+// round and nothing otherwise; a stroke with no points or no width adds nothing. The caller owns `result`, empties it with resetStrokeGeometryData and releases it with
+// freeStrokeGeometryData.
+void appendStrokeGeometryData(
+    StrokeGeometryData *result,
+    const simd_float3 *points,
+    int pointCount,
+    bool closed,
+    float width,
+    int joinStyle,
+    int capStyle,
+    float miterLimit,
+    simd_float3 up,
+    int roundResolution,
+    const float *pointWidthScales,
+    int pointWidthScaleCount,
+    const simd_float4 *pointColors,
+    int pointColorCount);
+
 #if defined(__cplusplus)
 }
 #endif

@@ -7,6 +7,7 @@
 
 #include <CoreText/CoreText.h>
 #include <algorithm>
+#include <cassert>
 #include <malloc/_malloc.h>
 #include <simd/simd.h>
 #include <iostream>
@@ -2630,6 +2631,552 @@ generateRoundedBoxGeometryData(float width, float height, float depth, float rad
 
     computeNormalsOfGeometryData(&geoData);
     return geoData;
+}
+
+// MARK: - Stroke
+
+// A perpendicular to `tangent` (unit length), oriented by `up`. Falls back to a
+// secondary reference axis when the segment runs parallel to `up` (the fixed-`up`
+// scheme's one degenerate case); that axis is at least ~25° off the tangent, so
+// the cross product never vanishes and this never returns NaN.
+// `static` (rather than an anonymous namespace) keeps this internal without
+// tripping "C-linkage function returning a C++-only type" under this file's
+// wrapping extern "C" block.
+static simd_float3 strokeSideVector(simd_float3 tangent, simd_float3 up) {
+    simd_float3 reference = up;
+    if (fabsf(simd_dot(tangent, up)) > 0.999f) {
+        reference = fabsf(tangent.x) < 0.9f ? simd_make_float3(1.0f, 0.0f, 0.0f)
+                                             : simd_make_float3(0.0f, 1.0f, 0.0f);
+    }
+
+    return simd_normalize(simd_cross(reference, tangent));
+}
+
+// Collapses consecutive duplicate points (within epsilon); for closed
+// polylines also drops a trailing point that duplicates the first, since
+// wraparound already connects back to it. Width scales and colors ride along in
+// lockstep: each may be shorter than pointCount (its last value pads the
+// remainder) or null/empty (every point defaults to 1 and opaque white).
+static void strokeDedupeConsecutive(
+    const simd_float3 *points, int pointCount,
+    const float *pointWidthScales, int pointWidthScaleCount,
+    const simd_float4 *pointColors, int pointColorCount,
+    bool closed,
+    std::vector<simd_float3> &outPoints,
+    std::vector<float> &outWidthScales,
+    std::vector<simd_float4> &outColors) {
+    outPoints.clear();
+    outWidthScales.clear();
+    outColors.clear();
+    if (pointCount <= 0) return;
+
+    auto widthScaleAt = [&](int index) -> float {
+        if (pointWidthScales == nullptr || pointWidthScaleCount <= 0) { return 1.0f; }
+        return pointWidthScales[std::min(index, pointWidthScaleCount - 1)];
+    };
+    auto colorAt = [&](int index) -> simd_float4 {
+        if (pointColors == nullptr || pointColorCount <= 0) {
+            return simd_make_float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+        return pointColors[std::min(index, pointColorCount - 1)];
+    };
+
+    outPoints.reserve(pointCount);
+    outWidthScales.reserve(pointCount);
+    outColors.reserve(pointCount);
+    outPoints.push_back(points[0]);
+    outWidthScales.push_back(widthScaleAt(0));
+    outColors.push_back(colorAt(0));
+
+    for (int i = 1; i < pointCount; i++) {
+        if (simd_length(points[i] - outPoints.back()) > 1e-6f) {
+            outPoints.push_back(points[i]);
+            outWidthScales.push_back(widthScaleAt(i));
+            outColors.push_back(colorAt(i));
+        }
+    }
+
+    if (closed && outPoints.size() > 1 && simd_length(outPoints.front() - outPoints.back()) <= 1e-6f) {
+        outPoints.pop_back();
+        outWidthScales.pop_back();
+        outColors.pop_back();
+    }
+}
+
+struct StrokeRailPair {
+    uint32_t left = 0;
+    // On the line itself, so each side's texture v runs across its own half of the width.
+    uint32_t core = 0;
+    uint32_t right = 0;
+    bool valid = false;
+};
+
+struct StrokeJointResult {
+    StrokeRailPair endRail;
+    StrokeRailPair startRail;
+};
+
+// appendStrokeGeometryData's working arrays, kept on StrokeGeometryData between updates so
+// strokes rebuilt every frame allocate only when they grow. Each stroke overwrites them.
+struct StrokeScratch {
+    std::vector<simd_float3> points;
+    std::vector<float> widthScales;
+    std::vector<simd_float4> colors;
+    std::vector<simd_float3> tangents;
+    std::vector<simd_float3> sides;
+    std::vector<float> cumulativeLength;
+    std::vector<StrokeJointResult> joints;
+    std::vector<int> jointTriangleStarts;
+    std::vector<TriangleIndices> orderedTriangles;
+};
+
+StrokeGeometryData createStrokeGeometryData() {
+    return (StrokeGeometryData) {
+        .vertexCount = 0, .vertexData = NULL, .indexCount = 0, .indexData = NULL,
+        .vertexCapacity = 0, .indexCapacity = 0, .scratch = NULL
+    };
+}
+
+// By pointer, not count: reused storage outlives an empty stroke.
+void freeStrokeGeometryData(StrokeGeometryData *data) {
+    free(data->vertexData);
+    free(data->indexData);
+    delete static_cast<StrokeScratch *>(data->scratch);
+    *data = createStrokeGeometryData();
+}
+
+void resetStrokeGeometryData(StrokeGeometryData *data) {
+    data->vertexCount = 0;
+    data->indexCount = 0;
+}
+
+// Grows the storage to hold these totals, at least doubling and keeping the strokes already
+// appended, so appending many strokes stays linear.
+static void strokeReserve(StrokeGeometryData &data, int vertexCapacity, int triangleCapacity) {
+    if (data.vertexCapacity < vertexCapacity) {
+        data.vertexCapacity = std::max(vertexCapacity, data.vertexCapacity * 2);
+        data.vertexData = (StrokeVertex *)realloc(data.vertexData, sizeof(StrokeVertex) * data.vertexCapacity);
+    }
+    if (data.indexCapacity < triangleCapacity) {
+        data.indexCapacity = std::max(triangleCapacity, data.indexCapacity * 2);
+        data.indexData = (TriangleIndices *)realloc(data.indexData, sizeof(TriangleIndices) * data.indexCapacity);
+    }
+}
+
+// A stroke of one point with a round cap: a disc around it, facing `up`, its two half circles
+// matching the round cap's resolution.
+static void strokeAppendDot(StrokeGeometryData &data, simd_float3 point, float halfWidth, float widthScale,
+                            simd_float4 color, simd_float3 up, int resolution) {
+    const int rimCount = 2 * resolution;
+    strokeReserve(data, data.vertexCount + rimCount + 1, data.indexCount + rimCount);
+
+    const simd_float3 side = strokeSideVector(simd_make_float3(1.0f, 0.0f, 0.0f), up);
+    const simd_float3 forward = simd_cross(up, side);
+    const uint32_t hub = (uint32_t)data.vertexCount;
+    auto addVertex = [&](simd_float3 position, simd_float2 uv, simd_float3 neighbor) {
+        StrokeVertex vertex;
+        vertex.position = position;
+        vertex.normal = up;
+        vertex.uv = uv;
+        vertex.custom0 = simd_make_float4(0.0f, widthScale, 3.0f, 0.0f);
+        vertex.custom1 = point;
+        vertex.custom2 = neighbor;
+        vertex.color = color;
+        data.vertexData[data.vertexCount++] = vertex;
+    };
+
+    // The texture lies flat across the disc, with v across `side` as it runs across a line's width.
+    addVertex(point, simd_make_float2(0.5f, 0.5f), point);
+    for (int step = 0; step < rimCount; step++) {
+        const float t = (float)step / (float)rimCount;
+        const float angle = 2.0f * (float)M_PI * t;
+        const simd_float3 dir = side * cosf(angle) + forward * sinf(angle);
+        addVertex(point + halfWidth * widthScale * dir, simd_make_float2(0.5f + 0.5f * sinf(angle), 0.5f + 0.5f * cosf(angle)), point + dir);
+        TriangleIndices tri;
+        tri.i0 = hub;
+        tri.i1 = hub + 1 + (uint32_t)step;
+        tri.i2 = hub + 1 + (uint32_t)((step + 1) % rimCount);
+        data.indexData[data.indexCount++] = tri;
+    }
+}
+
+// joinStyle: 0 = miter, 1 = bevel, 2 = round; any other value draws a bevel. capStyle: 0 = butt,
+// 1 = square, 2 = round; any other value draws a round cap. Per-point width scales (multiples of
+// `width`) and colors are optional: see strokeDedupeConsecutive for how they pad and default.
+void appendStrokeGeometryData(
+    StrokeGeometryData *result,
+    const simd_float3 *rawPoints,
+    int rawPointCount,
+    bool closed,
+    float width,
+    int joinStyle,
+    int capStyle,
+    float miterLimit,
+    simd_float3 up,
+    int roundResolution,
+    const float *rawPointWidthScales,
+    int rawPointWidthScaleCount,
+    const simd_float4 *rawPointColors,
+    int rawPointColorCount) {
+
+    StrokeGeometryData &data = *result;
+
+    if (data.scratch == NULL) {
+        data.scratch = new StrokeScratch();
+    }
+    StrokeScratch &scratch = *static_cast<StrokeScratch *>(data.scratch);
+    std::vector<simd_float3> &points = scratch.points;
+    std::vector<float> &widthScales = scratch.widthScales;
+    std::vector<simd_float4> &colors = scratch.colors;
+    strokeDedupeConsecutive(rawPoints, rawPointCount, rawPointWidthScales, rawPointWidthScaleCount,
+                              rawPointColors, rawPointColorCount, closed, points, widthScales, colors);
+    const int n = (int)points.size();
+
+    if (n == 0 || width <= 0.0f) {
+        return;
+    }
+
+    const float halfWidth = width * 0.5f;
+    const int resolution = std::max(1, roundResolution);
+    const simd_float3 safeUp =
+        simd_length(up) > 1e-6f ? simd_normalize(up) : simd_make_float3(0.0f, 1.0f, 0.0f);
+    const float safeMiterLimit = std::max(1.0f, miterLimit);
+    // Any cap style but butt or square draws round, so sizing and drawing share this test.
+    const bool roundCap = capStyle != 0 && capStyle != 1;
+
+    if (n == 1) {
+        if (roundCap) {
+            strokeAppendDot(data, points[0], halfWidth, widthScales[0], colors[0], safeUp, resolution);
+        }
+        return;
+    }
+
+    // One side vector per segment; segment s runs from points[s] to points[(s+1)%n].
+    const int segmentCount = closed ? n : n - 1;
+    std::vector<simd_float3> &tangents = scratch.tangents;
+    std::vector<simd_float3> &sides = scratch.sides;
+    std::vector<float> &cumulativeLength = scratch.cumulativeLength;
+    tangents.resize(segmentCount);
+    sides.resize(segmentCount);
+    cumulativeLength.assign(n, 0.0f);
+
+    for (int s = 0; s < segmentCount; s++) {
+        const simd_float3 a = points[s];
+        const simd_float3 b = points[(s + 1) % n];
+        const simd_float3 delta = b - a;
+        const float segmentLength = simd_length(delta);
+        const simd_float3 tangent =
+            segmentLength > 1e-9f ? delta / segmentLength : simd_make_float3(1.0f, 0.0f, 0.0f);
+        tangents[s] = tangent;
+        sides[s] = strokeSideVector(tangent, safeUp);
+
+        const int nextIndex = s + 1;
+        if (nextIndex < n) {
+            cumulativeLength[nextIndex] = cumulativeLength[s] + segmentLength;
+        }
+    }
+    // A closed polyline's length includes its closing segment, so u reaches 1 back at the start.
+    const float closingLength = closed ? simd_distance(points[n - 1], points[0]) : 0.0f;
+    // u runs from one tip of the stroke to the other, so a cap that reaches past its point gets its
+    // own share of the texture rather than repeating the texture's edge.
+    const float capReachScale = capStyle == 0 || closed ? 0.0f : halfWidth;
+    const float startCapReach = capReachScale * widthScales[0];
+    const float endCapReach = capReachScale * widthScales[n - 1];
+    const float totalLength = std::max(startCapReach + cumulativeLength.back() + closingLength + endCapReach, 1e-6f);
+
+    // Segment s always starts at point s, so "does point i have a next segment"
+    // reduces to "does segment i exist" — true for every i when closed
+    // (segmentCount == n, including the wraparound segment n-1 starting at the
+    // last point), false only for the open polyline's final point.
+    auto nextSegment = [&](int pointIndex) -> int { return pointIndex < segmentCount ? pointIndex : -1; };
+    auto prevSegment = [&](int pointIndex) -> int {
+        if (pointIndex == 0) return closed ? segmentCount - 1 : -1;
+        return pointIndex - 1;
+    };
+
+    // Written straight into the result, sized for the most any point can emit with these
+    // styles: a round join's fallback emits 2 * resolution + 3 vertices and 2 * resolution
+    // triangles, a miter's 6 and 2, a round cap resolution + 2 and resolution, a butt or square
+    // cap 3 and none. Plus four triangles per segment and a closed seam's three vertices. The
+    // storage is kept between updates and grows only when this needs more.
+    const int joinVertices = joinStyle == 2 ? 2 * resolution + 3 : 6;
+    const int joinTriangles = joinStyle == 2 ? 2 * resolution : 2;
+    const int capVertices = roundCap ? resolution + 2 : 3;
+    const int capTriangles = roundCap ? resolution : 0;
+    const int vertexCapacity = data.vertexCount + n * std::max(joinVertices, capVertices) + 3;
+    const int triangleCapacity = data.indexCount + n * std::max(joinTriangles, capTriangles) + segmentCount * 4;
+    strokeReserve(data, vertexCapacity, triangleCapacity);
+
+    auto addVertex = [&](simd_float3 position, simd_float3 normal, float u, float v, float side,
+                          float widthScale, float cornerType, simd_float3 core,
+                          simd_float3 neighbor, simd_float4 color) -> uint32_t {
+        StrokeVertex vertex;
+        vertex.position = position;
+        vertex.normal = normal;
+        vertex.uv = simd_make_float2(u, v);
+        vertex.custom0 = simd_make_float4(side, widthScale, cornerType, 0.0f);
+        vertex.custom1 = core;
+        vertex.custom2 = neighbor;
+        vertex.color = color;
+        assert(data.vertexCount < vertexCapacity);
+        data.vertexData[data.vertexCount] = vertex;
+        return (uint32_t)data.vertexCount++;
+    };
+
+    auto addTriangle = [&](uint32_t a, uint32_t b, uint32_t c) {
+        TriangleIndices tri;
+        tri.i0 = a;
+        tri.i1 = b;
+        tri.i2 = c;
+        assert(data.indexCount < triangleCapacity);
+        data.indexData[data.indexCount++] = tri; // triangle count, matching GeometryData's convention
+    };
+
+    // Round join fans. The rim sweeps from `from` to `to` by angle; opposite vectors (a reversal)
+    // span no plane, so it sweeps through `forward` instead. The winding follows the sweep, so
+    // each fan faces `hubNormal` whichever way the polyline turns. The whole rim lies on one edge
+    // of the line, so it keeps that edge's `rimV`.
+    auto addFan = [&](uint32_t hub, simd_float3 from, simd_float3 to, simd_float3 forward, simd_float3 hubNormal,
+                       simd_float3 center, float u, float rimV, float radius, float widthScale,
+                       simd_float4 color, uint32_t startBoundary, uint32_t endBoundary) {
+        const float cosAngle = simd_clamp(simd_dot(from, to), -1.0f, 1.0f);
+        const float angle = acosf(cosAngle);
+        const simd_float3 towardTo = to - from * cosAngle;
+        const simd_float3 perpendicular = simd_length_squared(towardTo) > 1e-10f ? simd_normalize(towardTo) : forward;
+        const bool reversed = simd_dot(simd_cross(from, perpendicular), hubNormal) < 0.0f;
+        uint32_t previous = startBoundary;
+        for (int step = 1; step < resolution; step++) {
+            const float t = (float)step / (float)resolution;
+            const simd_float3 dir = from * cosf(angle * t) + perpendicular * sinf(angle * t);
+            const uint32_t rim = addVertex(
+                center + radius * dir, hubNormal, u, rimV, 0.0f, widthScale, 2.0f,
+                center, center + dir, color);
+            if (reversed) {
+                addTriangle(hub, rim, previous);
+            } else {
+                addTriangle(hub, previous, rim);
+            }
+            previous = rim;
+        }
+        if (reversed) {
+            addTriangle(hub, endBoundary, previous);
+        } else {
+            addTriangle(hub, previous, endBoundary);
+        }
+    };
+
+    // Returns the rail pair that finishes the segment ending at point i, and
+    // the rail pair that starts the segment beginning at point i.
+    auto buildJoint = [&](int i) -> StrokeJointResult {
+        StrokeJointResult result;
+        const simd_float3 p = points[i];
+        const int prevSeg = prevSegment(i);
+        const int nextSeg = nextSegment(i);
+        const float u = (startCapReach + cumulativeLength[i]) / totalLength;
+        // This point's own half-width; widthScale in each addVertex call below stays
+        // relative to the *base* halfWidth, so a shader can rebuild the offset from a width of its own.
+        const float halfWidthAtI = halfWidth * widthScales[i];
+        const float widthScaleAtI = widthScales[i];
+        const simd_float4 colorAtI = colors[i];
+
+        // Open polyline cap at either end. `direction` is -1 at the start (the cap reaches
+        // back, against the first segment's tangent) and +1 at the end (forward, along the
+        // last segment's). `segment` is the one segment touching this point.
+        auto addCap = [&](int segment, simd_float3 neighbor, float direction) -> StrokeRailPair {
+            const simd_float3 side = sides[segment];
+            const simd_float3 tangent = tangents[segment];
+            const simd_float3 normal = simd_normalize(simd_cross(tangent, side));
+
+            if (!roundCap) { // butt, or square: the rails pushed out by half the width
+                const bool square = capStyle == 1;
+                const simd_float3 core = square ? p + direction * halfWidthAtI * tangent : p;
+                const simd_float3 coreNeighbor = square ? p : neighbor;
+                const float coreU = square ? simd_clamp(u + direction * halfWidthAtI / totalLength, 0.0f, 1.0f) : u;
+                const uint32_t l = addVertex(
+                    core + halfWidthAtI * side, normal, coreU, 1.0f, 1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                const uint32_t c = addVertex(core, normal, coreU, 0.5f, 0.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                const uint32_t r = addVertex(
+                    core - halfWidthAtI * side, normal, coreU, 0.0f, -1.0f, widthScaleAtI, 3.0f, core, coreNeighbor, colorAtI);
+                return { l, c, r, true };
+            }
+
+            // Round: a half-disc fan from the left rail to the right, swept along `direction`.
+            // v follows each rim point's place across the line's width, 1 on the left rail and 0 on the right.
+            const uint32_t hub = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 3.0f, p, p, colorAtI);
+            uint32_t previousRim = 0;
+            uint32_t firstRim = 0;
+            for (int step = 0; step <= resolution; step++) {
+                const float t = (float)step / (float)resolution;
+                const float angle = (float)M_PI * t;
+                const simd_float3 dir = side * cosf(angle) + direction * tangent * sinf(angle);
+                const float rimU = simd_clamp(u + direction * sinf(angle) * halfWidthAtI / totalLength, 0.0f, 1.0f);
+                const uint32_t rim = addVertex(
+                    p + halfWidthAtI * dir, normal, rimU, 0.5f + 0.5f * cosf(angle), 0.0f, widthScaleAtI, 3.0f, p, p + dir, colorAtI);
+                // Sweeping forward reverses the fan's winding relative to `normal`: flip to stay front-facing.
+                if (step > 0) {
+                    if (direction > 0.0f) {
+                        addTriangle(hub, rim, previousRim);
+                    } else {
+                        addTriangle(hub, previousRim, rim);
+                    }
+                } else {
+                    firstRim = rim;
+                }
+                previousRim = rim;
+            }
+            return { firstRim, hub, previousRim, true };
+        };
+
+        if (prevSeg < 0) {
+            result.startRail = addCap(nextSeg, points[(i + 1) % n], -1.0f);
+            return result;
+        }
+        if (nextSeg < 0) {
+            result.endRail = addCap(prevSeg, points[i - 1], 1.0f);
+            return result;
+        }
+
+        // Interior joint (or every point, when closed): both segments exist.
+        const simd_float3 sidePrev = sides[prevSeg];
+        const simd_float3 sideNext = sides[nextSeg];
+        const simd_float3 neighborPrev = points[i == 0 ? n - 1 : i - 1];
+        const simd_float3 neighborNext = points[(i + 1) % n];
+
+        // A slight turn, as along a sampled curve: both segments share one rib along the bisector, so
+        // the texture runs on through it with no join. This is 2 * sin(turn / 2) for a turn of 15°.
+        // Where a curve is tighter than the half width, the inner side of its strip twists over.
+        if (simd_length(sideNext - sidePrev) < 0.26f) {
+            const simd_float3 normal = simd_normalize(
+                simd_cross(tangents[nextSeg], sideNext) + simd_cross(tangents[prevSeg], sidePrev));
+            const simd_float3 bisector = simd_normalize(sidePrev + sideNext);
+            // Keeps the width along each segment, and is relative to the *base* halfWidth like every widthScale here.
+            const float ribScale = 1.0f / simd_dot(bisector, sideNext);
+            const uint32_t l = addVertex(
+                p + halfWidthAtI * ribScale * bisector, normal, u, 1.0f, 1.0f, widthScaleAtI * ribScale, 0.0f, p, neighborNext, colorAtI);
+            const uint32_t c = addVertex(p, normal, u, 0.5f, 0.0f, widthScaleAtI, 0.0f, p, neighborNext, colorAtI);
+            const uint32_t r = addVertex(
+                p - halfWidthAtI * ribScale * bisector, normal, u, 0.0f, -1.0f, widthScaleAtI * ribScale, 0.0f, p, neighborNext, colorAtI);
+            result.endRail = { l, c, r, true };
+            result.startRail = { l, c, r, true };
+            return result;
+        }
+
+        // A sharper turn pivots: each segment keeps its own rails, square across it, and every vertex
+        // but a miter's tip stays half a width from the line. On the outer side a join fills the gap
+        // between the rails. On the inner side the rails simply overlap, pivoting on the point itself,
+        // as the width there has no room to run along both segments.
+        const simd_float3 normalPrev = simd_normalize(simd_cross(tangents[prevSeg], sidePrev));
+        const simd_float3 normalNext = simd_normalize(simd_cross(tangents[nextSeg], sideNext));
+        const simd_float3 hubNormal = simd_normalize(normalPrev + normalNext);
+        const bool turnReversed = simd_dot(simd_cross(sidePrev, sideNext), hubNormal) < 0.0f;
+        // Turning toward +side makes -side (R) the outer one. An exact reversal has the L side
+        // sweep the whole semicircle beyond the tip.
+        const float outerSign = simd_dot(tangents[nextSeg], sidePrev) > 0.0f ? -1.0f : 1.0f;
+        const float outerV = outerSign > 0.0f ? 1.0f : 0.0f;
+
+        const uint32_t endL = addVertex(
+            p + halfWidthAtI * sidePrev, normalPrev, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborPrev, colorAtI);
+        const uint32_t endR = addVertex(
+            p - halfWidthAtI * sidePrev, normalPrev, u, 0.0f, -1.0f, widthScaleAtI, 2.0f, p, neighborPrev, colorAtI);
+        const uint32_t startL = addVertex(
+            p + halfWidthAtI * sideNext, normalNext, u, 1.0f, 1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
+        const uint32_t startR = addVertex(
+            p - halfWidthAtI * sideNext, normalNext, u, 0.0f, -1.0f, widthScaleAtI, 2.0f, p, neighborNext, colorAtI);
+        const uint32_t hub = addVertex(p, hubNormal, u, 0.5f, 0.0f, widthScaleAtI, 2.0f, p, p, colorAtI);
+        const uint32_t endOuter = outerSign > 0.0f ? endL : endR;
+        const uint32_t startOuter = outerSign > 0.0f ? startL : startR;
+
+        auto addFiller = [&](uint32_t from, uint32_t to) {
+            if (turnReversed) {
+                addTriangle(hub, to, from);
+            } else {
+                addTriangle(hub, from, to);
+            }
+        };
+
+        // A miter past its limit, or with no direction at a reversal, draws as a bevel.
+        const simd_float3 miterDirRaw = sidePrev + sideNext;
+        const float miterLengthSquared = simd_dot(miterDirRaw, miterDirRaw);
+        const simd_float3 miterDir = miterLengthSquared > 1e-8f ? miterDirRaw / sqrtf(miterLengthSquared) : sideNext;
+        const float cosHalfAngle = simd_dot(miterDir, sideNext);
+        const bool drawsMiter = joinStyle == 0 && miterLengthSquared > 1e-8f && cosHalfAngle > 1e-4f && 1.0f / cosHalfAngle <= safeMiterLimit;
+
+        if (joinStyle == 2) { // round
+            addFan(hub, outerSign * sidePrev, outerSign * sideNext, tangents[prevSeg], hubNormal, p, u, outerV,
+                   halfWidthAtI, widthScaleAtI, colorAtI, endOuter, startOuter);
+        } else if (drawsMiter) {
+            // Relative to the *base* halfWidth, like every widthScale here.
+            const uint32_t tip = addVertex(
+                p + outerSign * (halfWidthAtI / cosHalfAngle) * miterDir, hubNormal, u, outerV, outerSign,
+                widthScaleAtI / cosHalfAngle, 1.0f, p, neighborNext, colorAtI);
+            addFiller(endOuter, tip);
+            addFiller(tip, startOuter);
+        } else {
+            addFiller(endOuter, startOuter);
+        }
+
+        result.endRail = { endL, hub, endR, true };
+        result.startRail = { startL, hub, startR, true };
+        return result;
+    };
+
+    std::vector<StrokeJointResult> &joints = scratch.joints;
+    joints.clear();
+    joints.reserve(n);
+    std::vector<int> &jointTriangleStarts = scratch.jointTriangleStarts;
+    jointTriangleStarts.clear();
+    jointTriangleStarts.reserve(n + 1);
+    for (int i = 0; i < n; i++) {
+        jointTriangleStarts.push_back(data.indexCount);
+        joints.push_back(buildJoint(i));
+    }
+    jointTriangleStarts.push_back(data.indexCount);
+
+    // A closed polyline's last segment returns to point 0, whose vertices start the first
+    // segment at u = 0: it ends at copies of them at u = 1, so u never runs backwards.
+    auto copyWithEndU = [&](uint32_t index) -> uint32_t {
+        StrokeVertex vertex = data.vertexData[index];
+        vertex.uv.x = 1.0f;
+        assert(data.vertexCount < vertexCapacity);
+        data.vertexData[data.vertexCount] = vertex;
+        return (uint32_t)data.vertexCount++;
+    };
+    StrokeRailPair seamEndRail = joints[0].endRail;
+    if (closed && seamEndRail.valid) {
+        seamEndRail = { copyWithEndU(seamEndRail.left), copyWithEndU(seamEndRail.core), copyWithEndU(seamEndRail.right), true };
+    }
+
+    // Triangles in the order the line is drawn: each joint, then the segment leaving it. Where a line
+    // crosses itself, the later part then covers the earlier part all the way across, instead of
+    // every segment covering every joint.
+    std::vector<TriangleIndices> &orderedTriangles = scratch.orderedTriangles;
+    orderedTriangles.clear();
+    orderedTriangles.reserve(jointTriangleStarts[n] - jointTriangleStarts[0] + segmentCount * 4);
+    for (int i = 0; i < n; i++) {
+        orderedTriangles.insert(orderedTriangles.end(), data.indexData + jointTriangleStarts[i], data.indexData + jointTriangleStarts[i + 1]);
+        if (i >= segmentCount) continue;
+        const int iB = (i + 1) % n;
+        const StrokeRailPair &aStart = joints[i].startRail;
+        const StrokeRailPair &bEnd = iB == 0 ? seamEndRail : joints[iB].endRail;
+        if (!aStart.valid || !bEnd.valid) continue;
+
+        const uint32_t halves[4][3] = {
+            { aStart.left, aStart.core, bEnd.core },
+            { aStart.left, bEnd.core, bEnd.left },
+            { aStart.core, aStart.right, bEnd.right },
+            { aStart.core, bEnd.right, bEnd.core },
+        };
+        for (const auto &half : halves) {
+            TriangleIndices triangle;
+            triangle.i0 = half[0];
+            triangle.i1 = half[1];
+            triangle.i2 = half[2];
+            orderedTriangles.push_back(triangle);
+        }
+    }
+    assert(jointTriangleStarts[0] + (int)orderedTriangles.size() <= triangleCapacity);
+    std::copy(orderedTriangles.begin(), orderedTriangles.end(), data.indexData + jointTriangleStarts[0]);
+    data.indexCount = jointTriangleStarts[0] + (int)orderedTriangles.size();
 }
 
 #if defined(__cplusplus)

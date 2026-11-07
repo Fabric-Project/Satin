@@ -9,6 +9,9 @@ typedef struct {
     float3 worldNormal;
     float3 worldPosition;
     float3 cameraPosition;
+#if defined(HAS_COLOR)
+    float4 color;
+#endif
 
 #ifdef OUTPUT_VELOCITY
     float4 currentClipPos;
@@ -113,6 +116,9 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
     out.worldNormal = worldNormal;
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
+#if defined(HAS_COLOR)
+    out.color = in.color;
+#endif
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;
@@ -137,13 +143,18 @@ fragment FragmentOutput basicDiffuseFragment(
 #endif
     constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
-    float4 outColor = float4(0.0, 0.0, 0.0, uniforms.color.a);
+#if defined(HAS_COLOR)
+    const float4 color = uniforms.color * in.color;
+#else
+    const float4 color = uniforms.color;
+#endif
+    float4 outColor = float4(0.0, 0.0, 0.0, color.a);
 
     const float3 N = normalize(in.worldNormal);
 
 #if defined(DEFERRED_GEOMETRY)
 #else
-    float3 litRgb = uniforms.color.rgb * max(uniforms.ambient, 0.0);
+    float3 litRgb = color.rgb * max(uniforms.ambient, 0.0);
 
 #if defined(LIGHTING) && defined(MAX_LIGHTS)
     const float hardnessExponent = mix(0.75, max(uniforms.diffusePower, 1.0), saturate(uniforms.hardness));
@@ -179,10 +190,10 @@ fragment FragmentOutput basicDiffuseFragment(
 #endif
 
         const float diffuseFactor = pow(saturate(dot(N, lightDirection)), hardnessExponent);
-        litRgb += uniforms.color.rgb * lightRadiance * diffuseFactor;
+        litRgb += color.rgb * lightRadiance * diffuseFactor;
     }
 #else
-    litRgb = uniforms.color.rgb * max(
+    litRgb = color.rgb * max(
         max(uniforms.ambient, 0.0),
         getBasicDiffuseFallbackFactor(
             in.worldPosition,
@@ -198,8 +209,8 @@ fragment FragmentOutput basicDiffuseFragment(
 #endif
 
     SurfaceOutput surface;
-    surface.albedo    = half3(uniforms.color.rgb);
-    surface.alpha     = half(uniforms.color.a);
+    surface.albedo    = half3(color.rgb);
+    surface.alpha     = half(color.a);
     surface.normal    = half3(N);
     surface.roughness = 1.0h;
     surface.metalness = 0.0h;

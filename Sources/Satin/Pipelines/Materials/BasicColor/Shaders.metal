@@ -8,6 +8,9 @@ typedef struct {
 typedef struct {
     float4 position [[position]];
     float pointSize [[point_size]];
+#if defined(HAS_COLOR)
+    float4 color;
+#endif
 } BasicColorVertexData;
 
 vertex BasicColorVertexData basicColorVertex(
@@ -26,6 +29,9 @@ vertex BasicColorVertexData basicColorVertex(
 #endif
 
     out.pointSize = uniforms.pointSize;
+#if defined(HAS_COLOR)
+    out.color = in.color;
+#endif
     return out;
 }
 
@@ -33,5 +39,10 @@ fragment FragmentOutput basicColorFragment(
     BasicColorVertexData in [[stage_in]],
     constant BasicColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
-    return buildColorFragmentOutput(half4(uniforms.color) SATIN_ALPHA_OIT_FORWARD_ARGS);
+#if defined(HAS_COLOR)
+    const float4 color = uniforms.color * in.color;
+#else
+    const float4 color = uniforms.color;
+#endif
+    return buildColorFragmentOutput(half4(color) SATIN_ALPHA_OIT_FORWARD_ARGS);
 }

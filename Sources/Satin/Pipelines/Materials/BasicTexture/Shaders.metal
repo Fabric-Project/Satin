@@ -11,6 +11,9 @@ typedef struct {
     float4 position [[position]];
     float2 texcoord;
     float pointSize [[point_size]];
+#if defined(HAS_COLOR)
+    float4 color;
+#endif
 } BasicTextureVertexData;
 
 vertex BasicTextureVertexData basicTextureVertex(
@@ -30,6 +33,9 @@ vertex BasicTextureVertexData basicTextureVertex(
 
     out.texcoord = in.texcoord;
     out.pointSize = uniforms.pointSize;
+#if defined(HAS_COLOR)
+    out.color = in.color;
+#endif
     return out;
 }
 
@@ -43,5 +49,10 @@ fragment FragmentOutput basicTextureFragment(
     const float4 texSample = tex.sample(texSampler, uv);
     if (texSample.a == 0.0) { discard_fragment(); }
 
-    return buildColorFragmentOutput(half4(uniforms.color * texSample) SATIN_ALPHA_OIT_FORWARD_ARGS);
+#if defined(HAS_COLOR)
+    const float4 color = uniforms.color * in.color * texSample;
+#else
+    const float4 color = uniforms.color * texSample;
+#endif
+    return buildColorFragmentOutput(half4(color) SATIN_ALPHA_OIT_FORWARD_ARGS);
 }
