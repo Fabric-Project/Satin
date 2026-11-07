@@ -8,7 +8,10 @@
 
 import Metal
 
-public struct Context {
+/// A render configuration. A final class with only `let` properties: passing one along a draw
+/// retains one object instead of copying its device, queue, allocator and formats. Equality and
+/// hashing compare the configuration, not identity.
+public final class Context {
     public let id: UUID
     /// This configuration's interned index (see `RenderContextRegistry`): equal configurations on
     /// one device share it, so they share compiled pipelines.

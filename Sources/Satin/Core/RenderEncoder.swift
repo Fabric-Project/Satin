@@ -2555,7 +2555,7 @@ private final class AlphaOitResources {
         guard let pipelineURL = getPipelinesCommonURL("AlphaOIT.metal") else {
             throw NSError(domain: "Satin.RenderEncoder", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing AlphaOIT pipeline source"])
         }
-        let source = try String(contentsOf: pipelineURL)
+        let source = try String(contentsOf: pipelineURL, encoding: .utf8)
         let library = try renderer.context.device.makeLibrary(source: source, options: nil)
 
         guard let tileFunction = library.makeFunction(name: "alphaOitClearTileData"),

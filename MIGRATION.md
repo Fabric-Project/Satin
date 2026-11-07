@@ -24,6 +24,13 @@ Satin encodes into the caller's command buffer on the thread that calls it. Raw 
 - `gpuAllocator` is not part of a context's equality or hash.
 - **Sizing heaps:** `GPUAllocator.Configuration` sizes each memory class with a `HeapSizing` (`gpuOnly`, `cpuWrites`, `cpuReads`). A host that knows it renders 4K or 8K can set `configuration.gpuOnly.initialSize` so the first frame creates one heap for its working set. `dedicatedThreshold` is optional and off by default.
 
+## `Context` is a class
+
+`Context` is now a `final class`. Creating, passing, comparing and hashing contexts work as before: every property was already immutable, `==` and `hash(into:)` still compare the configuration, and `Context(device:…)` is unchanged. Two things differ:
+
+- `===` now compiles for contexts and compares identity. Use `==` to compare configurations, as before.
+- A context is no longer copied when assigned. Nothing about it can change, so code can't observe the difference.
+
 ## Renderer subclasses
 
 Drawing now takes the frame being drawn, so your renderer needs its `frameTime` current. **An `update(frame:)` override must call `super` first**: it stores the frame as `frameTime`, and without it every draw sees frame 0 and motion never advances.
