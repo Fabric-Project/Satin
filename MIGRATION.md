@@ -31,6 +31,15 @@ Satin encodes into the caller's command buffer on the thread that calls it. Raw 
 - `===` now compiles for contexts and compares identity. Use `==` to compare configurations, as before.
 - A context is no longer copied when assigned. Nothing about it can change, so code can't observe the difference.
 
+## Parameter groups no longer listen to `valuePublisher`
+
+Setting `value`, `min` or `max` invalidates every group holding the parameter, as before. A group now
+hears it from the parameter directly, so calling `valuePublisher.send(_:)` yourself, without setting
+`value`, no longer reaches the group or an owner such as Fabric's `ParameterPort`. To notify with an
+unchanged value, call `notifyValueChanged()` instead; it tells groups, owners and `valuePublisher`
+subscribers alike. Subscribers to `valuePublisher` see
+each change after the parameter's groups and owners (`observeValueChanges(by:_:)`) have.
+
 ## Renderer subclasses
 
 Drawing now takes the frame being drawn, so your renderer needs its `frameTime` current. **An `update(frame:)` override must call `super` first**: it stores the frame as `frameTime`, and without it every draw sees frame 0 and motion never advances.

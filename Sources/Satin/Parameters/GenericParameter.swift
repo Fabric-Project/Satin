@@ -13,8 +13,10 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 
     public typealias ValueType = T
 
-    // Delegate
-    public let valuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Every value change, for UI and clients. Read-only: changes go through `value` or
+    /// `notifyValueChanged()`, so groups and owners hear every one.
+    public var valuePublisher: AnyPublisher<ValueType, Never> { valueSubject.eraseToAnyPublisher() }
+    private let valueSubject = PassthroughSubject<ValueType, Never>()
 
     // Getable Properties
     public var type: ParameterType { .generic }
@@ -42,12 +44,74 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
     {
         didSet
         {
-            if oldValue != self.value
+            let value = self.value
+            if oldValue != value
             {
                 self.valueDidChange = true
-                valuePublisher.send(self.value)
+                notify(value)
             }
         }
+    }
+
+    /// Who hears this parameter change, in one stored struct so a change reads it once.
+    private struct Listeners {
+        /// Owners that mirror this parameter, such as Fabric's ParameterPort, observe it here:
+        /// synchronously, on every change, before `valuePublisher` sends, without Combine.
+        var valueObservers: ContiguousArray<ParameterValueObserver> = []
+
+        /// Tells registrations apart, so one an owner replaced or removed mid-notify is skipped.
+        var nextObserverRegistration: UInt64 = 0
+
+        /// Groups packing this value, told directly so a change costs no Combine send per group.
+        var groupLinks: ContiguousArray<ParameterGroupLink> = []
+    }
+
+    private var listeners = Listeners()
+
+    /// Tells groups, owners and `valuePublisher` subscribers that the value changed. Setting `value`
+    /// calls it; call it yourself to notify with an unchanged value.
+    public func notifyValueChanged() {
+        notify(value)
+    }
+
+    /// Loops over a copy of the listeners, so a handler that stops observing doesn't change the loop
+    /// under it. A handler can still stop another observer, whose owner may then be gone: each observer
+    /// is called only while its registration is still current, as a Combine cancellation would be.
+    private func notify(_ value: ValueType) {
+        let listeners = self.listeners
+        for link in listeners.groupLinks { link.group.memberValueDidChange() }
+        for observer in listeners.valueObservers {
+            guard self.listeners.valueObservers.contains(where: { $0.registration == observer.registration }) else { continue }
+            observer.handler()
+        }
+        valueSubject.send(value)
+    }
+
+    /// Calls `handler` on every value change until `owner` stops observing. One handler per owner:
+    /// observing again replaces it. Every other observer (UI, clients) uses `valuePublisher`.
+    public func observeValueChanges(by owner: AnyObject, _ handler: @escaping () -> Void) {
+        stopObservingValueChanges(by: owner)
+        listeners.nextObserverRegistration &+= 1
+        listeners.valueObservers.append(ParameterValueObserver(owner: ObjectIdentifier(owner),
+                                                               registration: listeners.nextObserverRegistration,
+                                                               handler: handler))
+    }
+
+    /// Safe from the owner's deinit.
+    public func stopObservingValueChanges(by owner: AnyObject) {
+        let identifier = ObjectIdentifier(owner)
+        listeners.valueObservers.removeAll { $0.owner == identifier }
+    }
+
+    func attach(to group: ParameterGroup) {
+        let identifier = ObjectIdentifier(group)
+        guard !listeners.groupLinks.contains(where: { $0.identifier == identifier }) else { return }
+        listeners.groupLinks.append(ParameterGroupLink(group: group, identifier: identifier))
+    }
+
+    /// By identifier, so a deinitializing group can detach without loading its unowned reference.
+    func detach(from groupIdentifier: ObjectIdentifier) {
+        listeners.groupLinks.removeAll { $0.identifier == groupIdentifier }
     }
 
     public var defaultValue: ValueType
@@ -146,21 +210,25 @@ public class GenericParameter<T: Codable & Equatable>: Parameter {
 public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParameter<T> {
     public typealias ValueType = T
 
-    public let minValuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Read-only: changes go through `min`.
+    public var minValuePublisher: AnyPublisher<ValueType, Never> { minValueSubject.eraseToAnyPublisher() }
+    private let minValueSubject = PassthroughSubject<ValueType, Never>()
 
     public var min: ValueType {
         didSet {
-            minValuePublisher.send(min)
-            valuePublisher.send(value)
+            minValueSubject.send(min)
+            notifyValueChanged()
         }
     }
 
-    public let maxValuePublisher = PassthroughSubject<ValueType, Never>()
+    /// Read-only: changes go through `max`.
+    public var maxValuePublisher: AnyPublisher<ValueType, Never> { maxValueSubject.eraseToAnyPublisher() }
+    private let maxValueSubject = PassthroughSubject<ValueType, Never>()
 
     public var max: ValueType {
         didSet {
-            maxValuePublisher.send(max)
-            valuePublisher.send(value)
+            maxValueSubject.send(max)
+            notifyValueChanged()
         }
     }
 
@@ -192,4 +260,18 @@ public class GenericParameterWithMinMax<T: Codable & Equatable>: GenericParamete
     override public func clone() -> any Parameter {
         GenericParameterWithMinMax<ValueType>(label, value, min, max, controlType, description)
     }
+}
+
+// Outside GenericParameter, so they are not generic: a type nested in a generic class needs a
+// metadata lookup on every access.
+
+private struct ParameterValueObserver {
+    let owner: ObjectIdentifier
+    let registration: UInt64
+    let handler: () -> Void
+}
+
+private struct ParameterGroupLink {
+    unowned let group: ParameterGroup
+    let identifier: ObjectIdentifier
 }
