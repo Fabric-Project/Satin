@@ -28,7 +28,7 @@ vertex BasicColorVertexData basicColorVertex(
     out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 #endif
 
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
 #if defined(HAS_COLOR)
     out.color = in.color;
 #endif

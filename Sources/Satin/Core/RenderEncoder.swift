@@ -1005,7 +1005,7 @@ open class RenderEncoder {
 
     /// Whether `renderable` may be seen in any of `frusta`: always, when it isn't frustum culled.
     private static func mayBeSeen(_ renderable: Renderable, in frusta: ContiguousArray<ViewFrustum>) -> Bool {
-        guard renderable.frustumCulled, !frusta.isEmpty else { return true }
+        guard renderable.mayBeFrustumCulled, !frusta.isEmpty else { return true }
         let bounds = renderable.worldBounds
         for frustum in frusta where frustum.mayContain(bounds) {
             return true
@@ -1082,7 +1082,7 @@ open class RenderEncoder {
                     submission.shadowOccurrences.append(RecordedShadowOccurrence(packets: packets,
                                                                                   occurrence: renderable.occurrence,
                                                                                   bounds: renderable.worldBounds,
-                                                                                  frustumCulled: renderable.frustumCulled))
+                                                                                  frustumCulled: renderable.mayBeFrustumCulled))
                 }
             }
             try recordColorPasses(of: renderable, renderLayer: renderable.renderLayer.rawValue, routes: routes, recorder: recorder, views: submission.views, frusta: frusta, isRecorded: true)

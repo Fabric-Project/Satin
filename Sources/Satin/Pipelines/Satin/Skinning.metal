@@ -48,7 +48,12 @@ static inline float3x3 satinSkinNormalMatrix(float4x4 skin) {
 #define SATIN_SKIN_DIRECTION(v, direction) (direction)
 #define SATIN_PREVIOUS_SKIN_TRANSFORM(v, position) (position)
 #endif
+// Geometry without normals, such as points with only positions, faces +z.
+#if defined(HAS_NORMAL)
 #define SATIN_SKIN_NORMAL(v) SATIN_SKIN_DIRECTION(v, v.normal)
+#else
+#define SATIN_SKIN_NORMAL(v) SATIN_SKIN_DIRECTION(v, float3(0.0, 0.0, 1.0))
+#endif
 
 // Where `v` was last frame, in object space then clip space, for velocity. Custom10 is
 // VertexAttributeIndex.PreviousPosition: last frame's position for geometry deformed on the CPU.
@@ -63,4 +68,12 @@ static inline float3x3 satinSkinNormalMatrix(float4x4 skin) {
 #define SATIN_PREVIOUS_CLIP_POSITION(v) (vertexUniforms[amp_id].previousViewProjectionMatrix * instanceUniforms[instanceID].previousModelMatrix * SATIN_PREVIOUS_POSITION(v))
 #else
 #define SATIN_PREVIOUS_CLIP_POSITION(v) (vertexUniforms[amp_id].previousModelViewProjectionMatrix * SATIN_PREVIOUS_POSITION(v))
+#endif
+
+// A point's size in pixels: the material's `size` times the vertex's own when the geometry has
+// one. Custom9 is VertexAttributeIndex.PointSize, a points' `.size` attribute.
+#if defined(HAS_CUSTOM9)
+#define SATIN_POINT_SIZE(v, size) ((size) * v.custom9)
+#else
+#define SATIN_POINT_SIZE(v, size) (size)
 #endif

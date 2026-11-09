@@ -71,7 +71,7 @@ vertex CustomVertexData standardVertex(
 
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
 
 #ifdef OUTPUT_VELOCITY
     out.currentClipPos = out.position;

@@ -188,12 +188,19 @@ open class Geometry {
         didSet {
             positionAttribute = vertexAttributes[.Position]
             // Clear first: setting the flag tells meshes, which read the new layout at once.
-            cachedVertexDescriptor = nil
+            if !replacementKeepsVertexLayout {
+                cachedVertexDescriptor = nil
+            }
             _updateVertexBuffers = true
         }
     }
+    /// Set while one published attribute replaces another with the same layout: the vertex
+    /// descriptor stays as it is, so points published every frame don't rebuild it.
+    private var replacementKeepsVertexLayout = false
     private var bufferAttributes: [VertexAttributeIndex: BufferAttribute] = [:]
     private var interleavedAttributes: [VertexAttributeIndex: InterleavedBufferAttribute] = [:]
+    /// Bound as published: never uploaded or observed, since their contents never change.
+    private var publishedAttributes: [VertexAttributeIndex: PublishedAttribute] = [:]
 
     /// Registered with every buffer this geometry uses, which notify it through it; see
     /// `GeometryBufferObserver`. Created on first registration, so nil means none.
@@ -345,6 +352,21 @@ open class Geometry {
         return _bounds
     }
 
+    /// Bounds given from outside, used instead of any computed from the positions: for positions
+    /// with no CPU copy to scan, such as published ones.
+    public var suppliedBounds: Bounds? {
+        didSet {
+            updateBounds = true
+            onUpdate.send(self)
+        }
+    }
+
+    /// Whether `bounds` covers what is drawn. False for published positions without
+    /// `suppliedBounds`; a mesh drawing it is then never frustum culled.
+    public var boundsAreKnown: Bool {
+        suppliedBounds != nil || !(positionAttribute is PublishedAttribute)
+    }
+
     // MARK: - Init
 
     public init(context: Context, primitiveType: MTLPrimitiveType = .triangle, windingOrder: MTLWinding = .counterClockwise) {
@@ -352,6 +374,46 @@ open class Geometry {
         self.windingOrder = windingOrder
         self.primitiveType = primitiveType
         setup()
+    }
+
+    /// Draws `points` as `primitiveType`, binding their published attributes without copying them.
+    public convenience init(context: Context, points: Points, primitiveType: MTLPrimitiveType) {
+        self.init(context: context, primitiveType: primitiveType)
+        setPoints(points)
+    }
+
+    /// The slots the last `setPoints` bound, to unbind the ones the next points don't have.
+    private var boundPointSlots = ContiguousArray<VertexAttributeIndex>()
+
+    /// Draws `points` from now on, in place of whatever points, bounds and indices this geometry
+    /// had: every attribute in its resolved slot, and the topology's indices where they apply.
+    /// Strips need a strip primitive (`.lineStrip`, `.triangleStrip`); other primitives draw the
+    /// points in order. Draws already recorded keep the points they were recorded with.
+    public func setPoints(_ points: Points) {
+        for index in boundPointSlots where !points.slots.contains(where: { $0.index == index }) {
+            removeAttribute(index)
+        }
+        boundPointSlots.removeAll(keepingCapacity: true)
+        for slot in points.slots {
+            addAttribute(slot.attribute, for: slot.index)
+            boundPointSlots.append(slot.index)
+        }
+
+        switch points.topology {
+            case .implicit:
+                setElements(nil)
+            case .indexed:
+                setElements(points.elements)
+            case .strips:
+                setElements(primitiveType == .lineStrip || primitiveType == .triangleStrip ? points.elements : nil)
+        }
+
+        switch points.bounds {
+            case let .known(bounds):
+                suppliedBounds = bounds
+            case .unknown:
+                suppliedBounds = nil
+        }
     }
 
     open func setup() {
@@ -447,18 +509,33 @@ open class Geometry {
 
     public func addAttribute(_ attribute: VertexAttribute, for index: VertexAttributeIndex) {
         let replacedAttribute = vertexAttributes[index]
+        if let replacedPublished = replacedAttribute as? PublishedAttribute,
+           let published = attribute as? PublishedAttribute,
+           replacedPublished.layout == published.layout,
+           replacedPublished.stepRate == published.stepRate,
+           replacedPublished.stepFunction == published.stepFunction {
+            replacementKeepsVertexLayout = true
+        }
         vertexAttributes[index] = attribute
+        replacementKeepsVertexLayout = false
         if let bufferAttribute = attribute as? BufferAttribute {
             bufferAttributes[index] = bufferAttribute
             interleavedAttributes.removeValue(forKey: index)
+            publishedAttributes.removeValue(forKey: index)
             bufferAttribute.observers.add(bufferObserver)
         } else if let interleavedBuffer = attribute as? InterleavedBufferAttribute {
             interleavedAttributes[index] = interleavedBuffer
             bufferAttributes.removeValue(forKey: index)
+            publishedAttributes.removeValue(forKey: index)
             interleavedBuffer.parent.observers.add(bufferObserver)
+        } else if let publishedAttribute = attribute as? PublishedAttribute {
+            publishedAttributes[index] = publishedAttribute
+            bufferAttributes.removeValue(forKey: index)
+            interleavedAttributes.removeValue(forKey: index)
         } else {
             bufferAttributes.removeValue(forKey: index)
             interleavedAttributes.removeValue(forKey: index)
+            publishedAttributes.removeValue(forKey: index)
         }
         if let replacedAttribute, replacedAttribute !== attribute {
             stopObservingIfUnused(replacedAttribute)
@@ -470,6 +547,11 @@ open class Geometry {
             vertexAttributes.removeValue(forKey: index)
             bufferAttributes.removeValue(forKey: index)
             interleavedAttributes.removeValue(forKey: index)
+            if publishedAttributes.removeValue(forKey: index) != nil {
+                // Nothing re-uploads a published slot, so release its buffer here.
+                vertexBuffers.removeValue(forKey: index.bufferIndex)
+                vertexBufferOffsets.removeValue(forKey: index.bufferIndex)
+            }
             stopObservingIfUnused(attribute)
         }
     }
@@ -479,6 +561,12 @@ open class Geometry {
         vertexAttributes.removeAll()
         bufferAttributes.removeAll()
         interleavedAttributes.removeAll()
+        for index in publishedAttributes.keys {
+            vertexBuffers.removeValue(forKey: index.bufferIndex)
+            vertexBufferOffsets.removeValue(forKey: index.bufferIndex)
+        }
+        publishedAttributes.removeAll()
+        boundPointSlots.removeAll()
     }
 
     /// Unregisters from the buffers behind every attribute.
@@ -535,6 +623,9 @@ open class Geometry {
         for attribute in interleavedAttributes.values {
             setupInterleavedBufferAttribute(device, attribute: attribute)
         }
+        for (attributeIndex, attribute) in publishedAttributes {
+            setupPublishedAttribute(attribute, for: attributeIndex)
+        }
     }
 
     // MARK: - Setup Index Buffer
@@ -587,6 +678,16 @@ open class Geometry {
         }
     }
 
+    /// Binds a published attribute's buffer as it is, at its layout's offset: nothing to upload.
+    private func setupPublishedAttribute(_ attribute: PublishedAttribute, for index: VertexAttributeIndex) {
+        let bufferIndex = index.bufferIndex
+        guard vertexBuffers[bufferIndex] !== attribute.buffer
+              || vertexBufferOffsets[bufferIndex] != attribute.layout.byteOffset
+        else { return }
+        vertexBuffers[bufferIndex] = attribute.buffer
+        vertexBufferOffsets[bufferIndex] = attribute.layout.byteOffset
+    }
+
     // MARK: - Vertex Descriptor
 
     open func generateVertexDescriptor() -> MTLVertexDescriptor {
@@ -616,6 +717,22 @@ open class Geometry {
             descriptor.layouts[bufferIndex].stride = interleavedBuffer.stride
             descriptor.layouts[bufferIndex].stepRate = interleavedBuffer.stepRate
             descriptor.layouts[bufferIndex].stepFunction = interleavedBuffer.stepFunction
+        }
+
+        // A pulled attribute is bound but not described: its shader reads the buffer itself.
+        // The buffer is bound at the layout's offset, so the attribute starts at 0 within it.
+        for (attributeIndex, publishedAttribute) in publishedAttributes {
+            guard let format = publishedAttribute.layout.vertexFormat else { continue }
+            let index = attributeIndex.rawValue
+            let bufferIndex = attributeIndex.bufferIndex.rawValue
+
+            descriptor.attributes[index].format = format
+            descriptor.attributes[index].offset = 0
+            descriptor.attributes[index].bufferIndex = bufferIndex
+
+            descriptor.layouts[bufferIndex].stride = publishedAttribute.layout.byteStride
+            descriptor.layouts[bufferIndex].stepRate = publishedAttribute.stepRate
+            descriptor.layouts[bufferIndex].stepFunction = publishedAttribute.stepFunction
         }
 
         return descriptor
@@ -680,6 +797,9 @@ open class Geometry {
     // MARK: - Bounds
 
     open func computeBounds() -> Bounds {
+        if let suppliedBounds {
+            return suppliedBounds
+        }
         if isSkinned, let jointPalette {
             if let jointRestBounds = skinningSource.jointRestBounds() {
                 return Self.posedBounds(jointRestBounds: jointRestBounds, palette: jointPalette)

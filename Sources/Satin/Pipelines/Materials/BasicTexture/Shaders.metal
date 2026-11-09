@@ -32,7 +32,7 @@ vertex BasicTextureVertexData basicTextureVertex(
 #endif
 
     out.texcoord = in.texcoord;
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
 #if defined(HAS_COLOR)
     out.color = in.color;
 #endif

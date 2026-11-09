@@ -73,7 +73,10 @@ final class StrokeTessellationTests: XCTestCase {
         let corner = simd_float3(1, 0, 0)
         var data = tessellate([[0, 0, 0], corner, [1, 1, 0]], capStyle: 0)
         defer { freeStrokeGeometryData(&data) }
-        let rim = (0 ..< Int(data.vertexCount)).map { data.vertexData[$0] }.filter { abs(simd_distance($0.position, corner) - 0.1) < 1e-4 }
+        // The inner rails' ends are a half width from the corner too, on the other edge: keep the outer side only.
+        let outward = simd_normalize(simd_float3(1, -1, 0))
+        let rim = (0 ..< Int(data.vertexCount)).map { data.vertexData[$0] }
+            .filter { abs(simd_distance($0.position, corner) - 0.1) < 1e-4 && simd_dot($0.position - corner, outward) > 0 }
         XCTAssertGreaterThan(rim.count, 2)
         XCTAssertTrue(rim.allSatisfy { $0.uv.y == rim[0].uv.y })
         XCTAssertTrue(rim[0].uv.y == 0 || rim[0].uv.y == 1)

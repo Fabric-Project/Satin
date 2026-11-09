@@ -44,7 +44,6 @@ public enum VertexBufferIndex: Int, CaseIterable, Codable {
     case Custom8 = 28
     case Custom9 = 29
     case Custom10 = 30
-    case Custom11 = 31
 
     public var label: String {
         String(describing: self)
@@ -77,7 +76,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
     case Custom8 = 23
     case Custom9 = 24
     case Custom10 = 25
-    case Custom11 = 26
 
     public var description: String {
         String(describing: self).titleCase.replacingOccurrences(of: " ", with: "")
@@ -199,8 +197,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 return "Invalid"
             case .Custom10:
                 return "Invalid"
-            case .Custom11:
-                return "Invalid"
         }
     }
 
@@ -264,8 +260,6 @@ public enum VertexAttributeIndex: Int, CaseIterable, Codable {
                 return .Custom9
             case .Custom10:
                 return .Custom10
-            case .Custom11:
-                return .Custom11
         }
     }
 }
@@ -276,6 +270,10 @@ public extension VertexAttributeIndex {
     /// position, so per-vertex motion shows up in motion blur. Reserves the Custom10 slot
     /// (`HAS_CUSTOM10`, `in.custom10` in shaders); supply it as float3 or float4.
     static let PreviousPosition: VertexAttributeIndex = .Custom10
+
+    /// Each point's size in pixels, multiplying a material's point size. Reserves the Custom9 slot
+    /// (`HAS_CUSTOM9`, `in.custom9` in shaders); supply it as one float per point.
+    static let PointSize: VertexAttributeIndex = .Custom9
 }
 
 public enum VertexTextureIndex: Int {

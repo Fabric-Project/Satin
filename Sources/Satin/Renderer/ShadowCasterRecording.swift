@@ -96,7 +96,7 @@ final class ShadowCasterRecording {
         casters.removeAll(keepingCapacity: true)
         for renderable in renderables where renderable.castShadow {
             var reached = allPasses
-            if renderable.frustumCulled {
+            if renderable.mayBeFrustumCulled {
                 let bounds = renderable.worldBounds
                 reached = 0
                 var shadowReaches = false

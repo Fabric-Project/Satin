@@ -27,7 +27,7 @@ vertex BasicPointCustomVertexData basicPointVertex(
 #else
     out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * position;
 #endif
-    out.pointSize = uniforms.size + 1.0;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.size) + 1.0;
     return out;
 }
 

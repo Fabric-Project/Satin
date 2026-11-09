@@ -126,6 +126,7 @@ struct ContentView: View {
                     ExampleItem(id: "octasphere", title: "Octasphere", systemImage: "globe") { OctasphereRendererView() },
                     ExampleItem(id: "uv-disk", title: "UV Disk", systemImage: "hexagon.fill") { DiskRendererView() },
                     ExampleItem(id: "strokes", title: "Strokes", systemImage: "scribble") { StrokeRendererView() },
+                    ExampleItem(id: "published-points", title: "Published Points", systemImage: "circle.grid.3x3") { PublishedPointsRendererView() },
                     ExampleItem(id: "export-geometry", title: "Export Geometry", systemImage: "square.and.arrow.up") { ExportGeometryRendererView() }
                 ]
             )

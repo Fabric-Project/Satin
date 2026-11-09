@@ -332,6 +332,8 @@ open class Mesh: Renderable {
         geometry.bounds
     }
 
+    override open var cullingBoundsAreKnown: Bool { geometry.boundsAreKnown }
+
     override open func computeLocalBounds() -> Bounds {
         transformBounds(bounds, localMatrix)
     }

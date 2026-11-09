@@ -77,6 +77,13 @@ open class Renderable : Object {
     /// cover what is drawn. Bounds that are empty or not finite are never culled.
     public var frustumCulled = true
 
+    /// Whether this renderable's bounds cover what it draws, so culling can judge it. False, for
+    /// example, for a mesh of points a GPU pass wrote with no bounds given: it is never culled.
+    open var cullingBoundsAreKnown: Bool { true }
+
+    /// Whether passes may cull this renderable: it asks to be, and its bounds can be judged.
+    final var mayBeFrustumCulled: Bool { frustumCulled && cullingBoundsAreKnown }
+
 
     open var cullMode: MTLCullMode = .back
 
