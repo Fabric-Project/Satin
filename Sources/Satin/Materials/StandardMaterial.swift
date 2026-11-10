@@ -210,6 +210,8 @@ open class StandardMaterial: Material {
         self.specular = specular
         self.occlusion = occlusion
         self.emissiveColor = emissiveColor
+        // Like the other materials: otherwise nothing writes Point Size until someone sets it.
+        self.pointSize = 1.0
         var slots = [MTLTexture?](repeating: nil, count: PBRTextureType.count)
         for (type, texture) in maps {
             slots[type.index] = texture
@@ -247,6 +249,7 @@ open class StandardMaterial: Material {
         self.specular = 0.5
         self.occlusion = 1.0
         self.emissiveColor = .zero
+        self.pointSize = 1.0
         lighting = true
         blending = .disabled
         initalize()

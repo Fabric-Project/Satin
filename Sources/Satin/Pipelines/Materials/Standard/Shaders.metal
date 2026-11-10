@@ -96,10 +96,18 @@ fragment FragmentOutput standardFragment(
 #endif
 #include "Chunks/PbrTextures.metal"
     constant StandardUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     float4 outColor;
 #include "Chunks/PixelInfoInit.metal"
 #include "Chunks/PbrInit.metal"
+#if defined(SATIN_POINT_SPRITE_ENABLED)
+    {
+        const float4 sprited = SATIN_POINT_SPRITE(float4(pixel.material.baseColor, pixel.material.alpha));
+        pixel.material.baseColor = sprited.rgb;
+        pixel.material.alpha = sprited.a;
+    }
+#endif
 
     SurfaceOutput surface;
 #include "Chunks/PixelInfoSurfaceOutput.metal"

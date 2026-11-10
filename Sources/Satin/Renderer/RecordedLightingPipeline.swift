@@ -57,7 +57,7 @@ final class RecordedLightingPipelineState {
         if let layout, let descriptor = layout.vertexDescriptor.copy() as? MTLVertexDescriptor {
             self.layout = DrawLayout(vertexDescriptor: descriptor, vertexLayoutID: layout.vertexLayoutID,
                                      skinning: layout.skinning, instancing: layout.instancing,
-                                     castShadow: layout.castShadow, receiveShadow: layout.receiveShadow)
+                                     castShadow: layout.castShadow, receiveShadow: layout.receiveShadow, points: layout.points)
         } else {
             self.layout = layout
         }
@@ -74,7 +74,8 @@ final class RecordedLightingPipelineState {
         case let (stored?, incoming?):
             guard stored.vertexLayoutID == incoming.vertexLayoutID,
                   stored.skinning == incoming.skinning, stored.instancing == incoming.instancing,
-                  stored.castShadow == incoming.castShadow, stored.receiveShadow == incoming.receiveShadow
+                  stored.castShadow == incoming.castShadow, stored.receiveShadow == incoming.receiveShadow,
+                  stored.points == incoming.points
             else { return false }
         default: return false
         }

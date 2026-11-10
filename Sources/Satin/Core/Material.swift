@@ -170,6 +170,26 @@ open class Material: Codable {
         set { renderingConfiguration.lighting = newValue }
     }
 
+    /// How each point this material draws is shaped; meshes of other primitives are unaffected.
+    /// Changing it compiles the shader again; a shader that doesn't take the point sprite chunk
+    /// draws square points whatever it is.
+    public var pointSprite: PointSprite {
+        get { renderingConfiguration.pointSprite }
+        set { renderingConfiguration.pointSprite = newValue }
+    }
+
+    /// How much of a `.disc` point's radius fades out at its edge, from 0 (antialiased only) to 1.
+    public var pointSpriteSoftness: Float = 0.1
+
+    /// What a `.texture` point samples, across the point from its top left.
+    public var pointSpriteTexture: MTLTexture? {
+        get { texture(at: .PointSprite) }
+        set { set(newValue, index: FragmentTextureIndex.PointSprite) }
+    }
+
+    /// Maps a point's coordinate to the point sprite texture's, as an image's texture transform does.
+    public var pointSpriteTextureTransform: simd_float4x4 = matrix_identity_float4x4
+
     public var directShadowCount: Int {
         get { renderingConfiguration.directShadowCount }
         set {
@@ -472,6 +492,9 @@ open class Material: Codable {
         recordDepthState(in: context, shadow: shadow)
         try recordBuffers(in: context, shader: shader, conservative: shadow || usage == nil)
         recordTextures(in: context, shader: shader, conservative: shadow || usage == nil)
+        if !shadow, context.layout?.points == true, pointSprite != .square {
+            try recordPointSprite(in: context)
+        }
         if let pipeline {
             context.setPipeline(pipeline, usage: usage)
             if defersLighting {
@@ -480,6 +503,18 @@ open class Material: Codable {
                                                                                  layout: context.layout))
             }
         }
+    }
+
+    /// The point sprite's uniforms, in the draw's arena, for a draw of points: written per draw, so
+    /// a change never reaches work already recorded. Its texture is an ordinary fragment texture slot.
+    private func recordPointSprite(in context: MaterialDrawContext) throws {
+        var uniforms = PointSpriteUniforms(textureTransform: pointSpriteTextureTransform, softness: pointSpriteSoftness)
+        let length = MemoryLayout<PointSpriteUniforms>.stride
+        let slice = try context.recorder.allocate(length: length)
+        withUnsafeBytes(of: &uniforms) { bytes in
+            if let address = bytes.baseAddress { slice.contents.copyMemory(from: address, byteCount: length) }
+        }
+        try context.setFragmentBuffer(slice.buffer, offset: slice.offset, index: .PointSprite)
     }
 
     private func recordUniforms(in context: MaterialDrawContext, shader: Shader, shadow: Bool, usage: PipelineResourceUsage?) throws {
@@ -819,6 +854,9 @@ open class Material: Codable {
         clone.onUpdate = onUpdate
 
         clone.renderingConfiguration = renderingConfiguration
+        clone.pointSpriteSoftness = pointSpriteSoftness
+        clone.pointSpriteTexture = pointSpriteTexture
+        clone.pointSpriteTextureTransform = pointSpriteTextureTransform
 
         clone.depthCompareFunction = depthCompareFunction
         clone.depthWriteEnabled = depthWriteEnabled

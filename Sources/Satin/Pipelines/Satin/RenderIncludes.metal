@@ -16,6 +16,7 @@
 #include "VertexUniforms.metal"
 #include "InstanceMatrixUniforms.metal"
 #include "Skinning.metal"
+#include "PointSprite.metal"
 
 // inject shadow shader
 // inject vertex shader

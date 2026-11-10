@@ -32,6 +32,8 @@ public enum FragmentBufferIndex: Int {
     case ProjectorTransforms = 17
     case DirectShadows = 18
     case DirectShadowMatrices = 19
+    /// A material's point sprite uniforms (`PointSpriteUniforms`).
+    case PointSprite = 20
 }
 
 public enum FragmentTextureIndex: Int {
@@ -70,6 +72,8 @@ public enum FragmentTextureIndex: Int {
     case Shadow7 = 32
     case Projector0 = 33
     case DirectShadow0 = 41
+    /// A material's point sprite texture: past every direct shadow texture.
+    case PointSprite = 89
 }
 
 public enum FragmentSamplerIndex: Int {

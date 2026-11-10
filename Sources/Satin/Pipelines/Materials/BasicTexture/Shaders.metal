@@ -31,7 +31,12 @@ vertex BasicTextureVertexData basicTextureVertex(
     out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 #endif
 
+#if defined(HAS_TEXCOORD)
     out.texcoord = in.texcoord;
+#else
+    // Layouts without texture coordinates, such as points, get zero.
+    out.texcoord = float2(0.0);
+#endif
     out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
 #if defined(HAS_COLOR)
     out.color = in.color;
@@ -44,15 +49,16 @@ fragment FragmentOutput basicTextureFragment(
     constant BasicTextureUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]],
     texture2d<float> tex [[texture(FragmentTextureCustom0)]],
     sampler texSampler [[sampler(FragmentSamplerCustom0)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     const float2 uv = applyTextureTransform(in.texcoord, uniforms.textureTransform);
     const float4 texSample = tex.sample(texSampler, uv);
     if (texSample.a == 0.0) { discard_fragment(); }
 
 #if defined(HAS_COLOR)
-    const float4 color = uniforms.color * in.color * texSample;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color * in.color * texSample);
 #else
-    const float4 color = uniforms.color * texSample;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color * texSample);
 #endif
     return buildColorFragmentOutput(half4(color) SATIN_ALPHA_OIT_FORWARD_ARGS);
 }

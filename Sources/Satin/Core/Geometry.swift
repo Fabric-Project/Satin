@@ -384,6 +384,10 @@ open class Geometry {
 
     /// The slots the last `setPoints` bound, to unbind the ones the next points don't have.
     private var boundPointSlots = ContiguousArray<VertexAttributeIndex>()
+    /// The last points connect to nothing (an empty index list or strips), so there is nothing to draw.
+    private var drawsNothing = false
+    /// The last points' GPU-written count, drawn instead of `vertexCount`.
+    private var drawArguments: PointsDrawArguments?
 
     /// Draws `points` from now on, in place of whatever points, bounds and indices this geometry
     /// had: every attribute in its resolved slot, and the topology's indices where they apply.
@@ -399,6 +403,8 @@ open class Geometry {
             boundPointSlots.append(slot.index)
         }
 
+        drawsNothing = points.drawsNothing
+        drawArguments = points.drawArguments
         switch points.topology {
             case .implicit:
                 setElements(nil)
@@ -461,6 +467,11 @@ open class Geometry {
     /// Records the draw call: over the context's elements when given, else indexed when there is
     /// an index buffer, otherwise by vertex count.
     final func recordDrawCall(in context: GeometryDrawContext) {
+        guard !drawsNothing else { return }
+        if let drawArguments, context.elements == nil {
+            context.drawPrimitives(type: primitiveType, indirectBuffer: drawArguments.buffer, indirectBufferOffset: drawArguments.offset)
+            return
+        }
         let elements = context.elements ?? self
         if let indexBuffer = elements.indexBuffer, let indexType = elements.indexType {
             let indexCount = elements.indexCount
@@ -567,6 +578,8 @@ open class Geometry {
         }
         publishedAttributes.removeAll()
         boundPointSlots.removeAll()
+        drawsNothing = false
+        drawArguments = nil
     }
 
     /// Unregisters from the buffers behind every attribute.

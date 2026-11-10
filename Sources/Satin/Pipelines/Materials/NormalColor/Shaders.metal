@@ -26,13 +26,14 @@ vertex NormalColorVertexData normalColorVertex(
     out.normal = vertexUniforms[amp_id].normalMatrix * SATIN_SKIN_NORMAL(in);
 #endif
 
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
     return out;
 }
 
 fragment half4 normalColorFragment(
     NormalColorVertexData in [[stage_in]],
-    constant NormalColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
+    constant NormalColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA) {
     const float3 normal = normalize(in.normal);
-    return half4(half3(mix(normal, abs(normal), float(uniforms.absolute))), 1.0h);
+    return SATIN_POINT_SPRITE(half4(half3(mix(normal, abs(normal), float(uniforms.absolute))), 1.0h));
 }

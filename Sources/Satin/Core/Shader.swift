@@ -169,6 +169,7 @@ open class Shader {
         let instancing: Bool
         let castShadow: Bool
         let receiveShadow: Bool
+        let points: Bool
     }
 
     /// Pipelines for meshes drawn with a vertex layout, skinning, instancing or shadow settings
@@ -679,6 +680,7 @@ open class Shader {
               || layout.instancing != renderingConfiguration.instancing
               || castShadow != renderingConfiguration.castShadow
               || receiveShadow != renderingConfiguration.receiveShadow
+              || layout.points != renderingConfiguration.points
               || layout.vertexLayoutID != configuredVertexLayout.layoutID(for: renderingConfiguration.vertexDescriptor)
         else { return getPipeline(renderContext: renderContext, shadow: shadow) }
 
@@ -689,7 +691,8 @@ open class Shader {
             skinning: layout.skinning,
             instancing: layout.instancing,
             castShadow: castShadow,
-            receiveShadow: receiveShadow
+            receiveShadow: receiveShadow,
+            points: layout.points
         )
         var existingVariantIndex: Int?
         for index in layoutVariantKeys.indices where layoutVariantKeys[index] == key {
@@ -707,6 +710,7 @@ open class Shader {
         variantConfiguration.rendering.instancing = layout.instancing
         variantConfiguration.rendering.castShadow = castShadow
         variantConfiguration.rendering.receiveShadow = receiveShadow
+        variantConfiguration.rendering.points = layout.points
         variantConfiguration.rendering.vertexDescriptor = layout.vertexDescriptor
         let savedConfiguration = configuration
         configuration = variantConfiguration

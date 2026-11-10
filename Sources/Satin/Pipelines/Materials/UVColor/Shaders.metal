@@ -23,11 +23,17 @@ vertex UVColorVertexData uvcolorVertex(
     out.position = vertexUniforms[amp_id].modelViewProjectionMatrix * SATIN_SKIN_POSITION(in);
 #endif
 
+#if defined(HAS_TEXCOORD)
     out.texcoord = in.texcoord;
-    out.pointSize = uniforms.pointSize;
+#else
+    // Layouts without texture coordinates, such as points, get zero.
+    out.texcoord = float2(0.0);
+#endif
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
     return out;
 }
 
-fragment half4 uvcolorFragment(UVColorVertexData in [[stage_in]]) {
-    return half4(half2(in.texcoord), 0.0h, 1.0h);
+fragment half4 uvcolorFragment(UVColorVertexData in [[stage_in]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA) {
+    return SATIN_POINT_SPRITE(half4(half2(in.texcoord), 0.0h, 1.0h));
 }

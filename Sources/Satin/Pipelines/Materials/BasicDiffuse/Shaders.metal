@@ -112,7 +112,7 @@ vertex BasicDiffuseVertexData basicDiffuseVertex(
 
     BasicDiffuseVertexData out;
     out.position = vertexUniforms[amp_id].viewProjectionMatrix * worldPosition;
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
     out.worldNormal = worldNormal;
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
@@ -142,11 +142,12 @@ fragment FragmentOutput basicDiffuseFragment(
     array<depth2d<float>, DIRECT_SHADOW_TEXTURE_COUNT> directShadowTextures [[texture(FragmentTextureDirectShadow0)]],
 #endif
     constant BasicDiffuseUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
 #if defined(HAS_COLOR)
-    const float4 color = uniforms.color * in.color;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color * in.color);
 #else
-    const float4 color = uniforms.color;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color);
 #endif
     float4 outColor = float4(0.0, 0.0, 0.0, color.a);
 

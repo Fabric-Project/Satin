@@ -49,6 +49,10 @@ public struct RenderingConfiguration: Hashable {
     var directShadowTextureCount: Int = 0
     var projectorCount: Int = 0
 
+    // Points: whether the draw is of points, and how the material shapes them (`PointSprite`)
+    var points: Bool = false
+    var pointSprite: PointSprite = .square
+
     var defines: [ShaderDefine] = []
     var constants: [String] = []
 
@@ -67,6 +71,10 @@ public struct RenderingConfiguration: Hashable {
         hasher.combine(directShadowCount)
         hasher.combine(directShadowTextureCount)
         hasher.combine(projectorCount)
+
+        // Only when set, so configurations without them hash exactly as before.
+        if points { hasher.combine(points) }
+        if pointSprite != .square { hasher.combine(pointSprite) }
 
         if !defines.isEmpty { hasher.combine(defines) }
         if !constants.isEmpty { hasher.combine(constants) }
@@ -92,6 +100,12 @@ public struct RenderingConfiguration: Hashable {
         if directShadowCount > 0 { results.append(ShaderDefine(key: "DIRECT_SHADOW_COUNT", value: NSNumber(value: directShadowCount))) }
         if directShadowTextureCount > 0 { results.append(ShaderDefine(key: "DIRECT_SHADOW_TEXTURE_COUNT", value: NSNumber(value: directShadowTextureCount))) }
         if projectorCount > 0 { results.append(ShaderDefine(key: "PROJECTOR_COUNT", value: NSNumber(value: projectorCount))) }
+        if points { results.append(ShaderDefine(key: "SATIN_POINT_PRIMITIVE", value: NSString(string: "true"))) }
+        switch pointSprite {
+            case .square: break
+            case .disc: results.append(ShaderDefine(key: "SATIN_POINT_SPRITE_DISC", value: NSString(string: "true")))
+            case .texture: results.append(ShaderDefine(key: "SATIN_POINT_SPRITE_TEXTURE", value: NSString(string: "true")))
+        }
 
         return results
     }
@@ -114,6 +128,8 @@ extension RenderingConfiguration: Equatable {
             lhs.directShadowCount == rhs.directShadowCount &&
             lhs.directShadowTextureCount == rhs.directShadowTextureCount &&
             lhs.projectorCount == rhs.projectorCount &&
+            lhs.points == rhs.points &&
+            lhs.pointSprite == rhs.pointSprite &&
             lhs.defines == rhs.defines &&
             lhs.constants == rhs.constants &&
             lhs.tessellationDescriptor == rhs.tessellationDescriptor

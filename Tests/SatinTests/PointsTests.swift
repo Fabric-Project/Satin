@@ -45,6 +45,41 @@ final class PointsTests: XCTestCase {
         }
     }
 
+    func testStripsMustBeInOrderAndApart() throws {
+        let context = try makeContext()
+        let position = try floats3(count: 4, context)
+        XCTAssertThrowsError(try Points(attributes: [(.position, position)],
+                                        topology: .strips([PointStrip(range: 2 ..< 4, closed: false), PointStrip(range: 0 ..< 2, closed: false)]),
+                                        bounds: .unknown)) {
+            XCTAssertEqual($0 as? PointsError, .stripsOutOfOrder)
+        }
+        XCTAssertThrowsError(try Points(attributes: [(.position, position)],
+                                        topology: .strips([PointStrip(range: 0 ..< 3, closed: false), PointStrip(range: 2 ..< 4, closed: false)]),
+                                        bounds: .unknown)) {
+            XCTAssertEqual($0 as? PointsError, .stripsOutOfOrder)
+        }
+    }
+
+    func testDrawArgumentsMustLieInsideTheirBuffer() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let buffer = try XCTUnwrap(device.makeBuffer(length: 32, options: .storageModeShared))
+        XCTAssertNoThrow(try PointsDrawArguments(buffer: buffer, offset: 0))
+        XCTAssertNoThrow(try PointsDrawArguments(buffer: buffer, offset: 16))
+        XCTAssertThrowsError(try PointsDrawArguments(buffer: buffer, offset: 20)) { XCTAssertEqual($0 as? PointsError, .drawArgumentsOutOfRange) }
+        XCTAssertThrowsError(try PointsDrawArguments(buffer: buffer, offset: 2)) { XCTAssertEqual($0 as? PointsError, .drawArgumentsOutOfRange) }
+        XCTAssertThrowsError(try PointsDrawArguments(buffer: buffer, offset: -4)) { XCTAssertEqual($0 as? PointsError, .drawArgumentsOutOfRange) }
+    }
+
+    func testEmptyTopologyDrawsNothing() throws {
+        let context = try makeContext()
+        let position = try floats3(count: 3, context)
+        let unconnected = try Points(attributes: [(.position, position)], topology: .indexed([]), bounds: .unknown)
+        XCTAssertTrue(unconnected.drawsNothing)
+        XCTAssertTrue(try Points(attributes: [(.position, position)], topology: .strips([]), bounds: .unknown).drawsNothing)
+        XCTAssertFalse(try Points(attributes: [(.position, position)], topology: .implicit, bounds: .unknown).drawsNothing)
+        XCTAssertNil(Geometry(context: context, points: unconnected, primitiveType: .triangle).elementBuffer)
+    }
+
     func testStripsBecomeIndicesWithARestartBetweenEach() throws {
         let context = try makeContext()
         let points = try Points(attributes: [(.position, try floats3(count: 7, context))],

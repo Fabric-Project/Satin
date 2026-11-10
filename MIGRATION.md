@@ -270,3 +270,7 @@ The view renderer's existing error boundary reports failures through `errorDeleg
 ## Named material textures share binding storage
 
 The named texture properties on post-processing, motion-blur and AR post materials read and write the material's retained fragment texture slot directly. Replacing or clearing that slot with `set(_:index:)` is visible through the named property too; no separate `unowned` texture alias remains. Recorded packets still retain the textures captured at record time, independently of later material changes.
+
+## Draw layouts state points
+
+`DrawLayout.init` takes `points:`, whether the mesh draws points, which selects a material's point sprite variant. Pass `geometry.primitiveType == .point`, or the `points` of the layout being copied.

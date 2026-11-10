@@ -3,6 +3,7 @@
 //  Satin
 //
 
+import Metal
 import simd
 
 #if SWIFT_PACKAGE
@@ -86,6 +87,39 @@ public enum PointsError: Error, Equatable {
     case attributeTooShort(PointAttribute)
     /// A strip or index that reaches past the last point.
     case topologyOutOfRange
+    /// Strips that overlap or aren't in the order of their first points.
+    case stripsOutOfOrder
+    /// A GPU-written count with strips or indices, which would index past what was drawn.
+    case drawArgumentsNeedImplicitTopology
+    /// Draw arguments whose record isn't wholly inside their buffer, or at an offset that isn't a
+    /// multiple of 4.
+    case drawArgumentsOutOfRange
+}
+
+/// A count of points to draw that a GPU pass wrote: a whole `MTLDrawPrimitivesIndirectArguments`
+/// (count, instance count 1, vertex start 0, base instance 0) in `buffer` at `offset`, read by GPU
+/// passes and indirect draws. Immutable once published, like the points' attributes.
+public struct PointsDrawArguments {
+    public let buffer: MTLBuffer
+    public let offset: Int
+
+    /// Bytes in one record.
+    public static let recordLength = MemoryLayout<MTLDrawPrimitivesIndirectArguments>.stride
+
+    /// Throws `drawArgumentsOutOfRange` unless the record at `offset` is 4-byte aligned and lies
+    /// wholly inside `buffer`.
+    public init(buffer: MTLBuffer, offset: Int) throws {
+        guard offset >= 0, offset % 4 == 0,
+              offset <= buffer.length - Self.recordLength
+        else { throw PointsError.drawArgumentsOutOfRange }
+        self.buffer = buffer
+        self.offset = offset
+    }
+
+    /// The same record: the same buffer at the same offset.
+    public func isSameRecord(as other: PointsDrawArguments) -> Bool {
+        buffer === other.buffer && offset == other.offset
+    }
 }
 
 /// A published set of points: immutable, so it can be held, queued and drawn by any number of
@@ -103,14 +137,27 @@ public struct Points: Equatable {
     /// The topology's indices, made once: strips with a restart between each, or the index list.
     public let elements: ElementBuffer?
     public let bounds: PointsBounds
+    /// Where a GPU pass wrote how many of these points to draw, as `MTLDrawPrimitivesIndirectArguments`,
+    /// for points whose count only the GPU knows; `count` is then their capacity. Nil draws `count`.
+    public let drawArguments: PointsDrawArguments?
     /// Unique among everything published in this process; a new publish always has a new one.
     public let version: UInt64
 
     public var count: Int { position.count }
 
+    /// An index list or strips with nothing in them: these points connect to nothing, so draw nothing.
+    public var drawsNothing: Bool {
+        switch topology {
+            case .implicit: return false
+            case .indexed, .strips: return elements == nil
+        }
+    }
+
     /// Points with `attributes`, which must include `.position` and may each appear once. Every
-    /// attribute has at least as many elements as there are positions.
-    public init(attributes: [(PointAttribute, PublishedAttribute)], topology: PointTopology, bounds: PointsBounds) throws {
+    /// attribute has at least as many elements as there are positions. `drawArguments` gives a count a
+    /// GPU pass wrote, for implicit topology only.
+    public init(attributes: [(PointAttribute, PublishedAttribute)], topology: PointTopology, bounds: PointsBounds,
+                drawArguments: PointsDrawArguments? = nil) throws {
         guard let position = attributes.first(where: { $0.0 == .position })?.1 else { throw PointsError.missingPosition }
         guard attributes.filter({ $0.0 == .position }).count == 1 else { throw PointsError.duplicateAttribute(.position) }
 
@@ -142,6 +189,10 @@ public struct Points: Equatable {
         self.topology = topology
         self.elements = try Self.makeElements(for: topology, pointCount: position.count)
         self.bounds = bounds
+        if drawArguments != nil {
+            guard case .implicit = topology else { throw PointsError.drawArgumentsNeedImplicitTopology }
+        }
+        self.drawArguments = drawArguments
         self.version = PublishedVersion.next()
     }
 
@@ -153,6 +204,7 @@ public struct Points: Equatable {
         self.topology = .implicit
         self.elements = nil
         self.bounds = bounds
+        self.drawArguments = nil
         self.version = PublishedVersion.next()
     }
 
@@ -184,9 +236,13 @@ public struct Points: Equatable {
                 guard given.allSatisfy({ Int($0) < pointCount }) else { throw PointsError.topologyOutOfRange }
                 indices = given
             case let .strips(strips):
+                var previousEnd = 0
                 for strip in strips {
                     guard strip.range.lowerBound >= 0, strip.range.upperBound <= pointCount else { throw PointsError.topologyOutOfRange }
                     guard !strip.range.isEmpty else { continue }
+                    // In order and apart, so each point belongs to one strip, as tessellation needs.
+                    guard strip.range.lowerBound >= previousEnd else { throw PointsError.stripsOutOfOrder }
+                    previousEnd = strip.range.upperBound
                     if !indices.isEmpty { indices.append(stripRestartIndex) }
                     indices.append(contentsOf: strip.range.map { UInt32($0) })
                     if strip.closed, strip.range.count > 2 { indices.append(UInt32(strip.range.lowerBound)) }

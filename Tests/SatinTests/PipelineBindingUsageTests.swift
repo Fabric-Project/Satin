@@ -280,7 +280,7 @@ final class PipelineBindingUsageTests: XCTestCase {
         // Instancing the material isn't configured for: a layout variant, not the shader's own pipeline.
         let variantLayout = DrawLayout(vertexDescriptor: own.vertexDescriptor, vertexLayoutID: own.vertexLayoutID,
                                        skinning: own.skinning, instancing: !shader.renderingConfiguration.instancing,
-                                       castShadow: own.castShadow, receiveShadow: own.receiveShadow)
+                                       castShadow: own.castShadow, receiveShadow: own.receiveShadow, points: own.points)
         let ownPipeline = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: own))
 
         let compiled = try XCTUnwrap(shader.getPipeline(renderContext: context, shadow: false, layout: variantLayout))

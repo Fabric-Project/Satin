@@ -93,6 +93,41 @@ public struct Stroke: Equatable {
 }
 
 public extension Stroke {
+    /// One stroke per strip of `points` (one for points without strips), in `style`, closed where the
+    /// strip is or `closesAll`. Each point's `.size` multiplies the width and its `.color` colors it.
+    /// Nil when the CPU can't read the points: they must have been written by the CPU (see
+    /// `PublishedAttribute.isCPUWritten`), as a GPU pass's points can't be without a readback.
+    static func strokes(from points: Points, style: Style, closesAll: Bool) -> [Stroke]? {
+        guard let positionFloats = points.position.cpuFloats(components: 3) else { return nil }
+        var colorFloats: ContiguousArray<Float>?
+        if let color = points.attribute(.color) {
+            guard let floats = color.cpuFloats(components: 4) else { return nil }
+            colorFloats = floats
+        }
+        var sizes: ContiguousArray<Float>?
+        if let size = points.attribute(.size) {
+            guard let floats = size.cpuFloats(components: 1) else { return nil }
+            sizes = floats
+        }
+
+        let ranges: [(range: Range<Int>, closed: Bool)]
+        switch points.topology {
+            case let .strips(strips): ranges = strips.map { ($0.range, closesAll || $0.closed) }
+            case .implicit, .indexed: ranges = [(0 ..< points.count, closesAll)]
+        }
+        return ranges.compactMap { strip in
+            guard !strip.range.isEmpty else { return nil }
+            let strokePoints = ContiguousArray(strip.range.map {
+                simd_float3(positionFloats[$0 * 3], positionFloats[$0 * 3 + 1], positionFloats[$0 * 3 + 2])
+            })
+            let colors = colorFloats.map { floats in
+                ContiguousArray(strip.range.map { simd_float4(floats[$0 * 4], floats[$0 * 4 + 1], floats[$0 * 4 + 2], floats[$0 * 4 + 3]) })
+            } ?? []
+            let widthScales = sizes.map { values in ContiguousArray(strip.range.map { values[$0] }) } ?? []
+            return Stroke(points: strokePoints, closed: strip.closed, colors: colors, style: style, widthScales: widthScales)
+        }
+    }
+
     /// The distance along the line, including a closed stroke's closing side.
     var totalLength: Float {
         guard points.count >= 2 else { return 0 }
@@ -269,8 +304,10 @@ public final class StrokeGeometry: Geometry {
     /// a dot when its cap is round and nothing otherwise, and no strokes clear the geometry.
     ///
     /// `pieces` divides the result for animating with a joint palette. Each update makes new pieces,
-    /// and too many for `GeometryPieces` draws whole.
-    public func update(strokes: [Stroke], pieces: StrokePieces = .none) {
+    /// and too many for `GeometryPieces` draws whole. `bend` (0 to 1) tilts each normal toward its
+    /// edge, so a flat ribbon lights like a tube, as `GPUStrokeTessellation` does.
+    public func update(strokes: [Stroke], pieces: StrokePieces = .none, bend: Float = 0) {
+        let bendAngle = min(max(bend, 0), 1) * .pi / 2
         resetStrokeGeometryData(&geometryData)
         var strokeEnds: [Int] = []
         if pieces != .none { strokeEnds.reserveCapacity(strokes.count) }
@@ -298,6 +335,10 @@ public final class StrokeGeometry: Geometry {
                     }
                 }
             }
+            if bendAngle > 0, let vertices = geometryData.vertexData {
+                Self.bendNormals(vertices, range: firstVertex ..< Int(geometryData.vertexCount),
+                                 up: simd_normalize(stroke.style.up), angle: bendAngle)
+            }
             if stroke.textureRange != [0, 1], let vertices = geometryData.vertexData {
                 for vertexIndex in firstVertex ..< Int(geometryData.vertexCount) {
                     vertices[vertexIndex].uv.x = simd_mix(stroke.textureRange.x, stroke.textureRange.y, vertices[vertexIndex].uv.x)
@@ -315,6 +356,19 @@ public final class StrokeGeometry: Geometry {
             setPieces(Self.makePieces(pieces, strokes: strokes, strokeEnds: strokeEnds))
         } else if self.pieces != nil {
             setPieces(nil)
+        }
+    }
+
+    /// Each normal tilted by `angle` from `up` toward its vertex's offset from its core point
+    /// (`custom1`); a vertex on the line itself keeps facing `up`.
+    private static func bendNormals(_ vertices: UnsafeMutablePointer<StrokeVertex>, range: Range<Int>, up: simd_float3, angle: Float) {
+        let upAmount = cos(angle)
+        let outAmount = sin(angle)
+        for index in range {
+            var radial = vertices[index].position - vertices[index].custom1
+            radial -= simd_dot(radial, up) * up
+            let length = simd_length(radial)
+            vertices[index].normal = length > 1e-6 ? simd_normalize(up * upAmount + radial / length * outAmount) : up
         }
     }
 

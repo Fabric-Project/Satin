@@ -120,6 +120,13 @@ public struct GeometryDrawContext {
         storage.finishPacket(drawCall: .primitives(type, vertexStart: vertexStart, vertexCount: vertexCount, instanceCount: instanceCount))
     }
 
+    /// Draws as many vertices as the GPU wrote into `indirectBuffer`'s `MTLDrawPrimitivesIndirectArguments`
+    /// at `indirectBufferOffset`, so a count a compute pass produced needs no readback.
+    public func drawPrimitives(type: MTLPrimitiveType, indirectBuffer: MTLBuffer, indirectBufferOffset: Int) {
+        let indirectBufferIndex = storage.appendIndexBuffer(indirectBuffer)
+        storage.finishPacket(drawCall: .indirectPrimitives(type, indirectBufferIndex: indirectBufferIndex, indirectBufferOffset: indirectBufferOffset))
+    }
+
     public func drawIndexedPrimitives(type: MTLPrimitiveType, indexCount: Int, indexType: MTLIndexType, indexBuffer: MTLBuffer, indexBufferOffset: Int, instanceCount: Int) {
         let indexBufferIndex = storage.appendIndexBuffer(indexBuffer)
         storage.finishPacket(drawCall: .indexedPrimitives(

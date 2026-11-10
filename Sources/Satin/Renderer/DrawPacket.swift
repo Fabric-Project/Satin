@@ -31,6 +31,9 @@ struct DrawPacket {
 /// A packet's draw call, as data: vertices, indices, tessellation patches or mesh-shader threadgroups.
 enum PacketDrawCall {
     case primitives(MTLPrimitiveType, vertexStart: Int, vertexCount: Int, instanceCount: Int)
+    /// Vertices counted by the GPU: `indirectBufferIndex` is into the storage's buffers, holding
+    /// `MTLDrawPrimitivesIndirectArguments` at `indirectBufferOffset`.
+    case indirectPrimitives(MTLPrimitiveType, indirectBufferIndex: Int32, indirectBufferOffset: Int)
     case indexedPrimitives(MTLPrimitiveType, indexCount: Int, indexType: MTLIndexType, indexBufferIndex: Int32, indexBufferOffset: Int, instanceCount: Int)
     case patches(controlPointCount: Int, patchCount: Int, instanceCount: Int)
     /// `controlPointIndexBufferIndex` is into the storage's buffers.
@@ -628,6 +631,8 @@ struct PacketTables {
         switch packet.drawCall {
         case let .primitives(type, vertexStart, vertexCount, instanceCount):
             renderEncoder.drawPrimitives(type: type, vertexStart: vertexStart, vertexCount: vertexCount, instanceCount: instanceCount)
+        case let .indirectPrimitives(type, indirectBufferIndex, indirectBufferOffset):
+            renderEncoder.drawPrimitives(type: type, indirectBuffer: buffers[Int(indirectBufferIndex)], indirectBufferOffset: indirectBufferOffset)
         case let .indexedPrimitives(type, indexCount, indexType, indexBufferIndex, indexBufferOffset, instanceCount):
             renderEncoder.drawIndexedPrimitives(
                 type: type,

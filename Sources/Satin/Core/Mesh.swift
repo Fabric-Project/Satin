@@ -30,14 +30,18 @@ public struct DrawLayout {
     public let instancing: Bool
     public let castShadow: Bool
     public let receiveShadow: Bool
+    /// The mesh draws points, so a material's point sprite applies (`SATIN_POINT_PRIMITIVE`).
+    public let points: Bool
 
-    public init(vertexDescriptor: MTLVertexDescriptor, vertexLayoutID: Int, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool) {
+    public init(vertexDescriptor: MTLVertexDescriptor, vertexLayoutID: Int, skinning: Bool, instancing: Bool, castShadow: Bool, receiveShadow: Bool,
+                points: Bool) {
         self.vertexDescriptor = vertexDescriptor
         self.vertexLayoutID = vertexLayoutID
         self.skinning = skinning
         self.instancing = instancing
         self.castShadow = castShadow
         self.receiveShadow = receiveShadow
+        self.points = points
     }
 }
 
@@ -65,13 +69,14 @@ open class Mesh: Renderable {
            cachedDrawLayout.vertexDescriptor === vertexDescriptor,
            cachedDrawLayoutJointPalette === jointPalette,
            cachedDrawLayout.castShadow == castShadow,
-           cachedDrawLayout.receiveShadow == receiveShadow
+           cachedDrawLayout.receiveShadow == receiveShadow,
+           cachedDrawLayout.points == (geometry.primitiveType == .point)
         {
             return cachedDrawLayout
         }
 
         let drawLayout = DrawLayout(vertexDescriptor: vertexDescriptor, vertexLayoutID: geometry.vertexLayoutID, skinning: geometry.isSkinned, instancing: isInstanced,
-                                    castShadow: castShadow, receiveShadow: receiveShadow)
+                                    castShadow: castShadow, receiveShadow: receiveShadow, points: geometry.primitiveType == .point)
         cachedDrawLayout = drawLayout
         cachedDrawLayoutGeometry = geometry
         cachedDrawLayoutJointPalette = jointPalette

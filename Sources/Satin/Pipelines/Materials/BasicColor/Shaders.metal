@@ -38,11 +38,12 @@ vertex BasicColorVertexData basicColorVertex(
 fragment FragmentOutput basicColorFragment(
     BasicColorVertexData in [[stage_in]],
     constant BasicColorUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
 #if defined(HAS_COLOR)
-    const float4 color = uniforms.color * in.color;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color * in.color);
 #else
-    const float4 color = uniforms.color;
+    const float4 color = SATIN_POINT_SPRITE(uniforms.color);
 #endif
     return buildColorFragmentOutput(half4(color) SATIN_ALPHA_OIT_FORWARD_ARGS);
 }

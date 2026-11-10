@@ -74,7 +74,7 @@ vertex CustomVertexData physicalVertex(
 
     out.worldPosition = worldPosition.xyz;
     out.cameraPosition = vertexUniforms[amp_id].worldCameraPosition.xyz;
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(in, uniforms.pointSize);
 #if defined(HAS_TRANSMISSION)
     float3 modelScale;
     modelScale.x = length(modelMatrix[0].xyz);
@@ -106,11 +106,19 @@ fragment FragmentOutput physicalFragment(
 #endif
 #include "Chunks/PbrTextures.metal"
     constant PhysicalUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA
     SATIN_ALPHA_OIT_FRAGMENT_DATA) {
     float4 outColor;
 
 #include "Chunks/PixelInfoInit.metal"
 #include "Chunks/PbrInit.metal"
+#if defined(SATIN_POINT_SPRITE_ENABLED)
+    {
+        const float4 sprited = SATIN_POINT_SPRITE(float4(pixel.material.baseColor, pixel.material.alpha));
+        pixel.material.baseColor = sprited.rgb;
+        pixel.material.alpha = sprited.a;
+    }
+#endif
 
     SurfaceOutput surface;
 #include "Chunks/PixelInfoSurfaceOutput.metal"

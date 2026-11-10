@@ -106,17 +106,25 @@ public final class PublishedAttribute: VertexAttribute {
     public let buffer: MTLBuffer
     /// Unique among everything published in this process; equal versions mean the same contents.
     public let version: UInt64
+    /// Written by the CPU when published (`publishing`), so the CPU may read it back from `buffer`
+    /// directly, with no GPU wait. False for a buffer a GPU pass wrote.
+    public let isCPUWritten: Bool
     private let elementCount: Int
 
     /// Publishes `count` elements already written to `buffer` in `layout`, such as a compute pass's
     /// output or a plugin's own buffer. The caller hands the buffer over (see the type's notes).
-    public init(adopting buffer: MTLBuffer, layout: AttributeLayout, count: Int) {
+    public convenience init(adopting buffer: MTLBuffer, layout: AttributeLayout, count: Int) {
+        self.init(adopting: buffer, layout: layout, count: count, isCPUWritten: false)
+    }
+
+    private init(adopting buffer: MTLBuffer, layout: AttributeLayout, count: Int, isCPUWritten: Bool) {
         precondition(count >= 0, "An attribute can't have a negative count")
         precondition(count == 0 || layout.byteOffset + (count - 1) * layout.byteStride + layout.elementSize <= buffer.length,
                      "The buffer is too short for \(count) elements in this layout")
         self.layout = layout
         self.buffer = buffer
         self.elementCount = count
+        self.isCPUWritten = isCPUWritten
         self.version = PublishedVersion.next()
         super.init()
     }
@@ -142,7 +150,25 @@ public final class PublishedAttribute: VertexAttribute {
                 buffer.contents().copyMemory(from: baseAddress, byteCount: bytes.count)
             }
         }
-        return PublishedAttribute(adopting: buffer, layout: layout, count: values.count)
+        return PublishedAttribute(adopting: buffer, layout: layout, count: values.count, isCPUWritten: true)
+    }
+
+    /// The first `components` floats of each element, read from `buffer` on the CPU, or nil when the
+    /// CPU didn't write it or it isn't float32 with that many components.
+    public func cpuFloats(components: Int) -> ContiguousArray<Float>? {
+        guard isCPUWritten, layout.scalar == .float32, layout.components >= components,
+              layout.byteOffset % 4 == 0, layout.byteStride % 4 == 0
+        else { return nil }
+        let contents = UnsafeRawPointer(buffer.contents())
+        var values = ContiguousArray<Float>()
+        values.reserveCapacity(elementCount * components)
+        for element in 0 ..< elementCount {
+            let start = layout.byteOffset + element * layout.byteStride
+            for component in 0 ..< components {
+                values.append(contents.load(fromByteOffset: start + component * 4, as: Float.self))
+            }
+        }
+        return values
     }
 
     /// Read by its shader from `buffer` instead of through the vertex descriptor.

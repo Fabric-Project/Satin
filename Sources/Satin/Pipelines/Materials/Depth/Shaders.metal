@@ -47,15 +47,16 @@ vertex DepthVertexData depthVertex(
     DepthVertexData out;
     out.position = projection * position;
     out.depth = depth;
-    out.pointSize = uniforms.pointSize;
+    out.pointSize = SATIN_POINT_SIZE(v, uniforms.pointSize);
     return out;
 }
 
 fragment float4 depthFragment(
     DepthVertexData in [[stage_in]],
-    constant DepthUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]) {
+    constant DepthUniforms &uniforms [[buffer(FragmentBufferMaterialUniforms)]]
+    SATIN_POINT_SPRITE_FRAGMENT_DATA) {
     const float depth = uniforms.invert ? 1.0 - in.depth : in.depth;
     float3 color = mix(float3(depth), turbo(depth), uniforms.color);
     color = dither8x8(in.position.xy, color);
-    return float4(color, 1.0);
+    return SATIN_POINT_SPRITE(float4(color, 1.0));
 }
